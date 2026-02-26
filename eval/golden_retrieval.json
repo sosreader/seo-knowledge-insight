@@ -1,0 +1,78 @@
+[
+  {
+    "scenario": "Discover 流量大幅下降",
+    "query": "Discover 流量 大幅下降 原因 怎麼處理",
+    "expected_keywords": ["Discover", "流量", "AMP"],
+    "expected_categories": ["Discover與AMP", "演算法與趨勢"],
+    "description": "當 Discover 流量下降時，應該能檢索到關於 Discover 演算法、AMP 設定的 Q&A"
+  },
+  {
+    "scenario": "CTR 持續下降",
+    "query": "CTR 下降 代表什麼 SEO 含義",
+    "expected_keywords": ["CTR", "點擊率", "SERP", "曝光"],
+    "expected_categories": ["搜尋表現分析", "內容策略"],
+    "description": "CTR 下降可能涉及 SERP 變化或內容策略問題"
+  },
+  {
+    "scenario": "檢索未索引增加",
+    "query": "檢索未索引 增加 如何處理",
+    "expected_keywords": [
+      "索引",
+      "Coverage",
+      "robots.txt",
+      "sitemap",
+      "canonical"
+    ],
+    "expected_categories": ["索引與檢索", "技術SEO"],
+    "description": "未索引頁面增加涉及索引管理與技術 SEO 設定"
+  },
+  {
+    "scenario": "Organic Search 工作階段下降",
+    "query": "Organic Search 工作階段 下降 原因 注意事項",
+    "expected_keywords": ["Organic", "工作階段", "排名", "流量"],
+    "expected_categories": ["搜尋表現分析", "GA與數據追蹤"],
+    "description": "有機搜尋流量下降需結合 GA 數據分析"
+  },
+  {
+    "scenario": "AMP 頁面表現異常",
+    "query": "AMP Article 大幅下降 原因 怎麼處理",
+    "expected_keywords": ["AMP", "Article", "Discover"],
+    "expected_categories": ["Discover與AMP", "技術SEO"],
+    "description": "AMP 表現異常可能與技術設定或 Discover 推薦有關"
+  },
+  {
+    "scenario": "曝光數大幅上升但點擊未同步",
+    "query": "曝光 大幅上升 代表什麼 注意事項",
+    "expected_keywords": ["曝光", "點擊", "CTR", "排名"],
+    "expected_categories": ["搜尋表現分析"],
+    "description": "曝光增加但點擊不同步，可能是排名位置或 SERP 特徵的變化"
+  },
+  {
+    "scenario": "內部連結架構優化",
+    "query": "內部連結 架構 優化 SEO 建議",
+    "expected_keywords": ["內部連結", "連結", "架構"],
+    "expected_categories": ["連結策略"],
+    "description": "內部連結策略相關的知識庫內容"
+  },
+  {
+    "scenario": "結構化資料問題",
+    "query": "結構化資料 Schema 標記 最佳實踐",
+    "expected_keywords": ["結構化資料", "Schema", "rich result"],
+    "expected_categories": ["技術SEO"],
+    "description": "結構化資料標記的實作建議"
+  },
+  {
+    "scenario": "GA4 追蹤設定",
+    "query": "GA4 事件追蹤 歸因分析 設定",
+    "expected_keywords": ["GA4", "追蹤", "事件", "歸因"],
+    "expected_categories": ["GA與數據追蹤"],
+    "description": "Google Analytics 4 相關的追蹤配置問題"
+  },
+  {
+    "scenario": "Canonical 設定混亂",
+    "query": "canonical 重複頁面 索引問題 處理方式",
+    "expected_keywords": ["canonical", "重複", "索引"],
+    "expected_categories": ["索引與檢索", "技術SEO"],
+    "description": "Canonical 標籤設定不當導致的索引問題"
+  }
+]

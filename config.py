@@ -26,6 +26,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.2")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 
+# ── Google Sheets ─────────────────────────────────────
+# 步驟 4 週報：試算表 URL（可省略 gid，程式會依 tab 名稱自動解析）
+SHEETS_URL = os.getenv("SHEETS_URL", "")
+
 # ── 處理參數 ──────────────────────────────────────────
 # 單次 API 呼叫的最大 token 限制（避免太長的會議紀錄超限）
 MAX_TOKENS_PER_CHUNK = 6000

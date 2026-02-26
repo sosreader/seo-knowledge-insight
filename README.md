@@ -11,16 +11,23 @@ Notion API 擷取 → Markdown 轉換（含圖片下載）→ OpenAI 萃取 Q&A 
 ```
 SEO_QA_Rawdata/
 ├── config.py                    # 設定檔
+├── pyproject.toml               # Package 定義（pip install -e . 用）
 ├── .env                         # 你的 API keys（從 .env.example 複製）
 ├── scripts/
 │   ├── 01_fetch_notion.py       # 步驟 1：從 Notion 擷取
 │   ├── 02_extract_qa.py         # 步驟 2：OpenAI 萃取 Q&A
 │   ├── 03_dedupe_classify.py    # 步驟 3：去重 + 分類
-│   └── run_pipeline.py          # 一鍵執行全部
+│   ├── 04_generate_report.py    # 步驟 4：產生每週 SEO 週報
+│   ├── 05_evaluate.py           # 步驟 5：Q&A 品質評估（LLM-as-Judge）
+│   ├── run_pipeline.py          # 一鍵執行全部
+│   ├── extract_qa_helpers.py    # 純邏輯函式（日期擷取、文字切分）
+│   └── dedupe_helpers.py        # 純邏輯函式（cosine similarity 矩陣）
 ├── utils/
 │   ├── notion_client.py         # Notion API 封裝
 │   ├── block_to_markdown.py     # Block → Markdown 轉換
 │   └── openai_helper.py         # OpenAI API 封裝
+├── tests/
+│   └── test_core.py             # 核心邏輯 unit tests（23 個）
 ├── raw_data/                    # 原始資料（source of truth）
 │   ├── notion_json/             # Notion API 回傳的原始 JSON
 │   ├── markdown/                # 轉換後的 Markdown（含圖片引用）
@@ -29,7 +36,12 @@ SEO_QA_Rawdata/
     ├── qa_per_meeting/          # 每份會議的 Q&A（中間產物）
     ├── qa_all_raw.json          # 所有原始 Q&A（去重前）
     ├── qa_final.json            # 最終 Q&A 資料庫（JSON）
-    └── qa_final.md              # 人類可讀的 Markdown 版
+    ├── qa_final.md              # 人類可讀的 Markdown 版
+    ├── qa_embeddings.npy        # 持久化 embedding 向量（Step 3 產出，Step 4 載入）
+    ├── metrics_sample.tsv      # 範例指標資料（可替换為實際資料）
+    ├── report_YYYYMMDD.md       # 產生的每週 SEO 週報
+    ├── eval_report.json         # 品質評估報告（JSON）
+    └── eval_report.md           # 品質評估報告（Markdown）
 ```
 
 ---
@@ -110,6 +122,30 @@ python scripts/run_pipeline.py --step 3
 
 # 步驟 3：只分類不去重
 python scripts/run_pipeline.py --step 3 --skip-dedup
+
+# 步驟 3：測試模式（前 30 個 Q&A）
+python scripts/run_pipeline.py --step 3 --limit 30
+
+# 步驟 4：產生每週 SEO 週報（自動從 Google Sheets 擷取，無需手動複製）
+python scripts/run_pipeline.py --step 4
+
+# 步驟 4：指定分頁名稱（預設 vocus）
+python scripts/run_pipeline.py --step 4 --tab vocus
+
+# 步驟 4：改用本機檔案（測試或離線用）
+python scripts/run_pipeline.py --step 4 --input metrics.tsv
+
+# 步驟 4：指定輸出路徑
+python scripts/run_pipeline.py --step 4 --output output/report_20260220.md
+
+# 步驟 5：品質評估（預設抽樣 30 筆）
+python scripts/run_pipeline.py --step 5
+
+# 步驟 5：抽樣 50 筆 + 帶原始會議紀錄驗證
+python scripts/run_pipeline.py --step 5 --sample 50 --with-source
+
+# 步驟 5：含 Retrieval 品質評估
+python scripts/run_pipeline.py --step 5 --eval-retrieval
 ```
 
 ### 只檢查設定
@@ -117,6 +153,27 @@ python scripts/run_pipeline.py --step 3 --skip-dedup
 ```bash
 python scripts/run_pipeline.py --dry-run
 ```
+
+---
+
+## 資料完整性說明
+
+### 會議記錄涵蓋範圍
+
+- **最早記錄**：2023-03-20
+- **最近記錄**：2026-02-23（持續累積中）
+- **會議頻率**：每兩週一次；偶爾延至三週
+- **Notion 子頁面總數**：86 筆（含非定期、顧問、特殊會議）
+- **本機 Markdown 檔**：87 個（含一份重複的 `SEO_會議_20230920`）
+
+> **檔名規則**：所有 markdown 均採 `YYYYMMDD` 格式（如 `SEO_會議_20230329.md`）。2023 年初期的幾份早期檔案原本只有 `MMDD`（如 `SEO_0614`），已於 2026-02-26 補齊年份重命名。
+
+### 已確認的缺口
+
+| 時段                | 說明                                                                                                                                             | 狀態           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| **2023-04**         | 3/29 到 5/3 中間 35 天（預計約 2 次會議缺失）。2023-04-07 有排程會議，但 Notion 上無記錄，Notion Search API 亦查無結果。推測當時開了但未建頁面。 | ❌ Notion 無檔 |
+| **2024-03-20 前後** | 3/6 到 4/3 中間 28 天（預計約 1 次缺失）。                                                                                                       | ❌ Notion 無檔 |
 
 ---
 
@@ -130,7 +187,123 @@ python scripts/run_pipeline.py --dry-run
 
 4. **跑步驟 3** 去重和分類。
 
-5. **人工審核**：看 `output/qa_final.md`，標記需要更新或修正的內容。
+5. **每週產生週報**：直接執行 `python scripts/run_pipeline.py --step 4`，腳本自動從 Google Sheets 下載最新資料並產生報告，無需手動複製貼上。
+
+6. **評估品質**：執行 `python scripts/run_pipeline.py --step 5 --sample 50`，用 LLM-as-Judge 檢查萃取品質。
+
+7. **人工審核**：看 `output/qa_final.md`，標記需要更新或修正的內容。
+
+---
+
+## 步驟 4：每週 SEO 週報
+
+### 操作流程
+
+**一行指令搞定（最簡方式）：**
+
+```bash
+python scripts/run_pipeline.py --step 4
+```
+
+腳本自動從 [Google Sheets](https://docs.google.com/spreadsheets/d/1fzttLHJfl2Tnecxg0PDKsTmj0-PT5eSsYOivTI6wRdo) 下載最新資料（無需手動複製），報告儲存至 `output/report_YYYYMMDD.md`。
+
+**資料來源優先順序：**
+
+| 優先度 | 方式                                | 說明                              |
+| ------ | ----------------------------------- | --------------------------------- |
+| 1      | `--input <URL 或檔案>`              | 明確指定 URL 或本機 `.tsv` 檔     |
+| 2      | `.env` 裡的 `SHEETS_URL`            | 適合換了試算表 URL 時設定         |
+| 3      | `config.py` 的 `DEFAULT_SHEETS_URL` | 內建預設（目前指向 vocus 試算表） |
+
+> **前提**：Google Sheets 須設為「任何知道連結者可檢視」（Anyone with the link - Viewer）。
+
+### 報告內容
+
+| 區段                  | 說明                                                                  |
+| --------------------- | --------------------------------------------------------------------- |
+| **本週 SEO 狀況概覽** | 2-3 句總結本週最重要變化                                              |
+| **重點指標分析**      | 核心指標（曝光/點擊/CTR/Coverage/Organic Search 等）數值與趨勢        |
+| **異常值與潛在原因**  | 月趨勢超過 ±15% 或週趨勢超過 ±20% 的指標，結合 Q&A 知識庫解釋可能原因 |
+| **本週行動建議**      | 2-3 條具體 Todo（引用對應 Q&A 知識）                                  |
+| **相關 SEO 知識補充** | 從 Q&A 知識庫節錄最相關的 1-2 個問答                                  |
+
+### 知識庫來源
+
+- 優先使用 `output/qa_final.json`（若 ≥50 筆，即步驟 3 完整跑過）
+- 自動降級使用 `output/qa_all_raw.json`（696 筆，步驟 2 產出）
+
+---
+
+## 模型使用政策
+
+**一律使用 GPT-5 系列模型，禁止使用 GPT-4 系列（gpt-4o、gpt-4o-mini 等已淘汰）。**
+
+| 用途      | 模型                     | 說明                               |
+| --------- | ------------------------ | ---------------------------------- |
+| Q&A 萃取  | `gpt-5.2`                | 主力模型，需要高品質理解與生成     |
+| Q&A 合併  | `gpt-5.2`                | 合併多源資訊需要強推理             |
+| 分類標籤  | `gpt-5-mini`             | 結構化輸出，省成本                 |
+| 週報生成  | `gpt-5.2`                | 需要深度分析與知識引用             |
+| 品質評估  | `gpt-5.2` + `gpt-5-mini` | Judge 用主力模型，分類驗證用小模型 |
+| Embedding | `text-embedding-3-small` | 去重與語意搜尋                     |
+
+---
+
+## 步驟 5：品質評估（Evaluation）
+
+### 概述
+
+用 LLM-as-Judge 對 Q&A 萃取品質做四維度自動評估，產出診斷報告。
+
+### 操作方式
+
+```bash
+# 基本評估（抽樣 30 筆）
+python scripts/run_pipeline.py --step 5
+
+# 加大抽樣
+python scripts/run_pipeline.py --step 5 --sample 50
+
+# 帶原始 Markdown 驗證 Faithfulness（更嚴格）
+python scripts/run_pipeline.py --step 5 --with-source
+
+# 含 Retrieval 品質評估
+python scripts/run_pipeline.py --step 5 --eval-retrieval
+
+# 完整評估（品質 + 分類 + Retrieval）
+python scripts/run_pipeline.py --step 5 --sample 50 --with-source --eval-retrieval
+```
+
+### 評估維度（1–5 分）
+
+| 維度             | 說明                                           |
+| ---------------- | ---------------------------------------------- |
+| **Relevance**    | Q&A 是否涵蓋真正有價值的 SEO 知識              |
+| **Accuracy**     | A 的內容是否合理且無明顯虛構                   |
+| **Completeness** | A 是否包含足夠上下文讓讀者理解                 |
+| **Granularity**  | Q 的範圍是否恰當（不太粗也不太細）             |
+| **Faithfulness** | （with-source 模式）A 是否忠實反映原始會議文本 |
+
+### Retrieval 品質評估（--eval-retrieval）
+
+| 指標                    | 說明                                           |
+| ----------------------- | ---------------------------------------------- |
+| **Keyword Hit Rate**    | 檢索結果的 keywords 是否覆蓋預期關鍵字         |
+| **Category Hit Rate**   | 檢索結果的分類是否命中預期類別                 |
+| **MRR**                 | Mean Reciprocal Rank，第一個相關結果的排名品質 |
+| **LLM Top-1 Precision** | LLM 判斷排名第一的結果是否真的相關             |
+
+### 附加檢查
+
+- **Confidence 校準**：模型自評的 confidence 分數是否與實際品質一致
+- **Self-contained**：Q 是否不需要看過原文就能理解
+- **Actionable**：A 是否提供可執行的建議
+- **分類準確度**：category、difficulty、evergreen 標籤是否合理
+
+### 產出
+
+- `output/eval_report.json` — 完整評估結果（每筆 Q&A 的詳細分數）
+- `output/eval_report.md` — 人類可讀的摘要報告
 
 ---
 
@@ -141,7 +314,7 @@ python scripts/run_pipeline.py --dry-run
 ### 使用到的模型與單價（Standard tier；每 1M tokens）
 
 - `gpt-5.2`：$1.75
-- `gpt-5-nano`：$0.05（本專案目前用於「分類標籤」，見 `utils/openai_helper.py`）
+- `gpt-5-mini`：$0.10（本專案用於「分類標籤」與「分類評估」，見 `utils/openai_helper.py`）
 - `text-embedding-3-small`：$0.02（Embeddings；Batch 會更便宜）
 
 > 註：Pricing 頁面的「Text tokens」是以 tokens 計價；模型的 reasoning tokens 會算在 output tokens 內並計費。
@@ -209,10 +382,10 @@ $$
 - 只有在判定重複的群組才會呼叫模型，且每群組通常 1 次。
 - 成本主要看「重複群組數」與「每群組帶入的 Q&A 長度」，通常會遠小於步驟 2。
 
-4. **步驟 3：分類標籤（`gpt-5-nano`）**
+4. **步驟 3：分類標籤（`gpt-5-mini`）**
 
 - 每個 Q&A 會呼叫 1 次分類。
-- 以 **600 個 Q&A、每次約 350 tokens** 估算：成本約 **$0.01**（`gpt-5-nano` $0.05/1M）
+- 以 **600 個 Q&A、每次約 350 tokens** 估算：成本約 **$0.02**（`gpt-5-mini` $0.10/1M）
 
 > 總結：以你目前已匯出的 87 份 Markdown，整體通常會落在 **小於 $1** 的量級；真正差異會主要來自「每場會議產出的 Q&A 數量」與「去重合併需要呼叫模型的群組數」。
 
@@ -339,14 +512,15 @@ $$
 
 ### 常見錯誤
 
-| 錯誤                                  | 原因                           | 解法                                                                                     |
-| ------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------- |
-| `Error code: 401 - Incorrect API key` | OpenAI API key 無效或過期      | 確認 `.env` 裡的 `OPENAI_API_KEY` 正確，到 https://platform.openai.com/api-keys 重新產生 |
-| `❌ NOTION_TOKEN 未設定`              | `.env` 不存在或 key 為空       | `cp .env.example .env` 後填入                                                            |
-| `⚠️ 跳過（無存取權）`                 | Integration 沒有該子頁面的權限 | 到 Notion 母頁面 → `···` → `Connections` → 確認 Integration 已加入                       |
-| `Rate limited, waiting Xs`            | API 呼叫太頻繁                 | 正常現象，腳本會自動等待重試                                                             |
-| `JSON 解析失敗`                       | OpenAI 回傳非標準 JSON         | 通常是內容太長導致截斷，可試著降低 `MAX_TOKENS_PER_CHUNK`                                |
-| 圖片路徑 `[DOWNLOAD_FAILED: ...]`     | Notion 圖片 URL 已過期         | 重跑步驟 1 會重新下載（Notion 暫存 URL 有效期約 1 小時）                                 |
+| 錯誤                                  | 原因                                         | 解法                                                                                     |
+| ------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `Error code: 401 - Incorrect API key` | OpenAI API key 無效或過期                    | 確認 `.env` 裡的 `OPENAI_API_KEY` 正確，到 https://platform.openai.com/api-keys 重新產生 |
+| `Unsupported parameter: 'max_tokens'` | 使用較新模型（如 `gpt-5.2`），舊參數名已棄用 | 已在 `utils/openai_helper.py` 改用 `max_completion_tokens`，若自訂 model 也需注意        |
+| `❌ NOTION_TOKEN 未設定`              | `.env` 不存在或 key 為空                     | `cp .env.example .env` 後填入                                                            |
+| `⚠️ 跳過（無存取權）`                 | Integration 沒有該子頁面的權限               | 到 Notion 母頁面 → `···` → `Connections` → 確認 Integration 已加入                       |
+| `Rate limited, waiting Xs`            | API 呼叫太頻繁                               | 正常現象，腳本會自動等待重試                                                             |
+| `JSON 解析失敗`                       | OpenAI 回傳非標準 JSON                       | 通常是內容太長導致截斷，可試著降低 `MAX_TOKENS_PER_CHUNK`                                |
+| 圖片路徑 `[DOWNLOAD_FAILED: ...]`     | Notion 圖片 URL 已過期                       | 重跑步驟 1 會重新下載（Notion 暫存 URL 有效期約 1 小時）                                 |
 
 ### 驗證設定
 
@@ -359,7 +533,7 @@ python scripts/run_pipeline.py --dry-run
 
 ## 已知限制
 
-1. **分類呼叫 API 次數 = Q&A 數量** — 沒有批次化，每筆各呼叫一次 `gpt-5-nano`。
+1. **分類呼叫 API 次數 = Q&A 數量** — 沒有批次化，每筆各呼叫一次 `gpt-5-mini`。
 2. **圖片只在步驟 1 下載** — 如果 Notion 上的圖片被替換，需要手動清除 `raw_data/images/` 後重跑步驟 1。
 
 ---
@@ -386,7 +560,7 @@ python -m pytest tests/ -v
 
 ### 專案慣例
 
-- **Python 3.11+**，使用 `from __future__ import annotations` 支援新型別語法
+- **Python 3.9+**，使用 `from __future__ import annotations` 支援新型別語法
 - **非同步 I/O**：步驟 1 使用 `httpx.AsyncClient`；步驟 2、3 是同步
 - **路徑管理**：所有路徑定義在 `config.py`，用 `pathlib.Path`
 - **API 安全**：所有 key 透過 `.env` 載入，絕不 hardcode

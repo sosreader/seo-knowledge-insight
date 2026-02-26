@@ -174,6 +174,10 @@ def main(args: argparse.Namespace) -> None:
     qa_pairs = raw_data.get("qa_pairs", [])
     print(f"\n📥 讀取 {len(qa_pairs)} 個原始 Q&A")
 
+    if args.limit and args.limit < len(qa_pairs):
+        qa_pairs = qa_pairs[: args.limit]
+        print(f"⚠️  測試模式：僅處理前 {args.limit} 個 Q&A")
+
     # 去重
     if not args.skip_dedup:
         qa_pairs = deduplicate_qas(qa_pairs)
@@ -205,6 +209,9 @@ def main(args: argparse.Namespace) -> None:
         encoding="utf-8",
     )
 
+    # 持久化 embedding 向量（Step 4 語意搜尋可直接載入，免重算）
+    _persist_embeddings(qa_pairs)
+
     # 同時輸出一份人類可讀的 Markdown
     _export_readable_md(qa_pairs)
 
@@ -212,8 +219,20 @@ def main(args: argparse.Namespace) -> None:
     print(f"✅ 步驟 3 完成！")
     print(f"   最終 Q&A 數量: {len(qa_pairs)}")
     print(f"   JSON: {final_path}")
+    print(f"   Embeddings: {config.OUTPUT_DIR / 'qa_embeddings.npy'}")
     print(f"   Markdown: {config.OUTPUT_DIR / 'qa_final.md'}")
     print("=" * 60)
+
+
+def _persist_embeddings(qa_pairs: list[dict]) -> None:
+    """計算並持久化 Q&A embedding，供 Step 4 語意搜尋直接載入。"""
+    print("\n💾 持久化 embedding 向量 ...")
+    texts = [f"{qa['question']} {qa['answer']}" for qa in qa_pairs]
+    embeddings = get_embeddings(texts)
+    emb_array = np.array(embeddings)
+    emb_path = config.OUTPUT_DIR / "qa_embeddings.npy"
+    np.save(emb_path, emb_array)
+    print(f"   已儲存 {emb_array.shape} 至 {emb_path}")
 
 
 def _export_readable_md(qa_pairs: list[dict]) -> None:
@@ -264,5 +283,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="去重、合併、分類")
     parser.add_argument("--skip-dedup", action="store_true", help="跳過去重")
     parser.add_argument("--skip-classify", action="store_true", help="跳過分類")
+    parser.add_argument("--limit", type=int, default=0, help="測試模式：僅處理前 N 個 Q&A（0 = 全部）")
     args = parser.parse_args()
     main(args)

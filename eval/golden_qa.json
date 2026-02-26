@@ -1,0 +1,82 @@
+[
+  {
+    "question": "AMP Article 流量/曝光下降可能原因是什麼？",
+    "answer": "會議判斷 AMP Article 下降可能是指標有改但沒有公開。建議觀察一段時間再評估。",
+    "expected_category": "Discover與AMP",
+    "expected_difficulty": "進階",
+    "expected_evergreen": false,
+    "note": "明確討論 AMP Article 指標變化"
+  },
+  {
+    "question": "PWA 架構下 GA 流量被歸因到 Direct 時怎麼辦？",
+    "answer": "需要另外設計追蹤方案，在啟動入口加可辨識的參數。",
+    "expected_category": "GA與數據追蹤",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "GA 歸因問題 + PWA 追蹤"
+  },
+  {
+    "question": "Coverage 有效頁面突然上升，如何判斷？",
+    "answer": "與重複頁面有關，主因是文章頁尾綴出現 #! 導致。",
+    "expected_category": "索引與檢索",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "Coverage 指標 = 索引與檢索範疇"
+  },
+  {
+    "question": "延伸閱讀模組在 SEO 上應該怎麼設計？",
+    "answer": "建議把延伸閱讀的權重提高，排序不要低於連播廣告。優先經營書評、影評、遊戲評論等容易轉換的主題。",
+    "expected_category": "內容策略",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "延伸閱讀、內容經營策略"
+  },
+  {
+    "question": "使用自訂網域對 SEO 有什麼幫助？",
+    "answer": "使用 custom domain 的作者比較有產品意識，內容量累積到 300 篇以上會比較有感。",
+    "expected_category": "平台策略",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "Vocus 產品面的 custom domain 功能"
+  },
+  {
+    "question": "Google Discover 的曝光大幅下滑，可能是什麼原因？",
+    "answer": "Discover 流量本來就不穩定，會受 Google 演算法調整影響。建議持續觀察，不要因為短期波動就改變內容策略。",
+    "expected_category": "Discover與AMP",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": false,
+    "note": "Discover 流量波動"
+  },
+  {
+    "question": "如何判斷 robots.txt 是否阻擋了重要頁面？",
+    "answer": "可以用 Search Console 的 robots.txt 測試工具檢查。也可以用 site: 搜尋來確認頁面是否已被索引。",
+    "expected_category": "索引與檢索",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "robots.txt 屬於索引與檢索"
+  },
+  {
+    "question": "內部連結的錨文字應該怎麼寫？",
+    "answer": "錨文字應該包含目標頁面的主要關鍵字，避免用「點這裡」這種非描述性文字。但也不要過度堆砌關鍵字。",
+    "expected_category": "連結策略",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "內部連結錨文字策略"
+  },
+  {
+    "question": "Core Web Vitals 的 LCP 太高怎麼改善？",
+    "answer": "LCP 常見問題是圖片太大、伺服器回應太慢。可以用 lazy loading、CDN、圖片壓縮等方式改善。",
+    "expected_category": "技術SEO",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "Core Web Vitals 歸類於技術 SEO"
+  },
+  {
+    "question": "Google 2024 年 3 月核心更新對網站排名有什麼影響？",
+    "answer": "這次更新主要針對低品質內容，強調 E-E-A-T。如果網站排名下降，建議檢查內容品質和作者專業度。",
+    "expected_category": "演算法與趨勢",
+    "expected_difficulty": "進階",
+    "expected_evergreen": false,
+    "note": "特定演算法更新，有時效性"
+  }
+]

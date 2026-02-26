@@ -6,6 +6,9 @@
     python scripts/run_pipeline.py --step 1     # 只執行步驟 1
     python scripts/run_pipeline.py --step 2     # 只執行步驟 2
     python scripts/run_pipeline.py --step 3     # 只執行步驟 3
+    python scripts/run_pipeline.py --step 4 --input metrics.tsv  # 產生週報
+    python scripts/run_pipeline.py --step 5                      # 品質評估
+    python scripts/run_pipeline.py --step 5 --sample 50          # 抽樣 50 筆評估
     python scripts/run_pipeline.py --dry-run    # 檢查設定但不執行
 """
 from __future__ import annotations
@@ -53,9 +56,25 @@ def main() -> None:
     parser.add_argument(
         "--step",
         type=int,
-        choices=[1, 2, 3],
+        choices=[1, 2, 3, 4, 5],
         default=0,
-        help="只執行指定步驟（0=全部）",
+        help="只執行指定步驟（0=全部 1-3）",
+    )
+    parser.add_argument(
+        "--sample",
+        type=int,
+        default=30,
+        help="步驟 5：評估抽樣數量（預設 30）",
+    )
+    parser.add_argument(
+        "--with-source",
+        action="store_true",
+        help="步驟 5：帶入原始 Markdown 驗證 Accuracy/Faithfulness",
+    )
+    parser.add_argument(
+        "--eval-retrieval",
+        action="store_true",
+        help="步驟 5：評估 Retrieval 品質",
     )
     parser.add_argument(
         "--filter",
@@ -88,6 +107,26 @@ def main() -> None:
         action="store_true",
         help="強制重新處理（忽略增量比對，適用於步驟 1、2）",
     )
+    parser.add_argument(
+        "--input", "-i",
+        default=None,
+        help="步驟 4：TSV 指標檔案路徑",
+    )
+    parser.add_argument(
+        "--output", "-o",
+        default=None,
+        help="步驟 4：報告輸出路徑（預設 output/report_YYYYMMDD.md）",
+    )
+    parser.add_argument(
+        "--no-qa",
+        action="store_true",
+        help="步驟 4：不使用 Q&A 知識庫",
+    )
+    parser.add_argument(
+        "--tab",
+        default="vocus",
+        help="步驟 4：Google Sheets 分頁名稱（預設: vocus）",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -101,7 +140,7 @@ def main() -> None:
     # 根據要執行的步驟，放寬檢查
     if args.step == 1:
         issues = [i for i in issues if "NOTION" in i]
-    elif args.step in (2, 3):
+    elif args.step in (2, 3, 4):
         issues = [i for i in issues if "OPENAI" in i]
 
     if issues:
@@ -117,6 +156,7 @@ def main() -> None:
         return
 
     start = time.time()
+    # 步驟 4 是獨立的報告產生流程，不列入預設 1-2-3 pipeline
     steps_to_run = [args.step] if args.step else [1, 2, 3]
 
     for step in steps_to_run:
@@ -140,7 +180,29 @@ def main() -> None:
                 extra.append("--skip-dedup")
             if args.skip_classify:
                 extra.append("--skip-classify")
+            if args.limit:
+                extra += ["--limit", str(args.limit)]
             ok = run_step("03_dedupe_classify.py", extra)
+        elif step == 4:
+            extra = []
+            if args.input:
+                extra += ["--input", args.input]
+            if args.output:
+                extra += ["--output", args.output]
+            if args.no_qa:
+                extra.append("--no-qa")
+            if hasattr(args, "tab") and args.tab and args.tab != "vocus":
+                extra += ["--tab", args.tab]
+            ok = run_step("04_generate_report.py", extra)
+        elif step == 5:
+            extra = []
+            if args.sample:
+                extra += ["--sample", str(args.sample)]
+            if args.with_source:
+                extra.append("--with-source")
+            if args.eval_retrieval:
+                extra.append("--eval-retrieval")
+            ok = run_step("05_evaluate.py", extra)
         else:
             continue
 
