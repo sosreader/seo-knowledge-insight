@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.env
+.env.*
+!.env.example
+
+# pipeline 資料，不進 image（EC2 上 volume mount）
+output/
+raw_data/
+eval/
+
+# pipeline scripts（API image 不需要）
+scripts/
+tests/
+utils/
+
+# 文件
+*.md
+PLAN_*.md
+research.md

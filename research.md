@@ -19,6 +19,8 @@
 10. [LLM-as-Judge：用 AI 評估 AI](#10-llm-as-judge用-ai-評估-ai)
 11. [Reasoning Model：會先思考的 AI](#11-reasoning-model會先思考的-ai)
 12. [本專案完整架構與決策](#12-本專案完整架構與決策)
+20. [FastAPI RAG API 化：把知識庫包成服務](#20-fastapi-rag-api-化把知識庫包成服務)
+21. [ECR + EC2 SSM 部署模式](#21-ecr--ec2-ssm-部署模式)
 
 ---
 
@@ -554,6 +556,17 @@ Notion 會議紀錄（87 份，2023–2026）
   分類品質：gpt-5-mini 驗證分類正確率
   Retrieval 品質：語意搜尋 + gpt-5-mini 相關性判斷
             ↓ output/eval_report.json
+
+══════════════ API 層（2026-02-27 新增）══════════════
+
+[SEO Insight API] app/ — FastAPI，讀 Step 3 產出進記憶體
+  啟動時載入：qa_final.json（703 筆）+ qa_embeddings.npy（703×1536）
+  endpoints：
+    POST /api/v1/search  → numpy cosine 語意搜尋
+    POST /api/v1/chat    → RAG 問答（gpt-5.2）
+    GET  /api/v1/qa      → 篩選列表
+  部署：Docker image → ECR → EC2（SSM 遠端換容器）
+            ↓ http://EC2:8001
 ```
 
 ### 模型選擇邏輯
@@ -597,3 +610,461 @@ Notion 會議紀錄（87 份，2023–2026）
 ```
 
 **不要先跑完 87 份再來評估要不要改 prompt。**
+
+---
+
+## 13. Prompt Engineering 進階：業界最佳實踐（2026-02-27 研究）
+
+### 四層結構：What / Why / How / Evidence
+
+每個 Answer 應包含四個層次（對應 Google E-E-A-T 框架）：
+
+| 層次 | 對應 E-E-A-T | 內容 |
+|------|------------|------|
+| **What** | Expertise | 直接說明建議或結論 |
+| **Why** | Authoritativeness | Google 演算法邏輯、SEO 影響機制 |
+| **How** | Experience | 具體可執行步驟、工具操作路徑 |
+| **Evidence** | Trustworthiness | 可在 GSC/GA4 驗證的位置或數據 |
+
+```
+❌ Completeness 3分：
+A: canonical 應該指向乾淨的 URL 版本。
+
+✅ Completeness 5分：
+A: [What] canonical 應統一指向不帶 query string 的乾淨 URL。
+   [Why] Google 爬蟲有時會自行選擇錯誤的 canonical，浪費爬蟲預算。
+   [How] 在帶參數頁面的 <head> 加 <link rel="canonical" href="..."> 指向標準版本。
+   [Evidence] GSC「索引 > 頁面 > 系統選擇的 canonical」驗證是否生效。
+```
+
+### 多角色定義（Multi-Expert Prompting）
+
+單一「SEO 專家」角色不夠，升級為三個視角：
+
+```python
+EXTRACT_SYSTEM_PROMPT = """
+你同時扮演三個角色：
+
+知識本體設計師：每個 Q&A 能獨立放進知識庫，讀者不需要看原始會議
+SEO 實踐審計員：判斷建議是否有工具配套（GSC、GA4），步驟是否能落地
+品質評估官：用「完整性 + 可執行性 + 可驗證性」衡量每個 A
+"""
+```
+
+研究來源：[ExpertPrompting (arXiv:2305.14688)](https://arxiv.org/html/2305.14688v2)
+
+### 防止幻覺（Hallucination Prevention）
+
+SEO 知識萃取最常見的三種幻覺：
+
+| 幻覺類型 | 錯誤範例 | 正確做法 |
+|---------|---------|---------|
+| 補充通用知識 | 會議說「title 有問題」→ 加上「通常 50-60 字最佳」 | 只寫會議有的，未提及標註「（具體做法未提及）」 |
+| 模糊工具路徑 | 「在 GA4 查看」 | 「GSC『索引 > 頁面』」或加「（路徑未提及）」 |
+| 虛構數字 | 「流量下降約 20%」 | 「流量下降」或「（幅度未提及）」 |
+
+研究來源：[Anthropic Hallucination Reduction](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-hallucinations)
+
+### 三個 Few-Shot 範例策略
+
+研究顯示應覆蓋 confidence 三個等級，避免過度（> 5 個）：
+
+| 範例 | Confidence | 用途 |
+|------|-----------|------|
+| 範例 1 | 0.9（高）| 顧問明確建議，有完整 What/Why/How/Evidence |
+| 範例 2 | 0.4（低）| 觀察中議題，標註「（持續觀察中）」|
+| 範例 3 | 0.65（中）| 部分資訊，有 What/Why/How，Evidence 標註「（未提及）」|
+
+研究來源：[Few-Shot Prompting Guide](https://www.promptingguide.ai/techniques/fewshot)
+
+### JSON Schema description 約束
+
+OpenAI strict=True 不支援 minLength/maxItems 等欄位驗證，改用 description 做軟約束：
+
+```python
+"question": {"type": "string", "description": "SEO 問題，自包含，20–150 字"},
+"answer":   {"type": "string", "description": "含 What/Why/How/Evidence，至少 100 字"},
+"keywords": {"type": "array",  "description": "3–7 個 SEO 術語，避免通用詞"},
+"confidence": {"type": "number", "description": "0.0–1.0，顧問建議≥0.8，推測≤0.7"},
+```
+
+研究來源：[OpenAI Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)
+
+---
+
+## 14. 評估維度詳解與基準線
+
+### 四個評估維度說明
+
+| 維度 | 問的核心問題 | 評分標準（1-5） |
+|------|------------|--------------|
+| **Relevance** | 這是真正有價值的 SEO 知識嗎？ | 1=完全無關閒聊；5=高濃度可複用知識 |
+| **Accuracy** | A 是否忠實反映原始會議內容？ | 1=明顯錯誤或虛構；5=完全符合來源 |
+| **Completeness** | A 是否有足夠深度讓讀者理解並行動？ | 1=只有結論無原因；5=What+Why+How+Evidence 齊全 |
+| **Granularity** | Q 的聚焦程度是否恰當？ | 1=問題過於廣泛；5=聚焦單一具體主題 |
+
+### 評估分數要求的完整行動建議
+
+| 維度 | 目標分數 | 當前基準線 | 狀態 | 提升方法 |
+|------|---------|----------|------|---------|
+| Relevance | ≥ 4.5 | 4.65 | ✅ | 無需調整 |
+| Accuracy | ≥ 4.0 | 3.80 | 可改善 | 加入 faithfulness 檢查 |
+| **Completeness** | **≥ 4.0** | **3.70** | **⚠️ 優先** | 強化 EXTRACT_SYSTEM_PROMPT（見第 13 節） |
+| Granularity | ≥ 4.5 | 4.65 | ✅ | 無需調整 |
+
+### 額外評估指標說明
+
+- **Confidence 校準**：Q&A 的 `confidence` 值應與實際品質相關（高 confidence → 高 Accuracy）
+- **Self-contained**：Q 不依賴原始會議就能理解（目前 Granularity 4.65 說明已做好）
+- **Actionable**：A 提供具體可執行建議（Completeness 的核心要求）
+- **Faithfulness**：A 的內容來自原始文件，不是 AI 自行補充（Accuracy 的核心要求）
+
+---
+
+## 15. 模型選擇決策
+
+### GPT-5 系列全為推理模型（2026-02-27 驗證）
+
+**重要發現**：gpt-5 整個系列（nano / mini / 5.2）**全部都是推理模型**，不存在非推理的 gpt-5 選項。
+
+```python
+# 實驗驗證 gpt-5-nano：
+response.model = "gpt-5-nano-2025-08-07"
+reasoning_tokens = 100  # 全部用於推理，content=""
+```
+
+測試結果：
+
+| 模型 | max_tokens | 空回應率 | Category 正確率 |
+|------|-----------|---------|--------------|
+| gpt-5-mini | 2048 | ~5-10% | **75%** ✅ |
+| gpt-5-nano | 2048 | **35%** | 65% ❌ |
+
+→ gpt-5-nano 表現比 gpt-5-mini 更差，原因是 nano 推理 token 佔用比例更高。
+
+### 正確解法：調整 token budget，而非換模型
+
+所有 gpt-5 系列做 JSON 輸出時的必要設定：
+
+```python
+# 分類任務：max_completion_tokens 要夠（reasoning + JSON output 共享）
+max_completion_tokens=2048  # 分類任務
+
+# 空回應保護（必須）：
+if "category_judgment" not in result:
+    continue  # skip-empty，不計入統計
+```
+
+### 本專案模型選擇總覽
+
+| 任務 | 模型 | 理由 |
+|------|------|------|
+| Q&A 萃取 | gpt-5.2 | 需要高品質理解與生成 |
+| Q&A 合併 | gpt-5.2 | 需要強推理 |
+| Q&A 分類 | gpt-5-mini | 省成本，max_tokens=2048 穩定 |
+| 週報生成 | gpt-5.2 | 需要深度分析 |
+| LLM Judge（品質評估） | gpt-5.2 | 需要推理能力 |
+| Retrieval 相關性判斷 | gpt-5-mini | max_tokens=1024 穩定 |
+| Embedding | text-embedding-3-small | 語意向量計算 |
+
+---
+
+## 16. Embedding 模型比較與升級時機
+
+### 主流 Embedding 模型比較
+
+| 模型 | 維度 | MTEB 準確度 | 成本 | 語言支援 |
+|------|------|-----------|------|---------|
+| **text-embedding-3-small**（現用）| 1536 | 75.8% | $0.00002/1K | 多語言 |
+| text-embedding-3-large | 3072 | 80.5% | $0.00013/1K（6.5x）| 多語言 |
+| Qwen3-Embedding-8B（開源）| 自訂 | MTEB 榜首 | 免費（自架）| 中英混合最佳 |
+
+### 何時考慮升級 Embedding
+
+**現階段維持 text-embedding-3-small**，原因：
+- Retrieval MRR = 0.79，Top-1 Precision = 100%
+- 目前 KW Hit Rate 54% 的瓶頸不在 embedding 品質，而在搜尋策略（Reranking）
+
+**升級觸發條件**：
+1. 實作 Cross-encoder Reranking 後，KW Hit Rate 仍 < 60%
+2. 新增非結構化資料來源（PDF、圖片）需要多模態 embedding
+3. 若要支援更精準的中英混合搜尋，考慮 Qwen3-Embedding
+
+---
+
+## 17. RAG 框架比較與整合策略
+
+### 主流框架比較
+
+| 框架 | 定位 | 優點 | 缺點 |
+|------|------|------|------|
+| **自建 pipeline**（現用）| 輕量自定義 | 低依賴、高彈性 | 需要自己維護 |
+| LangChain | 工作流編排 | 生態豐富、鏈式組合 | 複雜、版本頻繁變動 |
+| LlamaIndex | 文件檢索優化 | Retrieval 提升 35%、支援多種資料源 | 較重 |
+| txtai | 輕量無依賴 | 嵌入式、極簡 | 功能受限 |
+
+### 現階段決策：不引入外部框架
+
+**原因**：現有 pipeline 已驗證、穩定，引入框架的收益不值得增加的複雜度。
+
+**未來整合時機**：
+- 若需要支援 PDF、資料庫、圖片等多來源 → 考慮 LlamaIndex
+- 若需要複雜的多步驟 AI 工作流 → 考慮 LangChain
+- 目前只有 Notion Markdown 作為資料源 → 繼續自建
+
+---
+
+## 18. Retrieval 指標說明與 Cross-encoder Reranking
+
+### Retrieval 評估指標詳解
+
+| 指標 | 計算方式 | 直覺理解 | 本專案基準線 |
+|------|---------|---------|-----------|
+| **MRR**（Mean Reciprocal Rank）| 第一筆正確結果排名的倒數取平均 | 第 1 筆正確 = 1.0；第 2 筆正確 = 0.5 | 0.79 ✅ |
+| **NDCG**（Normalized Discounted Cumulative Gain）| 考慮排名位置的累積相關度，越靠前越值錢 | 比 MRR 更細緻 | 未實作 |
+| **Hit Rate**（Recall@K）| top-K 結果中有沒有包含正確答案 | Hit@5 = 前 5 筆有沒有 | KW 54% / Category 75% |
+| **LLM Top-1 Precision** | top-1 結果是否與查詢真實相關（LLM 判斷）| 最重要的第一筆準不準 | 100% ✅ |
+
+### KW Hit Rate 54% 的問題與 Reranking 方案
+
+**現況**：Bi-encoder（語意搜尋）+ keyword boost → KW Hit Rate 54%
+
+**Cross-encoder Reranking 架構**：
+
+```
+[查詢]
+  ↓
+[Bi-encoder 語意搜尋] → top-50 候選（快速，但精度有限）
+  ↓
+[Cross-encoder 重排序] → top-5 精排（慢但精準）
+  ↓
+[最終結果]
+```
+
+**效果預期**：Hit Rate 提升 8-15 個百分點（從 54% → 約 62-68%）
+
+**推薦模型**：BGE-reranker-v2-m3
+- 開源（Apache 2.0 授權）
+- 支援 100+ 語言（含中文）
+- 需要新增依賴：`sentence-transformers`
+
+**為什麼還沒實作**：
+- 需要新增依賴（增加複雜度）
+- 先在 Step 5 evaluation 中做實驗性對比，確認提升幅度再整合進 Step 4
+- LLM Top-1 Precision 已是 100%，當下用戶體驗不差
+
+---
+
+## 19. LLM-as-Judge 設計原則
+
+### Judge Prompt 最佳實踐
+
+**Chain-of-Thought（CoT）**：先給理由，再給分數：
+
+```python
+JUDGE_PROMPT = """
+評估以下 Q&A 的 Completeness（完整性），1-5分。
+
+請先給出你的分析，再給出分數：
+<analysis>
+[先分析 Answer 包含了哪些要素，缺少哪些要素]
+</analysis>
+<score>
+{"completeness": {"score": X, "reason": "一句話原因"}}
+</score>
+"""
+```
+
+**為什麼 CoT 重要**：強制 LLM 先思考再評分，減少直覺偏差，分數更穩定。
+
+### 常見 Judge 偏差與避免方法
+
+| 偏差類型 | 現象 | 避免方法 |
+|---------|------|---------|
+| 冗長偏差 | 長答案自動得高分 | 強調「精準簡潔也可以得 5 分」 |
+| 位置偏差 | 第一個選項偏高 | 固定評分順序，不做對比評估 |
+| 自我偏好 | 用 GPT-5.2 評 GPT-5.2 生成的內容 | 可接受，但需注意過度膨脹的分數 |
+
+### 本專案 Judge 模型維持 gpt-5.2
+
+**理由**：
+- 研究顯示 gpt-5.2 在評分一致性上表現良好
+- 換成 Claude Opus 會增加跨平台複雜度
+- 開源 Judge 模型（Prometheus-7B）需要自建推理環境
+
+**改善方向**：不換模型，而是改善 Judge prompt（加入 CoT、反向偏差提示）。
+
+---
+
+## 20. FastAPI RAG API 化：把知識庫包成服務
+
+> 本 session（2026-02-27）實作。把 Step 3 產出的 JSON + npy 包成 HTTP API，不動任何 pipeline 架構。
+
+### 設計原則：無 DB、No ORM、全記憶體
+
+```
+# 過度設計（不要做）       # MVP 做法（本專案選擇）
+postgres + pgvector     →  numpy 矩陣 @ 向量 = cosine
+redis cache             →  python dict，啟動一次載入記憶體
+celery task queue       →  FastAPI lifespan 直接載入
+```
+
+**決策依據**：703 筆 Q&A × 1536 維 = 約 4MB，遠小於 EC2 記憶體。
+資料不變動（pipeline 跑完才更新），不需要即時寫入。
+
+### FastAPI lifespan：啟動時載入資料
+
+```python
+# app/main.py
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    store.load()          # 載入 qa_final.json + qa_embeddings.npy
+    yield                 # 服務存活期間資料保持在記憶體
+    # 關閉時 GC 自動回收
+
+app = FastAPI(lifespan=lifespan)
+```
+
+**前端類比**：`useEffect(() => { fetchData() }, [])` 的伺服器端版本——只跑一次，結果存在 module-level 變數。
+
+### numpy cosine similarity（不用 pgvector）
+
+```python
+# app/core/store.py
+# 預先 L2 歸一化，讓點積 = cosine similarity
+norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+self.embeddings = embeddings / norms  # shape: (703, 1536)
+
+def search(self, query_vec: np.ndarray, top_k: int = 5):
+    scores = self.embeddings @ query_vec  # (703,)，dot product = cosine
+    top_idx = np.argsort(scores)[::-1][:top_k]
+    return [(self.items[i], float(scores[i])) for i in top_idx]
+```
+
+**數學**：兩個 L2 歸一化向量的點積 = cosine similarity。
+矩陣乘法一次計算全部 703 筆相似度，比 for loop 快 100x+。
+
+### RAG chat 實作模式
+
+```python
+# app/core/chat.py
+async def rag_chat(message: str, history: list[dict]) -> dict:
+    # 1. 把問題 embed
+    query_vec = await get_embedding(message)  # AsyncOpenAI
+
+    # 2. 語意搜尋找 context
+    hits = store.search(query_vec, top_k=5)
+
+    # 3. 組裝 context 進 system message
+    context = format_hits_as_text(hits)
+    messages = [
+        {"role": "system", "content": SEO_EXPERT_SYSTEM_PROMPT},
+        {"role": "system", "content": f"--- 知識庫 ---\n{context}"},
+        *history,
+        {"role": "user", "content": message},
+    ]
+
+    # 4. GPT 生成回答
+    resp = await client.chat.completions.create(
+        model="gpt-5.2", messages=messages, temperature=0.3
+    )
+    return {"answer": resp.choices[0].message.content, "sources": sources}
+```
+
+**關鍵**：`history` 放在 context 和 user message 之間，讓 GPT 看到對話歷史。
+`temperature=0.3`：RAG 問答要準確，不要創意。
+
+### 模組結構
+
+```
+app/
+├── config.py          # 從環境變數讀設定，不 import pipeline 的 config.py
+├── core/
+│   ├── store.py       # QAStore singleton：load() / search() / list_qa()
+│   └── chat.py        # get_embedding() + rag_chat()
+├── routers/
+│   ├── search.py      # POST /api/v1/search
+│   ├── chat.py        # POST /api/v1/chat
+│   └── qa.py          # GET  /api/v1/qa, /qa/{id}, /qa/categories
+└── main.py            # lifespan + CORS + include_router
+```
+
+**設計原則**：`app/` 自包含，不 import pipeline 的 `utils/` 或 `scripts/`。
+日後兩個可以獨立部署。
+
+---
+
+## 21. ECR + EC2 SSM 部署模式
+
+> 本 session（2026-02-27）設計，對應 vocus 現行 infra（與 vocus-web-ui 的 EC2 段相同邏輯）。
+
+### 三種部署選項比較
+
+| 方案 | 複雜度 | 適合場景 |
+|------|--------|----------|
+| EC2 直接 `docker run` | 低 | 一次性手動部署 |
+| **ECR + EC2 SSM（本專案選擇）** | **中** | **內部工具，CI/CD 自動化** |
+| ECR + ECS Fargate | 高 | Production，需要 auto-scaling |
+
+### ECR + EC2 SSM 流程
+
+```
+git push main
+    ↓
+GitHub Actions
+    ↓
+docker build -t seo-insight-api:$TAG .
+    ↓
+ECR push（AWS 私有 registry）
+    ↓
+SSM send-command → EC2 執行：
+  aws ecr get-login-password | docker login
+  docker pull $IMAGE:$TAG
+  docker stop seo-insight-api && docker rm seo-insight-api
+  docker run -d --name seo-insight-api \
+    -p 127.0.0.1:8001:8001 \
+    -v /data/output:/app/output:ro \
+    -e OPENAI_API_KEY=$KEY \
+    $IMAGE:$TAG
+```
+
+**SSM 好處**：不需要 SSH 進 EC2，不需要開 22 port，AWS IAM 控制權限。
+
+### Dockerfile 設計要點
+
+```dockerfile
+FROM python:3.12-slim        # slim = 沒有不必要的系統套件
+WORKDIR /app
+COPY requirements_api.txt .  # 先 COPY 依賴，利用 layer cache
+RUN pip install --no-cache-dir -r requirements_api.txt
+COPY app/ ./app/             # 只 COPY API 程式碼
+# output/ 用 volume mount，不進 image（data 與 code 分離）
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+```
+
+**`.dockerignore` 必要性**：排除 `output/`、`raw_data/`、`.venv/` 等，
+把 268MB image 控制在合理範圍（否則可能超過 1GB）。
+
+### volume mount：data 與 code 分離
+
+```bash
+# EC2 上放資料，container 只 COPY code
+docker run -v /home/ec2-user/seo-data/output:/app/output:ro ...
+#                 ↑ EC2 路徑                  ↑ container 內路徑  ↑ 唯讀
+```
+
+**好處**：更新 `qa_final.json`（pipeline 重跑後）只需要 `docker restart`，
+不需要重新 build image。
+
+### GitHub Actions 關鍵 Secrets
+
+| Secret | 用途 |
+|--------|------|
+| `ECR_DOMAIN` | `xxxx.dkr.ecr.ap-northeast-1.amazonaws.com` |
+| `EC2_TAG_KEY/VALUE` | 找目標 EC2 的 tag（e.g. `Name=seo-api`）|
+| `OUTPUT_DATA_PATH` | EC2 上的 data 路徑 |
+
+**EC2 所需 IAM 角色**：`ecr:GetAuthorizationToken` + `ecr:BatchGetImage` + SSM Agent 啟動。
+

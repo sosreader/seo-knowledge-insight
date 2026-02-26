@@ -583,6 +583,91 @@ Q&A 萃取的品質主要取決於 `utils/openai_helper.py` 中的 prompt：
 
 ---
 
+## SEO Insight API
+
+> **狀態**：Phase 2 已完成。`app/` 目錄提供獨立的 FastAPI 服務，讀取 `output/qa_final.json` 與 `output/qa_embeddings.npy` 進記憶體，不依賴任何資料庫。
+
+### 架構
+
+```
+app/
+├── main.py              # FastAPI 應用入口、lifespan（啟動載入資料）、CORS
+├── config.py            # API 專用設定（不依賴 pipeline config.py）
+├── core/
+│   ├── store.py         # QAStore singleton：載入 JSON+npy，search()/list_qa()
+│   └── chat.py          # get_embedding() + rag_chat()（AsyncOpenAI）
+└── routers/
+    ├── search.py        # POST /api/v1/search
+    ├── chat.py          # POST /api/v1/chat
+    └── qa.py            # GET  /api/v1/qa, /qa/{id}, /qa/categories
+```
+
+### Endpoints
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/health` | 健康檢查，回傳 `{status, qa_count}` |
+| `POST` | `/api/v1/search` | 語意搜尋，body: `{query, top_k?, category?}` |
+| `POST` | `/api/v1/chat` | RAG 問答，body: `{message, history?}` |
+| `GET` | `/api/v1/qa` | 列表查詢，query: `category`, `keyword`, `difficulty`, `evergreen`, `limit`, `offset` |
+| `GET` | `/api/v1/qa/categories` | 所有分類（依數量降序） |
+| `GET` | `/api/v1/qa/{id}` | 單筆 Q&A |
+
+互動式文件：`http://localhost:8001/docs`
+
+### 本機測試
+
+```bash
+# 方式 1：直接啟動
+OPENAI_API_KEY=sk-... uvicorn app.main:app --reload --port 8001
+
+# 方式 2：Docker
+docker build -t seo-insight-api:local .
+docker run -d \
+  -p 127.0.0.1:8001:8001 \
+  -v $(pwd)/output:/app/output:ro \
+  -e OPENAI_API_KEY=sk-... \
+  seo-insight-api:local
+
+# 測試
+curl http://localhost:8001/health
+curl 'http://localhost:8001/api/v1/qa/categories'
+```
+
+### 部署（ECR + EC2 SSM）
+
+GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workflows/deploy-seo-api.yaml)
+
+**觸發條件**：push to `main`，且 `app/**`、`requirements_api.txt` 或 `Dockerfile` 有變更。
+
+**所需 GitHub Secrets：**
+
+| Secret | 說明 |
+|--------|------|
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user，需 ECR push + SSM 執行權限 |
+| `AWS_REGION` | e.g. `ap-northeast-1` |
+| `ECR_DOMAIN` | e.g. `123456789.dkr.ecr.ap-northeast-1.amazonaws.com` |
+| `OPENAI_API_KEY` | 真實 key |
+| `EC2_TAG_KEY` / `EC2_TAG_VALUE` | 找 EC2 用的 tag，e.g. `Name` / `seo-api` |
+| `OUTPUT_DATA_PATH` | EC2 上 output/ 的絕對路徑，e.g. `/home/ec2-user/seo-api-data/output` |
+
+**EC2 也需要**：
+- IAM role 有 `ecr:GetAuthorizationToken` + `ecr:BatchGetImage` 權限
+- SSM Agent 啟動（Amazon Linux 2 預設已安裝）
+
+### 環境變數（`app/`）
+
+| 變數 | 預設值 | 說明 |
+|------|--------|------|
+| `OPENAI_API_KEY` | — | 必填 |
+| `OPENAI_MODEL` | `gpt-5.2` | RAG chat 模型 |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding 模型 |
+| `CORS_ORIGINS` | `http://localhost:3000` | 逗號分隔多個 origin |
+| `SEARCH_TOP_K` | `5` | 語意搜尋預設回傳筆數 |
+| `CHAT_CONTEXT_K` | `5` | RAG chat 帶入的 context 筆數 |
+
+---
+
 ## 未來擴充（Roadmap）
 
 ### Phase 1 — 增量處理（近期）
@@ -594,13 +679,15 @@ Q&A 萃取的品質主要取決於 `utils/openai_helper.py` 中的 prompt：
 
 ### Phase 2 — API 化（中期）
 
-- [ ] 加入 `api/` 目錄，用 FastAPI 提供 REST API
-  - `GET /api/qa` — 列表查詢（支援分類、關鍵字、分頁）
-  - `GET /api/qa/:id` — 單筆詳情
-  - `GET /api/qa/search?q=...` — 語意搜尋（embedding）
-  - `POST /api/pipeline/run` — 觸發 pipeline 執行
+- [x] 加入 `app/` 目錄，用 FastAPI 提供 REST API（見 [SEO Insight API](#seo-insight-api)）
+  - `GET /api/v1/qa` — 列表查詢（支援分類、關鍵字、難度、evergreen、分頁）
+  - `GET /api/v1/qa/{id}` — 單筆詳情
+  - `GET /api/v1/qa/categories` — 所有分類
+  - `POST /api/v1/search` — 語意搜尋（embedding cosine similarity）
+  - `POST /api/v1/chat` — RAG 問答（知識庫 + GPT 對話）
 - [ ] 前端 `~/Documents/vocus-web-ui` 透過 API 讀取 Q&A 資料庫
 - [x] 加入 `pyproject.toml`，讓專案可以 `pip install -e .` 安裝
+- [x] Docker 化（`Dockerfile`），部署至 EC2 via ECR + SSM
 
 ### Phase 3 — 進階功能（遠期）
 

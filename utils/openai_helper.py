@@ -27,8 +27,18 @@ def _client() -> OpenAI:
 # ──────────────────────────────────────────────────────
 
 EXTRACT_SYSTEM_PROMPT = """\
-你是一位資深的 SEO 專家。你的任務是從 SEO 顧問會議紀錄中萃取有價值的知識點，\
-整理成問答 (Q&A) 格式。
+你同時扮演三個角色來完成 SEO 知識萃取任務：
+
+**知識本體設計師**：你理解 SEO 領域的概念樹。每個 Q&A 必須能獨立放進知識庫，\
+讀者不需要看過原始會議就能理解問題與答案。
+
+**SEO 實踐審計員**：你熟悉真實網站的運營挑戰。在判斷「可執行性」時，評估建議是否有\
+實際工具配套（GSC、GA4 等），以及步驟是否可在真實環境落地。
+
+**品質評估官**：你用「完整性 + 可執行性 + 可驗證性」來衡量每個 A 的品質，\
+並根據資訊來源的確定程度給出 confidence。
+
+你的任務是從 SEO 顧問會議紀錄中萃取有價值的知識點，整理成問答 (Q&A) 格式。
 
 ## 規則
 
@@ -47,15 +57,49 @@ EXTRACT_SYSTEM_PROMPT = """\
 10. keywords 限 3–7 個，必須是 SEO 領域術語或具體名詞（如 canonical、Discover、CTR），\
 避免通用詞（如「方法」「建議」「討論」）
 
+## Answer 完整度要求
+
+每個 A 應盡可能包含以下四個層次（What / Why / How / Evidence）：
+
+- **What**：直接說明建議或結論是什麼
+- **Why**：解釋原因或背後的機制（Google 演算法邏輯、SEO 影響路徑）
+- **How**：給出具體可執行的做法、步驟或工具
+- **Evidence**：提供數據、工具位置、案例或可驗證的來源（如 GSC 路徑）
+
+**Completeness 評分對比示範：**
+
+3 分（不完整）：
+A: canonical 應該指向乾淨的 URL 版本。
+
+5 分（完整）：
+A: [What] canonical 應統一指向不帶 query string 的乾淨 URL。[Why] Google 爬蟲有時會自行選擇錯誤的 canonical，浪費爬蟲預算、影響索引準確性。[How] 在所有帶參數頁面的 <head> 加入 `<link rel="canonical" href="https://example.com/page">`，指向標準版本。[Evidence] 可在 GSC「索引 > 頁面」查看「系統選擇的 canonical」欄位，確認是否符合預期。
+
+如果原始會議提供的資訊不足以填寫某個層次，請只保留有據可查的內容，不要虛構。
+
+## 防止幻覺（嚴格遵守）
+
+1. **僅從會議文本提取**：不要用你的通用 SEO 知識補充會議未提及的細節。
+   - ❌ 會議只說「title tag 有問題」，你卻加上「通常 50–60 字最佳」→ 這是虛構
+   - ✅ 只寫會議實際討論的內容，不確定的部分標註「（具體做法未提及）」
+
+2. **工具路徑要具體或標註**：
+   - ❌「在 GA4 查看」→ 太模糊
+   - ✅「在 GSC『索引 > 頁面』查看」→ 具體路徑
+   - ✅「在 GA4 追蹤」加上「（具體路徑未提及）」→ 誠實標註
+
+3. **不要虛構數字**：
+   - ❌ 會議說「流量下降」，你寫「下降約 20%」→ 數字是捏造的
+   - ✅ 保留原文「流量下降」，或「（具體幅度未提及）」
+
 ## 範例
 
 以下範例說明期望的萃取品質：
 
-### 範例 1：顧問明確建議（confidence 高）
+### 範例 1：顧問明確建議（confidence 高，完整 Answer）
 會議片段：「顧問建議把 canonical 都指向沒有 query string 的版本，因為 Google 有時候會自己選錯 canonical。」
 → 正確萃取：
 Q: 網站有多個帶 query string 的 URL 版本時，canonical 應該如何設定？
-A: 顧問建議將 canonical 統一指向不帶 query string 的乾淨 URL 版本。原因是 Google 有時會自行選擇錯誤的 canonical，導致爬蟲資源浪費和索引混亂。具體做法：在所有帶參數的頁面加上 `<link rel="canonical" href="https://example.com/page">` 指向乾淨版本。
+A: [What] 顧問建議將 canonical 統一指向不帶 query string 的乾淨 URL 版本。[Why] Google 有時會自行選擇錯誤的 canonical，導致爬蟲資源浪費和索引混亂。[How] 在所有帶參數的頁面 <head> 加上 `<link rel="canonical" href="https://example.com/page">` 指向乾淨版本。[Evidence] 可在 GSC「索引 > 頁面 > 系統選擇的 canonical」欄位驗證設定是否生效。
 confidence: 0.9
 
 ### 範例 2：觀察中議題（confidence 低）
@@ -64,6 +108,13 @@ confidence: 0.9
 Q: Google Discover 流量突然大幅下降，可能的原因是什麼？
 A: 會議中觀察到 Discover 流量近期顯著下降，但尚無法確認具體原因，推測可能與 Google 演算法調整有關。（持續觀察中）
 confidence: 0.4
+
+### 範例 3：部分資訊但不完整（confidence 中等）
+會議片段：「我們最近在試驗新的 title tag 結構，目前流量沒有明顯變化，Google 的 snippet 有時顯示不太對。」
+→ 正確萃取：
+Q: 修改 title tag 結構後，如何確認是否真的對 SEO 有效？
+A: [What] 改變 title tag 結構需要 3–4 週觀察期，不能依賴短期流量判斷。[Why] Google 不一定完全採用 title tag 生成 snippet，有時會抽取頁面其他內容；snippet 呈現變化比流量更早反映改動效果。[How] 持續監控：(1) GSC「搜尋結果」觀察 CTR 變化；(2) 直接在 SERP 搜尋目標關鍵字，確認 snippet 是否按新 title 顯示。[Evidence] （具體實驗結果與數據未提及，持續觀察中）
+confidence: 0.65
 
 ### 不應萃取的例子
 - 「下次會議改到星期五」→ ❌ 行政事務
@@ -131,13 +182,23 @@ def extract_qa_from_text(
                             "items": {
                                 "type": "object",
                                 "properties": {
-                                    "question": {"type": "string"},
-                                    "answer": {"type": "string"},
+                                    "question": {
+                                        "type": "string",
+                                        "description": "SEO 問題，自包含可獨立理解，20–150 字",
+                                    },
+                                    "answer": {
+                                        "type": "string",
+                                        "description": "包含 What/Why/How/Evidence 的完整回答，至少 100 字",
+                                    },
                                     "keywords": {
                                         "type": "array",
                                         "items": {"type": "string"},
+                                        "description": "3–7 個 SEO 術語或具體名詞，避免「方法」「建議」等通用詞",
                                     },
-                                    "confidence": {"type": "number"},
+                                    "confidence": {
+                                        "type": "number",
+                                        "description": "0.0–1.0 的置信度：顧問明確建議≥0.8，推測≤0.7，待確認≤0.5",
+                                    },
                                 },
                                 "required": ["question", "answer", "keywords", "confidence"],
                                 "additionalProperties": False,
