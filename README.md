@@ -604,14 +604,14 @@ app/
 
 ### Endpoints
 
-| Method | Path | 說明 |
-|--------|------|------|
-| `GET` | `/health` | 健康檢查，回傳 `{status, qa_count}` |
-| `POST` | `/api/v1/search` | 語意搜尋，body: `{query, top_k?, category?}` |
-| `POST` | `/api/v1/chat` | RAG 問答，body: `{message, history?}` |
-| `GET` | `/api/v1/qa` | 列表查詢，query: `category`, `keyword`, `difficulty`, `evergreen`, `limit`, `offset` |
-| `GET` | `/api/v1/qa/categories` | 所有分類（依數量降序） |
-| `GET` | `/api/v1/qa/{id}` | 單筆 Q&A |
+| Method | Path                    | 說明                                                                                 |
+| ------ | ----------------------- | ------------------------------------------------------------------------------------ |
+| `GET`  | `/health`               | 健康檢查，回傳 `{status, qa_count}`                                                  |
+| `POST` | `/api/v1/search`        | 語意搜尋，body: `{query, top_k?, category?}`                                         |
+| `POST` | `/api/v1/chat`          | RAG 問答，body: `{message, history?}`                                                |
+| `GET`  | `/api/v1/qa`            | 列表查詢，query: `category`, `keyword`, `difficulty`, `evergreen`, `limit`, `offset` |
+| `GET`  | `/api/v1/qa/categories` | 所有分類（依數量降序）                                                               |
+| `GET`  | `/api/v1/qa/{id}`       | 單筆 Q&A                                                                             |
 
 互動式文件：`http://localhost:8001/docs`
 
@@ -642,29 +642,30 @@ GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workfl
 
 **所需 GitHub Secrets：**
 
-| Secret | 說明 |
-|--------|------|
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user，需 ECR push + SSM 執行權限 |
-| `AWS_REGION` | e.g. `ap-northeast-1` |
-| `ECR_DOMAIN` | e.g. `123456789.dkr.ecr.ap-northeast-1.amazonaws.com` |
-| `OPENAI_API_KEY` | 真實 key |
-| `EC2_TAG_KEY` / `EC2_TAG_VALUE` | 找 EC2 用的 tag，e.g. `Name` / `seo-api` |
-| `OUTPUT_DATA_PATH` | EC2 上 output/ 的絕對路徑，e.g. `/home/ec2-user/seo-api-data/output` |
+| Secret                                        | 說明                                                                 |
+| --------------------------------------------- | -------------------------------------------------------------------- |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user，需 ECR push + SSM 執行權限                                 |
+| `AWS_REGION`                                  | e.g. `ap-northeast-1`                                                |
+| `ECR_DOMAIN`                                  | e.g. `123456789.dkr.ecr.ap-northeast-1.amazonaws.com`                |
+| `OPENAI_API_KEY`                              | 真實 key                                                             |
+| `EC2_TAG_KEY` / `EC2_TAG_VALUE`               | 找 EC2 用的 tag，e.g. `Name` / `seo-api`                             |
+| `OUTPUT_DATA_PATH`                            | EC2 上 output/ 的絕對路徑，e.g. `/home/ec2-user/seo-api-data/output` |
 
 **EC2 也需要**：
+
 - IAM role 有 `ecr:GetAuthorizationToken` + `ecr:BatchGetImage` 權限
 - SSM Agent 啟動（Amazon Linux 2 預設已安裝）
 
 ### 環境變數（`app/`）
 
-| 變數 | 預設值 | 說明 |
-|------|--------|------|
-| `OPENAI_API_KEY` | — | 必填 |
-| `OPENAI_MODEL` | `gpt-5.2` | RAG chat 模型 |
-| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding 模型 |
-| `CORS_ORIGINS` | `http://localhost:3000` | 逗號分隔多個 origin |
-| `SEARCH_TOP_K` | `5` | 語意搜尋預設回傳筆數 |
-| `CHAT_CONTEXT_K` | `5` | RAG chat 帶入的 context 筆數 |
+| 變數                     | 預設值                   | 說明                         |
+| ------------------------ | ------------------------ | ---------------------------- |
+| `OPENAI_API_KEY`         | —                        | 必填                         |
+| `OPENAI_MODEL`           | `gpt-5.2`                | RAG chat 模型                |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding 模型               |
+| `CORS_ORIGINS`           | `http://localhost:3000`  | 逗號分隔多個 origin          |
+| `SEARCH_TOP_K`           | `5`                      | 語意搜尋預設回傳筆數         |
+| `CHAT_CONTEXT_K`         | `5`                      | RAG chat 帶入的 context 筆數 |
 
 ---
 

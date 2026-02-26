@@ -5,10 +5,10 @@ on:
     branches:
       - main
     paths:
-      - 'app/**'
-      - 'requirements_api.txt'
-      - 'Dockerfile'
-      - '.github/workflows/deploy-seo-api.yaml'
+      - "app/**"
+      - "requirements_api.txt"
+      - "Dockerfile"
+      - ".github/workflows/deploy-seo-api.yaml"
   workflow_dispatch:
 
 concurrency:

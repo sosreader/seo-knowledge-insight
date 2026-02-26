@@ -77,13 +77,13 @@
 
 ### 2.1 技術選型
 
-| 選項 | 決策 | 理由 |
-|------|------|------|
-| Web 框架 | **FastAPI** | 現有 pipeline 是 Python、async 原生支援、自動 OpenAPI 文件 |
-| 序列化 | **Pydantic v2** | 與 FastAPI 深度整合、strict mode、JSON Schema 產出 |
-| 資料庫 | **RDS PostgreSQL + pgvector** | 公司已在用 AWS，RDS 整合帳務、pgvector 支援語意搜尋 |
-| 快取 | **ElastiCache for Valkey** | Embedding 快取、Rate Limit、Session 快取；Valkey 比 Redis 便宜 20% |
-| Auth | **API Key + JWT** | 內部管理介面用 JWT、外部整合用 API Key |
+| 選項     | 決策                          | 理由                                                               |
+| -------- | ----------------------------- | ------------------------------------------------------------------ |
+| Web 框架 | **FastAPI**                   | 現有 pipeline 是 Python、async 原生支援、自動 OpenAPI 文件         |
+| 序列化   | **Pydantic v2**               | 與 FastAPI 深度整合、strict mode、JSON Schema 產出                 |
+| 資料庫   | **RDS PostgreSQL + pgvector** | 公司已在用 AWS，RDS 整合帳務、pgvector 支援語意搜尋                |
+| 快取     | **ElastiCache for Valkey**    | Embedding 快取、Rate Limit、Session 快取；Valkey 比 Redis 便宜 20% |
+| Auth     | **API Key + JWT**             | 內部管理介面用 JWT、外部整合用 API Key                             |
 
 ### 2.2 API Endpoints 完整規格
 
@@ -342,26 +342,26 @@ class ErrorDetail(BaseModel):
 
 **HTTP Status Code 使用：**
 
-| 場景 | Status Code |
-|------|-------------|
-| 成功回傳 | 200 |
-| 成功建立 | 201 |
-| 成功無內容 | 204 |
-| 驗證失敗 | 422 |
-| 未授權 | 401 |
-| 找不到 | 404 |
-| Rate Limit | 429 |
-| 伺服器錯誤 | 500 |
+| 場景       | Status Code |
+| ---------- | ----------- |
+| 成功回傳   | 200         |
+| 成功建立   | 201         |
+| 成功無內容 | 204         |
+| 驗證失敗   | 422         |
+| 未授權     | 401         |
+| 找不到     | 404         |
+| Rate Limit | 429         |
+| 伺服器錯誤 | 500         |
 
 ### 2.4 Rate Limiting
 
-| Tier | Limit | 適用 |
-|------|-------|------|
-| 搜尋/列表 | 60/min per user | GET endpoints |
-| 對話 (Chat) | 20/min per user | POST /chat |
-| 報告生成 | 5/hour per user | POST /report |
-| Pipeline | 2/hour global | POST /pipeline |
-| Eval | 10/hour per user | POST /eval |
+| Tier        | Limit            | 適用           |
+| ----------- | ---------------- | -------------- |
+| 搜尋/列表   | 60/min per user  | GET endpoints  |
+| 對話 (Chat) | 20/min per user  | POST /chat     |
+| 報告生成    | 5/hour per user  | POST /report   |
+| Pipeline    | 2/hour global    | POST /pipeline |
+| Eval        | 10/hour per user | POST /eval     |
 
 ### 2.5 資料庫 Schema
 
@@ -498,14 +498,14 @@ seo-insight-api/
 
 ### 3.1 Eval 類型
 
-| Eval 類型 | 頻率 | 觸發方式 | 說明 |
-|----------|------|---------|------|
-| **Q&A Quality** | 每次 pipeline 後 | 自動 + API | 四維度評分（Relevance、Accuracy、Completeness、Granularity） |
-| **Classification** | 每次 pipeline 後 | 自動 + API | 對照 golden set 驗證分類準確度 |
-| **Retrieval** | 每日 | 排程 + API | Keyword Hit Rate、Category Hit Rate、MRR、LLM Top-1 Precision |
-| **Multi-Turn Chat** | 每次部署後 | 手動 + API | 端到端對話品質、引用品質、連貫性 |
-| **Faithfulness** | 每季 | 手動 | 帶入原始 Markdown 驗證忠實度（成本較高） |
-| **Regression** | 每次模型/prompt 變更 | CI/CD | 確保變更不降低已知指標 |
+| Eval 類型           | 頻率                 | 觸發方式   | 說明                                                          |
+| ------------------- | -------------------- | ---------- | ------------------------------------------------------------- |
+| **Q&A Quality**     | 每次 pipeline 後     | 自動 + API | 四維度評分（Relevance、Accuracy、Completeness、Granularity）  |
+| **Classification**  | 每次 pipeline 後     | 自動 + API | 對照 golden set 驗證分類準確度                                |
+| **Retrieval**       | 每日                 | 排程 + API | Keyword Hit Rate、Category Hit Rate、MRR、LLM Top-1 Precision |
+| **Multi-Turn Chat** | 每次部署後           | 手動 + API | 端到端對話品質、引用品質、連貫性                              |
+| **Faithfulness**    | 每季                 | 手動       | 帶入原始 Markdown 驗證忠實度（成本較高）                      |
+| **Regression**      | 每次模型/prompt 變更 | CI/CD      | 確保變更不降低已知指標                                        |
 
 ### 3.2 Multi-Turn Eval 設計
 
@@ -579,15 +579,15 @@ MULTI_TURN_JUDGE_PROMPT = """
 
 #### 3.2.3 Multi-Turn Eval 指標
 
-| 指標 | 計算方式 | 目標 |
-|------|---------|------|
-| Turn Relevance | 每輪 LLM 評分平均 | ≥ 4.0 |
-| Groundedness | 引用 Q&A 覆蓋率 | ≥ 80% |
-| Coherence | 跨 turn 一致性 | ≥ 4.0 |
-| Citation Precision | 引用 Q&A 確實支持論點的比例 | ≥ 85% |
-| Query Rewrite Quality | 改寫查詢涵蓋意圖的比例 | ≥ 90% |
-| Hallucination Rate | 幻覺陳述數 / 總陳述數 | ≤ 5% |
-| pass@3 | 3 次中至少 1 次所有指標通過 | ≥ 90% |
+| 指標                  | 計算方式                    | 目標  |
+| --------------------- | --------------------------- | ----- |
+| Turn Relevance        | 每輪 LLM 評分平均           | ≥ 4.0 |
+| Groundedness          | 引用 Q&A 覆蓋率             | ≥ 80% |
+| Coherence             | 跨 turn 一致性              | ≥ 4.0 |
+| Citation Precision    | 引用 Q&A 確實支持論點的比例 | ≥ 85% |
+| Query Rewrite Quality | 改寫查詢涵蓋意圖的比例      | ≥ 90% |
+| Hallucination Rate    | 幻覺陳述數 / 總陳述數       | ≤ 5%  |
+| pass@3                | 3 次中至少 1 次所有指標通過 | ≥ 90% |
 
 #### 3.2.4 Eval Pipeline 自動化
 
@@ -663,7 +663,7 @@ MULTI_TURN_JUDGE_PROMPT = """
       ]
     },
     "completed_at": "2026-02-27T14:35:00Z",
-    "cost_usd": 1.20
+    "cost_usd": 1.2
   }
 }
 ```
@@ -717,9 +717,9 @@ name: Eval Regression Check
 on:
   push:
     paths:
-      - 'app/core/openai_client.py'     # prompt 變更
-      - 'app/services/chat_engine.py'    # RAG 邏輯變更
-      - 'app/services/search_engine.py'  # 搜尋邏輯變更
+      - "app/core/openai_client.py" # prompt 變更
+      - "app/services/chat_engine.py" # RAG 邏輯變更
+      - "app/services/search_engine.py" # 搜尋邏輯變更
 
 jobs:
   eval:
@@ -727,7 +727,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
+        with: { python-version: "3.12" }
       - run: pip install -r requirements.txt
       - run: |
           python -m pytest tests/test_eval_regression.py \
@@ -749,14 +749,14 @@ jobs:
     "avg_completeness": { "min": 3.5, "warn": 3.8 }
   },
   "retrieval": {
-    "avg_mrr": { "min": 0.60, "warn": 0.70 },
-    "llm_top1_precision": { "min": 0.70, "warn": 0.80 }
+    "avg_mrr": { "min": 0.6, "warn": 0.7 },
+    "llm_top1_precision": { "min": 0.7, "warn": 0.8 }
   },
   "multi_turn": {
     "avg_relevance": { "min": 3.8, "warn": 4.0 },
-    "citation_precision": { "min": 0.80, "warn": 0.85 },
-    "hallucination_rate": { "max": 0.10, "warn": 0.05 },
-    "pass_at_3": { "min": 0.85, "warn": 0.90 }
+    "citation_precision": { "min": 0.8, "warn": 0.85 },
+    "hallucination_rate": { "max": 0.1, "warn": 0.05 },
+    "pass_at_3": { "min": 0.85, "warn": 0.9 }
   }
 }
 ```
@@ -814,14 +814,15 @@ GET    /api/v1/eval/golden/export             # 匯出 (JSON)
 
 ### 4.2 部署選項比較（AWS 內）
 
-| 方案 | 推薦度 | 月費估算 | 優點 | 缺點 |
-|------|--------|---------|------|------|
-| **A: ECS Fargate（專用）** | ⭐⭐⭐ 推薦 | $45–65 | 無需管理 EC2、serverless container、ECR 整合 | 費用較 EC2 共用高 |
-| **B: 現有 EC2 加掛 Docker** | ⭐⭐ 省錢 | $15–25 | 幾乎不增加費用（EC2 已付）| 需確認 EC2 有剩餘容量、耦合度高 |
-| C: ECS EC2 Launch Type | 適合量大 | $30–50 | EC2 可預留實例折扣 | 需管理 EC2 cluster |
-| D: Lambda + API Gateway | 適合低頻 | $5–15 | Pay-per-use 最省 | Cold start 嚴重、不適合 WebSocket/streaming |
+| 方案                        | 推薦度      | 月費估算 | 優點                                         | 缺點                                        |
+| --------------------------- | ----------- | -------- | -------------------------------------------- | ------------------------------------------- |
+| **A: ECS Fargate（專用）**  | ⭐⭐⭐ 推薦 | $45–65   | 無需管理 EC2、serverless container、ECR 整合 | 費用較 EC2 共用高                           |
+| **B: 現有 EC2 加掛 Docker** | ⭐⭐ 省錢   | $15–25   | 幾乎不增加費用（EC2 已付）                   | 需確認 EC2 有剩餘容量、耦合度高             |
+| C: ECS EC2 Launch Type      | 適合量大    | $30–50   | EC2 可預留實例折扣                           | 需管理 EC2 cluster                          |
+| D: Lambda + API Gateway     | 適合低頻    | $5–15    | Pay-per-use 最省                             | Cold start 嚴重、不適合 WebSocket/streaming |
 
 **推薦：方案 A（ECS Fargate）**
+
 - 公司已有 ECR，Docker image push/pull 流程完整
 - ECS Fargate 免管理 EC2，自動 HA
 - 統一 VPC、IAM 權限管理
@@ -843,19 +844,33 @@ GET    /api/v1/eval/golden/export             # 匯出 (JSON)
     {
       "name": "seo-insight-api",
       "image": "ACCOUNT_ID.dkr.ecr.ap-northeast-1.amazonaws.com/seo-insight-api:latest",
-      "portMappings": [{"containerPort": 8080, "protocol": "tcp"}],
+      "portMappings": [{ "containerPort": 8080, "protocol": "tcp" }],
       "healthCheck": {
-        "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
-        "interval": 30, "timeout": 5, "retries": 3
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3
       },
       "environment": [
-        {"name": "ENVIRONMENT", "value": "production"},
-        {"name": "LOG_LEVEL", "value": "info"}
+        { "name": "ENVIRONMENT", "value": "production" },
+        { "name": "LOG_LEVEL", "value": "info" }
       ],
       "secrets": [
-        {"name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:...:seo-insight/database-url"},
-        {"name": "OPENAI_API_KEY", "valueFrom": "arn:aws:secretsmanager:...:openai-api-key"},
-        {"name": "REDIS_URL", "valueFrom": "arn:aws:secretsmanager:...:seo-insight/redis-url"}
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:...:seo-insight/database-url"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:...:openai-api-key"
+        },
+        {
+          "name": "REDIS_URL",
+          "valueFrom": "arn:aws:secretsmanager:...:seo-insight/redis-url"
+        }
       ],
       "logConfiguration": {
         "logDriver": "awslogs",
@@ -982,26 +997,26 @@ AWS_REGION=ap-northeast-1
 
 ### 5.1 基礎設施月費（方案 A：ECS Fargate 專用）
 
-| 服務 | 規格 | 月費估算 | 說明 |
-|------|------|---------|------|
-| **ECS Fargate** | 0.5 vCPU × 1GB × 24/7 | **~$18** | 1 task 常駐；若流量低可縮至 0.25 vCPU≈$9 |
-| **RDS PostgreSQL** | db.t4g.micro + 20GB gp3 Single AZ | **~$20** | t4g.micro ~$17/mo + storage $2.3 |
-| **ElastiCache Valkey** | cache.t3.micro | **~$14** | Valkey 比 Redis 便宜 20%；可免除改用 app-level cache |  
-| **ECR** | 500MB image | **~$0.05** | $0.10/GB-month |
-| **ALB** | 共用現有 ALB *(推薦)* | **$0** | 若需新建 ALB：$0.0243/hr ≈ $17.5/mo |
-| **S3** | 報告 Markdown 備份 | **~$0.05** | $0.023/GB；20 報告 ≈ 2MB |
-| **Secrets Manager** | 8 secrets | **~$0.32** | $0.40/secret/month |
-| **CloudWatch Logs** | 5GB/month | **~$2.5** | $0.50/GB |
+| 服務                   | 規格                              | 月費估算   | 說明                                                 |
+| ---------------------- | --------------------------------- | ---------- | ---------------------------------------------------- |
+| **ECS Fargate**        | 0.5 vCPU × 1GB × 24/7             | **~$18**   | 1 task 常駐；若流量低可縮至 0.25 vCPU≈$9             |
+| **RDS PostgreSQL**     | db.t4g.micro + 20GB gp3 Single AZ | **~$20**   | t4g.micro ~$17/mo + storage $2.3                     |
+| **ElastiCache Valkey** | cache.t3.micro                    | **~$14**   | Valkey 比 Redis 便宜 20%；可免除改用 app-level cache |
+| **ECR**                | 500MB image                       | **~$0.05** | $0.10/GB-month                                       |
+| **ALB**                | 共用現有 ALB _(推薦)_             | **$0**     | 若需新建 ALB：$0.0243/hr ≈ $17.5/mo                  |
+| **S3**                 | 報告 Markdown 備份                | **~$0.05** | $0.023/GB；20 報告 ≈ 2MB                             |
+| **Secrets Manager**    | 8 secrets                         | **~$0.32** | $0.40/secret/month                                   |
+| **CloudWatch Logs**    | 5GB/month                         | **~$2.5**  | $0.50/GB                                             |
 
 **基礎設施小計（方案 A）：~$55/月**
 
 ---
 
-| 服務 | 規格 | 月費估算 | 說明 |
-|------|------|---------|------|
-| **現有 EC2 加掛 Docker** *(方案 B)* | 共用現有 EC2 | **$0** | EC2 已付；需確認 CPU/RAM 有剩餘容量 |
-| **RDS PostgreSQL** | db.t4g.micro + 20GB gp3 Single AZ | **~$20** | 同上，或加入現有 RDS cluster |
-| **ElastiCache Valkey** | cache.t3.micro | **~$14** | 或跳過 Redis，用 app-level 記憶體快取 |
+| 服務                                | 規格                              | 月費估算 | 說明                                  |
+| ----------------------------------- | --------------------------------- | -------- | ------------------------------------- |
+| **現有 EC2 加掛 Docker** _(方案 B)_ | 共用現有 EC2                      | **$0**   | EC2 已付；需確認 CPU/RAM 有剩餘容量   |
+| **RDS PostgreSQL**                  | db.t4g.micro + 20GB gp3 Single AZ | **~$20** | 同上，或加入現有 RDS cluster          |
+| **ElastiCache Valkey**              | cache.t3.micro                    | **~$14** | 或跳過 Redis，用 app-level 記憶體快取 |
 
 **基礎設施小計（方案 B，最省）：~$15–35/月**
 
@@ -1009,35 +1024,35 @@ AWS_REGION=ap-northeast-1
 
 #### 5.2.1 模型定價（2025-2026）
 
-| 模型 | Input $/1M tokens | Output $/1M tokens | 用途 |
-|------|-------------------|---------------------|------|
-| text-embedding-3-small | $0.02 | — | 語意搜尋 |
-| gpt-5-mini | $0.80 | $4.00 | 分類、retrieval judge |
-| gpt-5.2 | $3.00 | $15.00 | 萃取、合併、週報、品質評估 |
+| 模型                   | Input $/1M tokens | Output $/1M tokens | 用途                       |
+| ---------------------- | ----------------- | ------------------ | -------------------------- |
+| text-embedding-3-small | $0.02             | —                  | 語意搜尋                   |
+| gpt-5-mini             | $0.80             | $4.00              | 分類、retrieval judge      |
+| gpt-5.2                | $3.00             | $15.00             | 萃取、合併、週報、品質評估 |
 
 #### 5.2.2 各功能估算（每月）
 
-| 功能 | 次數/月 | 模型 | Input tokens | Output tokens | 月費 |
-|------|---------|------|-------------|---------------|------|
-| **語意搜尋** | 500 | embedding-3-small | 50K | — | **$0.001** |
-| **Chat (RAG)** | 300 | gpt-5.2 | 600K | 150K | **$4.05** |
-| **週報生成** | 4 | gpt-5.2 | 80K | 20K | **$0.54** |
-| **Q&A Quality Eval** | 1 run × 30 筆 | gpt-5.2 | 120K | 60K | **$1.26** |
-| **Classification Eval** | 1 run × 20 筆 | gpt-5-mini | 20K | 10K | **$0.06** |
-| **Retrieval Eval** | 2 runs × 15 cases | gpt-5-mini | 30K | 15K | **$0.08** |
-| **Multi-Turn Eval** | 2 runs × 10 cases × 3 turns | gpt-5.2 | 300K | 120K | **$2.70** |
-| **Pipeline (Steps 2-3)** | 新增 ~5 篇/月 | gpt-5.2 + embedding | 100K | 30K | **$0.75** |
+| 功能                     | 次數/月                     | 模型                | Input tokens | Output tokens | 月費       |
+| ------------------------ | --------------------------- | ------------------- | ------------ | ------------- | ---------- |
+| **語意搜尋**             | 500                         | embedding-3-small   | 50K          | —             | **$0.001** |
+| **Chat (RAG)**           | 300                         | gpt-5.2             | 600K         | 150K          | **$4.05**  |
+| **週報生成**             | 4                           | gpt-5.2             | 80K          | 20K           | **$0.54**  |
+| **Q&A Quality Eval**     | 1 run × 30 筆               | gpt-5.2             | 120K         | 60K           | **$1.26**  |
+| **Classification Eval**  | 1 run × 20 筆               | gpt-5-mini          | 20K          | 10K           | **$0.06**  |
+| **Retrieval Eval**       | 2 runs × 15 cases           | gpt-5-mini          | 30K          | 15K           | **$0.08**  |
+| **Multi-Turn Eval**      | 2 runs × 10 cases × 3 turns | gpt-5.2             | 300K         | 120K          | **$2.70**  |
+| **Pipeline (Steps 2-3)** | 新增 ~5 篇/月               | gpt-5.2 + embedding | 100K         | 30K           | **$0.75**  |
 
 **OpenAI 小計：~$9.50/月**
 
 #### 5.2.3 成本優化策略
 
-| 策略 | 節省比例 | 說明 |
-|------|---------|------|
-| **Model Routing** | ~40% | 簡單任務用 gpt-5-mini（分類、retrieval judge） |
-| **Prompt Caching** | ~20% | 系統 prompt 快取（>1024 tokens 的 system prompt） |
-| **Embedding 快取** | ~60% | 已計算的 embedding 存入 Redis，避免重複呼叫 |
-| **Budget Guardrail** | 防爆 | 設定月預算上限 $30，超過自動降級為 gpt-5-mini |
+| 策略                 | 節省比例 | 說明                                              |
+| -------------------- | -------- | ------------------------------------------------- |
+| **Model Routing**    | ~40%     | 簡單任務用 gpt-5-mini（分類、retrieval judge）    |
+| **Prompt Caching**   | ~20%     | 系統 prompt 快取（>1024 tokens 的 system prompt） |
+| **Embedding 快取**   | ~60%     | 已計算的 embedding 存入 Redis，避免重複呼叫       |
+| **Budget Guardrail** | 防爆     | 設定月預算上限 $30，超過自動降級為 gpt-5-mini     |
 
 ```python
 # Cost Tracking（immutable pattern from ECC cost-aware-llm-pipeline）
@@ -1053,25 +1068,25 @@ class CostTracker:
 
 ### 5.3 總成本摘要
 
-| 項目 | 方案 A（ECS Fargate）| 方案 B（現有 EC2）| 說明 |
-|------|---------------------|-------------------|------|
-| 基礎設施（運算）| $18 | $0 | Fargate vs. 共用 EC2 |
-| 基礎設施（DB）| $20 | $20 | RDS db.t4g.micro |
-| 基礎設施（Cache）| $14 | $14 | ElastiCache t3.micro |
-| 其他 AWS | $3 | $3 | Logs, Secrets, S3, ECR |
-| OpenAI API | $9.5 | $9.5 | 視使用量 |
-| **月合計** | **~$65** | **~$47** | 不含現有 EC2/ALB 費用 |
-| **年合計** | **~$780** | **~$564** | |
+| 項目              | 方案 A（ECS Fargate） | 方案 B（現有 EC2） | 說明                   |
+| ----------------- | --------------------- | ------------------ | ---------------------- |
+| 基礎設施（運算）  | $18                   | $0                 | Fargate vs. 共用 EC2   |
+| 基礎設施（DB）    | $20                   | $20                | RDS db.t4g.micro       |
+| 基礎設施（Cache） | $14                   | $14                | ElastiCache t3.micro   |
+| 其他 AWS          | $3                    | $3                 | Logs, Secrets, S3, ECR |
+| OpenAI API        | $9.5                  | $9.5               | 視使用量               |
+| **月合計**        | **~$65**              | **~$47**           | 不含現有 EC2/ALB 費用  |
+| **年合計**        | **~$780**             | **~$564**          |                        |
 
 #### 成本優化路徑
 
-| 優化措施 | 節省金額 | 說明 |
-|---------|---------|------|
-| Fargate Savings Plan（1年）| -35% 運算費 | 承諾 1 年可省 ~$6/月 |
-| RDS 預留實例（1年不預付）| -30% DB 費 | RDS db.t4g.micro 省 ~$6/月 |
-| 跳過 ElastiCache | -$14/月 | 低流量工具用 app-level 快取即可 |
-| Fargate Spot（開發環境）| -70% 運算費 | 可中斷，適合 staging 環境 |
-| **最省組合**（方案 B + 省 Cache）| **~$33/月** | EC2 共用 + RDS + 無獨立 Redis |
+| 優化措施                          | 節省金額    | 說明                            |
+| --------------------------------- | ----------- | ------------------------------- |
+| Fargate Savings Plan（1年）       | -35% 運算費 | 承諾 1 年可省 ~$6/月            |
+| RDS 預留實例（1年不預付）         | -30% DB 費  | RDS db.t4g.micro 省 ~$6/月      |
+| 跳過 ElastiCache                  | -$14/月     | 低流量工具用 app-level 快取即可 |
+| Fargate Spot（開發環境）          | -70% 運算費 | 可中斷，適合 staging 環境       |
+| **最省組合**（方案 B + 省 Cache） | **~$33/月** | EC2 共用 + RDS + 無獨立 Redis   |
 
 > **對比 Cloud Run 原版方案：**  
 > Cloud Run（$2–8）+ Supabase Free + Upstash Free = ~$9/月  
@@ -1082,15 +1097,15 @@ class CostTracker:
 
 ## 6. 風險與緩解
 
-| # | 風險 | 嚴重度 | 緩解措施 |
-|---|------|--------|---------|
-| 1 | OpenAI API 不穩定導致 chat/eval 失敗 | High | 實作 exponential backoff retry（僅 transient errors）；加入 circuit breaker |
-| 2 | ECS Task 啟動延遲（冷啟動） | Low | ECS Fargate 保持 min task=1 常駐，無冷啟動問題；Spot 模式需設定 graceful shutdown |
-| 3 | 知識庫過時（>2 年歷史） | Medium | 加入 `relevance_decay` — 較舊的 Q&A 在搜尋中加權降低 |
-| 4 | Multi-turn 對話幻覺 | High | Eval 系統自動監控 hallucination_rate；強制引用 sources |
-| 5 | 資料庫從 JSON 遷移遺漏 | Medium | 寫 migration script + 遷移後跑 regression eval 確認完整 |
-| 6 | Prompt injection（使用者惡意輸入） | High | 輸入驗證 + system prompt 防護 + rate limit |
-| 7 | 月 API 費用失控 | Medium | CostTracker 強制預算上限 + model routing 降級機制 |
+| #   | 風險                                 | 嚴重度 | 緩解措施                                                                          |
+| --- | ------------------------------------ | ------ | --------------------------------------------------------------------------------- |
+| 1   | OpenAI API 不穩定導致 chat/eval 失敗 | High   | 實作 exponential backoff retry（僅 transient errors）；加入 circuit breaker       |
+| 2   | ECS Task 啟動延遲（冷啟動）          | Low    | ECS Fargate 保持 min task=1 常駐，無冷啟動問題；Spot 模式需設定 graceful shutdown |
+| 3   | 知識庫過時（>2 年歷史）              | Medium | 加入 `relevance_decay` — 較舊的 Q&A 在搜尋中加權降低                              |
+| 4   | Multi-turn 對話幻覺                  | High   | Eval 系統自動監控 hallucination_rate；強制引用 sources                            |
+| 5   | 資料庫從 JSON 遷移遺漏               | Medium | 寫 migration script + 遷移後跑 regression eval 確認完整                           |
+| 6   | Prompt injection（使用者惡意輸入）   | High   | 輸入驗證 + system prompt 防護 + rate limit                                        |
+| 7   | 月 API 費用失控                      | Medium | CostTracker 強制預算上限 + model routing 降級機制                                 |
 
 ---
 
@@ -1103,6 +1118,7 @@ class CostTracker:
 **Decision:** 獨立 FastAPI 服務。
 
 **Consequences:**
+
 - ✅ 重用現有 Python 邏輯（openai_helper, pipeline scripts）
 - ✅ 獨立部署、獨立 scaling
 - ✅ async 原生、自動 OpenAPI 文件
@@ -1116,6 +1132,7 @@ class CostTracker:
 **Decision:** pgvector（PostgreSQL extension）。
 
 **Consequences:**
+
 - ✅ AWS RDS for PostgreSQL 支援 `pgvector` extension，與整體 AWS 基礎設施整合
 - ✅ 同一資料庫，JOIN / filter 方便
 - ✅ ~1K 筆向量，pgvector 性能綽綽有餘
@@ -1128,6 +1145,7 @@ class CostTracker:
 **Decision:** 以 gpt-5.2 作為 Judge，搭配結構化評分 schema。
 
 **Consequences:**
+
 - ✅ 可評估開放式回答品質
 - ✅ 評估維度豐富（relevance, groundedness, coherence, etc.）
 - ❌ 評估本身有成本（每次 ~$1.20）
@@ -1140,6 +1158,7 @@ class CostTracker:
 **Decision:** 寫一次性 migration script，保持 JSON 作為 backup。
 
 **Migration Steps:**
+
 1. 讀取 `qa_final.json` + `qa_embeddings.npy`
 2. 寫入 `qa_items` table（含 embedding 向量）
 3. 建立 ivfflat index
@@ -1155,6 +1174,7 @@ class CostTracker:
 **Decision:** 部署於 AWS ECS Fargate，使用 ECR 存放 Docker image。
 
 **Consequences:**
+
 - ✅ 整合現有 AWS 帳號、VPC、IAM、帳務
 - ✅ ECR 已在使用，image push/pull 流程完整
 - ✅ 可使用 AWS Secrets Manager 統一管理機密
@@ -1163,6 +1183,7 @@ class CostTracker:
 - ❌ ALB 設定比 Cloud Run HTTPS 複雜（但可共用現有 ALB）
 
 **備選方案：共用現有 EC2（方案 B）**
+
 - 優點：幾乎零增量費用
 - 缺點：耦合度高、需協調 EC2 容量、不易獨立 scaling
 

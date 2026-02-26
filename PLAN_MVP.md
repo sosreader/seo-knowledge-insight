@@ -22,6 +22,7 @@ FastAPI（現有 EC2 上跑，nginx 反向代理）
 ```
 
 **省掉的東西（之後可以加）：**
+
 - ❌ DB 遷移（PostgreSQL / pgvector）→ 直接讀 JSON
 - ❌ Redis / ElastiCache → 記憶體快取即可
 - ❌ ECS / Fargate → 跑在現有 EC2
@@ -34,6 +35,7 @@ FastAPI（現有 EC2 上跑，nginx 反向代理）
 ## API Endpoints（只有 3 個）
 
 ### `POST /api/v1/search`
+
 語意搜尋 Q&A 知識庫。
 
 ```json
@@ -56,6 +58,7 @@ FastAPI（現有 EC2 上跑，nginx 反向代理）
 ```
 
 ### `POST /api/v1/chat`
+
 單輪 RAG 對話（上下文由前端帶入，API 本身 stateless）。
 
 ```json
@@ -76,6 +79,7 @@ FastAPI（現有 EC2 上跑，nginx 反向代理）
 ```
 
 ### `GET /api/v1/qa`
+
 列表 + 篩選（不含語意搜尋）。
 
 ```
@@ -120,7 +124,7 @@ class QAStore:
         data = json.loads(Path("output/qa_final.json").read_text())
         self.items = data["qa_items"]          # list of dicts
         self.embeddings = np.load("output/qa_embeddings.npy")  # (703, 1536)
-    
+
     def search(self, query_embedding: np.ndarray, top_k: int = 5):
         scores = self.embeddings @ query_embedding  # cosine sim（已歸一化）
         top_idx = np.argsort(scores)[::-1][:top_k]
@@ -210,11 +214,11 @@ docker run -d ...（同上）
 
 ## 成本
 
-| 項目 | 月費 |
-|------|------|
-| EC2 新增費用 | $0（共用現有） |
-| OpenAI（搜尋 + 對話）| ~$3–8 |
-| **合計** | **$3–8/月** |
+| 項目                  | 月費           |
+| --------------------- | -------------- |
+| EC2 新增費用          | $0（共用現有） |
+| OpenAI（搜尋 + 對話） | ~$3–8          |
+| **合計**              | **$3–8/月**    |
 
 ---
 
@@ -232,10 +236,10 @@ Day 5: 部署到 EC2 + nginx 設定 + 與 UI 串接測試
 
 ## 升級路徑（之後有需要再加）
 
-| 當遇到這個問題 | 才需要加 |
-|---|---|
-| JSON 太大讀取慢 / 需要複雜查詢 | 遷移到 PostgreSQL + pgvector |
-| 多人同時使用、embedding 重複計算 | 加 Redis 快取 |
-| EC2 資源不夠 / 需要獨立 scaling | 改用 ECS Fargate |
-| 需要持續監控 Q&A 品質 | 建 Eval 系統 |
-| 需要觸發 pipeline / 看執行狀態 | 加 Pipeline API |
+| 當遇到這個問題                   | 才需要加                     |
+| -------------------------------- | ---------------------------- |
+| JSON 太大讀取慢 / 需要複雜查詢   | 遷移到 PostgreSQL + pgvector |
+| 多人同時使用、embedding 重複計算 | 加 Redis 快取                |
+| EC2 資源不夠 / 需要獨立 scaling  | 改用 ECS Fargate             |
+| 需要持續監控 Q&A 品質            | 建 Eval 系統                 |
+| 需要觸發 pipeline / 看執行狀態   | 加 Pipeline API              |
