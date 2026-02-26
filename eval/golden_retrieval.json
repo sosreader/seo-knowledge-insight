@@ -1,78 +1,308 @@
 [
   {
     "scenario": "Discover 流量大幅下降",
-    "query": "Discover 流量 大幅下降 原因 怎麼處理",
-    "expected_keywords": ["Discover", "流量", "AMP"],
-    "expected_categories": ["Discover與AMP", "演算法與趨勢"],
-    "description": "當 Discover 流量下降時，應該能檢索到關於 Discover 演算法、AMP 設定的 Q&A"
+    "query": "Discover 流量 大幅下降 探索演算法 內容策略",
+    "expected_keywords": [
+      "Discover",
+      "流量",
+      "AMP",
+      "探索"
+    ],
+    "expected_categories": [
+      "Discover與AMP",
+      "演算法與趨勢"
+    ],
+    "description": "Discover 月趨勢異常下滑"
   },
   {
     "scenario": "CTR 持續下降",
-    "query": "CTR 下降 代表什麼 SEO 含義",
-    "expected_keywords": ["CTR", "點擊率", "SERP", "曝光"],
-    "expected_categories": ["搜尋表現分析", "內容策略"],
-    "description": "CTR 下降可能涉及 SERP 變化或內容策略問題"
+    "query": "CTR 持續下降 原因解讀 如何改善搜尋外觀",
+    "expected_keywords": [
+      "CTR",
+      "點擊率",
+      "SERP",
+      "曝光"
+    ],
+    "expected_categories": [
+      "搜尋表現分析",
+      "內容策略"
+    ],
+    "description": "CTR 持續惡化，區分曝光池縮小 vs 排名外觀問題"
   },
   {
-    "scenario": "檢索未索引增加",
-    "query": "檢索未索引 增加 如何處理",
+    "scenario": "檢索未索引大幅增加",
+    "query": "檢索未索引增加 WAF 封鎖 Googlebot 伺服器錯誤",
     "expected_keywords": [
       "索引",
       "Coverage",
-      "robots.txt",
-      "sitemap",
-      "canonical"
+      "Googlebot",
+      "canonical",
+      "WAF"
     ],
-    "expected_categories": ["索引與檢索", "技術SEO"],
-    "description": "未索引頁面增加涉及索引管理與技術 SEO 設定"
+    "expected_categories": [
+      "索引與檢索",
+      "技術SEO"
+    ],
+    "description": "未索引頁面月趨勢 +80% 異常增加"
   },
   {
     "scenario": "Organic Search 工作階段下降",
-    "query": "Organic Search 工作階段 下降 原因 注意事項",
-    "expected_keywords": ["Organic", "工作階段", "排名", "流量"],
-    "expected_categories": ["搜尋表現分析", "GA與數據追蹤"],
-    "description": "有機搜尋流量下降需結合 GA 數據分析"
+    "query": "Organic Search 工作階段下降 GSC 點擊 vs GA 落差",
+    "expected_keywords": [
+      "Organic",
+      "工作階段",
+      "排名",
+      "GSC",
+      "GA"
+    ],
+    "expected_categories": [
+      "搜尋表現分析",
+      "GA與數據追蹤"
+    ],
+    "description": "GA Organic Search session 下滑"
   },
   {
-    "scenario": "AMP 頁面表現異常",
-    "query": "AMP Article 大幅下降 原因 怎麼處理",
-    "expected_keywords": ["AMP", "Article", "Discover"],
-    "expected_categories": ["Discover與AMP", "技術SEO"],
-    "description": "AMP 表現異常可能與技術設定或 Discover 推薦有關"
+    "scenario": "AMP Article 幾乎歸零",
+    "query": "AMP Article 流量下降 焦點新聞 索引問題 時效供給",
+    "expected_keywords": [
+      "AMP",
+      "Article",
+      "焦點新聞",
+      "Discover",
+      "News"
+    ],
+    "expected_categories": [
+      "Discover與AMP",
+      "技術SEO"
+    ],
+    "description": "AMP Article 月趨勢 -114%"
   },
   {
-    "scenario": "曝光數大幅上升但點擊未同步",
-    "query": "曝光 大幅上升 代表什麼 注意事項",
-    "expected_keywords": ["曝光", "點擊", "CTR", "排名"],
-    "expected_categories": ["搜尋表現分析"],
-    "description": "曝光增加但點擊不同步，可能是排名位置或 SERP 特徵的變化"
+    "scenario": "曝光大幅上升但點擊未同步",
+    "query": "曝光上升點擊未同步 外觀型曝光 SERP 版位變化",
+    "expected_keywords": [
+      "曝光",
+      "點擊",
+      "CTR",
+      "SERP",
+      "外觀"
+    ],
+    "expected_categories": [
+      "搜尋表現分析"
+    ],
+    "description": "曝光增加但 CTR 降低"
   },
   {
     "scenario": "內部連結架構優化",
-    "query": "內部連結 架構 優化 SEO 建議",
-    "expected_keywords": ["內部連結", "連結", "架構"],
-    "expected_categories": ["連結策略"],
-    "description": "內部連結策略相關的知識庫內容"
+    "query": "內部連結架構優化 每頁連結數 重要頁面分配",
+    "expected_keywords": [
+      "內部連結",
+      "連結",
+      "架構",
+      "權重"
+    ],
+    "expected_categories": [
+      "連結策略"
+    ],
+    "description": "每頁內部連結過少或分佈不均"
   },
   {
-    "scenario": "結構化資料問題",
-    "query": "結構化資料 Schema 標記 最佳實踐",
-    "expected_keywords": ["結構化資料", "Schema", "rich result"],
-    "expected_categories": ["技術SEO"],
-    "description": "結構化資料標記的實作建議"
+    "scenario": "結構化資料覆蓋率下降",
+    "query": "結構化資料比例下降 AggregateRating FAQ VideoObject 如何補強",
+    "expected_keywords": [
+      "結構化資料",
+      "Schema",
+      "rich result",
+      "AMP"
+    ],
+    "expected_categories": [
+      "技術SEO"
+    ],
+    "description": "結構化 Ratio 惡化"
   },
   {
-    "scenario": "GA4 追蹤設定",
-    "query": "GA4 事件追蹤 歸因分析 設定",
-    "expected_keywords": ["GA4", "追蹤", "事件", "歸因"],
-    "expected_categories": ["GA與數據追蹤"],
-    "description": "Google Analytics 4 相關的追蹤配置問題"
+    "scenario": "GA4 追蹤問題 unassigned 增加",
+    "query": "GA4 unassigned 流量 追蹤設定問題 歸因錯誤",
+    "expected_keywords": [
+      "GA4",
+      "追蹤",
+      "事件",
+      "歸因",
+      "unassigned"
+    ],
+    "expected_categories": [
+      "GA與數據追蹤"
+    ],
+    "description": "GA4 出現大量 unassigned 來源"
   },
   {
-    "scenario": "Canonical 設定混亂",
-    "query": "canonical 重複頁面 索引問題 處理方式",
-    "expected_keywords": ["canonical", "重複", "索引"],
-    "expected_categories": ["索引與檢索", "技術SEO"],
-    "description": "Canonical 標籤設定不當導致的索引問題"
+    "scenario": "Canonical 設定混亂 Google 選擇不同版本",
+    "query": "canonical 重複頁面 Google 選擇不同版本 如何修正",
+    "expected_keywords": [
+      "canonical",
+      "重複",
+      "索引",
+      "URL"
+    ],
+    "expected_categories": [
+      "索引與檢索",
+      "技術SEO"
+    ],
+    "description": "重覆頁面 Google 選擇增加"
+  },
+  {
+    "scenario": "Video Appearance 歸零",
+    "query": "Video Appearance 消失 VideoObject 結構化資料 SERP 影片縮圖",
+    "expected_keywords": [
+      "Video",
+      "影片",
+      "結構化資料",
+      "SERP"
+    ],
+    "expected_categories": [
+      "技術SEO",
+      "搜尋表現分析"
+    ],
+    "description": "Video Appearance 完全歸零"
+  },
+  {
+    "scenario": "Google News 流量下降",
+    "query": "Google News 流量下降 AMP 與 News 導頁關係 時效內容",
+    "expected_keywords": [
+      "Google News",
+      "AMP",
+      "News",
+      "時效"
+    ],
+    "expected_categories": [
+      "Discover與AMP",
+      "內容策略"
+    ],
+    "description": "Google News session 下滑"
+  },
+  {
+    "scenario": "伺服器回應時間上升",
+    "query": "伺服器回應時間 TTFB 影響 SEO 爬蟲抓取 索引頻率",
+    "expected_keywords": [
+      "伺服器",
+      "回應時間",
+      "爬蟲",
+      "索引",
+      "TTFB"
+    ],
+    "expected_categories": [
+      "技術SEO",
+      "索引與檢索"
+    ],
+    "description": "回應時間突然上升"
+  },
+  {
+    "scenario": "/user 路徑流量大幅下降",
+    "query": "/user 頁面流量下降 用戶頁面 noindex 是否應索引",
+    "expected_keywords": [
+      "user",
+      "noindex",
+      "索引",
+      "路徑"
+    ],
+    "expected_categories": [
+      "索引與檢索",
+      "平台策略"
+    ],
+    "description": "/user 月趨勢 -34%"
+  },
+  {
+    "scenario": "手機 Core Web Vitals 劣化",
+    "query": "手機 Core Web Vitals 差 LCP CLS 如何改善 行動版體驗",
+    "expected_keywords": [
+      "Core Web Vitals",
+      "手機",
+      "LCP",
+      "行動版",
+      "體驗"
+    ],
+    "expected_categories": [
+      "技術SEO"
+    ],
+    "description": "手機差的頁面數增加"
+  },
+  {
+    "scenario": "AI 來源流量佔比偏低",
+    "query": "AI 流量佔比 ChatGPT Perplexity Gemini AI SEO 策略",
+    "expected_keywords": [
+      "AI",
+      "GPT",
+      "Gemini",
+      "Perplexity",
+      "來源"
+    ],
+    "expected_categories": [
+      "演算法與趨勢",
+      "GA與數據追蹤"
+    ],
+    "description": "AI 占比極低，評估 AI-SEO 策略必要性"
+  },
+  {
+    "scenario": "圖片搜尋流量下降",
+    "query": "圖片搜尋流量下降 Image SEO alt metadata 優化",
+    "expected_keywords": [
+      "Image",
+      "圖片",
+      "alt",
+      "metadata"
+    ],
+    "expected_categories": [
+      "技術SEO",
+      "搜尋表現分析"
+    ],
+    "description": "Image 月趨勢 -26%"
+  },
+  {
+    "scenario": "GSC 探索流量被計入 GA Direct",
+    "query": "GSC Discover 流量 GA Direct 歸因差異 AMP 流量計算",
+    "expected_keywords": [
+      "Discover",
+      "Direct",
+      "GA",
+      "GSC",
+      "AMP",
+      "歸因"
+    ],
+    "expected_categories": [
+      "GA與數據追蹤",
+      "Discover與AMP"
+    ],
+    "description": "GSC Discover 與 GA Direct 差距擴大"
+  },
+  {
+    "scenario": "有效頁面數持續下滑",
+    "query": "有效頁面數下降 Coverage 有效頁減少 索引壓力",
+    "expected_keywords": [
+      "Coverage",
+      "有效",
+      "索引",
+      "頁面"
+    ],
+    "expected_categories": [
+      "索引與檢索",
+      "技術SEO"
+    ],
+    "description": "有效 Coverage 月趨勢 -5%"
+  },
+  {
+    "scenario": "當週文章數銳減影響整體曝光",
+    "query": "當週文章數減少 內容供給 SEO 流量 曝光池縮小",
+    "expected_keywords": [
+      "文章",
+      "內容",
+      "曝光",
+      "供給",
+      "Discover"
+    ],
+    "expected_categories": [
+      "內容策略",
+      "Discover與AMP"
+    ],
+    "description": "content supply 下降導致曝光縮水"
   }
 ]

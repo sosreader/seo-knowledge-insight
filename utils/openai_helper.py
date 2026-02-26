@@ -150,7 +150,7 @@ def extract_qa_from_text(
                 },
             },
         },
-        max_completion_tokens=4096,
+        max_completion_tokens=16000,  # gpt-5 推理模型：reasoning token 佔用大，需預留足夠空間
     )
 
     content = response.choices[0].message.content or "{}"
@@ -275,7 +275,7 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
                 },
             },
         },
-        max_completion_tokens=2048,
+        max_completion_tokens=8192,  # gpt-5 推理模型：需額外空間給 reasoning
     )
 
     content = response.choices[0].message.content or "{}"
@@ -383,7 +383,7 @@ def classify_qa(question: str, answer: str) -> dict:
                 },
             },
         },
-        max_completion_tokens=512,  # gpt-5-nano 需要 >256 才能完成回應（含思考 token）
+        max_completion_tokens=2048,  # gpt-5-mini 推理模型需要足夠空間給 reasoning + JSON output
     )
 
     content = response.choices[0].message.content or "{}"

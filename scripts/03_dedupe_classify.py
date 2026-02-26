@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -209,6 +211,13 @@ def main(args: argparse.Namespace) -> None:
         encoding="utf-8",
     )
 
+    # QA DB 快照：複製到 output/snapshots/ 供版本比較
+    snapshot_dir = config.OUTPUT_DIR / "snapshots"
+    snapshot_dir.mkdir(exist_ok=True)
+    snap_ts = datetime.now().strftime("%Y%m%d")
+    snap_path = snapshot_dir / f"qa_final_{snap_ts}.json"
+    shutil.copy2(final_path, snap_path)
+
     # 持久化 embedding 向量（Step 4 語意搜尋可直接載入，免重算）
     _persist_embeddings(qa_pairs)
 
@@ -219,6 +228,7 @@ def main(args: argparse.Namespace) -> None:
     print(f"✅ 步驟 3 完成！")
     print(f"   最終 Q&A 數量: {len(qa_pairs)}")
     print(f"   JSON: {final_path}")
+    print(f"   快照: {snap_path}")
     print(f"   Embeddings: {config.OUTPUT_DIR / 'qa_embeddings.npy'}")
     print(f"   Markdown: {config.OUTPUT_DIR / 'qa_final.md'}")
     print("=" * 60)

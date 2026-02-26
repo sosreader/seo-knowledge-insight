@@ -166,7 +166,7 @@ python scripts/run_pipeline.py --dry-run
 - **Notion 子頁面總數**：86 筆（含非定期、顧問、特殊會議）
 - **本機 Markdown 檔**：87 個（含一份重複的 `SEO_會議_20230920`）
 
-> **檔名規則**：所有 markdown 均採 `YYYYMMDD` 格式（如 `SEO_會議_20230329.md`）。2023 年初期的幾份早期檔案原本只有 `MMDD`（如 `SEO_0614`），已於 2026-02-26 補齊年份重命名。
+> **檔名規則**：所有 markdown 均採 `YYYYMMDD` 格式（如 `SEO_會議_20230329.md`）。2023 年初期的幾份早期檔案原本只有 `MMDD`（如 `SEO_0614`），**已於** 2026-02-26 補齊年份重命名。
 
 ### 已確認的缺口
 
@@ -182,6 +182,8 @@ python scripts/run_pipeline.py --dry-run
 1. **先跑步驟 1**，確認 Notion 資料都拉下來了。去 `raw_data/markdown/` 看幾份，確認內容完整。
 
 2. **步驟 2 先試跑 3-5 份**（`--limit 3`），看萃取出的 Q&A 格式和粒度是不是你要的。如果不滿意，可以調整 `utils/openai_helper.py` 裡的 prompt。
+
+---
 
 3. **確認後跑完全部步驟 2**。
 

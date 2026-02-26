@@ -27,8 +27,10 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import shutil
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -323,11 +325,16 @@ def _llm_judge_retrieval_relevance(query: str, qa: dict) -> bool:
                     },
                 },
             },
-            max_completion_tokens=256,
+            max_completion_tokens=1024,
         )
-        content = response.choices[0].message.content or "{}"
+        content = response.choices[0].message.content
+        if not content:
+            return False
         result = json.loads(content)
-        return result.get("judgment") == "relevant"
+        judgment = result.get("judgment")
+        if judgment is None:
+            return False
+        return judgment == "relevant"
     except Exception:
         return False
 
@@ -451,7 +458,7 @@ def evaluate_qa_quality(
                 },
             },
         },
-        max_completion_tokens=1024,
+        max_completion_tokens=4096,  # gpt-5 推理模型：reasoning + JSON output 共享 token 預算
     )
 
     content = response.choices[0].message.content or "{}"
@@ -510,7 +517,7 @@ def evaluate_classification(qa: dict) -> dict:
                 },
             },
         },
-        max_completion_tokens=512,
+        max_completion_tokens=2048,
     )
 
     content = response.choices[0].message.content or "{}"
@@ -792,6 +799,9 @@ def main(args: argparse.Namespace) -> None:
                 print(f"  [{i}/{eval_count}] {qa.get('category', '?')} ← {qa['question'][:40]}...")
                 try:
                     result = evaluate_classification(qa)
+                    if "category_judgment" not in result:
+                        print(f"    ⚠️  空回應（推理模型 content=None），跳過 QA {qa.get('id', i)}")
+                        continue
                     result["_qa_id"] = qa.get("id", i)
                     result["_original_category"] = qa.get("category", "")
                     classify_results.append(result)
@@ -853,6 +863,25 @@ def main(args: argparse.Namespace) -> None:
         encoding="utf-8",
     )
 
+    # 歷史紀錄：追加到 eval_history.jsonl（不含詳細 eval_details，節省大小）
+    ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    history_entry = {
+        "timestamp": ts,
+        "sample_size": report["sample_size"],
+        "quality_stats": report["quality_stats"],
+        "classify_stats": report["classify_stats"],
+        "retrieval_stats": report["retrieval_stats"],
+    }
+    history_path = config.OUTPUT_DIR / "eval_history.jsonl"
+    with open(history_path, "a", encoding="utf-8") as _hf:
+        _hf.write(json.dumps(history_entry, ensure_ascii=False) + "\n")
+
+    # 快照：複製完整報告到 eval_reports/ 子目錄
+    snapshot_dir = config.OUTPUT_DIR / "eval_reports"
+    snapshot_dir.mkdir(exist_ok=True)
+    snap_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    shutil.copy2(json_path, snapshot_dir / f"eval_{snap_ts}.json")
+
     # Markdown
     md_report = generate_eval_report_md(
         stats, classify_stats, sample_size, args.with_source, low_quality,
@@ -889,10 +918,67 @@ def main(args: argparse.Namespace) -> None:
 
     print(f"\n   📄 詳細報告: {json_path}")
     print(f"   📄 Markdown: {md_path}")
+    print(f"   💾 歷史紀錄: {history_path}")
+    print(f"   💾 快照: {snapshot_dir / f'eval_{snap_ts}.json'}")
     print("=" * 60)
 
     # Console 輸出 Markdown 報告
     print("\n" + md_report)
+
+
+def compare_eval_reports(path1: str, path2: str) -> None:
+    """比較兩個評估報告，輸出 diff 表格"""
+    r1 = json.loads(Path(path1).read_text(encoding="utf-8"))
+    r2 = json.loads(Path(path2).read_text(encoding="utf-8"))
+    p1, p2 = Path(path1).name, Path(path2).name
+
+    print(f"\n{'='*60}")
+    print(f"📊 評估結果比較")
+    print(f"   A: {p1}")
+    print(f"   B: {p2}")
+    print(f"{'='*60}\n")
+
+    q1 = r1.get("quality_stats", {})
+    q2 = r2.get("quality_stats", {})
+
+    dims = ["relevance", "accuracy", "completeness", "granularity"]
+    print(f"  {'指標':<20} {'A':>7} {'B':>7} {'Δ':>8}")
+    print("  " + "-" * 46)
+    for dim in dims:
+        v1 = q1.get(dim, {}).get("mean")
+        v2 = q2.get(dim, {}).get("mean")
+        if v1 is not None and v2 is not None:
+            delta = v2 - v1
+            arrow = "↑" if delta > 0.05 else ("↓" if delta < -0.05 else "→")
+            print(f"  {dim:<20} {v1:>7.2f} {v2:>7.2f} {delta:>+7.2f} {arrow}")
+
+    ret1 = r1.get("retrieval_stats") or {}
+    ret2 = r2.get("retrieval_stats") or {}
+    if ret1 and ret2 and "error" not in ret1 and "error" not in ret2:
+        print()
+        for key, label in [
+            ("avg_mrr", "MRR"),
+            ("llm_top1_precision", "Top-1 Precision"),
+            ("avg_keyword_hit_rate", "KW Hit Rate"),
+            ("avg_category_hit_rate", "Category Hit Rate"),
+        ]:
+            v1 = ret1.get(key)
+            v2 = ret2.get(key)
+            if v1 is not None and v2 is not None:
+                delta = v2 - v1
+                arrow = "↑" if delta > 0.02 else ("↓" if delta < -0.02 else "→")
+                print(f"  {label:<20} {v1:>7.2%} {v2:>7.2%} {delta:>+7.2%} {arrow}")
+
+    cc1 = (r1.get("classify_stats") or {}).get("category_accuracy", {})
+    cc2 = (r2.get("classify_stats") or {}).get("category_accuracy", {})
+    if cc1 and cc2:
+        print()
+        v1, v2 = cc1.get("accuracy_rate", 0), cc2.get("accuracy_rate", 0)
+        delta = v2 - v1
+        arrow = "↑" if delta > 0.02 else ("↓" if delta < -0.02 else "→")
+        print(f"  {'分類正確率':<20} {v1:>7.0%} {v2:>7.0%} {delta:>+7.0%} {arrow}")
+
+    print(f"\n{'='*60}\n")
 
 
 if __name__ == "__main__":
@@ -905,7 +991,15 @@ if __name__ == "__main__":
     parser.add_argument("--eval-retrieval", action="store_true", help="評估 Retrieval 品質")
     parser.add_argument("--retrieval-golden", type=str, default="", help="Retrieval golden set 路徑")
     parser.add_argument("--golden", type=str, default="", help="Golden set JSON 路徑")
+    parser.add_argument(
+        "--compare", nargs=2, metavar=("REPORT_A", "REPORT_B"),
+        help="比較兩個 eval_report.json，例如 --compare eval_reports/eval_A.json eval_reports/eval_B.json",
+    )
     args = parser.parse_args()
+
+    if args.compare:
+        compare_eval_reports(args.compare[0], args.compare[1])
+        sys.exit(0)
 
     if args.seed == -1:
         args.seed = None
