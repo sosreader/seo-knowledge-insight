@@ -71,7 +71,7 @@ cp .env.example .env
 NOTION_TOKEN=ntn_你的token
 NOTION_PARENT_PAGE_ID=你的母頁面ID
 OPENAI_API_KEY=sk-你的key
-OPENAI_MODEL=gpt-4o
+OPENAI_MODEL=gpt-5.2
 ```
 
 ---
@@ -87,14 +87,20 @@ python scripts/run_pipeline.py
 ### 分步執行
 
 ```bash
-# 步驟 1：從 Notion 擷取（建立 raw data）
+# 步驟 1：從 Notion 擷取（增量模式，只抓新增/有更新的）
 python scripts/run_pipeline.py --step 1
+
+# 步驟 1 + 強制全量重抓
+python scripts/run_pipeline.py --step 1 --force
 
 # 步驟 1 + 篩選特定標題
 python scripts/run_pipeline.py --step 1 --filter "SEO 會議"
 
-# 步驟 2：OpenAI 萃取 Q&A
+# 步驟 2：OpenAI 萃取 Q&A（增量模式，跳過已完成的）
 python scripts/run_pipeline.py --step 2
+
+# 步驟 2：強制全部重新處理
+python scripts/run_pipeline.py --step 2 --force
 
 # 步驟 2：先試 3 份看效果
 python scripts/run_pipeline.py --step 2 --limit 3
@@ -130,15 +136,85 @@ python scripts/run_pipeline.py --dry-run
 
 ## 成本估算
 
-以 100-200 場會議、每場約 2000 tokens 計算：
+> 定價來源：OpenAI Developers Pricing（https://developers.openai.com/api/docs/pricing）
 
-| 步驟         | 模型                   | 預估 tokens                | 預估成本  |
-| ------------ | ---------------------- | -------------------------- | --------- |
-| 2. 萃取 Q&A  | GPT-4o                 | ~400K input + ~200K output | ~$3-5     |
-| 3. Embedding | text-embedding-3-small | ~300K                      | ~$0.01    |
-| 3. 合併重複  | GPT-4o                 | ~50K                       | ~$0.5     |
-| 3. 分類      | GPT-4o-mini            | ~100K                      | ~$0.05    |
-| **合計**     |                        |                            | **~$4-6** |
+### 使用到的模型與單價（Standard tier；每 1M tokens）
+
+- `gpt-5.2`：$1.75
+- `gpt-5-nano`：$0.05（本專案目前用於「分類標籤」，見 `utils/openai_helper.py`）
+- `text-embedding-3-small`：$0.02（Embeddings；Batch 會更便宜）
+
+> 註：Pricing 頁面的「Text tokens」是以 tokens 計價；模型的 reasoning tokens 會算在 output tokens 內並計費。
+
+### 用你目前已匯出的資料做估算（raw backup 規模）
+
+你目前在 `raw_data/markdown/` 有 87 份 Markdown，總字元數約 163,664。
+
+由於 token 與語言/符號密度有關，這裡用「字元 → tokens」做區間估算：
+
+- 粗估範圍：約 40,916 ～ 81,832 tokens（以 4 chars/token 與 2 chars/token 夾出區間）
+
+你可以用下面指令重算（不會呼叫 API，不花錢）：
+
+```bash
+python - <<'PY'
+from pathlib import Path
+
+md_dir = Path('raw_data/markdown')
+paths = sorted(md_dir.glob('*.md'))
+
+total_chars = 0
+for p in paths:
+    total_chars += len(p.read_text(encoding='utf-8', errors='replace'))
+
+min_tokens = total_chars // 4
+max_tokens = total_chars // 2
+
+print('files=', len(paths))
+print('chars=', total_chars)
+print('tokens_est_range=', f'{min_tokens}..{max_tokens}')
+PY
+```
+
+### 依 pipeline 各步驟估算（以你目前 87 份資料）
+
+以下是「可重算」的估算方式（讓你之後換資料量/換模型時能快速更新）。
+
+1. **步驟 2：萃取 Q&A（`gpt-5.2`）**
+
+- 會議內容 tokens：$T_{raw}$（上面那個 40,916～81,832）
+- 每份會議的 prompt/格式化開銷：假設 $T_{overhead}=800$ tokens/份（system prompt + JSON 格式要求等）
+- 輸出 tokens：高度依「每場產出幾個 Q&A」而變，保守用 $0.6\times T_{raw}$ ～ $1.5\times T_{raw}$
+
+則：
+
+$$
+T_{step2} \approx (T_{raw} + 87\times 800) + (0.6T_{raw} \sim 1.5T_{raw})
+$$
+
+套入你目前資料量，約：
+
+- input：約 110,516 ～ 151,432 tokens
+- output：約 24,549 ～ 122,748 tokens
+- 合計：約 135,065 ～ 274,180 tokens
+- 成本（`gpt-5.2` $1.75/1M）：約 **$0.24 ～ $0.48**
+
+2. **步驟 3：Embedding 去重（`text-embedding-3-small`）**
+
+- Embedding 的 tokens 大致跟「所有 Q&A 的文字量」同級（通常接近步驟 2 的輸出規模）。
+- 若粗略用 output tokens 當 proxy：成本約 **$0.0005 ～ $0.0025**（非常低）
+
+3. **步驟 3：合併重複（`gpt-5.2`）**
+
+- 只有在判定重複的群組才會呼叫模型，且每群組通常 1 次。
+- 成本主要看「重複群組數」與「每群組帶入的 Q&A 長度」，通常會遠小於步驟 2。
+
+4. **步驟 3：分類標籤（`gpt-5-nano`）**
+
+- 每個 Q&A 會呼叫 1 次分類。
+- 以 **600 個 Q&A、每次約 350 tokens** 估算：成本約 **$0.01**（`gpt-5-nano` $0.05/1M）
+
+> 總結：以你目前已匯出的 87 份 Markdown，整體通常會落在 **小於 $1** 的量級；真正差異會主要來自「每場會議產出的 Q&A 數量」與「去重合併需要呼叫模型的群組數」。
 
 ---
 
@@ -151,8 +227,209 @@ python scripts/run_pipeline.py --dry-run
 
 ---
 
-## 未來擴充
+## 資料結構（Data Schema）
 
-- **RAG 搜尋**：把 `qa_final.json` 匯入向量資料庫（Supabase pgvector / Pinecone），搭配 embedding 做語意搜尋
-- **匯入 Notion**：把最終 Q&A 匯回 Notion Database，用欄位篩選查詢
-- **自動更新**：每次會議後自動觸發 pipeline，增量處理新紀錄
+### `meetings_index.json`
+
+步驟 1 產生的索引檔，記錄所有已擷取的會議紀錄。
+
+```jsonc
+[
+  {
+    "title": "SEO 會議_2024/05/02", // Notion 頁面標題
+    "id": "052d1af9-3b5b-4de6-...", // Notion Page ID
+    "created_time": "2024-05-15T01:55:00.000Z",
+    "last_edited_time": "2024-09-18T01:01:00.000Z",
+    "url": "https://www.notion.so/...",
+    "json_file": "notion_json/SEO_會議_2024_05_02.json", // 對應的原始 JSON
+    "md_file": "markdown/SEO_會議_2024_05_02.md", // 對應的 Markdown
+  },
+]
+```
+
+### `qa_per_meeting/{filename}_qa.json`（步驟 2 中間產物）
+
+```jsonc
+{
+  "qa_pairs": [
+    {
+      "question": "Google 如何處理 JavaScript 渲染的頁面？",
+      "answer": "Google 會用 headless Chromium 做二次渲染，但...",
+      "keywords": ["JavaScript SEO", "渲染", "Googlebot"],
+      "confidence": 0.9, // 0-1，萃取品質信心
+      "source_file": "SEO_會議_2024_05_02.md",
+      "source_title": "SEO 會議_2024/05/02",
+      "source_date": "2024-05-02",
+    },
+  ],
+  "meeting_summary": "本次會議討論了 JS 渲染問題與內部連結優化策略",
+}
+```
+
+### `qa_all_raw.json`（步驟 2 最終合併）
+
+```jsonc
+{
+  "total_qa_count": 342,
+  "meetings_processed": 87,
+  "qa_pairs": [
+    /* 所有會議的 qa_pairs 合併 */
+  ],
+  "processing_summary": [
+    {
+      "file": "SEO_會議_2024_05_02.md",
+      "qa_count": 5,
+      "summary": "討論了 JS 渲染問題...",
+    },
+  ],
+}
+```
+
+### `qa_final.json`（步驟 3 最終資料庫）
+
+```jsonc
+{
+  "version": "1.0",
+  "total_count": 280, // 去重後的數量
+  "original_count": 342, // 去重前的數量
+  "meetings_processed": 87,
+  "qa_database": [
+    {
+      "id": 1, // 唯一序號
+      "question": "...",
+      "answer": "...",
+      "keywords": ["..."],
+      "category": "技術SEO", // 主分類（見下方分類列表）
+      "difficulty": "進階", // 基礎 / 進階
+      "evergreen": true, // true=常青知識, false=可能過時
+      "source_file": "...",
+      "source_title": "...",
+      "source_date": "...",
+      "is_merged": false, // 是否由多筆合併而來
+      "merge_count": 3, // (選填) 合併了幾筆
+      "merged_from": [
+        // (選填) 合併來源
+        { "source_title": "...", "source_date": "..." },
+      ],
+    },
+  ],
+}
+```
+
+### 分類標籤列表（`category`）
+
+| 分類            | 說明                                              |
+| --------------- | ------------------------------------------------- |
+| 技術SEO         | Crawling、Indexing、Rendering、Structured Data 等 |
+| 內容策略        | 內容規劃、改寫、E-E-A-T、內容行銷                 |
+| 連結建設        | 外鏈、內鏈、Anchor Text 策略                      |
+| 關鍵字研究      | 關鍵字挖掘、搜尋意圖、長尾策略                    |
+| 網站架構        | URL 結構、導覽、分類架構、Breadcrumb              |
+| Core Web Vitals | LCP、FID/INP、CLS、效能優化                       |
+| 本地SEO         | Google 商家、NAP、在地搜尋                        |
+| 電商SEO         | 商品頁、分類頁、結構化資料（Product）             |
+| GA/GSC 數據分析 | Google Analytics、Search Console 數據解讀         |
+| SEO 工具        | Ahrefs、Screaming Frog 等工具使用                 |
+| 演算法更新      | Google 演算法更新、應對策略                       |
+| 其他            | 無法歸類的項目                                    |
+
+---
+
+## Troubleshooting
+
+### 常見錯誤
+
+| 錯誤                                  | 原因                           | 解法                                                                                     |
+| ------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------- |
+| `Error code: 401 - Incorrect API key` | OpenAI API key 無效或過期      | 確認 `.env` 裡的 `OPENAI_API_KEY` 正確，到 https://platform.openai.com/api-keys 重新產生 |
+| `❌ NOTION_TOKEN 未設定`              | `.env` 不存在或 key 為空       | `cp .env.example .env` 後填入                                                            |
+| `⚠️ 跳過（無存取權）`                 | Integration 沒有該子頁面的權限 | 到 Notion 母頁面 → `···` → `Connections` → 確認 Integration 已加入                       |
+| `Rate limited, waiting Xs`            | API 呼叫太頻繁                 | 正常現象，腳本會自動等待重試                                                             |
+| `JSON 解析失敗`                       | OpenAI 回傳非標準 JSON         | 通常是內容太長導致截斷，可試著降低 `MAX_TOKENS_PER_CHUNK`                                |
+| 圖片路徑 `[DOWNLOAD_FAILED: ...]`     | Notion 圖片 URL 已過期         | 重跑步驟 1 會重新下載（Notion 暫存 URL 有效期約 1 小時）                                 |
+
+### 驗證設定
+
+```bash
+# 只檢查 API key 等設定是否正確，不實際執行
+python scripts/run_pipeline.py --dry-run
+```
+
+---
+
+## 已知限制
+
+1. **分類呼叫 API 次數 = Q&A 數量** — 沒有批次化，每筆各呼叫一次 `gpt-5-nano`。
+2. **圖片只在步驟 1 下載** — 如果 Notion 上的圖片被替換，需要手動清除 `raw_data/images/` 後重跑步驟 1。
+
+---
+
+## 開發指南
+
+### 環境設置
+
+```bash
+# Clone 後
+cd SEO_QA_Rawdata
+cp .env.example .env    # 填入 API keys
+pip install -r requirements.txt
+
+# （選擇性）安裝為可開發模式的 package，免去 sys.path 問題
+pip install -e ".[dev]"
+
+# 驗證設定
+python scripts/run_pipeline.py --dry-run
+
+# 執行測試
+python -m pytest tests/ -v
+```
+
+### 專案慣例
+
+- **Python 3.11+**，使用 `from __future__ import annotations` 支援新型別語法
+- **非同步 I/O**：步驟 1 使用 `httpx.AsyncClient`；步驟 2、3 是同步
+- **路徑管理**：所有路徑定義在 `config.py`，用 `pathlib.Path`
+- **API 安全**：所有 key 透過 `.env` 載入，絕不 hardcode
+
+### 調整 Prompt
+
+Q&A 萃取的品質主要取決於 `utils/openai_helper.py` 中的 prompt：
+
+- `EXTRACT_SYSTEM_PROMPT` — 控制萃取粒度、格式、語言
+- `MERGE_SYSTEM_PROMPT` — 控制合併邏輯（以新日期為準等）
+- `CLASSIFY_SYSTEM_PROMPT` — 控制分類維度和標籤列表
+
+建議修改 prompt 後先用 `--limit 3` 試跑，確認效果再全量處理。
+
+### 擴展新分類
+
+修改 `CLASSIFY_SYSTEM_PROMPT` 中的分類列表，同步更新本 README 的「分類標籤列表」。
+
+---
+
+## 未來擴充（Roadmap）
+
+### Phase 1 — 增量處理（近期）
+
+- [x] `meetings_index.json` 增加 `status` 欄位（`fetched` / `extracted` / `classified`）
+- [x] 步驟 1 比對 `last_edited_time`，只抓新增或有更新的頁面
+- [x] 步驟 2 檢查 `qa_per_meeting/` 已存在就跳過（加 `--force` 強制重跑）
+- [x] 步驟 2 即時寫入合併檔，中途 crash 不丟失進度
+
+### Phase 2 — API 化（中期）
+
+- [ ] 加入 `api/` 目錄，用 FastAPI 提供 REST API
+  - `GET /api/qa` — 列表查詢（支援分類、關鍵字、分頁）
+  - `GET /api/qa/:id` — 單筆詳情
+  - `GET /api/qa/search?q=...` — 語意搜尋（embedding）
+  - `POST /api/pipeline/run` — 觸發 pipeline 執行
+- [ ] 前端 `~/Documents/vocus-web-ui` 透過 API 讀取 Q&A 資料庫
+- [x] 加入 `pyproject.toml`，讓專案可以 `pip install -e .` 安裝
+
+### Phase 3 — 進階功能（遠期）
+
+- [ ] **RAG 搜尋**：把 `qa_final.json` 匯入向量資料庫（Supabase pgvector / Pinecone），搭配 embedding 做語意搜尋
+- [ ] **匯入 Notion**：把最終 Q&A 匯回 Notion Database，用欄位篩選查詢
+- [ ] **自動更新**：Notion webhook / 定時 cron 觸發 pipeline，增量處理新紀錄
+- [ ] **版本追蹤**：Q&A 修改歷程，保留「何時更新」「因哪次會議更新」
+- [ ] **品質儀表板**：追蹤 `confidence` 分布、`evergreen: false` 待 review 項目數量

@@ -22,12 +22,27 @@ import re
 import sys
 from pathlib import Path
 
-# 把專案根目錄加到 path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# 支援直接執行 script（未 pip install -e . 時）
+try:
+    import config
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import config
 
-import config
 from utils.notion_client import fetch_all_meetings
 from utils.block_to_markdown import blocks_to_markdown
+
+
+def _load_existing_index() -> dict[str, dict]:
+    """載入現有索引，回傳 {page_id: entry} 的 dict"""
+    index_path = config.RAW_JSON_DIR.parent / "meetings_index.json"
+    if not index_path.exists():
+        return {}
+    try:
+        entries = json.loads(index_path.read_text(encoding="utf-8"))
+        return {e["id"]: e for e in entries if "id" in e}
+    except (json.JSONDecodeError, KeyError):
+        return {}
 
 
 async def main(args: argparse.Namespace) -> None:
@@ -40,9 +55,20 @@ async def main(args: argparse.Namespace) -> None:
         print("❌ 請設定 NOTION_TOKEN（在 .env）")
         sys.exit(1)
 
+    force = args.force
+
     print("=" * 60)
     print("📥 步驟 1：從 Notion 擷取 SEO 會議紀錄")
+    if force:
+        print("   ⚡ 強制模式：重新抓取所有頁面")
+    else:
+        print("   📦 增量模式：只抓新增或有更新的頁面")
     print("=" * 60)
+
+    # 載入現有索引（用於增量比對）
+    existing_index = _load_existing_index()
+    if existing_index and not force:
+        print(f"   📋 現有索引: {len(existing_index)} 份")
 
     # 擷取所有會議
     meetings = await fetch_all_meetings(
@@ -50,10 +76,34 @@ async def main(args: argparse.Namespace) -> None:
         filter_keyword=args.filter,
     )
 
-    print(f"\n✅ 共擷取 {len(meetings)} 份會議紀錄")
+    print(f"\n📋 Notion 上共 {len(meetings)} 份會議紀錄")
+
+    # 增量過濾：只處理新增或有更新的
+    if not force and existing_index:
+        filtered = []
+        skipped = 0
+        for m in meetings:
+            page_id = m["meta"].get("id", "")
+            remote_edited = m["meta"].get("last_edited_time", "")
+            local_entry = existing_index.get(page_id)
+
+            if local_entry and local_entry.get("last_edited_time") == remote_edited:
+                skipped += 1
+            else:
+                filtered.append(m)
+
+        if skipped:
+            print(f"   ⏭️  跳過 {skipped} 份（無更新）")
+        meetings = filtered
+
+    if not meetings:
+        print("\n✅ 沒有新的或更新的會議紀錄，無需處理。")
+        return
+
+    print(f"   🔄 需處理: {len(meetings)} 份\n")
 
     # 轉 Markdown
-    print("\n📝 正在轉換為 Markdown ...")
+    print("📝 正在轉換為 Markdown ...")
     for i, meeting in enumerate(meetings, 1):
         meta = meeting["meta"]
         blocks = meeting["blocks"]
@@ -68,12 +118,8 @@ async def main(args: argparse.Namespace) -> None:
         md_path.parent.mkdir(parents=True, exist_ok=True)
         md_path.write_text(md_content, encoding="utf-8")
 
-    # 建立索引
-    index = []
-    for meeting in meetings:
-        meta = meeting["meta"]
-        safe_title = re.sub(r'[^\w\u4e00-\u9fff\-]', '_', meta.get("title", "Untitled"))[:80]
-        index.append({
+        # 即時更新索引條目
+        existing_index[meta.get("id", "")] = {
             "title": meta.get("title", ""),
             "id": meta.get("id", ""),
             "created_time": meta.get("created_time", ""),
@@ -81,15 +127,18 @@ async def main(args: argparse.Namespace) -> None:
             "url": meta.get("url", ""),
             "json_file": f"notion_json/{safe_title}.json",
             "md_file": f"markdown/{safe_title}.md",
-        })
+            "status": "fetched",
+        }
 
+    # 寫入合併後的索引（保留舊的 + 更新新的）
+    index = list(existing_index.values())
     index_path = config.RAW_JSON_DIR.parent / "meetings_index.json"
     index_path.write_text(
         json.dumps(index, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
-    print(f"\n📋 索引已儲存: {index_path}")
+    print(f"\n📋 索引已儲存: {index_path}（共 {len(index)} 份）")
     print(f"📁 Raw JSON: {config.RAW_JSON_DIR}")
     print(f"📁 Markdown:  {config.RAW_MD_DIR}")
     print(f"📁 圖片:      {config.IMAGES_DIR}")
@@ -107,6 +156,11 @@ if __name__ == "__main__":
         "--filter",
         default=None,
         help="篩選標題包含此關鍵字的頁面（例如 'SEO 會議'）",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="強制重新抓取所有頁面（忽略增量比對）",
     )
     args = parser.parse_args()
     asyncio.run(main(args))

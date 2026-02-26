@@ -22,24 +22,18 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+try:
+    import config
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import config
 
-import config
 from utils.openai_helper import extract_qa_from_text
-
-
-def _extract_date_from_title(title: str) -> str:
-    """嘗試從標題中擷取日期"""
-    # 常見格式: 2024-01-15, 2024/01/15, 20240115
-    patterns = [
-        r'(\d{4}[-/]\d{1,2}[-/]\d{1,2})',
-        r'(\d{4}\d{2}\d{2})',
-    ]
-    for pattern in patterns:
-        m = re.search(pattern, title)
-        if m:
-            return m.group(1)
-    return ""
+from scripts.extract_qa_helpers import (
+    _extract_date_from_title,
+    _extract_date_from_content,
+    _split_content,
+)
 
 
 def process_single_meeting(md_path: Path) -> dict:
@@ -53,7 +47,12 @@ def process_single_meeting(md_path: Path) -> dict:
     if title_match:
         title = title_match.group(1)
 
-    date = _extract_date_from_title(title) or _extract_date_from_title(filename)
+    # 優先從 metadata 區取日期，其次從標題
+    date = (
+        _extract_date_from_content(content)
+        or _extract_date_from_title(title)
+        or _extract_date_from_title(filename)
+    )
 
     print(f"  📄 {title}")
     print(f"     字數: {len(content)}")
@@ -89,34 +88,40 @@ def process_single_meeting(md_path: Path) -> dict:
     return meeting_result
 
 
-def _split_content(content: str, max_chars: int) -> list[str]:
+def _rebuild_merged_from_per_meeting() -> dict:
     """
-    把長內容依標題分段。
-    優先以 ## 標題切分，如果沒有就等距切分。
+    從 qa_per_meeting/ 下所有已完成的 JSON 重新組合 qa_all_raw.json。
+    確保即使中途 crash，已處理的結果不會遺失。
     """
-    # 以 ## 或 ### 標題為切分點
-    sections = re.split(r'(?=\n##\s)', content)
+    all_qa: list[dict] = []
+    summary: list[dict] = []
+    qa_dir = config.QA_PER_MEETING_DIR
 
-    if len(sections) <= 1:
-        # 沒有標題結構，等距切分
-        chunks = []
-        for i in range(0, len(content), max_chars):
-            chunks.append(content[i:i + max_chars])
-        return chunks
+    if not qa_dir.exists():
+        return {"total_qa_count": 0, "meetings_processed": 0, "qa_pairs": [], "processing_summary": []}
 
-    # 合併太小的段落
-    chunks = []
-    current = ""
-    for section in sections:
-        if len(current) + len(section) > max_chars and current:
-            chunks.append(current)
-            current = section
-        else:
-            current += section
-    if current:
-        chunks.append(current)
+    for f in sorted(qa_dir.glob("*_qa.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            pairs = data.get("qa_pairs", [])
+            # 跳過處理失敗的空結果
+            if not pairs and "處理失敗" in data.get("meeting_summary", ""):
+                continue
+            all_qa.extend(pairs)
+            summary.append({
+                "file": f.stem.replace("_qa", "") + ".md",
+                "qa_count": len(pairs),
+                "summary": data.get("meeting_summary", ""),
+            })
+        except (json.JSONDecodeError, KeyError):
+            continue
 
-    return chunks
+    return {
+        "total_qa_count": len(all_qa),
+        "meetings_processed": len(summary),
+        "qa_pairs": all_qa,
+        "processing_summary": summary,
+    }
 
 
 def main(args: argparse.Namespace) -> None:
@@ -124,9 +129,15 @@ def main(args: argparse.Namespace) -> None:
         print("❌ 請設定 OPENAI_API_KEY（在 .env）")
         sys.exit(1)
 
+    force = args.force
+
     print("=" * 60)
     print("🤖 步驟 2：用 OpenAI 萃取 Q&A")
     print(f"   模型: {config.OPENAI_MODEL}")
+    if force:
+        print("   ⚡ 強制模式：重新處理所有檔案")
+    else:
+        print("   📦 增量模式：跳過已完成的檔案")
     print("=" * 60)
 
     # 收集要處理的檔案
@@ -145,14 +156,46 @@ def main(args: argparse.Namespace) -> None:
     if args.limit:
         md_files = md_files[: args.limit]
 
-    print(f"\n📚 共 {len(md_files)} 份待處理\n")
+    # 增量過濾：跳過已經有成功結果的
+    if not force:
+        filtered = []
+        skipped = 0
+        for md_path in md_files:
+            qa_path = config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json"
+            if qa_path.exists():
+                try:
+                    existing = json.loads(qa_path.read_text(encoding="utf-8"))
+                    # 只跳過有實際 Q&A 結果的（處理失敗的要重跑）
+                    if existing.get("qa_pairs") and "處理失敗" not in existing.get("meeting_summary", ""):
+                        skipped += 1
+                        continue
+                except (json.JSONDecodeError, KeyError):
+                    pass
+            filtered.append(md_path)
+
+        if skipped:
+            print(f"\n   ⏭️  跳過 {skipped} 份（已完成）")
+        md_files = filtered
+
+    if not md_files:
+        print("\n✅ 所有檔案已處理完畢，無需重跑。")
+        print("   💡 使用 --force 可強制全部重新處理")
+        # 確保合併檔存在
+        merged = _rebuild_merged_from_per_meeting()
+        merged_path = config.OUTPUT_DIR / "qa_all_raw.json"
+        merged_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+        qa_count = merged["total_qa_count"]
+        print(f"   📊 合併結果已更新: {qa_count} 個 Q&A")
+        return
+
+    total_files = len(md_files)
+    print(f"\n📚 共 {total_files} 份待處理\n")
 
     # 逐一處理
-    all_qa_pairs = []
-    results_per_meeting = []
+    newly_processed = 0
 
     for i, md_path in enumerate(md_files, 1):
-        print(f"\n[{i}/{len(md_files)}]")
+        print(f"\n[{i}/{total_files}]")
 
         try:
             result = process_single_meeting(md_path)
@@ -168,23 +211,13 @@ def main(args: argparse.Namespace) -> None:
             encoding="utf-8",
         )
 
-        all_qa_pairs.extend(result.get("qa_pairs", []))
-        results_per_meeting.append({
-            "file": md_path.name,
-            "qa_count": len(result.get("qa_pairs", [])),
-            "summary": result.get("meeting_summary", ""),
-        })
+        newly_processed += 1
 
         # 簡單的 rate limit 保護
         time.sleep(1)
 
-    # 合併輸出
-    merged_output = {
-        "total_qa_count": len(all_qa_pairs),
-        "meetings_processed": len(md_files),
-        "qa_pairs": all_qa_pairs,
-        "processing_summary": results_per_meeting,
-    }
+    # 從所有 per-meeting 結果重建合併檔（包含增量前已處理的）
+    merged_output = _rebuild_merged_from_per_meeting()
 
     merged_path = config.OUTPUT_DIR / "qa_all_raw.json"
     merged_path.write_text(
@@ -194,7 +227,8 @@ def main(args: argparse.Namespace) -> None:
 
     print("\n" + "=" * 60)
     print(f"✅ 步驟 2 完成！")
-    print(f"   共萃取 {len(all_qa_pairs)} 個 Q&A pairs")
+    print(f"   本次處理: {newly_processed} 份")
+    print(f"   總計 Q&A: {merged_output['total_qa_count']} 個")
     print(f"   單份結果: {config.QA_PER_MEETING_DIR}")
     print(f"   合併結果: {merged_path}")
     print("=" * 60)
@@ -204,5 +238,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用 OpenAI 萃取 Q&A")
     parser.add_argument("--limit", type=int, default=0, help="只處理前 N 份")
     parser.add_argument("--file", default="", help="只處理指定檔案名稱")
+    parser.add_argument("--force", action="store_true", help="強制重新處理所有檔案（忽略已完成的）")
     args = parser.parse_args()
     main(args)

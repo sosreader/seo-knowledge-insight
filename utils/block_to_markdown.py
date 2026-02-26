@@ -235,6 +235,7 @@ async def blocks_to_markdown(
     # 前言 metadata
     md_parts.append(f"# {meta.get('title', 'Untitled')}")
     md_parts.append("")
+    md_parts.append(f"- **會議日期**: {meta.get('meeting_date', meta.get('created_time', 'N/A'))[:10]}")
     md_parts.append(f"- **建立時間**: {meta.get('created_time', 'N/A')}")
     md_parts.append(f"- **最後編輯**: {meta.get('last_edited_time', 'N/A')}")
     md_parts.append(f"- **Notion URL**: {meta.get('url', 'N/A')}")

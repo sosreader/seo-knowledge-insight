@@ -25,22 +25,14 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+try:
+    import config
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import config
 
-import config
 from utils.openai_helper import get_embeddings, merge_similar_qas, classify_qa
-
-
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    """計算兩個向量的 cosine similarity"""
-    a_arr = np.array(a)
-    b_arr = np.array(b)
-    dot = np.dot(a_arr, b_arr)
-    norm_a = np.linalg.norm(a_arr)
-    norm_b = np.linalg.norm(b_arr)
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return float(dot / (norm_a * norm_b))
+from scripts.dedupe_helpers import _cosine_similarity_matrix
 
 
 def find_duplicate_groups(
@@ -58,25 +50,25 @@ def find_duplicate_groups(
     texts = [f"{qa['question']} {qa['answer']}" for qa in qa_pairs]
     embeddings = get_embeddings(texts)
 
-    print("  🔍 計算相似度矩陣 ...")
+    print("  🔍 計算相似度矩陣（向量化）...")
+    sim_matrix = _cosine_similarity_matrix(embeddings)
     n = len(qa_pairs)
     merged = set()  # 已被分到某個群組的 index
     groups: list[list[int]] = []
 
-    for i in tqdm(range(n), desc="  比對中"):
+    for i in tqdm(range(n), desc="  分組中"):
         if i in merged:
             continue
-        group = [i]
-        for j in range(i + 1, n):
-            if j in merged:
-                continue
-            sim = _cosine_similarity(embeddings[i], embeddings[j])
-            if sim >= threshold:
-                group.append(j)
-                merged.add(j)
-        if len(group) > 1:
+        # 用 numpy 一次比對 i 與所有 j>i 的相似度
+        sims = sim_matrix[i, i + 1:]
+        candidates = np.where(sims >= threshold)[0] + (i + 1)
+        # 過濾已分組的
+        new_members = [int(j) for j in candidates if j not in merged]
+        if new_members:
+            group = [i] + new_members
             groups.append(group)
             merged.add(i)
+            merged.update(new_members)
 
     unique = [i for i in range(n) if i not in merged]
 

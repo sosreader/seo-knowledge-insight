@@ -10,11 +10,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import functools
+
 from openai import OpenAI
 
 import config
 
 
+@functools.lru_cache(maxsize=1)
 def _client() -> OpenAI:
     return OpenAI(api_key=config.OPENAI_API_KEY)
 
@@ -252,7 +255,7 @@ def classify_qa(question: str, answer: str) -> dict:
     client = _client()
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",  # 分類用小模型就夠了，省成本
+        model="gpt-5-nano",  # 分類是簡單結構化任務，用最小模型省成本
         messages=[
             {"role": "system", "content": CLASSIFY_SYSTEM_PROMPT},
             {"role": "user", "content": f"Q: {question}\n\nA: {answer}"},

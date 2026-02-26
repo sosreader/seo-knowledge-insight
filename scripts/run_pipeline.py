@@ -16,8 +16,11 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import config
+try:
+    import config
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import config
 
 
 def check_config() -> list[str]:
@@ -80,6 +83,11 @@ def main() -> None:
         action="store_true",
         help="步驟 3 跳過分類",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="強制重新處理（忽略增量比對，適用於步驟 1、2）",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -116,11 +124,15 @@ def main() -> None:
             extra = []
             if args.filter:
                 extra += ["--filter", args.filter]
+            if args.force:
+                extra.append("--force")
             ok = run_step("01_fetch_notion.py", extra)
         elif step == 2:
             extra = []
             if args.limit:
                 extra += ["--limit", str(args.limit)]
+            if args.force:
+                extra.append("--force")
             ok = run_step("02_extract_qa.py", extra)
         elif step == 3:
             extra = []

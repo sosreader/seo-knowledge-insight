@@ -85,14 +85,76 @@ async def _api_post(
 # 頁面列表
 # ──────────────────────────────────────────────────────
 
+async def _is_database(client: httpx.AsyncClient, notion_id: str) -> bool:
+    """檢查 ID 是否為資料庫"""
+    url = f"{config.NOTION_BASE_URL}/databases/{notion_id}"
+    resp_data = await _api_get(client, url)
+    return resp_data.get("object") == "database"
+
+
 async def list_child_pages(
     client: httpx.AsyncClient,
     parent_page_id: str,
 ) -> list[dict[str, str]]:
     """
-    列出 parent_page_id 下所有 child_page 類型的 block，
+    自動偵測 parent_page_id 是頁面還是資料庫：
+    - 資料庫 → 用 POST /databases/{id}/query 查詢所有紀錄
+    - 頁面 → 列出所有 child_page 類型 block
     回傳 [{id, title}]
     """
+    # 先試資料庫 API
+    db_url = f"{config.NOTION_BASE_URL}/databases/{parent_page_id}"
+    db_check = await _api_get(client, db_url)
+
+    if db_check.get("object") == "database":
+        print("  📊 偵測到資料庫，使用 Database Query API ...")
+        return await _list_database_pages(client, parent_page_id)
+    else:
+        print("  📄 偵測到頁面，使用 Blocks Children API ...")
+        return await _list_page_children(client, parent_page_id)
+
+
+async def _list_database_pages(
+    client: httpx.AsyncClient,
+    database_id: str,
+) -> list[dict[str, str]]:
+    """查詢資料庫中所有 page records"""
+    pages: list[dict[str, str]] = []
+    url = f"{config.NOTION_BASE_URL}/databases/{database_id}/query"
+    cursor: str | None = None
+
+    while True:
+        body: dict[str, Any] = {"page_size": 100}
+        if cursor:
+            body["start_cursor"] = cursor
+
+        data = await _api_post(client, url, body)
+        for record in data.get("results", []):
+            if record.get("object") != "page":
+                continue
+            # 找 title 欄位
+            title = ""
+            for prop in record.get("properties", {}).values():
+                if prop.get("type") == "title":
+                    title = "".join(
+                        t.get("plain_text", "") for t in prop.get("title", [])
+                    )
+                    break
+            pages.append({"id": record["id"], "title": title or record["id"]})
+
+        if data.get("has_more"):
+            cursor = data["next_cursor"]
+        else:
+            break
+
+    return pages
+
+
+async def _list_page_children(
+    client: httpx.AsyncClient,
+    parent_page_id: str,
+) -> list[dict[str, str]]:
+    """列出頁面下所有 child_page 類型 block"""
     pages: list[dict[str, str]] = []
     url = f"{config.NOTION_BASE_URL}/blocks/{parent_page_id}/children"
     cursor: str | None = None
@@ -129,6 +191,7 @@ async def fetch_blocks_recursive(
     """
     遞迴取得 block 底下所有 children（含巢狀 block）。
     每個 block dict 會新增 "children_blocks" 鍵。
+    404 表示 Integration 沒有該 block 的存取權，直接回傳空列表。
     """
     if depth > max_depth:
         return []
@@ -142,7 +205,14 @@ async def fetch_blocks_recursive(
         if cursor:
             params["start_cursor"] = cursor
 
-        data = await _api_get(client, url, params)
+        try:
+            data = await _api_get(client, url, params)
+        except Exception as e:
+            # 404 = Integration 沒有此頁面存取權，跳過
+            if "404" in str(e):
+                print(f"  ⚠️  跳過（無存取權）: {block_id}")
+                return []
+            raise
 
         for block in data.get("results", []):
             # 如果這個 block 有 children，遞迴抓取
@@ -171,24 +241,31 @@ async def fetch_page_meta(
     client: httpx.AsyncClient,
     page_id: str,
 ) -> dict:
-    """取得頁面 meta：標題、建立/更新時間"""
+    """取得頁面 meta：標題、建立/更新時間，也嘗試從資料庫 Date 欄位取得會議日期"""
     url = f"{config.NOTION_BASE_URL}/pages/{page_id}"
     data = await _api_get(client, url)
 
-    # 從 properties 裡找 title
     title = ""
-    for prop in data.get("properties", {}).values():
-        if prop.get("type") == "title":
+    meeting_date = ""
+
+    for prop_name, prop in data.get("properties", {}).items():
+        ptype = prop.get("type", "")
+        if ptype == "title":
             title = "".join(
                 t.get("plain_text", "") for t in prop.get("title", [])
             )
-            break
+        elif ptype == "date" and not meeting_date:
+            date_val = prop.get("date") or {}
+            meeting_date = date_val.get("start", "")
+        elif ptype == "created_time" and not meeting_date:
+            meeting_date = prop.get("created_time", "")
 
     return {
         "id": data.get("id", page_id),
         "title": title,
         "created_time": data.get("created_time", ""),
         "last_edited_time": data.get("last_edited_time", ""),
+        "meeting_date": meeting_date or data.get("created_time", "")[:10],
         "url": data.get("url", ""),
     }
 
