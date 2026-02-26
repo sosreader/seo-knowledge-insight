@@ -1,0 +1,8 @@
+.env
+raw_data/notion_json/
+raw_data/markdown/
+raw_data/images/
+output/
+__pycache__/
+*.pyc
+.DS_Store
