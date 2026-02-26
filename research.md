@@ -1,364 +1,181 @@
 # SEO QA Pipeline 技術教學
 
-> 專為純前端開發者設計。每個概念都會先給「前端你已知的對應物」，再解釋新東西。
-> 本文件同步記錄本專案用到的所有技術決策。
+> 專為前端開發者設計，聚焦 AI 相關技術。
+> 假設你已熟悉 JavaScript / fetch / JSON，直接從 AI 概念開始。
 
 ---
 
 ## 目錄
 
-1. [Python vs JavaScript](#1-python-vs-javascript)
-2. [腳本與 CLI](#2-腳本與-cli)
-3. [API 呼叫（你已經會了）](#3-api-呼叫你已經會了)
-4. [JSON 與檔案持久化](#4-json-與檔案持久化)
-5. [Pipeline：資料流水線](#5-pipeline資料流水線)
-6. [LLM 與 Prompt](#6-llm-與-prompt)
-7. [Token：AI 的計費單位](#7-token-ai-的計費單位)
-8. [Structured Output：讓 AI 填表格](#8-structured-output讓-ai-填表格)
-9. [Embedding：語意指紋](#9-embedding語意指紋)
-10. [Cosine Similarity：計算相似度](#10-cosine-similarity計算相似度)
-11. [RAG：給 AI 開卷考試](#11-rag給-ai-開卷考試)
-12. [LLM-as-Judge：用 AI 評估 AI](#12-llm-as-judge用-ai-評估-ai)
-13. [Reasoning Model：會思考的 AI](#13-reasoning-model會思考的-ai)
-14. [本專案完整架構](#14-本專案完整架構)
+1. [快速對照表（Python / CLI / API）](#1-快速對照表)
+2. [LLM 是什麼，怎麼呼叫](#2-llm-是什麼怎麼呼叫)
+3. [Token：AI 的計費與限制單位](#3-token-ai-的計費與限制單位)
+4. [Prompt Engineering：怎麼跟 AI 說話](#4-prompt-engineering怎麼跟-ai-說話)
+5. [Structured Output：強制 AI 回傳固定格式](#5-structured-output強制-ai-回傳固定格式)
+6. [Embedding：把文字變成數字](#6-embedding把文字變成數字)
+7. [Cosine Similarity：比較兩段文字的相似度](#7-cosine-similarity比較兩段文字的相似度)
+8. [RAG：讓 AI 查資料再回答](#8-rag讓-ai-查資料再回答)
+9. [Hybrid Search：語意 + 關鍵字混合搜尋](#9-hybrid-search語意--關鍵字混合搜尋)
+10. [LLM-as-Judge：用 AI 評估 AI](#10-llm-as-judge用-ai-評估-ai)
+11. [Reasoning Model：會先思考的 AI](#11-reasoning-model會先思考的-ai)
+12. [本專案完整架構與決策](#12-本專案完整架構與決策)
 
 ---
 
-## 1. Python vs JavaScript
+## 1. 快速對照表
 
-### 你已知的對應物
+前端你已知的東西，直接對照：
 
-| JavaScript | Python |
-|-----------|--------|
-| `console.log("hi")` | `print("hi")` |
-| `function add(a, b) {}` | `def add(a, b):` |
-| `const x = 1` | `x = 1` |
-| `// comment` | `# comment` |
-| `{}` 大括號定義區塊 | **縮排**定義區塊 |
-| `node script.js` | `python script.py` |
-| `import x from 'y'` | `from y import x` |
-| `package.json` | `pyproject.toml` |
-| `npm install` | `pip install` |
+| 你知道的 | Python / 本專案 |
+|---------|----------------|
+| `fetch(url, { headers })` | `requests.get(url, headers=...)` |
+| `process.env.API_KEY` | `os.getenv("API_KEY")` |
+| `JSON.parse / JSON.stringify` | `json.loads / json.dumps` |
+| `npm run build -- --flag` | `python script.py --step 2 --limit 3` |
+| `localStorage.setItem(k, v)` | `Path("file.json").write_text(...)` |
+| Promise chain | 每步結果存 JSON 檔，下步再讀 |
 
-### 最關鍵的差異：縮排就是語法
-
-```python
-# JavaScript 你可以這樣寫（醜但合法）：
-# function add(a,b){return a+b}
-
-# Python 不行，縮排是強制的
-def add(a, b):
-    return a + b   # ← 這個縮排不能少
-```
-
-### 型別提示（Type Hints）
-
-Python 是動態語言，但可以加型別提示（像 TypeScript 的感覺）：
-
-```python
-# 不加型別提示（像 JavaScript）
-def greet(name):
-    return f"Hello, {name}"
-
-# 加型別提示（像 TypeScript）
-def greet(name: str) -> str:
-    return f"Hello, {name}"
-```
-
-本專案大量使用型別提示，閱讀時看到 `list[dict]`、`str | None` 是正常的。
+其他語法差異（縮排、`def`、`import`）看到就懂，不需要特別記。
 
 ---
 
-## 2. 腳本與 CLI
+## 2. LLM 是什麼，怎麼呼叫
 
-### 前端對應：npm scripts
-
-```json
-// package.json
-{
-  "scripts": {
-    "build": "next build",
-    "dev": "next dev --port 3000"
-  }
-}
-```
-
-Python 直接在終端機跑腳本，加 `--` 參數：
-
-```bash
-# 前端
-npm run build
-npm run dev -- --port 3001
-
-# Python（本專案）
-python scripts/run_pipeline.py
-python scripts/run_pipeline.py --step 2 --limit 3
-```
-
-### argparse：解析 CLI 參數
-
-前端你用 `process.argv`，Python 用 `argparse`：
-
-```python
-import argparse
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--step", type=int)      # --step 2
-parser.add_argument("--limit", type=int)     # --limit 3
-parser.add_argument("--force", action="store_true")  # --force（布林旗標）
-
-args = parser.parse_args()
-print(args.step)   # 2
-print(args.force)  # True / False
-```
-
----
-
-## 3. API 呼叫（你已經會了）
-
-### 前端對應：fetch()
-
-```javascript
-// 前端：fetch API
-const res = await fetch("https://api.notion.com/v1/pages/123", {
-  headers: { "Authorization": `Bearer ${token}` }
-});
-const data = await res.json();
-```
-
-```python
-# Python：requests（最常用的 HTTP 套件）
-import requests
-
-res = requests.get(
-    "https://api.notion.com/v1/pages/123",
-    headers={"Authorization": f"Bearer {token}"}
-)
-data = res.json()   # 一樣的！
-```
-
-### 環境變數：.env 檔（一模一樣）
-
-```bash
-# .env（前端 Next.js 或 Python 都一樣）
-OPENAI_API_KEY=sk-xxx
-NOTION_API_KEY=secret_xxx
-```
-
-```python
-# Python 讀取方式
-from dotenv import load_dotenv
-import os
-
-load_dotenv()  # 讀取 .env 檔
-api_key = os.getenv("OPENAI_API_KEY")
-```
-
-```javascript
-// 前端讀取方式（Next.js）
-const apiKey = process.env.OPENAI_API_KEY;
-```
-
----
-
-## 4. JSON 與檔案持久化
-
-### 前端對應：localStorage / sessionStorage
-
-前端你用 localStorage 儲存資料，Python 直接讀寫 JSON 檔：
-
-```python
-import json
-from pathlib import Path
-
-# 寫入 JSON（相當於 localStorage.setItem）
-data = {"qa_pairs": [{"question": "什麼是 SEO？", "answer": "..."}]}
-Path("output/qa_final.json").write_text(
-    json.dumps(data, ensure_ascii=False, indent=2),
-    encoding="utf-8"
-)
-
-# 讀取 JSON（相當於 JSON.parse(localStorage.getItem(...))）
-data = json.loads(Path("output/qa_final.json").read_text(encoding="utf-8"))
-```
-
-### Path 物件（比字串拼接更安全）
-
-```python
-from pathlib import Path
-
-# 不要這樣拼接路徑（容易出錯）
-path = "output" + "/" + "qa_final.json"
-
-# 用 Path（自動處理 / 和 \ 的差異）
-path = Path("output") / "qa_final.json"
-path.exists()        # 檢查是否存在
-path.mkdir()         # 建立目錄
-path.read_text()     # 讀取內容
-path.write_text()    # 寫入內容
-```
-
----
-
-## 5. Pipeline：資料流水線
-
-### 前端對應：Promise chain / async/await 串接
-
-```javascript
-// 前端 Promise chain
-fetchData()
-  .then(parseJson)
-  .then(filterResults)
-  .then(saveToStorage)
-```
-
-本專案的 pipeline 是把「每個步驟的結果存成 JSON 檔」，下一步再讀進來：
-
-```
-Step 1: Notion API → raw_data/notion_json/*.json
-   ↓ 存檔
-Step 2: 讀 JSON → OpenAI 萃取 Q&A → output/qa_per_meeting/*.json
-   ↓ 存檔
-Step 3: 讀 Q&A → 去重 + 分類 → output/qa_final.json
-   ↓ 存檔
-Step 4: 讀 qa_final.json → 搜尋 + 生成報告
-Step 5: 讀 qa_final.json → 評估品質
-```
-
-### 為什麼每步都存檔？
-
-- **中斷後可接續**：跑到一半 Ctrl+C，下次從上次停的地方繼續
-- **增量處理**：已處理過的跳過，只處理新的
-- **除錯方便**：每步的輸出都看得到，不用重跑整條鏈
-
-這就是本專案的「增量機制」，等同於前端的 SWR/React Query 快取策略。
-
----
-
-## 6. LLM 與 Prompt
-
-### LLM 是什麼
+### 概念
 
 LLM（Large Language Model）= GPT、Claude 等 AI 模型。
-你傳一段文字進去（prompt），它回傳一段文字出來（completion）。
+你傳一段文字進去（prompt），它根據學過的大量資料預測最合理的回應。
+
+**它不是搜尋引擎，不是資料庫。** 它是「根據上下文預測下一段文字的機器」。
+
+### 呼叫方式（本專案）
 
 ```python
-# 最簡單的 OpenAI 呼叫（像 fetch + 解析 JSON）
 from openai import OpenAI
 
 client = OpenAI(api_key="sk-xxx")
 
 response = client.chat.completions.create(
-    model="gpt-5-mini",
+    model="gpt-5.2",
     messages=[
-        {"role": "system", "content": "你是 SEO 專家"},
+        {"role": "system", "content": "你是 SEO 專家，只用繁體中文回答"},
         {"role": "user",   "content": "什麼是 canonical tag？"},
     ]
 )
 
 answer = response.choices[0].message.content
-# answer = "Canonical tag 是用來告訴搜尋引擎..."
+# "Canonical tag 是 HTML 標籤，用來告訴搜尋引擎..."
 ```
 
-### System vs User message
+### 兩種 message 角色
 
-```
-system：給 AI 設定角色（"你是一個 SEO 專家，只用繁體中文回答"）
-user：  實際的問題（"為什麼我的 CTR 一直下降？"）
-```
+| 角色 | 用途 | 前端類比 |
+|------|------|---------|
+| `system` | 設定 AI 的角色、規則、輸出語言 | 元件的初始 props |
+| `user` | 實際問題或要處理的資料 | 使用者的 input |
 
-前端類比：`system` 像元件的 props，`user` 像使用者的 input。
-
-### Prompt 工程
-
-Prompt 就是「你給 AI 的指令」。寫好的 prompt 非常重要：
-
-```python
-# 差的 prompt（AI 不知道你要什麼格式）
-"幫我從這段文字裡找問題和答案"
-
-# 好的 prompt（明確格式、明確角色、明確要求）
-"""
-你是 SEO 知識萃取專家。
-從以下會議紀錄中，萃取出 3-8 個有價值的 Q&A。
-
-要求：
-- Q 必須是可以獨立理解的問題（不需要看原文）
-- A 必須包含具體建議和原因
-- 只萃取 SEO 相關知識，跳過行政內容
-
-回傳格式：JSON 陣列，每個元素包含 question、answer、keywords
-"""
-```
-
-本專案所有 prompt 定義在 `utils/openai_helper.py`。
+本專案所有 prompt 定義在 `utils/openai_helper.py`，包含萃取 Q&A、合併、分類等。
 
 ---
 
-## 7. Token：AI 的計費單位
-
-### 前端對應：API 呼叫次數計費
-
-前端你可能知道「每次 API 呼叫算一次費用」。
-LLM 更細：**計算你傳入和收到的「字數」**，單位叫 token。
+## 3. Token：AI 的計費與限制單位
 
 ### Token 是什麼
 
-大概 1 token ≈ 0.75 個英文單字，或 1 個中文字：
+模型不是「一個字一個字」讀，而是把文字切成「token」（子詞單位）：
 
 ```
-"Hello World"    → 2 tokens
-"你好世界"        → 4 tokens（每個中文字約 1 token）
-"CTR"            → 1 token
-"core web vitals" → 3 tokens
+"Core Web Vitals"   → 3 tokens
+"你好世界"           → 4 tokens（中文約每字 1 token）
+"unassigned"        → 1 token
+一份 87 頁會議紀錄   → 約 3,000–8,000 tokens
 ```
 
-### 為什麼本專案會遇到 token 問題（BUG-002）
+### 為什麼重要
 
-今天我們修的 BUG-002：
+**計費**：API 費用 = (輸入 tokens + 輸出 tokens) × 每 token 單價
+
+**Context Window**：模型一次能處理的 token 上限。
+本專案超過 6000 tokens 的會議紀錄會自動切段：
 
 ```python
-# 推理模型（gpt-5-mini）有特殊行為：
-# 它會先「思考」（reasoning），再輸出答案
-# 思考過程也佔用 token
-
-max_completion_tokens=256   # ← 256 tokens 太少
-# 推理：200 tokens 用於思考
-# 輸出：只剩 56 tokens，不夠完成 JSON
-# 結果：content = ""（空字串）
-
-max_completion_tokens=1024  # ← 修復後，1024 tokens 夠用
+# scripts/extract_qa_helpers.py
+MAX_TOKENS_PER_CHUNK = 6000   # 超過就切段，分批送給 AI
 ```
 
-### Token 費用估算
+### 本專案各步驟的 token 消耗
 
-| 模型 | 每 1M tokens | 本專案用途 |
-|------|-------------|----------|
-| gpt-5-mini | 便宜 | 分類、評估 |
-| gpt-5.2 | 較貴 | 萃取、合併、週報生成 |
-| text-embedding-3-small | 極便宜 | embedding（向量化） |
+| 步驟 | 模型 | 每次輸入 | 總成本估算 |
+|------|------|---------|----------|
+| Step 2 萃取 Q&A | gpt-5.2 | 每份文件 3K–8K | 87 份 × 平均 5K |
+| Step 3 合併 | gpt-5.2 | 每對 200–500 | 依重複數量 |
+| Step 3 分類 | gpt-5-mini | 每筆 100–200 | 703 筆 × 150 |
+| Step 5 評估 | gpt-5.2 | 每筆 300–600 | 30 筆 × 450 |
 
 ---
 
-## 8. Structured Output：讓 AI 填表格
+## 4. Prompt Engineering：怎麼跟 AI 說話
+
+### 為什麼 Prompt 很重要
+
+同樣的 AI，給不同的 prompt，結果差很多：
+
+```
+差的 prompt：
+「幫我找出這段文字的問題和答案」
+→ AI 隨便給幾個，格式不固定，內容表面
+
+好的 prompt（本專案 Step 2 使用）：
+「你是 SEO 知識萃取專家。
+從以下會議紀錄中，萃取 3-8 個有價值的 Q&A。
+
+要求：
+- Q 必須可以獨立理解（不需要看原始會議）
+- A 必須包含具體建議、原因或數據
+- 跳過行政安排、閒聊、人名提及
+- 用繁體中文
+
+每個 Q&A 回傳：question, answer, keywords (3-5個), confidence (0-1)」
+→ AI 給出符合格式、有深度的結果
+```
+
+### 本專案 Completeness 分數 3.70 的問題
+
+目前 Q&A 萃取品質評估中，Completeness（完整性）平均只有 3.70 / 5。
+LLM Judge 觀察到 Answer 缺少「原因 + 數據 + 可執行建議」。
+
+這是**唯一需要花錢改善的品質問題**（需重跑 Step 2 全部 87 份文件）。
+改法：強化 prompt 要求 A 必須包含 What / Why / How。
+
+### 小規模驗證原則
+
+**在花錢跑全部之前，先跑 3 份驗證 prompt 改動是否有效：**
+
+```bash
+python scripts/run_pipeline.py --step 2 --limit 3 --force
+python scripts/05_evaluate.py --sample 15 --skip-classify-eval
+# 確認 Completeness ≥ 4.0 再跑全量
+```
+
+---
+
+## 5. Structured Output：強制 AI 回傳固定格式
 
 ### 問題
 
-AI 預設回傳自由格式文字，但程式需要讀取固定格式資料：
+AI 預設輸出自由文字，但程式需要固定格式才能 parse：
 
 ```
-問題：「請評估這個 Q&A 的品質」
+❌ 自由文字（沒辦法用程式處理）：
+"這個 Q&A 品質不錯，相關性大約 4 分，完整性稍微不足..."
 
-AI 自由回答（沒辦法 parse）：
-"這個 Q&A 品質不錯，相關性很高，大約 4 分左右，完整性稍微欠缺..."
-
-AI 結構化回答（程式可以直接用）：
-{"relevance": {"score": 4, "reason": "..."}, "completeness": {"score": 3, ...}}
+✅ 結構化 JSON（程式可以直接讀）：
+{"relevance": {"score": 4, "reason": "..."}, "completeness": {"score": 3, "reason": "..."}}
 ```
 
-### JSON Schema（強制 AI 回傳固定格式）
+### JSON Schema（本專案使用方式）
 
-就像 TypeScript interface，你先定義格式，AI 只能照格式回答：
+用 JSON Schema 定義格式，AI 只能照這個格式回答：
 
 ```python
 response = client.chat.completions.create(
@@ -367,333 +184,416 @@ response = client.chat.completions.create(
     response_format={
         "type": "json_schema",
         "json_schema": {
-            "name": "qa_eval",
-            "strict": True,           # ← 強制嚴格符合格式
+            "name": "classify_result",
+            "strict": True,                  # 強制嚴格符合
             "schema": {
                 "type": "object",
                 "properties": {
-                    "score": {
-                        "type": "integer"  # ← 只能是整數
+                    "category": {
+                        "type": "string",
+                        "enum": [            # 只能選這 10 個其中一個
+                            "索引與檢索", "連結策略", "搜尋表現分析",
+                            "內容策略", "Discover與AMP", "技術SEO",
+                            "GA與數據追蹤", "平台策略", "演算法與趨勢", "其他"
+                        ]
                     },
-                    "reason": {
-                        "type": "string"
-                    }
+                    "difficulty": {
+                        "type": "string",
+                        "enum": ["基礎", "進階"]
+                    },
+                    "evergreen": {"type": "boolean"}
                 },
-                "required": ["score", "reason"],
-                "additionalProperties": False  # ← 不能有額外欄位
+                "required": ["category", "difficulty", "evergreen"],
+                "additionalProperties": False
             }
         }
     }
 )
 
-# 保證拿到的是合法 JSON，不是自由文字
 result = json.loads(response.choices[0].message.content)
-print(result["score"])   # 4
+print(result["category"])   # "技術SEO"
 ```
 
-### 本專案 BUG-001 的根因
+### BUG-001 根因（2026-02-27 修復）
 
-今天修的 BUG-001 也和這裡有關：
+`strict: True` 應保證格式正確，但推理模型（gpt-5-mini）token 不夠時
+`content` 回傳空字串 `""`，`json.loads("{}") = {}`，
+空 dict 沒有 `category` 欄位，但仍被計入 `total`。
 
-```python
-content = response.choices[0].message.content or "{}"
-
-# gpt-5-mini（推理模型）有時 content 回傳空字串 ""
-# "" or "{}"  →  "{}"
-# json.loads("{}")  →  {}（空 dict）
-# {} 沒有 "category_judgment" 欄位
-# 但還是被計入 total
-# 結果：Category 正確率顯示 10%（其實是 75%）
-```
+**修復**：append 前先確認必要欄位存在。
 
 ---
 
-## 9. Embedding：語意指紋
+## 6. Embedding：把文字變成數字
 
-### 這是本專案最「不前端」的概念
+### 為什麼需要
 
-Embedding = 把一段文字轉換成一串數字（向量）。
-
-### 為什麼需要這個
-
-關鍵字搜尋的問題：
+關鍵字搜尋的根本限制：
 
 ```
-查詢：「網站速度影響排名嗎？」
-關鍵字搜尋找：包含「速度」「排名」的文章 ✅
-關鍵字搜尋找不到：「Core Web Vitals 與 SEO 的關係」❌（沒有「速度」「排名」這兩個字）
+查詢：「網站速度對排名的影響」
+
+關鍵字搜尋：✅ 找到含「速度」「排名」的文章
+            ❌ 找不到「Core Web Vitals 與 SEO 效能」（字不一樣但意思相關）
+
+語意搜尋：  ✅ 兩個都找得到（因為意思相近）
 ```
 
-語意搜尋可以找到意思相近的，不只是字面上的。
+### Embedding 是什麼
 
-### 用地圖來理解
-
-想像把每個句子放在一個多維空間的地圖上：
-
-```
-「Core Web Vitals 與 SEO 的關係」  ← 放在這個位置
-「網站速度影響排名嗎？」            ← 放在附近的位置（意思相近）
-「如何做內部連結？」               ← 放在很遠的位置（不同主題）
-```
-
-Embedding 就是這個「地圖上的座標」，是一個有 1536 個數字的列表：
+把一段文字轉換成一個固定長度的數字列表（向量）。
+**語意相近的文字，轉換後的數字列表也相近。**
 
 ```python
-# 呼叫 OpenAI Embedding API
 from openai import OpenAI
 
 client = OpenAI()
 result = client.embeddings.create(
     model="text-embedding-3-small",
-    input="Core Web Vitals 與 SEO 的關係"
+    input="Core Web Vitals 與 SEO 效能"
 )
 
 vector = result.data[0].embedding
-# vector = [0.023, -0.156, 0.891, ..., 0.042]  ← 1536 個數字
-print(len(vector))  # 1536
+# [0.023, -0.156, 0.891, 0.044, -0.312, ...]
+print(len(vector))  # 1536 個數字
 ```
 
-本專案在 Step 3 計算所有 703 筆 Q&A 的 embedding，存成 `qa_embeddings.npy`。
+### 直覺理解
+
+把每段文字想像成 1536 維空間裡的一個點：
+- 「Core Web Vitals」和「網站速度」→ 兩個點距離很近
+- 「內部連結架構」和「GA 追蹤設定」→ 兩個點距離很遠
+
+### 本專案的使用
+
+**Step 3**：計算 703 筆 Q&A 的 embedding，儲存成 `qa_embeddings.npy`（numpy 陣列檔）。
+- 去重用：找相似 Q&A（cosine ≥ 0.88 就合併）
+- 搜尋用：Step 4 / Step 5 載入，做語意搜尋
+
+計算一次存起來，後續不重新計算（省成本）。
 
 ---
 
-## 10. Cosine Similarity：計算相似度
+## 7. Cosine Similarity：比較兩段文字的相似度
 
-### 前端對應：沒有直接對應，但原理不難
+### 概念
 
-兩個 embedding 向量有多「相近」？用 Cosine Similarity 計算。
+拿到兩個 embedding 向量後，計算它們的「夾角餘弦值」：
 
-結果是 -1 到 1 之間的數字：
-- `1.0` = 完全相同（意思一樣）
-- `0.88` = 非常相似（本專案的去重門檻）
-- `0.5` = 有點相關
-- `0.0` = 完全無關
-- `-1.0` = 意思相反
+| 數值 | 意義 |
+|------|------|
+| `1.0` | 完全相同（意思一模一樣） |
+| `0.88+` | 非常相似（本專案去重門檻） |
+| `0.7–0.88` | 相關但不重複 |
+| `< 0.5` | 意思不同 |
 
-### 去重的原理
-
-本專案 Step 3 的去重（`SIMILARITY_THRESHOLD = 0.88`）：
+### 本專案的去重邏輯
 
 ```python
 import numpy as np
 
-# 假設我們有兩個 Q&A 的 embedding
-qa1_vector = [0.1, 0.9, 0.3, ...]   # Q: Discover 流量下降原因？
-qa2_vector = [0.1, 0.8, 0.4, ...]   # Q: Google Discover 為什麼流量減少？
+# qa_embs shape: (703, 1536)，703 筆 Q&A 各有 1536 維向量
+qa_embs = np.load("output/qa_embeddings.npy")
 
-# 計算相似度
-similarity = cosine_similarity(qa1_vector, qa2_vector)
-# similarity = 0.97（非常像！）
+# 正規化（讓長度變成 1，方便算 cosine）
+norms = np.linalg.norm(qa_embs, axis=1, keepdims=True)
+qa_norm = qa_embs / (norms + 1e-8)
 
-if similarity >= 0.88:
-    # 這兩個問題意思一樣，合併成一筆
-    merge_qa_pairs(qa1, qa2)
+# 計算所有 Q&A 兩兩之間的相似度矩陣
+# similarity[i][j] = 第 i 筆和第 j 筆 Q&A 的相似度
+similarity_matrix = qa_norm @ qa_norm.T   # (703, 703)
+
+THRESHOLD = 0.88
+# 找出 similarity > 0.88 的 pair → 送給 gpt-5.2 判斷是否合併
 ```
 
 ---
 
-## 11. RAG：給 AI 開卷考試
+## 8. RAG：讓 AI 查資料再回答
 
-### RAG = Retrieval Augmented Generation
+### 核心問題
 
-問題：AI（gpt-5.2）不知道你的 SEO 會議內容。
-解法：先搜尋相關知識，再把搜尋結果交給 AI 一起回答。
+AI 不知道你的私人資料（會議紀錄、客戶資料）。
+直接問 AI → AI 只能靠通用知識回答，可能不準確。
 
-### 比喻：閉卷 vs 開卷
+### RAG 解決方案
 
-```
-❌ 閉卷考試（沒有 RAG）：
-User: 「上次開會說 canonical 設定有問題，怎麼解決？」
-AI: 「我不知道你上次開什麼會...」（AI 沒有你的私人資料）
-
-✅ 開卷考試（有 RAG）：
-Step 1 - 搜尋：在 703 筆 Q&A 中找到 5 筆 canonical 相關的知識
-Step 2 - 組裝：把這 5 筆 Q&A 塞進 prompt
-Step 3 - 生成：AI 看著這些知識回答，有依據
-```
-
-### 本專案 Step 4 的 RAG 流程
+**R**etrieval **A**ugmented **G**eneration = 先搜尋，再生成
 
 ```
-Google Sheets 指標異常
-    ↓
-偵測到「有效頁面數下降 5%」
-    ↓
-Embed 查詢：「有效頁面數下降 Coverage 索引」
-    ↓
-語意搜尋 703 筆 Q&A → 找到最相關的 5 筆
-    ↓
-組裝 prompt：「根據以下 SEO 知識庫：[5 筆 Q&A]，分析這個異常並給建議」
-    ↓
-gpt-5.2 生成週報段落
+[問題] 「上次開會說 Discover 流量下降，怎麼解決？」
+   ↓
+[Retrieval] 把問題轉成 embedding → 在 703 筆 Q&A 中找最相關的 5 筆
+   ↓
+[Augmented] 把這 5 筆 Q&A 塞進 prompt：
+   「根據以下 SEO 知識：
+   Q: Discover 流量下降原因？ A: 可能是內容品質、AMP...
+   Q: AMP 焦點新聞如何維持？ A: ...
+   [3 筆省略]
+   請根據以上知識，分析本週 Discover 下降 20% 的情況」
+   ↓
+[Generation] AI 有了具體上下文，回答更準確、有依據
 ```
 
-### Hybrid Search：語意 + 關鍵字
+### 比喻：開卷考試
 
-本專案不只用語意搜尋，還加了關鍵字 boost：
+- ❌ 無 RAG = 閉卷考試（AI 只能靠記憶）
+- ✅ 有 RAG = 開卷考試（AI 可以查你的筆記本）
+
+### 本專案 Step 4 流程
 
 ```python
-# 先算語意相似度分數
+# 1. 讀取本週 Google Sheets 指標
+metrics = load_google_sheets_tsv("metrics.tsv")
+
+# 2. 偵測異常（月趨勢超出閾值）
+anomalies = detect_anomalies(metrics)
+# → ["有效頁面數 -5%", "AMP Article -114%", "CTR -8%"]
+
+# 3. 對每個異常，做語意搜尋
+for anomaly in anomalies:
+    query_vector = embed(anomaly)   # 轉成 embedding
+    top5_qa = semantic_search(query_vector, qa_embeddings, top_k=5)
+
+    # 4. 組裝 prompt（RAG 的核心）
+    prompt = f"""
+    本週異常：{anomaly}
+
+    相關知識：
+    {format_qa_list(top5_qa)}
+
+    請分析原因並給出具體建議。
+    """
+
+    # 5. 生成週報段落
+    report_section = gpt52(prompt)
+```
+
+---
+
+## 9. Hybrid Search：語意 + 關鍵字混合搜尋
+
+### 純語意搜尋的弱點
+
+語意搜尋有時會漏掉「精確術語」：
+
+```
+查詢：「WAF 封鎖 Googlebot」
+語意搜尋可能找到：「伺服器設定問題」（語意相近但沒有 WAF）
+    → 但 WAF 是關鍵詞，漏掉就答非所問
+```
+
+### Hybrid Search = 語意分數 + 關鍵字加分
+
+```python
+# Step 1：計算語意相似度分數
 scores = cosine_similarity(query_vector, all_qa_vectors)
 
-# 再加關鍵字 boost（Q&A 的 keywords 出現在查詢裡就加分）
+# Step 2：關鍵字加分（Q&A 的 keywords 出現在查詢中）
 for i, qa in enumerate(qa_pairs):
-    keyword_hits = sum(1 for kw in qa["keywords"] if kw in query)
-    if keyword_hits > 0:
-        scores[i] += 0.08 * min(keyword_hits, 3)
+    hits = sum(1 for kw in qa["keywords"] if kw.lower() in query.lower())
+    if hits > 0:
+        scores[i] += 0.08 * min(hits, 3)   # 最多加 0.24 分
 
-# 取分數最高的前 5 筆
-top_5 = argsort(scores)[::-1][:5]
+# Step 3：取分數最高的前 5 筆
+top_indices = np.argsort(scores)[::-1][:5]
+retrieved = [qa_pairs[i] for i in top_indices]
 ```
+
+### 本專案 Retrieval 評估基準線
+
+| 指標 | 數值 | 說明 |
+|------|------|------|
+| KW Hit Rate | 54% | 查詢的關鍵字有多少被 top-5 覆蓋 |
+| Category Hit Rate | 75% | top-5 中有沒有正確分類的 Q&A |
+| MRR | 0.79 | 第一筆正確結果的排名倒數（越高越好） |
+| LLM Top-1 Precision | 100% | top-1 結果是否真的和查詢相關 |
+
+KW Hit Rate 54% 偏低，未來可考慮 cross-encoder reranking 改善。
 
 ---
 
-## 12. LLM-as-Judge：用 AI 評估 AI
+## 10. LLM-as-Judge：用 AI 評估 AI
 
-### 前端對應：用 ESLint 檢查程式碼（只是換成 AI）
+### 概念
 
-傳統評估方式：人工看 30 筆 Q&A，打分數。
-LLM-as-Judge：讓另一個 AI 看 Q&A，幫你打分數。
+傳統方法：人工看 30 筆 Q&A 打分數（慢、貴、主觀）。
+LLM-as-Judge：讓另一個 AI 當評審，自動評分（快、便宜、可重複）。
 
-```python
-# 你的 Q&A
-qa = {
-    "question": "Discover 流量下降的原因是什麼？",
-    "answer": "可能是內容品質、AMP 設定問題..."
+```
+[待評估的 Q&A]
+Q: Discover 流量下降的原因？
+A: 可能是內容品質或 AMP 問題，建議觀察 GSC...
+
+   ↓ 送給 gpt-5.2（評審）
+
+[評分結果]
+{
+  "relevance": {"score": 5, "reason": "精準捕捉核心 SEO 知識"},
+  "completeness": {"score": 3, "reason": "缺少具體行動建議"},
+  "accuracy": {"score": 4, "reason": "論述合理"},
+  "granularity": {"score": 5, "reason": "問題聚焦單一主題"}
 }
-
-# 讓 gpt-5.2 當評審
-judge_prompt = """
-你是 Q&A 品質評審員。請評估這個 Q&A：
-- Relevance（1-5）：是否涵蓋有價值的 SEO 知識？
-- Completeness（1-5）：答案是否有足夠細節？
-"""
-
-score = ask_gpt(judge_prompt, qa)
-# score = {"relevance": 4, "completeness": 3, "reason": "答案缺少具體建議"}
 ```
 
-### 為什麼今天的評估數字不對
+### 本專案四個評估維度
 
-今天修的兩個 bug 都是評審系統的問題，不是 Q&A 本身的問題：
+| 維度 | 問的問題 | 目前分數 |
+|------|---------|---------|
+| Relevance | 是否有價值的 SEO 知識（非閒聊） | 4.65 ✅ |
+| Accuracy | 內容是否合理無虛構 | 3.80 |
+| Completeness | 是否包含建議 + 原因 + 案例 | 3.70 ← 待改善 |
+| Granularity | 一個 Q 只問一個主題 | 4.65 ✅ |
 
-- BUG-001：分類評審（gpt-5-mini）大部分沒有成功回應，讓分母虛增
-- BUG-002：Retrieval 評審（gpt-5-mini）token 不夠，全部輸出空字串
+### 注意：Judge 本身也可能出錯
 
-**修完後的真實基準線**：
-- Category 正確率：75%（不是 10%）
-- Top-1 Precision：100%（不是 10%）
+今天（2026-02-27）修的兩個 bug 就是 Judge 失效：
+- BUG-001：分類 Judge 大量回傳空結果 → 正確率假的 10%，真實 75%
+- BUG-002：Retrieval Judge token 不夠 → Precision 假的 10%，真實 100%
+
+**原則**：看到評估結果異常（< 20% 或 > 98%），先懷疑是評估系統本身的問題。
 
 ---
 
-## 13. Reasoning Model：會思考的 AI
+## 11. Reasoning Model：會先思考的 AI
 
-### 標準模型 vs 推理模型
+### 兩種模型的差異
 
 ```
-標準模型（GPT-3.5 時代）：
-User: 什麼是 2 + 2？
-AI: 4
+標準模型（如 gpt-3.5, gpt-4）：
+  輸入 → 直接輸出
 
-推理模型（o1, o3, gpt-5-mini 等）：
-User: 什麼是 2 + 2？
-AI: <thinking>
-    讓我想一想...2 加 2...
-    先從 2 開始，再加 2...
-    1, 2, 3, 4... 是 4
-    </thinking>
-AI: 4
+推理模型（如 o1, o3-mini, gpt-5-mini, gpt-5.2）：
+  輸入 → [內部思考過程] → 輸出
 ```
 
-### 對程式開發的影響
+推理模型在回答前會先做「chain of thought」（思維鏈），
+能處理更複雜的推理問題，但使用上有兩個陷阱。
 
-推理模型的「思考過程」也佔用 token，對程式有兩個影響：
+### 陷阱一：`max_completion_tokens` 要給更多
 
-**1. `max_completion_tokens` 要設得更大**
 ```python
-# 標準模型：256 tokens 就夠回傳一個 JSON
-# 推理模型：256 tokens 可能全用在思考上，輸出為空
-max_completion_tokens=256   # ❌ 推理模型不夠
-max_completion_tokens=1024  # ✅ 足夠
+# max_completion_tokens 由「思考 + 輸出」共用
+
+# 標準模型：
+# 256 tokens 全給輸出 → 夠了
+
+# 推理模型：
+# 256 tokens：200 tokens 用於思考，只剩 56 給輸出
+# → finish_reason: "length"（被截斷）
+# → content = ""（空字串）
+
+# 本專案 BUG-002 的根因，修復：
+max_completion_tokens=256   # ❌
+max_completion_tokens=1024  # ✅
 ```
 
-**2. `content` 可能為空（本專案 BUG-001/002 的根因）**
+### 陷阱二：content 可能回傳空字串
+
 ```python
+# 標準模型：content 永遠有值
+# 推理模型：token 超限時，content = ""
+
+# 錯誤寫法（本專案修復前）：
+content = response.choices[0].message.content or "{}"
+# "" or "{}"  →  "{}"  →  json.loads("{}")  →  {}  →  靜默失敗
+
+# 正確寫法（修復後）：
 content = response.choices[0].message.content
-# 標準模型：永遠有內容
-# 推理模型：token 用完時，content = ""（空字串）
-
-# 防禦寫法：
 if not content:
-    print("⚠️ 推理模型回傳空內容")
-    return fallback_value
+    print("⚠️ 推理模型回傳空內容，可能 token 不足")
+    return fallback
+
+# 或者，append 前先驗證必要欄位存在：
+if "category_judgment" not in result:
+    continue   # 不計入統計
+```
+
+### 診斷方法
+
+```python
+# 確認是否被截斷
+print(response.choices[0].finish_reason)
+# "stop"   → 正常完成
+# "length" → token 超限，輸出不完整
 ```
 
 ---
 
-## 14. 本專案完整架構
+## 12. 本專案完整架構與決策
 
-### 全景圖
-
-```
-資料來源：Notion 會議紀錄（87 份，2023-2026）
-                    ↓
-[Step 1] fetch_notion.py
-  - Notion API → 下載 JSON + 轉 Markdown
-  - 增量機制：只抓 last_edited_time 有更新的
-                    ↓ raw_data/markdown/*.md
-[Step 2] extract_qa.py
-  - 讀 Markdown → gpt-5.2 萃取 Q&A → JSON
-  - 長文分段：超過 6000 tokens 就切段分別萃取
-                    ↓ output/qa_per_meeting/*.json
-[Step 3] dedupe_classify.py
-  - Embedding（text-embedding-3-small）計算每個 Q&A 的向量
-  - Cosine Similarity 找相似的 Q&A（門檻 0.88）
-  - gpt-5.2 合併相似 Q&A
-  - gpt-5-mini 分類（10 種類別 + difficulty + evergreen）
-                    ↓ output/qa_final.json + qa_embeddings.npy
-[Step 4] generate_report.py
-  - 讀 Google Sheets 指標（TSV 格式）
-  - 偵測異常指標（月趨勢 ± 閾值）
-  - RAG：語意搜尋相關 Q&A → gpt-5.2 生成週報
-                    ↓ output/report_YYYYMMDD.md
-[Step 5] evaluate.py
-  - LLM-as-Judge：gpt-5.2 評 Q&A 品質（4 維度）
-  - 分類評估：gpt-5-mini 驗分類準確度
-  - Retrieval 評估：語意搜尋 + LLM 判斷相關性
-                    ↓ output/eval_report.json
-```
-
-### 模型選擇決策
+### Pipeline 全景
 
 ```
-高品質理解/生成 → gpt-5.2（貴但準）
-  ├── Q&A 萃取（需要理解複雜會議紀錄）
-  ├── Q&A 合併（需要推理哪些可以合併）
-  ├── 週報生成（需要深度分析）
-  └── LLM Judge（需要準確評分）
+Notion 會議紀錄（87 份，2023–2026）
+            ↓
+[Step 1] fetch_notion.py — Notion API 擷取
+  增量機制：比對 last_edited_time，只抓更新的頁面
+            ↓ raw_data/markdown/*.md
 
-結構化輸出/分類 → gpt-5-mini（便宜夠用）
-  ├── 分類 703 筆 Q&A（重複性高，mini 夠）
-  └── Retrieval 相關性判斷（簡單二元判斷）
+[Step 2] extract_qa.py — LLM 萃取 Q&A
+  模型：gpt-5.2（需要高品質理解）
+  長文處理：超過 6000 tokens 自動切段
+  產出：699 筆原始 Q&A
+            ↓ output/qa_per_meeting/*.json
 
-向量計算 → text-embedding-3-small（極便宜）
-  └── 計算所有 Q&A 的 embedding
+[Step 3] dedupe_classify.py — 去重 + 分類
+  去重：text-embedding-3-small 計算向量
+        cosine ≥ 0.88 → gpt-5.2 判斷是否合併
+  分類：gpt-5-mini 貼 10 種標籤 + difficulty + evergreen
+  產出：703 筆去重後 Q&A + 1536 維 embedding 向量
+            ↓ output/qa_final.json + qa_embeddings.npy
+
+[Step 4] generate_report.py — RAG 週報生成
+  資料：Google Sheets 指標（TSV）
+  流程：異常偵測 → Hybrid Search → RAG 組裝 → gpt-5.2 生成
+            ↓ output/report_YYYYMMDD.md
+
+[Step 5] evaluate.py — 評估
+  Q&A 品質：gpt-5.2 LLM-as-Judge（4 維度）
+  分類品質：gpt-5-mini 驗證分類正確率
+  Retrieval 品質：語意搜尋 + gpt-5-mini 相關性判斷
+            ↓ output/eval_report.json
 ```
 
-### 今天修的問題
+### 模型選擇邏輯
 
-**本質**：gpt-5-mini 是推理模型，有以下行為：
-1. 思考佔用 token → `max_completion_tokens` 需要更大
-2. Token 超限時 content 回傳 `""` → 程式要做空值檢查
+```
+需要理解複雜文本、推理、生成高品質輸出
+  → gpt-5.2（主力模型）
+  → 用於：Q&A 萃取、Q&A 合併、週報生成、LLM Judge
 
-**結果**：兩個評估指標從假的「10%」恢復成真實的「75%」和「100%」。
+需要結構化輸出、分類、簡單判斷
+  → gpt-5-mini（省成本）
+  → 用於：Q&A 分類、Retrieval 相關性判斷
 
----
+需要計算語意向量
+  → text-embedding-3-small（極便宜，只做向量計算）
+  → 用於：去重、Step 4/5 語意搜尋
+```
 
-## 延伸閱讀
+### 當前品質基準線（2026-02-27）
 
-- [OpenAI Embeddings 官方文件](https://platform.openai.com/docs/guides/embeddings)
-- [RAG 概念介紹](https://platform.openai.com/docs/guides/retrieval-augmented-generation)
-- [Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)
-- Python 相關：參考本文件旁邊的 python-patterns skill
+| 指標 | 數值 | 狀態 |
+|------|------|------|
+| Relevance | 4.65 / 5 | ✅ 不需改善 |
+| Accuracy | 3.80 / 5 | 可改善 |
+| **Completeness** | **3.70 / 5** | **⚠️ 優先改善目標** |
+| Granularity | 4.65 / 5 | ✅ 不需改善 |
+| Category 正確率 | 75% | ✅ 可接受 |
+| Retrieval MRR | 0.79 | ✅ |
+| LLM Top-1 Precision | 100% | ✅ |
+| KW Hit Rate | 54% | 可改善（低成本） |
+
+### 花錢前必做：小規模驗證
+
+任何需要 API 費用的改動，流程是：
+
+```
+1. 修改 prompt 或設定
+2. --limit 3 只跑 3 份文件（驗證方向對）
+3. 用 Step 5 評估那 3 份的品質
+4. 通過門檻才擴大到全量
+```
+
+**不要先跑完 87 份再來評估要不要改 prompt。**
