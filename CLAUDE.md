@@ -64,8 +64,70 @@ def process_step(input_data) -> dict:
 
 ---
 
+## Pipeline — 直接執行（CLI）
+
+AI 工具（GitHub Copilot / Claude Code）可透過以下方式直接執行 pipeline，**不需要啟動 API 伺服器**。
+
+### 快速入口
+
+```bash
+make pipeline          # 完整流程 step 1→2→3
+make step1             # 只執行 Notion 擷取
+make step2             # 只執行 Q&A 萃取
+make step3             # 只執行去重 + 分類
+make step4             # 只執行週報生成
+make step5             # 只執行品質評估
+make dry-run           # 驗證設定（不執行）
+make test              # 執行測試
+make help              # 顯示所有可用 targets
+```
+
+### 直接呼叫 Python
+
+```bash
+.venv/bin/python scripts/run_pipeline.py                        # 完整流程
+.venv/bin/python scripts/run_pipeline.py --step 2 --limit 3    # 測試用
+.venv/bin/python scripts/run_pipeline.py --dry-run             # 只驗證設定
+```
+
+### GitHub Copilot（VS Code Tasks）
+
+使用 `Ctrl+Shift+P` → "Tasks: Run Task" → 選擇對應的 Pipeline task。
+
+### Claude Code Slash Command
+
+```
+/run-pipeline          # 查看完整用法說明（需要 OpenAI API key）
+/pipeline-local        # 完整流程（不需要 OpenAI，AI 工具本身是 LLM）
+/extract-qa            # 只執行 Step 2 Q&A 萃取（不需要 OpenAI）
+/dedupe-classify       # 只執行 Step 3 去重+分類（不需要 OpenAI）
+```
+
+### 不需要 OpenAI API Key 的流程
+
+Claude Code / GitHub Copilot 本身作為 LLM 引擎，直接讀取 Markdown 萃取 Q&A：
+
+```bash
+make status            # 查看目前 pipeline 狀態
+make list-unprocessed  # 列出待萃取的 Markdown 檔案
+# （然後在 Claude Code 執行 /extract-qa）
+make merge-qa          # AI 萃取完成後合併 JSON
+# （然後在 Claude Code 執行 /dedupe-classify）
+```
+
+### 前置條件
+
+確認 `.env` 已設定（參考 `.env.example`）：
+
+```bash
+make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
+```
+
+---
+
 ## Available Claude Commands
 
+- `/run-pipeline` — 執行 pipeline（查看用法）
 - `/tdd` — 測試驅動開發工作流（先寫測試）
 - `/plan` — 建立實作計畫，等待確認後再動手
 - `/code-review` — Python 程式碼品質審查
@@ -96,12 +158,12 @@ def process_step(input_data) -> dict:
 
 新知識補充時，依主題寫入對應檔案：
 
-| 主題 | 檔案 |
-|------|------|
-| LLM / Token / Embedding / Cosine / Prompt 基礎 / Structured Output | `research/01-ai-fundamentals.md` |
-| RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標 | `research/02-rag-and-search.md` |
-| 評估 / LLM-as-Judge / Reasoning Model / 評估維度設計 | `research/03-evaluation.md` |
-| Prompt Engineering 進階 / 業界最佳實踐 | `research/04-prompting.md` |
-| 模型選擇決策 / Embedding 模型比較 | `research/05-models.md` |
-| 專案架構 / 技術決策 / Changelog / Mermaid 圖 | `research/06-project-architecture.md` |
-| 部署 / FastAPI / ECR+EC2 / Docker | `research/07-deployment.md` |
+| 主題                                                               | 檔案                                  |
+| ------------------------------------------------------------------ | ------------------------------------- |
+| LLM / Token / Embedding / Cosine / Prompt 基礎 / Structured Output | `research/01-ai-fundamentals.md`      |
+| RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標                | `research/02-rag-and-search.md`       |
+| 評估 / LLM-as-Judge / Reasoning Model / 評估維度設計               | `research/03-evaluation.md`           |
+| Prompt Engineering 進階 / 業界最佳實踐                             | `research/04-prompting.md`            |
+| 模型選擇決策 / Embedding 模型比較                                  | `research/05-models.md`               |
+| 專案架構 / 技術決策 / Changelog / Mermaid 圖                       | `research/06-project-architecture.md` |
+| 部署 / FastAPI / ECR+EC2 / Docker                                  | `research/07-deployment.md`           |

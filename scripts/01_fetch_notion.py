@@ -9,9 +9,10 @@
 - 轉 Markdown（含下載圖片）存到 raw_data/markdown/
 
 用法：
-    python scripts/01_fetch_notion.py
-    python scripts/01_fetch_notion.py --filter "SEO 會議"
-    python scripts/01_fetch_notion.py --parent-id xxxxx
+    python scripts/01_fetch_notion.py                    # 增量 fetch
+    python scripts/01_fetch_notion.py --force            # 全量重抓
+    python scripts/01_fetch_notion.py --since 2026-02-27 # 只抓 2/27 后更新的
+    python scripts/01_fetch_notion.py --block-depth 2    # 控制 block 深度
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ import asyncio
 import json
 import re
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # 支援直接執行 script（未 pip install -e . 時）
@@ -45,6 +47,34 @@ def _load_existing_index() -> dict[str, dict]:
         return {}
 
 
+def _parse_since_date(since_str: str) -> str:
+    """
+    將日期字符串轉為 ISO timestamp。
+    支持格式：
+    - "2026-02-27" → "2026-02-27T00:00:00.000Z"
+    - "1d" → 1 天前
+    - "7d" → 7 天前
+    """
+    if not since_str:
+        return ""
+
+    # 如果是 "Xd" 格式
+    if since_str.endswith("d"):
+        try:
+            days = int(since_str[:-1])
+            dt = datetime.utcnow() - timedelta(days=days)
+            return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        except ValueError:
+            pass
+
+    # 如果是日期 "YYYY-MM-DD" 格式
+    if len(since_str) == 10:
+        return since_str + "T00:00:00.000Z"
+
+    # 否則當作 ISO timestamp 直接用
+    return since_str
+
+
 async def main(args: argparse.Namespace) -> None:
     parent_id = args.parent_id or config.NOTION_PARENT_PAGE_ID
     if not parent_id:
@@ -56,13 +86,18 @@ async def main(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     force = args.force
+    block_depth = args.block_depth
+    since_time = _parse_since_date(args.since) if args.since else None
 
     print("=" * 60)
     print("📥 步驟 1：從 Notion 擷取 SEO 會議紀錄")
     if force:
         print("   ⚡ 強制模式：重新抓取所有頁面")
+    elif since_time:
+        print(f"   📅 增量模式：只抓 {args.since} 後更新的頁面")
     else:
         print("   📦 增量模式：只抓新增或有更新的頁面")
+    print(f"   🔄 Block 深度：{block_depth}")
     print("=" * 60)
 
     # 載入現有索引（用於增量比對）
@@ -74,12 +109,14 @@ async def main(args: argparse.Namespace) -> None:
     meetings = await fetch_all_meetings(
         parent_page_id=parent_id,
         filter_keyword=args.filter,
+        block_max_depth=block_depth,
+        since_time=since_time,
     )
 
-    print(f"\n📋 Notion 上共 {len(meetings)} 份會議紀錄")
+    print(f"\n📋 Notion 上共取得 {len(meetings)} 份會議紀錄")
 
-    # 增量過濾：只處理新增或有更新的
-    if not force and existing_index:
+    # 增量過濾：只處理新增或有更新的（--force 時跳過）
+    if not force and not since_time and existing_index:
         filtered = []
         skipped = 0
         for m in meetings:
@@ -93,7 +130,7 @@ async def main(args: argparse.Namespace) -> None:
                 filtered.append(m)
 
         if skipped:
-            print(f"   ⏭️  跳過 {skipped} 份（無更新）")
+            print(f"   ⏭️  跳過 {skipped} 份（無變化）")
         meetings = filtered
 
     if not meetings:
@@ -130,9 +167,12 @@ async def main(args: argparse.Namespace) -> None:
             "status": "fetched",
         }
 
-    # 寫入合併後的索引（保留舊的 + 更新新的）
+    # 寫入合併後的索引（保留舊的 + 更新新的）+ last_checked_time
     index = list(existing_index.values())
     index_path = config.RAW_JSON_DIR.parent / "meetings_index.json"
+    
+    # 如果是增量 fetch，記錄檢查時間，供下次參考
+    # 注意：這裡先暫存為 metadata，可在後續版本改進
     index_path.write_text(
         json.dumps(index, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -161,6 +201,17 @@ if __name__ == "__main__":
         "--force",
         action="store_true",
         help="強制重新抓取所有頁面（忽略增量比對）",
+    )
+    parser.add_argument(
+        "--since",
+        default=None,
+        help="只抓此時間後更新的頁面。格式：'2026-02-27' 或 '1d'（1天前）或 '7d'（7天前）",
+    )
+    parser.add_argument(
+        "--block-depth",
+        type=int,
+        default=3,
+        help="最大 block 遞迴深度（預設 3）",
     )
     args = parser.parse_args()
     asyncio.run(main(args))

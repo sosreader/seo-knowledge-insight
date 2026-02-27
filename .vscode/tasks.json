@@ -1,0 +1,116 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Pipeline: Full (Step 1→2→3)",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/run_pipeline.py",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Dry Run (驗證設定)",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/run_pipeline.py --dry-run",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Step 1 — Notion 擷取",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/run_pipeline.py --step 1",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Step 1 — Force (全量重抓)",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/run_pipeline.py --step 1 --force",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Step 2 — Q&A 萃取",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/run_pipeline.py --step 2",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Step 2 — Q&A 萃取 (limit 3, 測試)",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/run_pipeline.py --step 2 --limit 3",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Step 3 — 去重 + 分類",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/run_pipeline.py --step 3",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Step 4 — 週報生成",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/run_pipeline.py --step 4",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Step 5 — 品質評估",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/run_pipeline.py --step 5",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Step 5 — 完整評估 (100 筆 + Retrieval)",
+      "type": "shell",
+      "command": ".venv/bin/python scripts/run_pipeline.py --step 5 --sample 100 --with-source --eval-retrieval",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Test: All",
+      "type": "shell",
+      "command": ".venv/bin/python -m pytest tests/ -v",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Test: Core only",
+      "type": "shell",
+      "command": ".venv/bin/python -m pytest tests/test_core.py -v",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "API: Start Dev Server (port 8000)",
+      "type": "shell",
+      "command": ".venv/bin/python -m uvicorn app.main:app --reload --port 8000",
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": {
+        "pattern": { "regexp": "." },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Started reloader process",
+          "endsPattern": "Application startup complete"
+        }
+      }
+    }
+  ]
+}

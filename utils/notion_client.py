@@ -179,12 +179,18 @@ async def fetch_blocks_recursive(
     client: httpx.AsyncClient,
     block_id: str,
     depth: int = 0,
-    max_depth: int = 10,
+    max_depth: int = 3,
 ) -> list[dict]:
     """
     遞迴取得 block 底下所有 children（含巢狀 block）。
     每個 block dict 會新增 "children_blocks" 鍵。
     404 表示 Integration 沒有該 block 的存取權，直接回傳空列表。
+    
+    Args:
+        client: httpx AsyncClient
+        block_id: 要讀取的 block ID
+        depth: 當前遞迴深度
+        max_depth: 最大遞迴深度（預設 3，減少 API 調用）
     """
     if depth > max_depth:
         return []
@@ -307,9 +313,17 @@ async def download_image(
 async def fetch_all_meetings(
     parent_page_id: str | None = None,
     filter_keyword: str | None = None,
+    block_max_depth: int = 3,
+    since_time: str | None = None,
 ) -> list[dict]:
     """
     主入口：列出母頁面下所有子頁面，逐一抓取完整 blocks 並存為 JSON。
+    
+    Args:
+        parent_page_id: 母頁面或資料庫 ID（覆蓋 config.NOTION_PARENT_PAGE_ID）
+        filter_keyword: 篩選標題包含此關鍵字的頁面
+        block_max_depth: 最大 block 遞迴深度（預設 3）
+        since_time: ISO 時間戳（例如 "2026-02-27T00:00:00.000Z"），只抓此時間後更新的頁面
     
     回傳：[{meta: {...}, blocks: [...]}]
     """
@@ -324,7 +338,7 @@ async def fetch_all_meetings(
         child_pages = await list_child_pages(client, parent_id)
         print(f"   找到 {len(child_pages)} 個子頁面")
 
-        # 過濾（可選）
+        # 篩選：關鍵字
         if filter_keyword:
             child_pages = [
                 p for p in child_pages
@@ -332,17 +346,39 @@ async def fetch_all_meetings(
             ]
             print(f"   篩選後剩 {len(child_pages)} 個（含 '{filter_keyword}'）")
 
-        for i, page in enumerate(child_pages, 1):
+        # 篩選：時間戳（如果指定）
+        # 此時需要查詢 meta 來比對 last_edited_time，所以預先做過濾
+        if since_time:
+            print(f"   篩選：只抓 {since_time} 後更新的頁面 ...")
+            filtered = []
+            for page in child_pages:
+                meta = await fetch_page_meta(client, page["id"])
+                if meta.get("last_edited_time", "") >= since_time:
+                    filtered.append((page, meta))  # 儲存 meta 以避免重複查詢
+                else:
+                    print(f"     ⏭️  跳過 {page['title']}（未更新）")
+            child_pages = filtered
+            print(f"   保留 {len(child_pages)} 份")
+        else:
+            # 沒有 since_time 過濾時，頁面中只有 id 和 title，meta 稍後查
+            child_pages = [(p, None) for p in child_pages]
+
+        for i, (page, cached_meta) in enumerate(child_pages, 1):
             page_id = page["id"]
             title = page["title"]
             print(f"\n[{i}/{len(child_pages)}] 📄 {title}")
 
-            # 取得 meta
-            meta = await fetch_page_meta(client, page_id)
+            # 取得 meta（使用快取或新查詢）
+            if cached_meta:
+                meta = cached_meta
+            else:
+                meta = await fetch_page_meta(client, page_id)
 
             # 取得完整 blocks
-            print(f"  ↳ 正在讀取 blocks ...")
-            blocks = await fetch_blocks_recursive(client, page_id)
+            print(f"  ↳ 正在讀取 blocks (max_depth={block_max_depth}) ...")
+            blocks = await fetch_blocks_recursive(
+                client, page_id, depth=0, max_depth=block_max_depth
+            )
             print(f"  ↳ 共 {len(blocks)} 個頂層 blocks")
 
             record = {"meta": meta, "blocks": blocks}
