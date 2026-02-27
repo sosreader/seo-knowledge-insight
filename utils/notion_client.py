@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 import config
+from utils import audit_logger
 
 
 # ──────────────────────────────────────────────────────
@@ -315,6 +316,7 @@ async def fetch_all_meetings(
     filter_keyword: str | None = None,
     block_max_depth: int = 3,
     since_time: str | None = None,
+    session_id: str | None = None,
 ) -> list[dict]:
     """
     主入口：列出母頁面下所有子頁面，逐一抓取完整 blocks 並存為 JSON。
@@ -324,6 +326,7 @@ async def fetch_all_meetings(
         filter_keyword: 篩選標題包含此關鍵字的頁面
         block_max_depth: 最大 block 遞迴深度（預設 3）
         since_time: ISO 時間戳（例如 "2026-02-27T00:00:00.000Z"），只抓此時間後更新的頁面
+        session_id: 稽核日誌 session ID（由 01_fetch_notion.py 生成並傳入）
     
     回傳：[{meta: {...}, blocks: [...]}]
     """
@@ -357,6 +360,15 @@ async def fetch_all_meetings(
                     filtered.append((page, meta))  # 儲存 meta 以避免重複查詢
                 else:
                     print(f"     ⏭️  跳過 {page['title']}（未更新）")
+                    # 記錄跳過事件
+                    if session_id:
+                        audit_logger.log_fetch_skip(
+                            session_id=session_id,
+                            page_id=meta.get("id", page["id"]),
+                            page_title=page["title"],
+                            last_edited_time=meta.get("last_edited_time", ""),
+                            reason="since_time_filter",
+                        )
             child_pages = filtered
             print(f"   保留 {len(child_pages)} 份")
         else:
@@ -393,6 +405,16 @@ async def fetch_all_meetings(
                 encoding="utf-8",
             )
             print(f"  ↳ 已存: {json_path.name}")
+
+            # 稽核日誌：記錄成功 fetch 頁面
+            if session_id:
+                audit_logger.log_fetch_page(
+                    session_id=session_id,
+                    page_id=meta.get("id", ""),
+                    page_title=title,
+                    last_edited_time=meta.get("last_edited_time", ""),
+                    block_count=len(blocks),
+                )
 
             # 避免打太快
             await asyncio.sleep(0.3)

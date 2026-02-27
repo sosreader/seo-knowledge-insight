@@ -5,12 +5,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from app import config
 from app.core.chat import get_embedding
 from app.core.store import store
+from utils import audit_logger
 
 router = APIRouter(prefix="/api/v1/search", tags=["search"])
 
@@ -40,7 +41,7 @@ class SearchResponse(BaseModel):
 
 
 @router.post("", response_model=SearchResponse)
-async def search(req: SearchRequest) -> SearchResponse:
+async def search(req: SearchRequest, request: Request) -> SearchResponse:
     embedding = await get_embedding(req.query)
     hits = store.search(embedding, top_k=req.top_k, category=req.category)
 
@@ -59,5 +60,16 @@ async def search(req: SearchRequest) -> SearchResponse:
         )
         for item, score in hits
     ]
+
+    # 稽核日誌：記錄查詢與返回的 QA IDs
+    client_ip = request.client.host if request.client else None
+    audit_logger.log_search(
+        query=req.query,
+        top_k=req.top_k,
+        category=req.category,
+        returned_ids=[r.id for r in results],
+        source_titles=list({r.source_title for r in results}),
+        client_ip=client_ip,
+    )
 
     return SearchResponse(results=results, total=len(results))

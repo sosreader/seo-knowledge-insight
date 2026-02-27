@@ -7,10 +7,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.core.store import QAItem, store
+from utils import audit_logger
 
 router = APIRouter(prefix="/api/v1/qa", tags=["qa"])
 
@@ -75,6 +76,7 @@ def get_qa_item(item_id: int) -> QAResponse:
 
 @router.get("", response_model=QAListResponse)
 def list_qa(
+    request: Request,
     category: Optional[str] = Query(default=None),
     keyword: Optional[str] = Query(default=None, max_length=100),
     difficulty: Optional[str] = Query(default=None, pattern="^(基礎|進階)$"),
@@ -90,6 +92,23 @@ def list_qa(
         limit=limit,
         offset=offset,
     )
+
+    # 稽核日誌：記錄列表查詢與返回的 QA IDs
+    client_ip = request.client.host if request.client else None
+    audit_logger.log_list_qa(
+        filters={
+            "category": category,
+            "keyword": keyword,
+            "difficulty": difficulty,
+            "evergreen": evergreen,
+            "limit": limit,
+            "offset": offset,
+        },
+        returned_ids=[i.id for i in items],
+        total=total,
+        client_ip=client_ip,
+    )
+
     return QAListResponse(
         items=[_to_schema(i) for i in items],
         total=total,

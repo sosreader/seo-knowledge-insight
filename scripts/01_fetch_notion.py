@@ -21,6 +21,7 @@ import asyncio
 import json
 import re
 import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -33,6 +34,7 @@ except ModuleNotFoundError:
 
 from utils.notion_client import fetch_all_meetings
 from utils.block_to_markdown import blocks_to_markdown
+from utils import audit_logger
 
 
 def _load_existing_index() -> dict[str, dict]:
@@ -89,6 +91,11 @@ async def main(args: argparse.Namespace) -> None:
     block_depth = args.block_depth
     since_time = _parse_since_date(args.since) if args.since else None
 
+    # 生成 session ID，一次 fetch 用同一個，方便日誌關聯
+    session_id = audit_logger.new_session_id()
+    fetch_mode = "force" if force else ("since" if since_time else "incremental")
+    start_time = time.monotonic()
+
     print("=" * 60)
     print("📥 步驟 1：從 Notion 擷取 SEO 會議紀錄")
     if force:
@@ -111,9 +118,19 @@ async def main(args: argparse.Namespace) -> None:
         filter_keyword=args.filter,
         block_max_depth=block_depth,
         since_time=since_time,
+        session_id=session_id,
     )
 
     print(f"\n📋 Notion 上共取得 {len(meetings)} 份會議紀錄")
+
+    # 稽核日誌：記錄 fetch 開始（要在锻錄數確定後才發送，包含實際要處理數）
+    audit_logger.log_fetch_start(
+        session_id=session_id,
+        mode=fetch_mode,
+        total_pages=len(meetings),
+        since_time=since_time,
+        block_max_depth=block_depth,
+    )
 
     # 增量過濾：只處理新增或有更新的（--force 時跳過）
     if not force and not since_time and existing_index:
@@ -126,6 +143,14 @@ async def main(args: argparse.Namespace) -> None:
 
             if local_entry and local_entry.get("last_edited_time") == remote_edited:
                 skipped += 1
+                # 稽核日誌：記錄增量跳過
+                audit_logger.log_fetch_skip(
+                    session_id=session_id,
+                    page_id=page_id,
+                    page_title=m["meta"].get("title", ""),
+                    last_edited_time=remote_edited,
+                    reason="no_change_incremental",
+                )
             else:
                 filtered.append(m)
 
@@ -182,6 +207,16 @@ async def main(args: argparse.Namespace) -> None:
     print(f"📁 Raw JSON: {config.RAW_JSON_DIR}")
     print(f"📁 Markdown:  {config.RAW_MD_DIR}")
     print(f"📁 圖片:      {config.IMAGES_DIR}")
+
+    # 稽核日誌：記錄 fetch 完成
+    duration = time.monotonic() - start_time
+    audit_logger.log_fetch_complete(
+        session_id=session_id,
+        fetched_count=len(meetings),
+        skipped_count=len(existing_index) - len(meetings) if not force else 0,
+        duration_sec=duration,
+    )
+    print(f"📃 Fetch 日誌: {audit_logger.FETCH_LOGS_DIR}")
     print("\n✅ 步驟 1 完成！")
 
 

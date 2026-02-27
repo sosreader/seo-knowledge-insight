@@ -5,10 +5,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.chat import rag_chat
+from utils import audit_logger
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
@@ -45,9 +46,20 @@ class ChatResponse(BaseModel):
 
 
 @router.post("", response_model=ChatResponse)
-async def chat(req: ChatRequest) -> ChatResponse:
+async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     history = [{"role": m.role, "content": m.content} for m in req.history]
     result = await rag_chat(req.message, history=history or None)
+
+    # 稽核日誌：記錄問答與使用的來源 QA IDs
+    client_ip = request.client.host if request.client else None
+    source_ids = [s["id"] for s in result["sources"]]
+    source_titles = list({s["source_title"] for s in result["sources"]})
+    audit_logger.log_chat(
+        message=req.message,
+        returned_ids=source_ids,
+        source_titles=source_titles,
+        client_ip=client_ip,
+    )
 
     return ChatResponse(
         answer=result["answer"],
