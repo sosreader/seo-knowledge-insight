@@ -20,7 +20,8 @@ _MOCK_EMBEDDING = np.ones(1536, dtype=np.float32) / np.sqrt(1536)
 
 @pytest.fixture
 def mock_embedding():
-    with patch("app.core.chat.get_embedding", new=AsyncMock(return_value=_MOCK_EMBEDDING)):
+    # patch 使用點（search router），而非定義點（app.core.chat）
+    with patch("app.routers.search.get_embedding", new=AsyncMock(return_value=_MOCK_EMBEDDING)):
         yield
 
 
