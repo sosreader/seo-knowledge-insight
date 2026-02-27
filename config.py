@@ -37,3 +37,11 @@ MAX_TOKENS_PER_CHUNK = 6000
 SIMILARITY_THRESHOLD = 0.88
 # 批次處理的並行數
 BATCH_CONCURRENCY = 5
+
+# ── Hybrid Search Keyword Boost ────────────────────────
+# 每個完整命中的 boost 分數（雙向匹配）
+KW_BOOST = float(os.getenv("KW_BOOST", "0.10"))
+# 中文 bigram 弱命中的 boost 分數
+KW_BOOST_PARTIAL = float(os.getenv("KW_BOOST_PARTIAL", "0.05"))
+# 最多計入幾個 keyword 命中（避免 boost 過大）
+KW_BOOST_MAX_HITS = int(os.getenv("KW_BOOST_MAX_HITS", "3"))

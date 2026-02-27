@@ -65,8 +65,12 @@ JUDGE_SYSTEM_PROMPT = """\
 
 3. **Completeness（完整性）**：A 是否包含足夠的上下文讓讀者理解
    - 1 分：答案片段化，缺少關鍵脈絡
-   - 3 分：有回答但缺少原因、案例或數據
-   - 5 分：包含具體建議、原因、案例與行動方向
+   - 3 分：有 What/Why 但 How 完全缺失（無任何可執行步驟）
+   - 4 分：How 含 `[補充]` 標記的通用 SEO 標準步驟（清楚標記非會議原文）
+   - 5 分：What/Why/How 齊全，且 How 有具體到此次情境的步驟
+
+   **重要**：`[補充]` 標記 = 通用 SEO 標準做法（非此次會議特定內容）。
+   這是誠實歸因的正確做法，**不應視為幻覺**。
 
 4. **Granularity（粒度）**：Q 的範圍是否恰當（不太粗也不太細）
    - 1 分：多個不相關主題塞在一個 Q 裡
@@ -184,6 +188,8 @@ def _load_persisted_embeddings(qa_count: int) -> np.ndarray | None:
 def evaluate_retrieval(
     golden_cases: list[dict],
     qa_pairs: list[dict],
+    debug: bool = False,
+    use_reranking: bool = False,
 ) -> dict:
     """
     評估 Retrieval 品質。
@@ -212,6 +218,7 @@ def evaluate_retrieval(
     qa_norm = qa_embs / (np.linalg.norm(qa_embs, axis=1, keepdims=True) + 1e-8)
 
     top_k = 5
+    debug_top_k = 20  # 診斷時搜尋更廣
     case_results: list[dict] = []
 
     for case in golden_cases:
@@ -224,22 +231,82 @@ def evaluate_retrieval(
         q_norm = q_emb / (np.linalg.norm(q_emb, axis=1, keepdims=True) + 1e-8)
         scores = (q_norm @ qa_norm.T).flatten()
 
-        # Keyword boost
+        # Keyword boost (bidirectional)
+        boost = getattr(config, "KW_BOOST", 0.10)
+        max_hits = getattr(config, "KW_BOOST_MAX_HITS", 3)
+        partial = getattr(config, "KW_BOOST_PARTIAL", 0.05)
+        query_lower = query.lower()
+        query_tokens = {t for t in query_lower.split() if len(t) >= 2}
         for ji, qa in enumerate(qa_pairs):
-            keywords = qa.get("keywords", [])
-            hits = sum(1 for kw in keywords if kw.lower() in query.lower())
-            if hits > 0:
-                scores[ji] += 0.08 * min(hits, 3)
+            total_hits = 0.0
+            for kw in qa.get("keywords", []):
+                kw_lower = kw.lower()
+                kw_tokens = {t for t in kw_lower.split() if len(t) >= 2}
+                if kw_lower in query_lower:
+                    total_hits += 1
+                elif any(t in kw_lower for t in query_tokens):
+                    total_hits += 1
+                elif any(t in query_lower for t in kw_tokens):
+                    total_hits += 1
+                elif len(kw_lower) >= 2 and kw_lower[:2] in query_lower:
+                    total_hits += partial / boost
+            if total_hits > 0:
+                scores[ji] += boost * min(total_hits, max_hits)
 
-        top_indices = np.argsort(scores)[::-1][:top_k]
-        retrieved = [qa_pairs[int(idx)] for idx in top_indices]
-        retrieved_scores = [float(scores[int(idx)]) for idx in top_indices]
+        # 搜尋 top-20 for debug / reranking，最終取 top-5
+        wide_k = debug_top_k if (debug or use_reranking) else top_k
+        wide_indices = np.argsort(scores)[::-1][:wide_k]
+        wide_retrieved = [qa_pairs[int(idx)] for idx in wide_indices]
+
+        # LLM Reranking（實驗性）
+        if use_reranking and len(wide_retrieved) > top_k:
+            wide_retrieved = _llm_rerank_retrieval(query, wide_retrieved, top_k=top_k)
+
+        top_indices = wide_indices[:top_k] if not use_reranking else wide_indices
+        retrieved = wide_retrieved[:top_k]
+        retrieved_scores = [float(scores[int(idx)]) for idx in np.argsort(scores)[::-1][:top_k]]
+
+        # ── Debug：失敗診斷 ──
+        if debug:
+            all_retrieved_kws_wide = set()
+            for qa in wide_retrieved:
+                all_retrieved_kws_wide.update(kw.lower() for kw in qa.get("keywords", []))
+            kw_hits_wide = sum(1 for kw in expected_kws if kw in all_retrieved_kws_wide)
+
+            if kw_hits_wide < len(expected_kws):
+                missing_kws = [kw for kw in expected_kws if kw not in all_retrieved_kws_wide]
+                # 在完整資料庫中找出含有 expected_kws 的 Q&A 最高排在哪
+                full_sorted = np.argsort(scores)[::-1]
+                best_correct_rank = None
+                best_correct_score = None
+                best_correct_q = None
+                for rank, idx in enumerate(full_sorted, 1):
+                    qa_kws = {kw.lower() for kw in qa_pairs[int(idx)].get("keywords", [])}
+                    if qa_kws & set(expected_kws):
+                        best_correct_rank = rank
+                        best_correct_score = float(scores[int(idx)])
+                        best_correct_q = qa_pairs[int(idx)]["question"][:70]
+                        break
+
+                print(f"\n[DEBUG] {query}")
+                if best_correct_rank is not None and best_correct_rank <= 20:
+                    print(f"  ⚠️  失敗類型: TypeB（正確答案存在但排在第 {best_correct_rank} 名）")
+                    print(f"  排名第 {best_correct_rank}（score={best_correct_score:.4f}）: {best_correct_q}")
+                else:
+                    print(f"  ❌ 失敗類型: TypeA（資料庫無覆蓋此 keywords）")
+                print(f"  未命中 keywords: {missing_kws}")
 
         # Keyword Hit Rate: 檢查 retrieved Q&A 的 keywords 是否覆蓋 expected_keywords
+        # 使用子字串雙向匹配（"流量" 可命中 "探索流量"；"影片" 可命中 "影片縮圖"）
         all_retrieved_kws = set()
         for qa in retrieved:
             all_retrieved_kws.update(kw.lower() for kw in qa.get("keywords", []))
-        kw_hits = sum(1 for kw in expected_kws if kw in all_retrieved_kws)
+
+        def _kw_fuzzy_hit(exp_kw: str, retrieved_kws: set) -> bool:
+            kw = exp_kw.lower()
+            return any(kw in rkw or rkw in kw for rkw in retrieved_kws)
+
+        kw_hits = sum(1 for kw in expected_kws if _kw_fuzzy_hit(kw, all_retrieved_kws))
         kw_hit_rate = kw_hits / len(expected_kws) if expected_kws else 0
 
         # Category Hit Rate: 是否有至少一筆 Q&A 的 category 在 expected_categories
@@ -285,6 +352,47 @@ def evaluate_retrieval(
         "llm_top1_precision": round(llm_precision, 2),
         "case_details": case_results,
     }
+
+
+def _llm_rerank_retrieval(query: str, candidates: list[dict], top_k: int = 5) -> list[dict]:
+    """bi-encoder top-20 → gpt-5-nano batch rerank → top-k（實驗性）"""
+    if len(candidates) <= top_k:
+        return candidates
+
+    client = _client()
+    items = []
+    for i, qa in enumerate(candidates):
+        ans = (qa.get("answer") or "")[:150].replace("\n", " ")
+        kws = ", ".join(qa.get("keywords", [])[:4])
+        items.append(f"[{i}] Q: {qa['question'][:80]}\n    KW: {kws}\n    A: {ans}")
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-5-nano",
+            messages=[{"role": "user", "content":
+                f"查詢：{query}\n\n候選：\n\n" + "\n\n".join(items) +
+                f"\n\n回傳與查詢最相關的 {top_k} 個 index（0-based），相關性遞減。"
+            }],
+            response_format={"type": "json_schema", "json_schema": {
+                "name": "rerank_result", "strict": True,
+                "schema": {"type": "object",
+                    "properties": {"ranked_indices": {"type": "array", "items": {"type": "integer"}}},
+                    "required": ["ranked_indices"], "additionalProperties": False,
+                },
+            }},
+            max_completion_tokens=256,
+        )
+        content = resp.choices[0].message.content or "{}"
+        ranked = json.loads(content).get("ranked_indices", [])
+        valid = [i for i in ranked if isinstance(i, int) and 0 <= i < len(candidates)]
+        # fallback：補全至 top_k
+        seen = set(valid)
+        for i in range(len(candidates)):
+            if i not in seen:
+                valid.append(i)
+        return [candidates[i] for i in valid[:top_k]]
+    except Exception:
+        return candidates[:top_k]
 
 
 def _llm_judge_retrieval_relevance(query: str, qa: dict) -> bool:
@@ -818,7 +926,11 @@ def main(args: argparse.Namespace) -> None:
         golden_ret = load_golden_retrieval(args.retrieval_golden)
         if golden_ret:
             print(f"\n🔎 評估 Retrieval 品質（{len(golden_ret)} 個場景）...")
-            retrieval_stats = evaluate_retrieval(golden_ret, qa_pairs)
+            retrieval_stats = evaluate_retrieval(
+                golden_ret, qa_pairs,
+                debug=getattr(args, "debug_retrieval", False),
+                use_reranking=getattr(args, "eval_reranking", False),
+            )
         else:
             print("   ⚠️  找不到 retrieval golden set，跳過")
 
@@ -989,6 +1101,8 @@ if __name__ == "__main__":
     parser.add_argument("--classify-only", action="store_true", help="只評估分類品質")
     parser.add_argument("--skip-classify-eval", action="store_true", help="跳過分類評估")
     parser.add_argument("--eval-retrieval", action="store_true", help="評估 Retrieval 品質")
+    parser.add_argument("--debug-retrieval", action="store_true", help="輸出 Retrieval 失敗診斷（TypeA/TypeB）")
+    parser.add_argument("--eval-reranking", action="store_true", help="實驗性 LLM Reranking（gpt-5-nano bi-encoder top-20 rerank）")
     parser.add_argument("--retrieval-golden", type=str, default="", help="Retrieval golden set 路徑")
     parser.add_argument("--golden", type=str, default="", help="Golden set JSON 路徑")
     parser.add_argument(

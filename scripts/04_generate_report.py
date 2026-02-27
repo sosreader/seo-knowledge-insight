@@ -489,24 +489,42 @@ def _load_persisted_embeddings(qa_count: int) -> np.ndarray | None:
 def _compute_keyword_boost(
     queries: list[str],
     qa_pairs: list[dict],
-    boost: float = 0.08,
+    boost: float | None = None,
+    max_hits: int | None = None,
 ) -> np.ndarray:
     """
-    Hybrid Search 關鍵字匹配 boost。
-    若 Q&A 的 keywords 出現在 query 中，給予額外分數。
+    Hybrid Search 關鍵字雙向匹配 boost。
+    匹配方式（優先序）：
+      1. kw 完整出現在 query 中（正向）
+      2. query 的 token 出現在 kw 中（反向）
+      3. kw 的 token 出現在 query 中
+      4. 中文 bigram（前 2 字）弱命中（給 partial 分）
     回傳 shape = (n_queries, n_qa) 的 boost 矩陣。
     """
-    n_queries = len(queries)
-    n_qa = len(qa_pairs)
-    boost_matrix = np.zeros((n_queries, n_qa), dtype=np.float32)
+    boost = boost if boost is not None else config.KW_BOOST
+    max_hits = max_hits if max_hits is not None else config.KW_BOOST_MAX_HITS
+    partial = config.KW_BOOST_PARTIAL
+
+    boost_matrix = np.zeros((len(queries), len(qa_pairs)), dtype=np.float32)
 
     for qi, query in enumerate(queries):
         query_lower = query.lower()
+        query_tokens = {t for t in query_lower.split() if len(t) >= 2}
         for ji, qa in enumerate(qa_pairs):
-            keywords = qa.get("keywords", [])
-            hits = sum(1 for kw in keywords if kw.lower() in query_lower)
-            if hits > 0:
-                boost_matrix[qi, ji] = boost * min(hits, 3)  # 最多 3 倍 boost
+            total_hits = 0.0
+            for kw in qa.get("keywords", []):
+                kw_lower = kw.lower()
+                kw_tokens = {t for t in kw_lower.split() if len(t) >= 2}
+                if kw_lower in query_lower:
+                    total_hits += 1
+                elif any(t in kw_lower for t in query_tokens):
+                    total_hits += 1
+                elif any(t in query_lower for t in kw_tokens):
+                    total_hits += 1
+                elif len(kw_lower) >= 2 and kw_lower[:2] in query_lower:
+                    total_hits += partial / boost
+            if total_hits > 0:
+                boost_matrix[qi, ji] = boost * min(total_hits, max_hits)
 
     return boost_matrix
 
