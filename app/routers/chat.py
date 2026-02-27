@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.chat import rag_chat
 
@@ -20,7 +20,14 @@ class HistoryMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
-    history: list[HistoryMessage] = Field(default_factory=list, max_length=20)
+    history: list[HistoryMessage] = Field(default_factory=list)
+
+    @field_validator("history")
+    @classmethod
+    def history_max_length(cls, v: list) -> list:
+        if len(v) > 20:
+            raise ValueError("history cannot exceed 20 messages")
+        return v
 
 
 class SourceItem(BaseModel):

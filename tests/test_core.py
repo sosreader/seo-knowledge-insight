@@ -186,8 +186,8 @@ class TestKeywordBoost:
         ]
         boost = _compute_keyword_boost(queries, qa_pairs)
         assert boost.shape == (1, 2)
-        # Q1 has 2 keyword hits → 0.08 * 2 = 0.16
-        assert abs(float(boost[0, 0]) - 0.16) < 1e-5
+        # Q1 has 2 keyword hits → KW_BOOST(0.10) * 2 = 0.20
+        assert abs(float(boost[0, 0]) - 0.20) < 1e-5
         # Q2 has 0 hits → 0
         assert float(boost[0, 1]) == 0.0
 
@@ -210,8 +210,8 @@ class TestKeywordBoost:
         queries = ["a b c d e"]
         qa_pairs = [{"question": "Q", "answer": "A", "keywords": ["a", "b", "c", "d", "e"]}]
         boost = _compute_keyword_boost(queries, qa_pairs)
-        # Capped at 3 hits → 0.08 * 3 = 0.24
-        assert abs(float(boost[0, 0]) - 0.24) < 1e-5
+        # Capped at 3 hits → KW_BOOST(0.10) * 3 = 0.30
+        assert abs(float(boost[0, 0]) - 0.30) < 1e-5
 
 
 # ──────────────────────────────────────────────────────

@@ -1,8 +1,8 @@
 # Implementation Plan: SEO Insight 後端 API + Evals 系統 + 部署方案
 
-> 日期：2026-02-27  
-> 最後更新：2026-02-25（部署方案改為 AWS ECS Fargate）  
-> 狀態：**Draft — 待 Review**
+> 日期：2026-02-27
+> 最後更新：2026-02-28
+> 狀態：**Phase 1 部分完成（見 2.1 實作現況）**
 > UI 位置：`/Documents/vocus-web-ui/pages/admin/seo/insight`
 
 ---
@@ -49,19 +49,23 @@
                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  SEO Insight API (FastAPI)                                  │
-│   ├── /api/v1/qa          — Q&A CRUD + 語意搜尋             │
-│   ├── /api/v1/chat        — Multi-turn RAG 對話             │
-│   ├── /api/v1/report      — 週報生成 / 列表                 │
-│   ├── /api/v1/eval        — 評估觸發 / 歷史 / 趨勢         │
-│   ├── /api/v1/pipeline    — Pipeline 執行狀態               │
-│   └── /api/v1/admin       — 設定管理                        │
+│   ├── /api/v1/qa          — Q&A CRUD + 語意搜尋        ✅   │
+│   ├── /api/v1/search      — 語意搜尋（路徑調整）        ✅   │
+│   ├── /api/v1/chat        — Multi-turn RAG 對話        ✅   │
+│   ├── /api/v1/report      — 週報生成 / 列表            ❌   │
+│   ├── /api/v1/eval        — 評估觸發 / 歷史 / 趨勢     ❌   │
+│   ├── /api/v1/pipeline    — Pipeline 執行狀態          ❌   │
+│   └── /api/v1/admin       — 設定管理                   ❌   │
 ├─────────────────────────────────────────────────────────────┤
 │  Core Layer                                                 │
-│   ├── qa_store.py         — Q&A 資料存取（Repository）       │
-│   ├── search_engine.py    — Hybrid Search (semantic + kw)   │
-│   ├── chat_engine.py      — Multi-turn RAG 引擎             │
-│   ├── eval_engine.py      — Eval 執行 + 歷史管理            │
-│   └── report_engine.py    — 週報生成引擎                     │
+│   ├── store.py            — Q&A 資料存取（Repository） ✅   │
+│   │   (原 qa_store.py → app/core/store.py)                  │
+│   ├── chat.py             — RAG + Embedding 引擎       ✅   │
+│   │   (原 chat_engine.py → app/core/chat.py)                │
+│   ├── search_engine.py    — Hybrid Search (semantic+kw) ⬜  │
+│   │   (邏輯目前在 store.py + chat.py，待拆分)               │
+│   ├── eval_engine.py      — Eval 執行 + 歷史管理       ❌   │
+│   └── report_engine.py    — 週報生成引擎               ❌   │
 ├─────────────────────────────────────────────────────────────┤
 │  Infra Layer                                                │
 │   ├── RDS PostgreSQL (AWS) — Q&A + eval_runs + sessions     │
@@ -85,16 +89,41 @@
 | 快取     | **ElastiCache for Valkey**    | Embedding 快取、Rate Limit、Session 快取；Valkey 比 Redis 便宜 20% |
 | Auth     | **API Key + JWT**             | 內部管理介面用 JWT、外部整合用 API Key                             |
 
+### 2.1.1 實作現況（2026-02-28）
+
+| 元件 | Plan 命名 | 實際路徑 | 狀態 |
+|------|-----------|----------|------|
+| FastAPI 主程式 | — | `app/main.py` | ✅ 完成 |
+| API 設定 | — | `app/config.py` | ✅ 完成 |
+| Q&A 資料層 | `qa_store.py` | `app/core/store.py` | ✅ 完成（in-memory） |
+| RAG + Embedding | `chat_engine.py` | `app/core/chat.py` | ✅ 完成 |
+| 語意搜尋（路徑改動） | `POST /api/v1/qa/search` | `app/routers/search.py` → `POST /api/v1/search` | ✅ 完成 |
+| Q&A 列表 / 單筆 / 分類 | `GET /api/v1/qa` | `app/routers/qa.py` | ✅ 完成 |
+| RAG 問答 | `POST /api/v1/chat` | `app/routers/chat.py` | ✅ 完成（無 session 持久化） |
+| Health check | — | `GET /health` in `app/main.py` | ✅ 完成 |
+| `search_engine.py`（獨立搜尋模組） | `search_engine.py` | 未拆分（邏輯在 `store.py` + `chat.py`） | ⬜ 待拆分（低優先） |
+| Q&A 統計 | `GET /api/v1/qa/stats` | — | ❌ 未實作 |
+| Q&A 人工校正 | `PATCH /api/v1/qa/:id` | — | ❌ 未實作 |
+| Chat session CRUD | `GET/DELETE /api/v1/chat/sessions` | — | ❌ 未實作 |
+| Response Envelope | `ApiResponse[T]` 包裝 | 目前裸 Pydantic model | ❌ 未實作 |
+| Rate Limiting | — | — | ❌ 未實作 |
+| Auth (API Key + JWT) | — | — | ❌ 未實作 |
+| 週報 API | `report_engine.py` + `/api/v1/report` | — | ❌ Phase 1 範圍外 |
+| Pipeline API | `GET/POST /api/v1/pipeline` | — | ❌ Phase 1 範圍外 |
+| Eval API | `eval_engine.py` + `/api/v1/eval` | — | ❌ Phase 2 |
+| PostgreSQL / pgvector 遷移 | `qa_items` table | 目前 in-memory JSON | ❌ Phase 1 後段 |
+
 ### 2.2 API Endpoints 完整規格
 
 #### 2.2.1 Q&A 知識庫
 
 ```
-GET    /api/v1/qa                    # 列表（分頁 + 篩選）
-GET    /api/v1/qa/:id                # 單筆詳情
-POST   /api/v1/qa/search             # 語意搜尋
-GET    /api/v1/qa/stats              # 統計摘要
-PATCH  /api/v1/qa/:id                # 更新分類/標籤（人工校正）
+GET    /api/v1/qa                    # 列表（分頁 + 篩選）          ✅ app/routers/qa.py
+GET    /api/v1/qa/categories         # 所有分類                      ✅ app/routers/qa.py
+GET    /api/v1/qa/:id                # 單筆詳情                      ✅ app/routers/qa.py
+POST   /api/v1/search                # 語意搜尋（路徑從 /qa/search 改） ✅ app/routers/search.py
+GET    /api/v1/qa/stats              # 統計摘要                      ❌ 待實作
+PATCH  /api/v1/qa/:id                # 更新分類/標籤（人工校正）      ❌ 待實作
 ```
 
 **語意搜尋 Request/Response:**
@@ -165,10 +194,10 @@ GET /api/v1/qa?q=canonical&difficulty=進階
 #### 2.2.2 Multi-Turn RAG 對話
 
 ```
-POST   /api/v1/chat                  # 發送訊息（含對話歷史）
-GET    /api/v1/chat/sessions         # 對話 session 列表
-GET    /api/v1/chat/sessions/:id     # 單一 session 歷史
-DELETE /api/v1/chat/sessions/:id     # 刪除 session
+POST   /api/v1/chat                  # 發送訊息（含對話歷史）         ✅ app/routers/chat.py（無 session 持久化）
+GET    /api/v1/chat/sessions         # 對話 session 列表             ❌ 待實作（需 DB）
+GET    /api/v1/chat/sessions/:id     # 單一 session 歷史             ❌ 待實作（需 DB）
+DELETE /api/v1/chat/sessions/:id     # 刪除 session                  ❌ 待實作（需 DB）
 ```
 
 **對話 Request/Response:**
@@ -277,9 +306,9 @@ GET    /api/v1/report/:id/metrics    # 週報指標原始資料
 #### 2.2.4 Pipeline 管理
 
 ```
-POST   /api/v1/pipeline/run           # 觸發 pipeline（指定步驟）
-GET    /api/v1/pipeline/status         # 目前執行狀態
-GET    /api/v1/pipeline/history        # 歷史執行紀錄
+POST   /api/v1/pipeline/run           # 觸發 pipeline（指定步驟）    ❌ 待實作
+GET    /api/v1/pipeline/status         # 目前執行狀態                 ❌ 待實作
+GET    /api/v1/pipeline/history        # 歷史執行紀錄                 ❌ 待實作
 ```
 
 ```json
