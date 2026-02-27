@@ -178,3 +178,63 @@ docker run -v /home/ec2-user/seo-data/output:/app/output:ro ...
 
 ---
 
+## 21. API 請求追蹤：Audit Trail（2026-02-28 新增）
+
+> 資料安全需求：確認哪些 QA 資料被哪些 IP 存取過。
+
+### 設計原則
+
+- **JSONL append-only**：每筆 event 一行 JSON，不修改歷史紀錄
+- **Zero side-effects**：`_append_jsonl()` 內包 `try/except`，寫入失敗不影響 API 回應
+- **按日期分檔**：`output/fetch_logs/fetch_2026-02-28.jsonl`、`output/access_logs/access_2026-02-28.jsonl`
+- **session_id 串接**：每次 Step 1 fetch 生成 8-char UUID，關聯同一批 fetch events
+
+### FastAPI 取得 client IP
+
+```python
+from fastapi import APIRouter, Request
+
+@router.post("/search")
+async def search(body: SearchRequest, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    audit_logger.log_search(
+        query=body.query,
+        returned_ids=[r["id"] for r in results],
+        client_ip=client_ip,
+    )
+```
+
+**注意**：`request: Request` 必須是非依賴注入的普通參數（直接放在函式簽名），不能用 `Depends()`。
+部署在反向代理後面時需要額外處理 `X-Forwarded-For`。
+
+### Log 格式（JSONL）
+
+```json
+// fetch_logs/fetch_2026-02-28.jsonl
+{"event": "fetch_start", "session_id": "a1b2c3d4", "mode": "incremental", "ts": "..."}
+{"event": "fetch_page", "session_id": "a1b2c3d4", "page_id": "...", "title": "SEO 會議", "block_count": 42, "ts": "..."}
+{"event": "fetch_skip", "session_id": "a1b2c3d4", "page_id": "...", "reason": "no_change_incremental", "ts": "..."}
+{"event": "fetch_complete", "session_id": "a1b2c3d4", "fetched": 5, "skipped": 82, "duration_sec": 12.3, "ts": "..."}
+
+// access_logs/access_2026-02-28.jsonl
+{"event": "search", "query": "canonical URL 怎麼設定", "top_k": 5, "returned_ids": [42, 17, 8], "client_ip": "1.2.3.4", "ts": "..."}
+{"event": "chat", "message": "什麼是 Core Web Vitals", "returned_ids": [3, 91], "client_ip": "1.2.3.4", "ts": "..."}
+{"event": "list_qa", "filters": {"category": "技術SEO"}, "total": 89, "client_ip": "1.2.3.4", "ts": "..."}
+```
+
+### 查詢工具
+
+```bash
+make audit           # 今天完整報告（fetch stats + 被存取最多 QA）
+make audit-fetch     # fetch session 摘要
+make audit-access    # access event 列表
+make audit-top       # Top 30 最常被存取的 QA
+
+# 直接呼叫
+.venv/bin/python scripts/audit_trail.py report
+.venv/bin/python scripts/audit_trail.py access --top 10 --event search
+.venv/bin/python scripts/audit_trail.py fetch --sessions
+```
+
+---
+

@@ -49,6 +49,16 @@ Notion 會議紀錄（87 份，2023–2026）
     GET  /api/v1/qa      → 篩選列表
   部署：Docker image → ECR → EC2（SSM 遠端換容器）
             ↓ http://EC2:8001
+
+══════════════ Audit Trail（2026-02-28 新增）══════════════
+
+[AuditLogger] utils/audit_logger.py — 零副作用 JSONL 日誌
+  fetch 事件：每次 Step 1 執行記錄 session → output/fetch_logs/fetch_YYYY-MM-DD.jsonl
+    log_fetch_start → log_fetch_page / log_fetch_skip → log_fetch_complete
+  access 事件：每次 API 呼叫記錄 query + returned QA IDs + client IP
+    → output/access_logs/access_YYYY-MM-DD.jsonl
+  查詢工具：scripts/audit_trail.py fetch|access|report
+            ↓ make audit / make audit-top
 ```
 
 ### 模型選擇邏輯
@@ -144,6 +154,13 @@ flowchart TD
         API --> EP["POST /api/v1/search<br/>POST /api/v1/chat<br/>GET  /api/v1/qa"]
     end
 
+    subgraph AuditTrail["Audit Trail（2026-02-28）"]
+        S1 -->|fetch events| AL["audit_logger.py<br/>output/fetch_logs/"]
+        EP -->|access events| AL2["audit_logger.py<br/>output/access_logs/"]
+        AL --> ATQ["audit_trail.py<br/>fetch / access / report"]
+        AL2 --> ATQ
+    end
+
     subgraph Deploy["部署"]
         API --> Docker[Docker Image]
         Docker --> ECR[AWS ECR]
@@ -164,6 +181,7 @@ flowchart TD
 | 2026-02-28 | v0.7 | 死碼清理：移除 10 項未使用 import/參數/函式/常數（vulture 80% 信心門檻），26 tests passing | `app/core/chat.py`, `utils/`, `scripts/`, `config.py`, `app/config.py` |
 | 2026-02-28 | v0.8 | 安全審查修復：config.py fail-fast env helpers（`_require_env`, `_get_float_env`, `_get_int_env`）；Google Sheets SSRF 防護（domain 白名單 + sheet_id/gid 格式驗證 + HTTP 狀態檢查 + 回應大小限制 10MB）；移除 `__import__` 非標準用法 | `config.py`, `scripts/04_generate_report.py`, `scripts/05_evaluate.py` |
 | 2026-02-28 | v0.9 | Fetch 管道優化：max_depth 10→3；新增 `--since` 增量篩選（1d/7d/日期）；避免重複 meta 查詢；預期快 50-85% | `scripts/01_fetch_notion.py`, `utils/notion_client.py`，新增 `docs/FETCH_OPTIMIZATION_GUIDE.md` |
+| 2026-02-28 | v1.0 | Audit Trail：全 fetch + API 存取 JSONL 日誌（session_id 關聯、zero side-effects）；`scripts/audit_trail.py` query CLI；`make audit/audit-top` shortcuts | `utils/audit_logger.py`（new），`scripts/audit_trail.py`（new），`scripts/01_fetch_notion.py`, `utils/notion_client.py`, `app/routers/search.py`, `app/routers/chat.py`, `app/routers/qa.py` |
 
 
 ### 更新架構圖的 SOP
