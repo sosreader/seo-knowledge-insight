@@ -169,7 +169,7 @@ flowchart TD
 每次架構有重大調整後：
 
 1. 用 **architect agent** 討論新設計（`Task: subagent_type=everything-claude-code:architect`）
-2. 把確認後的架構更新到 research.md 第 22 節的 Mermaid 圖
+2. 把確認後的架構更新到 `research/06-project-architecture.md` 的 Mermaid 圖
 3. 在 Architecture Changelog 新增一行（日期 + 版本 + 變更內容 + 影響範圍）
 4. 更新 MEMORY.md 的確認基準線（如有評估數字變動）
 

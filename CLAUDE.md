@@ -80,3 +80,28 @@ def process_step(input_data) -> dict:
 - 禁止直接 commit 到 `main`
 - PR 需通過所有測試才能合併
 - Commit message 以中文或英文皆可，但須清楚描述「為什麼」而非「做了什麼」
+
+### Commit 前知識沉澱清單（必做）
+
+每次 commit 前，依序確認以下步驟是否適用，適用則執行：
+
+1. **萃取 patterns** — 本次修改是否有可重用的模式？執行 `/learn-eval` 萃取並存入 `~/.claude/skills/learned/`
+2. **更新 research/** — 本次修改涉及新技術知識？依下方分類指引補充到對應的 `research/*.md`
+3. **更新 MEMORY.md** — 評估基準線變動、Bug 修復、模型替換等？更新 `~/.claude/projects/.../memory/MEMORY.md`
+4. **更新架構圖** — 架構有重大調整？更新 `research/06-project-architecture.md` 的 Mermaid 圖和 Changelog
+
+若本次為 typo fix、純測試修正、chore 類變更，以上可跳過。
+
+### research/ 分類指引
+
+新知識補充時，依主題寫入對應檔案：
+
+| 主題 | 檔案 |
+|------|------|
+| LLM / Token / Embedding / Cosine / Prompt 基礎 / Structured Output | `research/01-ai-fundamentals.md` |
+| RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標 | `research/02-rag-and-search.md` |
+| 評估 / LLM-as-Judge / Reasoning Model / 評估維度設計 | `research/03-evaluation.md` |
+| Prompt Engineering 進階 / 業界最佳實踐 | `research/04-prompting.md` |
+| 模型選擇決策 / Embedding 模型比較 | `research/05-models.md` |
+| 專案架構 / 技術決策 / Changelog / Mermaid 圖 | `research/06-project-architecture.md` |
+| 部署 / FastAPI / ECR+EC2 / Docker | `research/07-deployment.md` |
