@@ -161,6 +161,11 @@ flowchart TD
         AL2 --> ATQ
     end
 
+    subgraph Observability["可觀測性（2026-02-28）"]
+        API -->|auto-instrument| LM["Laminar SDK<br/>lmnr + @observe"]
+        LM --> LD["laminar.sh dashboard<br/>Traces / Spans / Sessions"]
+    end
+
     subgraph Deploy["部署"]
         API --> Docker[Docker Image]
         Docker --> ECR[AWS ECR]
@@ -182,6 +187,7 @@ flowchart TD
 | 2026-02-28 | v0.8 | 安全審查修復：config.py fail-fast env helpers（`_require_env`, `_get_float_env`, `_get_int_env`）；Google Sheets SSRF 防護（domain 白名單 + sheet_id/gid 格式驗證 + HTTP 狀態檢查 + 回應大小限制 10MB）；移除 `__import__` 非標準用法 | `config.py`, `scripts/04_generate_report.py`, `scripts/05_evaluate.py` |
 | 2026-02-28 | v0.9 | Fetch 管道優化：max_depth 10→3；新增 `--since` 增量篩選（1d/7d/日期）；避免重複 meta 查詢；預期快 50-85% | `scripts/01_fetch_notion.py`, `utils/notion_client.py`，新增 `docs/FETCH_OPTIMIZATION_GUIDE.md` |
 | 2026-02-28 | v1.0 | Audit Trail：全 fetch + API 存取 JSONL 日誌（session_id 關聯、zero side-effects）；`scripts/audit_trail.py` query CLI；`make audit/audit-top` shortcuts | `utils/audit_logger.py`（new），`scripts/audit_trail.py`（new），`scripts/01_fetch_notion.py`, `utils/notion_client.py`, `app/routers/search.py`, `app/routers/chat.py`, `app/routers/qa.py` |
+| 2026-02-28 | v1.1 | Laminar observability：`lmnr` 套件 + `Laminar.initialize()` 加入 `app/main.py`，所有 LLM 呼叫自動 trace；修復 `opentelemetry-semantic-conventions-ai 0.4.14` 缺少 `LLM_SYSTEM` 等 3 個屬性的相容問題 | `app/main.py`, `requirements_api.txt`, `.env.example` |
 
 
 ### 更新架構圖的 SOP

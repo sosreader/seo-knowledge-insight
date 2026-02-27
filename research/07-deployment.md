@@ -178,6 +178,67 @@ docker run -v /home/ec2-user/seo-data/output:/app/output:ro ...
 
 ---
 
+## 22. Laminar Observability（2026-02-28 新增）
+
+> LLM 呼叫的 trace / span 可觀測平台，讓每一次 OpenAI 呼叫都有完整紀錄。
+
+### 最小化設定（3 步驟）
+
+```bash
+pip install lmnr
+```
+
+```python
+# app/main.py — 在所有 import 完成後呼叫一次
+import os
+from lmnr import Laminar
+
+Laminar.initialize(project_api_key=os.getenv("LMNR_PROJECT_API_KEY"))
+```
+
+```
+# .env
+LMNR_PROJECT_API_KEY=your_laminar_project_api_key
+```
+
+初始化後，所有 `openai`、`anthropic` 等 SDK 呼叫自動被追蹤，**不需要修改任何 router 程式碼**。
+
+### 手動追蹤（不依賴 LLM）
+
+使用 `@observe` 裝飾器追蹤任意函式（測試用或自訂 span）：
+
+```python
+from lmnr import observe
+
+@observe()
+def seo_answer(question: str) -> str:
+    return "..."
+
+# span input = {"question": "..."}, span output = "..."
+```
+
+### 相依性衝突修復（Python 3.9 + lmnr 0.5.2）
+
+`opentelemetry-semantic-conventions-ai 0.4.14` 移除了 `LLM_SYSTEM`、`LLM_REQUEST_MODEL`、`LLM_RESPONSE_MODEL` 三個屬性，但 `lmnr 0.5.2` 的內部程式碼仍然參照它們。
+
+**修復方式**：在 `.venv/lib/.../opentelemetry/semconv_ai/__init__.py` 的 `SpanAttributes` class 補上：
+
+```python
+LLM_SYSTEM = "gen_ai.system"
+LLM_REQUEST_MODEL = "gen_ai.request.model"
+LLM_RESPONSE_MODEL = "gen_ai.response.model"
+```
+
+> 這是 `lmnr` 的 upstream bug，升級版本後可移除此補丁。
+
+### 注意事項
+
+- `Laminar.initialize()` 必須在 `load_dotenv()` 之後呼叫（本專案 `from app import config` 已隱含 `load_dotenv()`）
+- 啟動本身不會建立 trace；第一個 LLM 呼叫才會送出第一個 span
+- 可至 https://laminar.sh dashboard 的 Traces 頁面驗證
+
+---
+
 ## 21. API 請求追蹤：Audit Trail（2026-02-28 新增）
 
 > 資料安全需求：確認哪些 QA 資料被哪些 IP 存取過。

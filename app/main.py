@@ -4,10 +4,12 @@ FastAPI application entry point
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from lmnr import Laminar
 
 from app import config
 from app.core.store import store
@@ -18,6 +20,8 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+Laminar.initialize(project_api_key=os.getenv("LMNR_PROJECT_API_KEY"))
 
 
 @asynccontextmanager
