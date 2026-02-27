@@ -1,0 +1,19 @@
+#!/bin/bash
+# Knowledge Distillation Checklist
+# Runs before every git commit. Reminder only (exit 0 — never blocks).
+# To skip: git commit --no-verify
+
+cat >&2 << 'CHECKLIST'
+
+=== Knowledge Distillation Checklist ===
+[ ] 1. Patterns extracted?  /learn-eval → ~/.claude/skills/learned/
+[ ] 2. research/ updated?   (see CLAUDE.md for topic-to-file mapping)
+[ ] 3. MEMORY.md updated?   (baselines / bug fixes / model changes)
+[ ] 4. Architecture updated? research/06-project-architecture.md
+
+Skip if: typo fix / test-only / chore changes
+=========================================
+
+CHECKLIST
+
+exit 0
