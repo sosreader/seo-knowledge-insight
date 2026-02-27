@@ -4,7 +4,6 @@ RAG chat — embedding 查詢 + GPT 對話
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 
 import numpy as np
 from openai import AsyncOpenAI

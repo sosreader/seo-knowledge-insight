@@ -85,13 +85,6 @@ async def _api_post(
 # 頁面列表
 # ──────────────────────────────────────────────────────
 
-async def _is_database(client: httpx.AsyncClient, notion_id: str) -> bool:
-    """檢查 ID 是否為資料庫"""
-    url = f"{config.NOTION_BASE_URL}/databases/{notion_id}"
-    resp_data = await _api_get(client, url)
-    return resp_data.get("object") == "database"
-
-
 async def list_child_pages(
     client: httpx.AsyncClient,
     parent_page_id: str,
@@ -207,9 +200,8 @@ async def fetch_blocks_recursive(
 
         try:
             data = await _api_get(client, url, params)
-        except Exception as e:
-            # 404 = Integration 沒有此頁面存取權，跳過
-            if "404" in str(e):
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
                 print(f"  ⚠️  跳過（無存取權）: {block_id}")
                 return []
             raise
@@ -248,7 +240,7 @@ async def fetch_page_meta(
     title = ""
     meeting_date = ""
 
-    for prop_name, prop in data.get("properties", {}).items():
+    for _, prop in data.get("properties", {}).items():
         ptype = prop.get("type", "")
         if ptype == "title":
             title = "".join(

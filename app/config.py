@@ -28,5 +28,4 @@ CORS_ORIGINS: list[str] = [
 ]
 
 # ── RAG ─────────────────────────────────────────────────
-SEARCH_TOP_K: int = int(os.getenv("SEARCH_TOP_K", "5"))
 CHAT_CONTEXT_K: int = int(os.getenv("CHAT_CONTEXT_K", "5"))

@@ -1192,7 +1192,7 @@ flowchart TD
     end
 
     subgraph Eval["評估層"]
-        QA --> S5[Step 5: evaluate.py<br/>LLM-as-Judge × 4 維度]
+        QA --> S5[Step 5: evaluate.py<br/>LLM-as-Judge × 5 維度]
         EMB --> S5
         S5 --> ER[eval_report.json<br/>Completeness 3.85 / Accuracy 3.95]
     end
@@ -1225,6 +1225,8 @@ flowchart TD
 | 2026-02-27 | v0.4 | 修復 BUG-001（分類評估）+ BUG-002（Retrieval Judge）   | `scripts/05_evaluate.py`                           |
 | 2026-02-27 | v0.5 | 新增 `[補充]` Attribution Tag 機制提升 Completeness    | `utils/openai_helper.py`, `scripts/05_evaluate.py` |
 | 2026-02-27 | v0.6 | KW Hit Rate 改善：TypeA/TypeB 診斷 + Fuzzy 匹配（54% → 78%）+ `--debug-retrieval` + `--eval-reranking` | `config.py`, `scripts/04_generate_report.py`, `scripts/05_evaluate.py` |
+| 2026-02-28 | v0.7 | 死碼清理：移除 10 項未使用 import/參數/函式/常數（vulture 80% 信心門檻），26 tests passing | `app/core/chat.py`, `utils/`, `scripts/`, `config.py`, `app/config.py` |
+| 2026-02-28 | v0.8 | 安全審查修復：config.py fail-fast env helpers（`_require_env`, `_get_float_env`, `_get_int_env`）；Google Sheets SSRF 防護（domain 白名單 + sheet_id/gid 格式驗證 + HTTP 狀態檢查 + 回應大小限制 10MB）；移除 `__import__` 非標準用法 | `config.py`, `scripts/04_generate_report.py`, `scripts/05_evaluate.py` |
 
 ### 更新架構圖的 SOP
 

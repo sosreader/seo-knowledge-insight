@@ -255,7 +255,7 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     valid_texts = [texts[i] for i in valid_indices]
 
     if not valid_texts:
-        return [[0.0] * 1536] * len(texts)
+        return [[0.0] * 1536 for _ in range(len(texts))]
 
     # OpenAI embedding API 一次最多 2048 條
     all_embeddings: list[list[float]] = []
@@ -272,7 +272,7 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
 
     # 重建完整陣列（空字串給零向量）
     dim = len(all_embeddings[0]) if all_embeddings else 1536
-    result = [[0.0] * dim] * len(texts)
+    result = [[0.0] * dim for _ in range(len(texts))]
     for idx, emb in zip(valid_indices, all_embeddings):
         result[idx] = emb
 
@@ -377,24 +377,6 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
     ]
     return result
 
-
-# ──────────────────────────────────────────────────────
-# 分類標籤
-# ──────────────────────────────────────────────────────
-
-# 分類類別：依據實際會議內容分佈設計（Vocus 平台 SEO 顧問會議）
-CLASSIFY_CATEGORIES = [
-    "索引與檢索",       # Coverage、索引狀態、robots.txt、sitemap、canonical
-    "連結策略",         # 內部連結、外部連結、Disavow、連結架構
-    "搜尋表現分析",     # 曝光、點擊、CTR、排名、SERP 外觀
-    "內容策略",         # 關鍵字佈局、主題聚合、內容經營
-    "Discover與AMP",   # Google Discover、AMP Article、推薦流量
-    "技術SEO",         # 速度、Core Web Vitals、結構化資料、URL 結構
-    "GA與數據追蹤",     # GA4、事件追蹤、歸因、PWA 追蹤
-    "平台策略",         # Vocus 產品面 SEO（自訂網域、方案頁、SEO 設定）
-    "演算法與趨勢",     # Google 演算法更新、SERP 變化、AI 搜尋
-    "其他",            # 上述皆不適用
-]
 
 CLASSIFY_SYSTEM_PROMPT = """\
 你是 SEO 專家。請為以下 Q&A 加上分類標籤。

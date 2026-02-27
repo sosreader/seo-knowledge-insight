@@ -21,24 +21,26 @@ import argparse
 import csv
 import io
 import json
+import logging
 import re
 import sys
 import urllib.request
 from datetime import datetime
+from urllib.parse import urlparse
 from pathlib import Path
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # ── 路徑修正 ─────────────────────────────────────────
 try:
     import config
     from utils.openai_helper import get_embeddings
-    from scripts.dedupe_helpers import _cosine_similarity_matrix
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import config
     from utils.openai_helper import get_embeddings
-    from scripts.dedupe_helpers import _cosine_similarity_matrix
 
 from openai import OpenAI
 
@@ -101,7 +103,7 @@ METRIC_QUERY_MAP: dict[str, list[str]] = {
                           "News 流量與 AMP Article 連動"],
     "News(new)":         ["Google News 新增流量下降", "焦點新聞 Top Stories 排名掉出"],
     "探索比例":           ["Discover 流量佔比下降 探索成長策略"],
-    "新聞比例":           ["Google News 流量佔比分析"],
+    "新聞比例":           ["Google News 流量佔比分析", "新聞類文章比例 時事 SEO"],
 
     # ── 索引狀態 ──
     "有效 (Coverage)":   ["有效頁面數下降 索引減少 原因", "Coverage 有效頁下滑 如何處理"],
@@ -228,7 +230,7 @@ METRIC_QUERY_MAP: dict[str, list[str]] = {
     "Google 導流占比":     ["Google 導流佔比下降 搜尋依賴度"],
     "GSC 搜尋/GA 搜尋":    ["GSC 點擊與 GA Organic 落差原因 AMP 流量歸因"],
     "GSC 探索/GA Direct":  ["Discover 流量被歸到 GA Direct 流量歸因問題"],
-    "搜尋流量占比 (工作階段)": ["搜尋流量比例 SEO 依賴度分析"],
+    "搜尋流量占比 (工作階段)": ["搜尋流量比例 SEO 依賴度分析", "搜尋流量比例趨勢"],
     "全部流量":            ["全站流量趨勢分析"],
     "其他流量":            ["非 Google 流量來源"],
     "其他流量（新使用者）": ["新用戶流量來源 SEO 成長指標"],
@@ -239,7 +241,6 @@ METRIC_QUERY_MAP: dict[str, list[str]] = {
     "總文章數":            ["文章總量與 SEO 表現關係 內容規模"],
     "當週文章數":          ["本週新文章數量 內容供給 SEO 影響"],
     "文章 vs 流量":        ["文章數量與流量成長相關性分析"],
-    "新聞比例":            ["新聞類文章比例 時事 SEO"],
     "首頁占比":            ["首頁流量佔比 品牌搜尋"],
     "文章占比":            ["文章頁面流量佔比 內容頁貢獻"],
     "專題佔比":            ["專題頁面流量佔比 主題集合 SEO"],
@@ -249,8 +250,6 @@ METRIC_QUERY_MAP: dict[str, list[str]] = {
     "一般點擊佔比":        ["一般點擊佔比 外觀紅利依賴度"],
     "搜尋點擊流量圖 (E3)": ["E3 區塊搜尋點擊流量 GSC"],
     "網頁條件/總流量比":   ["有流量頁面佔比 長尾流量分佈"],
-    "搜尋流量占比 (工作階段)": ["搜尋流量比例趨勢"],
-
     # ── 體驗 / CWV 比率 ──
     "良好/有效":           ["良好 CWV 頁面佔有效頁比 體驗 KPI"],
     "強化/有效":           ["結構化資料強化頁面佔比"],
@@ -274,40 +273,70 @@ METRIC_QUERY_MAP: dict[str, list[str]] = {
 # Google Sheets 自動擷取
 # ──────────────────────────────────────────────────────
 
+_SHEET_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{10,60}$")
+_GID_RE = re.compile(r"^\d{1,10}$")
+_MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB 上限
+_ALLOWED_HOST = "docs.google.com"
+
+
+def _validate_sheet_id(sheet_id: str) -> None:
+    """驗證 sheet_id 格式，防止注入攻擊。"""
+    if not _SHEET_ID_RE.match(sheet_id):
+        raise ValueError(f"sheet_id 格式不合法：{sheet_id!r}")
+
+
+def _validate_gid(gid: str) -> None:
+    """驗證 gid 為純數字，防止注入攻擊。"""
+    if not _GID_RE.match(gid):
+        raise ValueError(f"gid 格式不合法：{gid!r}")
+
+
 def _parse_sheets_url(url: str) -> tuple[str, str]:
     """從 Google Sheets URL 解析 sheet_id 與 gid"""
+    parsed = urlparse(url)
+    if parsed.netloc != _ALLOWED_HOST:
+        raise ValueError(f"不允許的 Sheets 主機：{parsed.netloc!r}，僅允許 {_ALLOWED_HOST!r}")
     m = re.search(r"/spreadsheets/d/([a-zA-Z0-9_-]+)", url)
     if not m:
         raise ValueError(f"無法從 URL 解析 sheet ID：{url}")
     sheet_id = m.group(1)
+    _validate_sheet_id(sheet_id)
     gid_match = re.search(r"[?&#]gid=([0-9]+)", url)
     gid = gid_match.group(1) if gid_match else "0"
+    _validate_gid(gid)
     return sheet_id, gid
 
 
 def _find_gid_by_tab_name(sheet_id: str, tab: str) -> str | None:
     """在 Sheets HTML 裡找 tab 名稱對應的 gid（不需 OAuth）"""
+    _validate_sheet_id(sheet_id)
     try:
-        url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
+        url = f"https://{_ALLOWED_HOST}/spreadsheets/d/{sheet_id}/edit"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
-            html = resp.read().decode("utf-8", errors="ignore")
+            if resp.status != 200:
+                return None
+            html = resp.read(_MAX_RESPONSE_BYTES).decode("utf-8", errors="ignore")
         # 格式："sheetId":123456,"title":"vocus"
         m = re.search(
             r'"sheetId":(\d+)[^}]*"title":"' + re.escape(tab) + r'"',
             html,
         )
         if m:
-            return m.group(1)
+            gid = m.group(1)
+            _validate_gid(gid)
+            return gid
         # 備案：title 在前
         m2 = re.search(
             r'"title":"' + re.escape(tab) + r'"[^}]*"sheetId":(\d+)',
             html,
         )
         if m2:
-            return m2.group(1)
-    except Exception:
-        pass
+            gid = m2.group(1)
+            _validate_gid(gid)
+            return gid
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as e:
+        logger.warning("_find_gid_by_tab_name 失敗，tab=%r，err=%s", tab, e)
     return None
 
 
@@ -324,17 +353,21 @@ def fetch_from_sheets(url_or_id: str, tab: str = "vocus") -> str:
         else:
             gid = _find_gid_by_tab_name(sheet_id, tab) or "0"
     else:
+        _validate_sheet_id(url_or_id)
         sheet_id = url_or_id
         gid = _find_gid_by_tab_name(sheet_id, tab) or "0"
 
+    _validate_gid(gid)
     csv_url = (
-        f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+        f"https://{_ALLOWED_HOST}/spreadsheets/d/{sheet_id}"
         f"/export?format=csv&id={sheet_id}&gid={gid}"
     )
     print(f"   下載: {csv_url}")
     req = urllib.request.Request(csv_url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=30) as resp:
-        raw = resp.read()
+        if resp.status != 200:
+            raise ValueError(f"Google Sheets 回應異常，HTTP 狀態碼：{resp.status}")
+        raw = resp.read(_MAX_RESPONSE_BYTES)
     # Sheets CSV 為 UTF-8-BOM
     text = raw.decode("utf-8-sig")
 
@@ -376,7 +409,7 @@ def parse_metrics_tsv(text: str) -> dict[str, dict]:
 
     回傳 dict： metric_name → {monthly, weekly, max, min, latest, previous, latest_date, previous_date}
     """
-    lines = [l for l in text.splitlines() if l.strip()]
+    lines = [line for line in text.splitlines() if line.strip()]
     if not lines:
         return {}
 
@@ -393,6 +426,9 @@ def parse_metrics_tsv(text: str) -> dict[str, dict]:
     latest_date = date_cols[0] if date_cols else ""
     previous_date = date_cols[1] if len(date_cols) > 1 else ""
 
+    def _safe_col(cols: list[str], idx: int):
+        return _parse_value(cols[idx]) if idx < len(cols) else None
+
     metrics: dict[str, dict] = {}
     for line in lines[header_idx + 1:]:
         cols = line.split("\t")
@@ -402,16 +438,13 @@ def parse_metrics_tsv(text: str) -> dict[str, dict]:
         if name in SKIP_METRICS:
             continue
 
-        def _get(idx: int):
-            return _parse_value(cols[idx]) if idx < len(cols) else None
-
         metrics[name] = {
-            "monthly":      _get(1),
-            "weekly":       _get(2),
-            "max":          _get(3),
-            "min":          _get(4),
-            "latest":       _get(6) if len(cols) > 6 else None,
-            "previous":     _get(7) if len(cols) > 7 else None,
+            "monthly":      _safe_col(cols, 1),
+            "weekly":       _safe_col(cols, 2),
+            "max":          _safe_col(cols, 3),
+            "min":          _safe_col(cols, 4),
+            "latest":       _safe_col(cols, 6) if len(cols) > 6 else None,
+            "previous":     _safe_col(cols, 7) if len(cols) > 7 else None,
             "latest_date":  latest_date,
             "previous_date": previous_date,
         }
@@ -592,11 +625,6 @@ def find_relevant_qas_multi(
     # 依最高分排序，取前 total_max
     results = sorted(collected.values(), key=lambda x: -x["_score"])
     return results[:total_max]
-
-
-def find_relevant_qas(query: str, qa_pairs: list[dict], top_k: int = 8) -> list[dict]:
-    """單查詢版（向下相容）"""
-    return find_relevant_qas_multi([query], qa_pairs, top_k_per_query=top_k, total_max=top_k)
 
 
 def _rerank_qas(
@@ -842,10 +870,6 @@ def main() -> None:
         help="不使用 Q&A 知識庫（單純分析指標）",
     )
     args = parser.parse_args()
-
-    if not config.OPENAI_API_KEY:
-        print("❌ 請設定 OPENAI_API_KEY")
-        sys.exit(1)
 
     print("=" * 60)
     print("📊 SEO 週報產生器")

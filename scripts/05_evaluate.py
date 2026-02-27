@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import random
 import shutil
 import sys
@@ -33,6 +34,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -152,14 +155,6 @@ def load_source_markdown(source_file: str) -> str:
     return ""
 
 
-def load_golden_set(path: str) -> list[dict]:
-    """載入 golden set（人工標注的正確答案）"""
-    golden_path = Path(path)
-    if golden_path.exists():
-        return json.loads(golden_path.read_text(encoding="utf-8"))
-    return []
-
-
 def load_golden_retrieval(path: str = "") -> list[dict]:
     """載入 retrieval golden set"""
     if not path:
@@ -262,7 +257,6 @@ def evaluate_retrieval(
         if use_reranking and len(wide_retrieved) > top_k:
             wide_retrieved = _llm_rerank_retrieval(query, wide_retrieved, top_k=top_k)
 
-        top_indices = wide_indices[:top_k] if not use_reranking else wide_indices
         retrieved = wide_retrieved[:top_k]
         retrieved_scores = [float(scores[int(idx)]) for idx in np.argsort(scores)[::-1][:top_k]]
 
@@ -343,6 +337,9 @@ def evaluate_retrieval(
         time.sleep(0.3)
 
     # 彙整統計
+    if not case_results:
+        return {"error": "所有 golden case 評估均失敗，無法計算統計", "case_details": []}
+
     avg_kw_hit = sum(c["keyword_hit_rate"] for c in case_results) / len(case_results)
     avg_cat_hit = sum(c["category_hit_rate"] for c in case_results) / len(case_results)
     avg_mrr = sum(c["mrr"] for c in case_results) / len(case_results)
@@ -451,7 +448,8 @@ def _llm_judge_retrieval_relevance(query: str, qa: dict) -> bool:
         if judgment is None:
             return False
         return judgment == "relevant"
-    except Exception:
+    except Exception as e:
+        logger.warning("_llm_judge_retrieval_relevance 失敗（結果計為 False）：%s", e)
         return False
 
 
@@ -747,7 +745,7 @@ def generate_eval_report_md(
         "# Q&A 品質評估報告\n",
         f"- 評估樣本數：{sample_size}",
         f"- 帶原始來源驗證：{'是' if with_source else '否'}",
-        f"- 評估日期：{__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"- 評估日期：{datetime.now().strftime('%Y-%m-%d %H:%M')}",
         "",
     ]
 
@@ -854,10 +852,6 @@ def generate_eval_report_md(
 # ──────────────────────────────────────────────────────
 
 def main(args: argparse.Namespace) -> None:
-    if not config.OPENAI_API_KEY:
-        print("❌ 請設定 OPENAI_API_KEY（在 .env）")
-        sys.exit(1)
-
     print("=" * 60)
     print("📊 步驟 5：Q&A 品質評估（Evaluation）")
     print(f"   Judge 模型: {config.OPENAI_MODEL}")

@@ -64,7 +64,6 @@ async def _block_to_md(
     client: httpx.AsyncClient,
     images_dir: Path,
     indent: int = 0,
-    list_counter: dict | None = None,
 ) -> str:
     """把單個 block 轉成 Markdown 文字，回傳一行或多行"""
     btype = block.get("type", "")
@@ -251,8 +250,3 @@ async def blocks_to_markdown(
             md_parts.append("")  # 段落間空行
 
     return "\n".join(md_parts)
-
-
-def blocks_to_markdown_sync(meta: dict, blocks: list[dict]) -> str:
-    """同步版本的 blocks_to_markdown"""
-    return asyncio.run(blocks_to_markdown(meta, blocks))
