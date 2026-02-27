@@ -522,7 +522,7 @@ def _compute_keyword_boost(
                 elif any(t in query_lower for t in kw_tokens):
                     total_hits += 1
                 elif len(kw_lower) >= 2 and kw_lower[:2] in query_lower:
-                    total_hits += partial / boost
+                    total_hits += (partial / boost) if boost else 0
             if total_hits > 0:
                 boost_matrix[qi, ji] = boost * min(total_hits, max_hits)
 

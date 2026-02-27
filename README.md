@@ -9,7 +9,7 @@ Notion API 擷取 → Markdown 轉換（含圖片下載）→ OpenAI 萃取 Q&A 
 ```
 
 ```
-SEO_QA_Rawdata/
+seo-knowledge-insight/
 ├── config.py                    # 設定檔
 ├── pyproject.toml               # Package 定義（pip install -e . 用）
 ├── .env                         # 你的 API keys（從 .env.example 複製）
@@ -218,6 +218,7 @@ python scripts/run_pipeline.py --step 4
 | 3      | `config.py` 的 `DEFAULT_SHEETS_URL` | 內建預設（目前指向 vocus 試算表） |
 
 > **前提**：Google Sheets 須設為「任何知道連結者可檢視」（Anyone with the link - Viewer）。
+> **安全性**：腳本驗證 URL 格式與主機名稱，防止注入攻擊（僅允許 `docs.google.com`），回應大小上限 10MB。
 
 ### 報告內容
 
@@ -255,7 +256,7 @@ python scripts/run_pipeline.py --step 4
 
 ### 概述
 
-用 LLM-as-Judge 對 Q&A 萃取品質做四維度自動評估，產出診斷報告。
+用 LLM-as-Judge 對 Q&A 萃取品質做五維度自動評估，產出診斷報告。
 
 ### 操作方式
 
@@ -518,7 +519,8 @@ $$
 | ------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `Error code: 401 - Incorrect API key` | OpenAI API key 無效或過期                    | 確認 `.env` 裡的 `OPENAI_API_KEY` 正確，到 https://platform.openai.com/api-keys 重新產生 |
 | `Unsupported parameter: 'max_tokens'` | 使用較新模型（如 `gpt-5.2`），舊參數名已棄用 | 已在 `utils/openai_helper.py` 改用 `max_completion_tokens`，若自訂 model 也需注意        |
-| `❌ NOTION_TOKEN 未設定`              | `.env` 不存在或 key 為空                     | `cp .env.example .env` 後填入                                                            |
+| `必需環境變數 NOTION_TOKEN 未設定`     | `.env` 不存在或 key 為空（fail-fast 檢查）   | `cp .env.example .env` 後填入；啟動時即檢查必需變數                                     |
+| `必需環境變數 OPENAI_API_KEY 未設定`   | `.env` 中 key 為空（fail-fast 檢查）         | 同上；兩個必需變數都要設定                                                               |
 | `⚠️ 跳過（無存取權）`                 | Integration 沒有該子頁面的權限               | 到 Notion 母頁面 → `···` → `Connections` → 確認 Integration 已加入                       |
 | `Rate limited, waiting Xs`            | API 呼叫太頻繁                               | 正常現象，腳本會自動等待重試                                                             |
 | `JSON 解析失敗`                       | OpenAI 回傳非標準 JSON                       | 通常是內容太長導致截斷，可試著降低 `MAX_TOKENS_PER_CHUNK`                                |
@@ -546,7 +548,7 @@ python scripts/run_pipeline.py --dry-run
 
 ```bash
 # Clone 後
-cd SEO_QA_Rawdata
+cd seo-knowledge-insight
 cp .env.example .env    # 填入 API keys
 pip install -r requirements.txt
 
@@ -664,7 +666,6 @@ GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workfl
 | `OPENAI_MODEL`           | `gpt-5.2`                | RAG chat 模型                |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding 模型               |
 | `CORS_ORIGINS`           | `http://localhost:3000`  | 逗號分隔多個 origin          |
-| `SEARCH_TOP_K`           | `5`                      | 語意搜尋預設回傳筆數         |
 | `CHAT_CONTEXT_K`         | `5`                      | RAG chat 帶入的 context 筆數 |
 
 ---

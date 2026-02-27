@@ -249,7 +249,7 @@ def evaluate_retrieval(
                 elif any(t in query_lower for t in kw_tokens):
                     total_hits += 1
                 elif len(kw_lower) >= 2 and kw_lower[:2] in query_lower:
-                    total_hits += partial / boost
+                    total_hits += (partial / boost) if boost else 0
             if total_hits > 0:
                 scores[ji] += boost * min(total_hits, max_hits)
 
@@ -304,7 +304,11 @@ def evaluate_retrieval(
 
         def _kw_fuzzy_hit(exp_kw: str, retrieved_kws: set) -> bool:
             kw = exp_kw.lower()
-            return any(kw in rkw or rkw in kw for rkw in retrieved_kws)
+            # rkw in kw 方向需要最低長度 2，避免單字誤命中所有含該字的 expected_keyword
+            return any(
+                kw in rkw or (len(rkw) >= 2 and rkw in kw)
+                for rkw in retrieved_kws
+            )
 
         kw_hits = sum(1 for kw in expected_kws if _kw_fuzzy_hit(kw, all_retrieved_kws))
         kw_hit_rate = kw_hits / len(expected_kws) if expected_kws else 0
@@ -382,7 +386,10 @@ def _llm_rerank_retrieval(query: str, candidates: list[dict], top_k: int = 5) ->
             }},
             max_completion_tokens=256,
         )
-        content = resp.choices[0].message.content or "{}"
+        content = resp.choices[0].message.content
+        if not content:
+            print(f"⚠️ _llm_rerank_retrieval：LLM 回傳空內容，使用原始排序")
+            return candidates[:top_k]
         ranked = json.loads(content).get("ranked_indices", [])
         valid = [i for i in ranked if isinstance(i, int) and 0 <= i < len(candidates)]
         # fallback：補全至 top_k
@@ -391,7 +398,8 @@ def _llm_rerank_retrieval(query: str, candidates: list[dict], top_k: int = 5) ->
             if i not in seen:
                 valid.append(i)
         return [candidates[i] for i in valid[:top_k]]
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ _llm_rerank_retrieval 失敗（{e}），使用原始排序")
         return candidates[:top_k]
 
 
