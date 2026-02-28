@@ -21,7 +21,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-Laminar.initialize(project_api_key=os.getenv("LMNR_PROJECT_API_KEY"))
+_lmnr_key = os.getenv("LMNR_PROJECT_API_KEY", "")
+if _lmnr_key:
+    Laminar.initialize(project_api_key=_lmnr_key)
+else:
+    logger.warning("LMNR_PROJECT_API_KEY not set — Laminar tracing disabled")
 
 
 @asynccontextmanager
