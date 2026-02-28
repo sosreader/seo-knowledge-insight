@@ -5,12 +5,24 @@ from __future__ import annotations
 
 import logging
 import os
+
+# ── Laminar 必須在所有 LLM SDK 載入前初始化，才能正確 auto-instrument OpenAI ──
+# Laminar.initialize() 會 monkey-patch openai / anthropic 等 SDK。
+# 若在 `from app.routers import chat` 之後才初始化，openai 已被 import，patch 失效，
+# 導致 Top LLM spans / Tokens / Cost dashboard 全空白。
+_lmnr_key = os.getenv("LMNR_PROJECT_API_KEY", "")
+try:
+    from lmnr import Laminar
+    if _lmnr_key:
+        Laminar.initialize(project_api_key=_lmnr_key)
+except ImportError:
+    Laminar = None  # type: ignore[assignment,misc]
+
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from lmnr import Laminar
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -26,10 +38,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-_lmnr_key = os.getenv("LMNR_PROJECT_API_KEY", "")
-if _lmnr_key:
-    Laminar.initialize(project_api_key=_lmnr_key)
-else:
+if not _lmnr_key:
     logger.warning("LMNR_PROJECT_API_KEY not set — Laminar tracing disabled")
 
 

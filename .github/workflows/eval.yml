@@ -1,0 +1,36 @@
+name: Laminar Eval
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  eval:
+    name: Offline evals (retrieval + extraction)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run retrieval eval
+        env:
+          LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
+        # eval_retrieval.py 不需要 OPENAI_API_KEY（keyword-based search）
+        run: lmnr eval evals/eval_retrieval.py
+
+      - name: Run extraction eval
+        env:
+          LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: lmnr eval evals/eval_extraction.py

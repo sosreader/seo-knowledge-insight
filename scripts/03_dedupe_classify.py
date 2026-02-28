@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sys
 import time
@@ -329,6 +330,9 @@ def main(args: argparse.Namespace) -> None:
     # 同時輸出一份人類可讀的 Markdown
     _export_readable_md(final_qa_pairs)
 
+    # ── Laminar Dataset 快照：記錄本次知識庫版本 ──
+    _push_laminar_kb_snapshot(final_qa_pairs)
+
     print("\n" + "=" * 60)
     print("✅ 步驟 3 完成！")
     print(f"   最終 Q&A 數量: {len(final_qa_pairs)}")
@@ -340,6 +344,58 @@ def main(args: argparse.Namespace) -> None:
     print("=" * 60)
 
     flush_laminar()
+
+
+def _push_laminar_kb_snapshot(qa_pairs: list[dict]) -> None:
+    """Push a sample of the current QA knowledge base to Laminar as an evaluation
+    dataset snapshot.
+
+    Registers up to 50 QA pairs under the ``qa_knowledge_base`` group so each
+    run of Step 3 produces a versioned entry visible in the Laminar Evaluations
+    and Datasets pages.  Non-fatal: silently skips when LMNR_PROJECT_API_KEY is
+    not set or the lmnr package is unavailable.
+    """
+    api_key = os.getenv("LMNR_PROJECT_API_KEY", "")
+    if not api_key:
+        return
+    try:
+        from lmnr import evaluate  # type: ignore[import]
+
+        sample = qa_pairs[:50]
+        data = [
+            {
+                "data": {
+                    "question": qa["question"],
+                    "answer": qa.get("answer", ""),
+                    "category": qa.get("category", ""),
+                    "keywords": qa.get("keywords", []),
+                },
+                "target": {"expected_category": qa.get("category", "")},
+            }
+            for qa in sample
+        ]
+
+        def _passthrough(data: dict) -> dict:  # noqa: WPS430
+            return data
+
+        evaluate(
+            data=data,
+            executor=_passthrough,
+            evaluators={
+                "category_present": lambda output, target: float(
+                    bool(output.get("category"))
+                )
+            },
+            group_name="qa_knowledge_base",
+            name=f"snapshot_{datetime.now().strftime('%Y%m%d_%H%M')}",
+            project_api_key=api_key,
+        )
+        print(f"   Laminar 知識庫快照已推送（{len(sample)} 筆樣本 → group: qa_knowledge_base）")
+    except Exception as exc:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "Laminar KB snapshot push failed (non-fatal): %s", exc
+        )
 
 
 def _persist_embeddings(qa_pairs: list[dict]) -> None:
