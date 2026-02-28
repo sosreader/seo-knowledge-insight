@@ -45,6 +45,9 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import config
 
+from utils.pipeline_deps import preflight_check, StepDependency
+from utils.observability import init_laminar, flush_laminar, observe
+
 from openai import OpenAI
 
 # ──────────────────────────────────────────────────────
@@ -180,6 +183,7 @@ def _load_persisted_embeddings(qa_count: int) -> np.ndarray | None:
     return emb
 
 
+@observe(name="evaluate_retrieval")
 def evaluate_retrieval(
     golden_cases: list[dict],
     qa_pairs: list[dict],
@@ -400,6 +404,7 @@ def _llm_rerank_retrieval(query: str, candidates: list[dict], top_k: int = 5) ->
         return candidates[:top_k]
 
 
+@observe(name="_llm_judge_retrieval_relevance")
 def _llm_judge_retrieval_relevance(query: str, qa: dict) -> bool:
     """用 LLM 判斷 retrieved Q&A 是否與 query 真的相關"""
     client = _client()
@@ -457,6 +462,7 @@ def _llm_judge_retrieval_relevance(query: str, qa: dict) -> bool:
 # LLM-as-Judge：Q&A 品質評估
 # ──────────────────────────────────────────────────────
 
+@observe(name="evaluate_qa_quality")
 def evaluate_qa_quality(
     qa: dict,
     source_text: str = "",
@@ -848,10 +854,505 @@ def generate_eval_report_md(
 
 
 # ──────────────────────────────────────────────────────
+# 萃取品質評估（Phase 2）
+# ──────────────────────────────────────────────────────
+
+def evaluate_extraction(
+    golden_cases: list[dict],
+    per_meeting_dir: Path | None = None,
+) -> dict:
+    """
+    驗證每場會議萃取的 Q&A 是否符合 golden_extraction.json 的期望。
+
+    評估維度：
+      - count_accuracy: Q&A 數量是否在 [min_qa_count, max_qa_count] 範圍
+      - keyword_coverage_rate: must_extract_keywords 在萃取結果中的覆蓋率
+      - hallucination_rate: should_not_extract 關鍵詞不應出現在萃取結果中
+    """
+    if per_meeting_dir is None:
+        per_meeting_dir = config.QA_PER_MEETING_DIR
+
+    case_details: list[dict] = []
+
+    for case in golden_cases:
+        qa_file = per_meeting_dir / case["per_meeting_qa_file"]
+        if not qa_file.exists():
+            case_details.append({
+                "source_file": case["source_file"],
+                "status": "file_not_found",
+                "qa_file": str(qa_file),
+            })
+            continue
+
+        try:
+            data = json.loads(qa_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            case_details.append({
+                "source_file": case["source_file"],
+                "status": f"read_error: {e}",
+            })
+            continue
+
+        qa_list: list[dict] = data if isinstance(data, list) else data.get("qa_pairs", [])
+        actual_count = len(qa_list)
+        min_count = case.get("min_qa_count", 0)
+        max_count = case.get("max_qa_count", 9999)
+        count_ok = min_count <= actual_count <= max_count
+
+        # 把所有 Q&A 文字合併方便搜尋
+        all_text = " ".join(
+            f"{qa.get('question', '')} {qa.get('answer', '')}"
+            for qa in qa_list
+        ).lower()
+
+        must_kws = case.get("must_extract_keywords", [])
+        kw_hits = sum(1 for kw in must_kws if kw.lower() in all_text)
+        kw_coverage = kw_hits / len(must_kws) if must_kws else 1.0
+
+        should_not_kws = case.get("should_not_extract", [])
+        hallu_hits = sum(1 for kw in should_not_kws if kw.lower() in all_text)
+        hallu_rate = hallu_hits / len(should_not_kws) if should_not_kws else 0.0
+
+        case_details.append({
+            "source_file": case["source_file"],
+            "description": case.get("description", ""),
+            "actual_count": actual_count,
+            "count_ok": count_ok,
+            "count_range": [min_count, max_count],
+            "keyword_coverage": round(kw_coverage, 2),
+            "must_keywords_hit": kw_hits,
+            "must_keywords_total": len(must_kws),
+            "hallucination_rate": round(hallu_rate, 2),
+            "should_not_extract_violated": hallu_hits,
+        })
+
+    if not case_details:
+        return {"error": "沒有可評估的 extraction golden case"}
+
+    valid = [c for c in case_details if "status" not in c]
+    if not valid:
+        return {"error": "所有 golden case 都找不到對應檔案", "case_details": case_details}
+
+    count_accuracy = sum(1 for c in valid if c.get("count_ok", False)) / len(valid)
+    avg_kw_coverage = sum(c.get("keyword_coverage", 0) for c in valid) / len(valid)
+    avg_hallu_rate = sum(c.get("hallucination_rate", 0) for c in valid) / len(valid)
+
+    return {
+        "total_cases": len(golden_cases),
+        "evaluated": len(valid),
+        "count_accuracy": round(count_accuracy, 2),
+        "avg_keyword_coverage_rate": round(avg_kw_coverage, 2),
+        "avg_hallucination_rate": round(avg_hallu_rate, 2),
+        "case_details": case_details,
+    }
+
+
+# ──────────────────────────────────────────────────────
+# 去重品質評估（Phase 2）
+# ──────────────────────────────────────────────────────
+
+def _compute_pair_similarities(golden_pairs: list[dict]) -> np.ndarray:
+    """
+    對 golden_dedup.json 中每對 (qa_a, qa_b) 計算 cosine similarity。
+    回傳 shape=(N,) 的 similarity 陣列，對應各 pair 的分數。
+    """
+    from utils.openai_helper import get_embeddings
+
+    texts_a = [p["qa_a"]["question"] for p in golden_pairs]
+    texts_b = [p["qa_b"]["question"] for p in golden_pairs]
+    all_embs = np.array(get_embeddings(texts_a + texts_b), dtype=np.float32)
+
+    n = len(golden_pairs)
+    embs_a = all_embs[:n]
+    embs_b = all_embs[n:]
+
+    norm_a = embs_a / (np.linalg.norm(embs_a, axis=1, keepdims=True) + 1e-8)
+    norm_b = embs_b / (np.linalg.norm(embs_b, axis=1, keepdims=True) + 1e-8)
+
+    return (norm_a * norm_b).sum(axis=1)  # element-wise dot product -> cosine
+
+
+def _dedup_metrics_at_threshold(
+    similarities: np.ndarray,
+    labels: list[bool],
+    threshold: float,
+) -> dict:
+    """給定 pre-computed similarities 和 threshold，計算 precision/recall/F1。"""
+    tp = fp = fn = tn = 0
+    for sim, should_merge in zip(similarities, labels):
+        predicted_merge = sim >= threshold
+        if predicted_merge and should_merge:
+            tp += 1
+        elif predicted_merge and not should_merge:
+            fp += 1
+        elif not predicted_merge and should_merge:
+            fn += 1
+        else:
+            tn += 1
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    return {
+        "threshold": round(threshold, 2),
+        "precision": round(precision, 2),
+        "recall": round(recall, 2),
+        "f1": round(f1, 2),
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "tn": tn,
+    }
+
+
+@observe(name="evaluate_dedup")
+def evaluate_dedup(
+    golden_pairs: list[dict],
+    threshold: float | None = None,
+    precomputed_similarities: np.ndarray | None = None,
+) -> dict:
+    """
+    評估去重準確度：對 golden_dedup.json 的每對 Q&A 計算 embedding cosine similarity，
+    與標籤對比計算 precision/recall/F1。
+
+    Parameters
+    ----------
+    threshold:
+        閾值（None → 使用 config.SIMILARITY_THRESHOLD）
+    precomputed_similarities:
+        若已有預計算相似度，直接傳入避免重複呼叫 embedding API
+    """
+    if not golden_pairs:
+        return {"error": "缺少 golden pair 資料"}
+
+    threshold = threshold if threshold is not None else float(config.SIMILARITY_THRESHOLD)
+    labels = [bool(p.get("should_merge", False)) for p in golden_pairs]
+
+    if precomputed_similarities is not None:
+        sims = precomputed_similarities
+    else:
+        print(f"   計算 {len(golden_pairs)} 對 Q&A 的 embedding similarity...")
+        sims = _compute_pair_similarities(golden_pairs)
+
+    metrics = _dedup_metrics_at_threshold(sims, labels, threshold)
+    metrics["total_pairs"] = len(golden_pairs)
+    metrics["positive_pairs"] = sum(labels)
+    metrics["negative_pairs"] = len(labels) - sum(labels)
+    metrics["current_threshold"] = float(config.SIMILARITY_THRESHOLD)
+
+    return metrics
+
+
+@observe(name="evaluate_dedup_threshold_sweep")
+def evaluate_dedup_threshold_sweep(golden_pairs: list[dict]) -> dict:
+    """
+    掃描閾值 0.80–0.95（步長 0.01），找出 F1 最佳的閾值。
+    回傳 sweep 結果和建議的最佳閾值。
+    """
+    if not golden_pairs:
+        return {"error": "缺少 golden pair 資料"}
+
+    print(f"   計算 {len(golden_pairs)} 對 Q&A 的 embedding similarity（一次性）...")
+    sims = _compute_pair_similarities(golden_pairs)
+    labels = [bool(p.get("should_merge", False)) for p in golden_pairs]
+
+    sweep = []
+    for t_int in range(80, 96):  # 0.80 ~ 0.95
+        t = t_int / 100.0
+        metrics = _dedup_metrics_at_threshold(sims, labels, t)
+        sweep.append(metrics)
+
+    best = max(sweep, key=lambda m: m["f1"])
+    current_metrics = _dedup_metrics_at_threshold(sims, labels, float(config.SIMILARITY_THRESHOLD))
+
+    return {
+        "current_threshold": float(config.SIMILARITY_THRESHOLD),
+        "current_f1": current_metrics["f1"],
+        "optimal_threshold": best["threshold"],
+        "optimal_f1": best["f1"],
+        "recommendation": (
+            f"建議將 SIMILARITY_THRESHOLD 從 {config.SIMILARITY_THRESHOLD} 改為 {best['threshold']}"
+            if best["threshold"] != float(config.SIMILARITY_THRESHOLD)
+            else f"目前閾值 {config.SIMILARITY_THRESHOLD} 已是最佳"
+        ),
+        "sweep": sweep,
+    }
+
+
+# ──────────────────────────────────────────────────────
+# 週報品質評估（Phase 2）
+# ──────────────────────────────────────────────────────
+
+def _load_report_content(report_path: Path) -> str:
+    """載入報告 Markdown 內容，不存在回傳空字串。"""
+    if not report_path.exists():
+        return ""
+    return report_path.read_text(encoding="utf-8")
+
+
+@observe(name="evaluate_report_quality")
+def evaluate_report_quality(
+    golden_cases: list[dict],
+    reports_dir: Path | None = None,
+) -> dict:
+    """
+    評估週報品質：
+      1. required_topics 覆蓋率（快速字串匹配）
+      2. LLM-as-Judge 評估 grounding（有引用具體 Q&A 知識）、
+         actionability（有可執行建議）和 relevance（不偏題）
+    """
+    client = _client()
+    if reports_dir is None:
+        reports_dir = config.OUTPUT_DIR
+
+    case_details: list[dict] = []
+
+    for case in golden_cases:
+        # 嘗試找到最新報告（用 glob 匹配 report_*.md）
+        report_files = sorted(reports_dir.glob("report_*.md"))
+        if not report_files:
+            # fallback：用 case["id"] 嘗試精確匹配
+            candidate = reports_dir / f"{case['id']}.md"
+            report_files = [candidate] if candidate.exists() else []
+
+        if not report_files:
+            case_details.append({
+                "id": case["id"],
+                "status": "no_report_found",
+                "description": case.get("description", ""),
+            })
+            continue
+
+        # 取最新報告
+        report_path = report_files[-1]
+        content = _load_report_content(report_path)
+        if not content:
+            case_details.append({
+                "id": case["id"],
+                "status": "empty_report",
+                "report_path": str(report_path),
+            })
+            continue
+
+        # 快速 topic 覆蓋率檢查
+        content_lower = content.lower()
+        required_topics = case.get("required_topics", [])
+        topic_hits = sum(1 for t in required_topics if t.lower() in content_lower)
+        topic_coverage = topic_hits / len(required_topics) if required_topics else 1.0
+
+        # source_qa_keywords 關鍵字接地性
+        source_kws = case.get("source_qa_keywords", [])
+        kw_hits = sum(1 for kw in source_kws if kw.lower() in content_lower)
+        kw_grounding = kw_hits / len(source_kws) if source_kws else 1.0
+
+        # LLM 評估報告品質
+        llm_scores: dict = {}
+        try:
+            user_msg = (
+                f"報告用途：{case.get('description', '')}\n\n"
+                f"報告內容（節錄前 3000 字）：\n{content[:3000]}\n\n"
+                "請評估這份 SEO 週報的品質，回傳 JSON。"
+            )
+            resp = client.chat.completions.create(
+                model="gpt-5-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是 SEO 報告品質評審員。評估報告的三個維度（1-5分）："
+                            "grounding（有引用具體 SEO 知識而非泛泛而談）、"
+                            "actionability（有具體可執行的建議）、"
+                            "relevance（內容與 SEO 主題相關，未偏題）。"
+                            "只回答 JSON。"
+                        ),
+                    },
+                    {"role": "user", "content": user_msg},
+                ],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "report_quality",
+                        "strict": True,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "grounding": {"type": "integer"},
+                                "actionability": {"type": "integer"},
+                                "relevance": {"type": "integer"},
+                                "comment": {"type": "string"},
+                            },
+                            "required": ["grounding", "actionability", "relevance", "comment"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                max_completion_tokens=512,
+            )
+            content_str = resp.choices[0].message.content
+            if content_str:
+                llm_scores = json.loads(content_str)
+        except Exception as e:
+            llm_scores = {"error": str(e)}
+
+        case_details.append({
+            "id": case["id"],
+            "description": case.get("description", ""),
+            "report_path": str(report_path),
+            "topic_coverage": round(topic_coverage, 2),
+            "kw_grounding": round(kw_grounding, 2),
+            "llm_grounding": llm_scores.get("grounding"),
+            "llm_actionability": llm_scores.get("actionability"),
+            "llm_relevance": llm_scores.get("relevance"),
+            "llm_comment": llm_scores.get("comment", ""),
+        })
+
+        time.sleep(0.3)
+
+    valid = [c for c in case_details if "status" not in c and "llm_grounding" in c]
+    if not valid:
+        return {
+            "error": "無有效報告可評估（請先執行 Step 4 生成報告）",
+            "case_details": case_details,
+        }
+
+    avg_topic_cov = sum(c["topic_coverage"] for c in valid) / len(valid)
+    avg_kw_ground = sum(c["kw_grounding"] for c in valid) / len(valid)
+    llm_grounds = [c["llm_grounding"] for c in valid if isinstance(c.get("llm_grounding"), int)]
+    llm_actions = [c["llm_actionability"] for c in valid if isinstance(c.get("llm_actionability"), int)]
+    llm_rels = [c["llm_relevance"] for c in valid if isinstance(c.get("llm_relevance"), int)]
+
+    return {
+        "total_cases": len(golden_cases),
+        "evaluated": len(valid),
+        "avg_topic_coverage": round(avg_topic_cov, 2),
+        "avg_kw_grounding": round(avg_kw_ground, 2),
+        "avg_llm_grounding": round(sum(llm_grounds) / len(llm_grounds), 2) if llm_grounds else None,
+        "avg_llm_actionability": round(sum(llm_actions) / len(llm_actions), 2) if llm_actions else None,
+        "avg_llm_relevance": round(sum(llm_rels) / len(llm_rels), 2) if llm_rels else None,
+        "case_details": case_details,
+    }
+
+
+# ──────────────────────────────────────────────────────
 # 主程式
 # ──────────────────────────────────────────────────────
 
+def _save_versioned_eval(
+    args: argparse.Namespace,
+    stats: dict | None,
+    classify_stats: dict | None,
+    retrieval_stats: dict | None,
+    sample_size: int,
+) -> None:
+    """
+    版本化 eval 結果儲存到 output/evals/{date}_{provider}_{extraction_engine}.json
+    並可選擇性地與基準線比較 / 更新基準線。
+    """
+    evals_dir = config.OUTPUT_DIR / "evals"
+    evals_dir.mkdir(parents=True, exist_ok=True)
+    baseline_path = config.OUTPUT_DIR / "eval_baseline.json"
+
+    provider = getattr(args, "provider", "openai")
+    extraction_engine = getattr(args, "extraction_engine", "openai")
+    model = getattr(args, "model", "") or config.OPENAI_MODEL
+    today = datetime.now().strftime("%Y%m%d")
+    run_id = f"{today}_{provider}_{extraction_engine}"
+
+    dims = ["relevance", "accuracy", "completeness", "granularity"]
+    generation_scores: dict[str, float] = {}
+    if stats:
+        for dim in dims:
+            if dim in stats:
+                generation_scores[dim] = round(stats[dim]["mean"], 4)
+
+    retrieval_scores: dict[str, float] = {}
+    if retrieval_stats and "error" not in retrieval_stats:
+        retrieval_scores = {
+            "kw_hit_rate":       round(retrieval_stats.get("avg_keyword_hit_rate", 0), 4),
+            "mrr":               round(retrieval_stats.get("avg_mrr", 0), 4),
+            "llm_top1_precision": round(retrieval_stats.get("llm_top1_precision", 0), 4),
+        }
+
+    classification_scores: dict[str, float] = {}
+    if classify_stats:
+        ca = classify_stats.get("category_accuracy", {})
+        classification_scores = {
+            "category_accuracy":  round(ca.get("accuracy_rate", 0), 4),
+            "difficulty_accuracy": round(classify_stats.get("difficulty_accuracy", 0), 4),
+            "evergreen_accuracy":  round(classify_stats.get("evergreen_accuracy", 0), 4),
+        }
+
+    versioned: dict = {
+        "version": run_id,
+        "date": today,
+        "sample_size": sample_size,
+        "provider": provider,
+        "extraction_engine": extraction_engine,
+        "model": model,
+        "generation": generation_scores,
+        "retrieval": retrieval_scores,
+        "classification": classification_scores,
+    }
+
+    versioned_path = evals_dir / f"{run_id}.json"
+    versioned_path.write_text(json.dumps(versioned, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"   版本化 eval 儲存至: {versioned_path}")
+
+    # ── 基準線比較 ──────────────────────────────────────────
+    if not baseline_path.exists():
+        return
+
+    try:
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return
+
+    bs = baseline.get("generation", baseline.get("scores", {}))
+    if not bs or not generation_scores:
+        return
+
+    new_avg = sum(generation_scores.get(d, 0) for d in dims) / len(dims)
+    base_avg = sum(bs.get(d, 0) for d in dims) / len(dims)
+    delta = new_avg - base_avg
+    arrow = "↑" if delta > 0.02 else ("↓" if delta < -0.02 else "→")
+    print(f"\n   基準線比較（avg）：新分數 {new_avg:.2f} vs 基準 {base_avg:.2f}  Δ{delta:+.2f} {arrow}")
+    for dim in dims:
+        nv = generation_scores.get(dim, 0)
+        bv = bs.get(dim, 0)
+        print(f"     {dim:<15s}: {nv:.2f} vs {bv:.2f}  Δ{nv-bv:+.2f}")
+
+    if getattr(args, "update_baseline", False):
+        threshold = 0.05
+        if delta >= threshold:
+            versioned["note"] = "自動更新基準線"
+            baseline_path.write_text(json.dumps(versioned, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"\n   基準線已更新（Δ{delta:+.2f} >= {threshold}）")
+        else:
+            print(f"\n   基準線未更新（Δ{delta:+.2f} < {threshold}），保留原有基準線")
+
+
 def main(args: argparse.Namespace) -> None:
+    init_laminar()
+
+    # ── Preflight dependency check ───────────────────────────
+    deps = [
+        StepDependency(
+            path=config.OUTPUT_DIR / "qa_final.json",
+            required=False,
+            max_age_days=7,
+            hint="建議先執行 Step 3（或用 qa_all_raw.json fallback）",
+        ),
+    ]
+    preflight_check(
+        deps=deps,
+        env_keys=["OPENAI_API_KEY"],
+        step_name="Step 5: 品質評估",
+        check_only=getattr(args, "check", False),
+    )
+    if getattr(args, "check", False):
+        return
+
     print("=" * 60)
     print("📊 步驟 5：Q&A 品質評估（Evaluation）")
     print(f"   Judge 模型: {config.OPENAI_MODEL}")
@@ -936,6 +1437,56 @@ def main(args: argparse.Namespace) -> None:
         else:
             print("   ⚠️  找不到 retrieval golden set，跳過")
 
+    # ── 萃取品質評估 ──
+    extraction_stats = None
+    if getattr(args, "eval_extraction", False):
+        golden_ext_path = getattr(args, "extraction_golden", "") or "eval/golden_extraction.json"
+        ext_path = Path(golden_ext_path)
+        if not ext_path.is_absolute():
+            ext_path = config.ROOT_DIR / ext_path
+        if ext_path.exists():
+            golden_ext = json.loads(ext_path.read_text(encoding="utf-8"))
+            print(f"\n📝 評估萃取品質（{len(golden_ext)} 個場景）...")
+            extraction_stats = evaluate_extraction(golden_ext)
+        else:
+            print(f"   ⚠️  找不到 extraction golden set（{ext_path}），跳過")
+
+    # ── 去重品質評估 ──
+    dedup_stats = None
+    dedup_sweep_stats = None
+    if getattr(args, "eval_dedup", False) or getattr(args, "dedup_threshold_sweep", False):
+        golden_dedup_path = getattr(args, "dedup_golden", "") or "eval/golden_dedup.json"
+        dedup_path = Path(golden_dedup_path)
+        if not dedup_path.is_absolute():
+            dedup_path = config.ROOT_DIR / dedup_path
+        if dedup_path.exists():
+            golden_dedup = json.loads(dedup_path.read_text(encoding="utf-8"))
+            if getattr(args, "dedup_threshold_sweep", False):
+                print(f"\n🔬 掃描去重閾值（{len(golden_dedup)} 對 × 16 個閾值）...")
+                dedup_sweep_stats = evaluate_dedup_threshold_sweep(golden_dedup)
+                print(f"   {dedup_sweep_stats.get('recommendation', '')}")
+                # 順便在目前閾值下計算精確指標
+                dedup_stats = evaluate_dedup(golden_dedup)
+            elif getattr(args, "eval_dedup", False):
+                print(f"\n⚖️  評估去重品質（{len(golden_dedup)} 對，閾值={config.SIMILARITY_THRESHOLD}）...")
+                dedup_stats = evaluate_dedup(golden_dedup)
+        else:
+            print(f"   ⚠️  找不到 dedup golden set（{dedup_path}），跳過")
+
+    # ── 週報品質評估 ──
+    report_eval_stats = None
+    if getattr(args, "eval_report", False):
+        golden_rep_path = getattr(args, "report_golden", "") or "eval/golden_report.json"
+        rep_path = Path(golden_rep_path)
+        if not rep_path.is_absolute():
+            rep_path = config.ROOT_DIR / rep_path
+        if rep_path.exists():
+            golden_rep = json.loads(rep_path.read_text(encoding="utf-8"))
+            print(f"\n📰 評估週報品質（{len(golden_rep)} 個場景）...")
+            report_eval_stats = evaluate_report_quality(golden_rep)
+        else:
+            print(f"   ⚠️  找不到 report golden set（{rep_path}），跳過")
+
     # ── 統計彙整 ──
     valid_evals = [r for r in eval_results if "error" not in r]
     stats = compute_statistics(valid_evals) if valid_evals else {}
@@ -965,6 +1516,10 @@ def main(args: argparse.Namespace) -> None:
         "quality_stats": stats,
         "classify_stats": classify_stats,
         "retrieval_stats": retrieval_stats,
+        "extraction_stats": extraction_stats,
+        "dedup_stats": dedup_stats,
+        "dedup_sweep_stats": dedup_sweep_stats,
+        "report_eval_stats": report_eval_stats,
         "low_quality_items": low_quality,
         "eval_details": eval_results,
         "classify_details": classify_results,
@@ -985,6 +1540,13 @@ def main(args: argparse.Namespace) -> None:
         "quality_stats": report["quality_stats"],
         "classify_stats": report["classify_stats"],
         "retrieval_stats": report["retrieval_stats"],
+        "extraction_stats": report["extraction_stats"],
+        "dedup_stats": report["dedup_stats"],
+        "dedup_sweep_stats": {
+            k: v for k, v in (report["dedup_sweep_stats"] or {}).items()
+            if k != "sweep"  # 不存 sweep 陣列，節省大小
+        } if report["dedup_sweep_stats"] else None,
+        "report_eval_stats": report["report_eval_stats"],
     }
     history_path = config.OUTPUT_DIR / "eval_history.jsonl"
     with open(history_path, "a", encoding="utf-8") as _hf:
@@ -1027,6 +1589,30 @@ def main(args: argparse.Namespace) -> None:
         print(f"   MRR: {retrieval_stats['avg_mrr']:.2f}")
         print(f"   Top-1 Precision: {retrieval_stats['llm_top1_precision']:.0%}")
 
+    if extraction_stats and "error" not in extraction_stats:
+        print(f"\n   萃取品質：")
+        print(f"   Count Accuracy: {extraction_stats['count_accuracy']:.0%}")
+        print(f"   Keyword Coverage: {extraction_stats['avg_keyword_coverage_rate']:.0%}")
+        print(f"   Hallucination Rate: {extraction_stats['avg_hallucination_rate']:.0%}")
+
+    if dedup_stats and "error" not in dedup_stats:
+        print(f"\n   去重品質（threshold={dedup_stats['threshold']:.2f}）：")
+        print(f"   Precision: {dedup_stats['precision']:.0%}")
+        print(f"   Recall:    {dedup_stats['recall']:.0%}")
+        print(f"   F1:        {dedup_stats['f1']:.0%}")
+
+    if dedup_sweep_stats and "error" not in dedup_sweep_stats:
+        print(f"\n   閾值掃描：{dedup_sweep_stats.get('recommendation', '')}")
+
+    if report_eval_stats and "error" not in report_eval_stats:
+        print(f"\n   週報品質：")
+        if report_eval_stats.get("avg_llm_grounding") is not None:
+            print(f"   Grounding:     {report_eval_stats['avg_llm_grounding']:.1f}/5")
+        if report_eval_stats.get("avg_llm_actionability") is not None:
+            print(f"   Actionability: {report_eval_stats['avg_llm_actionability']:.1f}/5")
+        if report_eval_stats.get("avg_llm_relevance") is not None:
+            print(f"   Relevance:     {report_eval_stats['avg_llm_relevance']:.1f}/5")
+
     if low_quality:
         print(f"\n   ⚠️  低品質 Q&A: {len(low_quality)} 筆（平均分 < 3.0）")
 
@@ -1036,8 +1622,13 @@ def main(args: argparse.Namespace) -> None:
     print(f"   💾 快照: {snapshot_dir / f'eval_{snap_ts}.json'}")
     print("=" * 60)
 
+    # ── 版本化 eval 輸出（output/evals/） ──────────────────
+    _save_versioned_eval(args, stats, classify_stats, retrieval_stats, sample_size)
+
     # Console 輸出 Markdown 報告
     print("\n" + md_report)
+
+    flush_laminar()
 
 
 def compare_eval_reports(path1: str, path2: str) -> None:
@@ -1108,9 +1699,31 @@ if __name__ == "__main__":
     parser.add_argument("--retrieval-golden", type=str, default="", help="Retrieval golden set 路徑")
     parser.add_argument("--golden", type=str, default="", help="Golden set JSON 路徑")
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help="只檢查依賴是否就緒，不實際執行",
+    )
+    parser.add_argument(
         "--compare", nargs=2, metavar=("REPORT_A", "REPORT_B"),
         help="比較兩個 eval_report.json，例如 --compare eval_reports/eval_A.json eval_reports/eval_B.json",
     )
+    # ── Phase 2 新增 eval flags ───────────────────────────
+    parser.add_argument("--eval-extraction", action="store_true", help="評估萃取品質（需 eval/golden_extraction.json）")
+    parser.add_argument("--extraction-golden", type=str, default="", help="Extraction golden set 路徑（預設 eval/golden_extraction.json）")
+    parser.add_argument("--eval-dedup", action="store_true", help="評估去重準確度（需 eval/golden_dedup.json）")
+    parser.add_argument("--dedup-golden", type=str, default="", help="Dedup golden set 路徑（預設 eval/golden_dedup.json）")
+    parser.add_argument("--dedup-threshold-sweep", action="store_true", help="掃描去重閾值 0.80–0.95，找出 F1 最佳閾值")
+    parser.add_argument("--eval-report", action="store_true", help="評估週報品質（需 eval/golden_report.json + output/report_*.md）")
+    parser.add_argument("--report-golden", type=str, default="", help="Report golden set 路徑（預設 eval/golden_report.json）")
+    # ── 跨 provider 追蹤 flags ────────────────────────────
+    parser.add_argument("--provider", default="openai",
+                        help="Judge provider（預設 openai）")
+    parser.add_argument("--extraction-engine", dest="extraction_engine", default="openai",
+                        help="Q&A 萃取引擎（openai / claude-code，預設 openai）")
+    parser.add_argument("--model", default="",
+                        help="Judge model（空白時沿用 config.OPENAI_MODEL）")
+    parser.add_argument("--update-baseline", action="store_true",
+                        help="若新分數超過基準線閾值（+0.05），更新 output/eval_baseline.json")
     args = parser.parse_args()
 
     if args.compare:
