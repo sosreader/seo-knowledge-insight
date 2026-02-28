@@ -25,10 +25,15 @@ from lmnr import evaluate  # type: ignore[import]
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
 _golden_path = PROJECT_ROOT / "eval" / "golden_retrieval.json"
+if not _golden_path.exists():
+    print(f"[eval_retrieval] Golden dataset not found: {_golden_path}", file=sys.stderr)
+    print("[eval_retrieval] Run the pipeline first (Steps 1–3) to generate output.", file=sys.stderr)
+    sys.exit(1)
+
 with open(_golden_path, encoding="utf-8") as _f:
     _golden_raw: list[dict] = json.load(_f)
 
-data = [
+_dataset = [
     {
         "data": {"query": item["query"]},
         "target": {
@@ -122,7 +127,7 @@ def top5_category_coverage(output: dict, target: dict) -> float:
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 evaluate(
-    data=data,
+    data=_dataset,
     executor=retrieval_executor,
     evaluators={
         "keyword_hit_rate": keyword_hit_rate,

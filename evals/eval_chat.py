@@ -11,15 +11,16 @@ Requires: LMNR_PROJECT_API_KEY, OPENAI_API_KEY, output/qa_final.json,
 Note: This eval initialises the QAStore in-process — it does NOT require a
       running FastAPI server. It calls app.core.chat.rag_chat() directly.
 
+      chat_executor is an async def so lmnr calls it directly (no thread pool),
+      preserving the OpenTelemetry context chain.
+
 Run:
     python evals/eval_chat.py
     lmnr eval evals/eval_chat.py
 """
 from __future__ import annotations
 
-import asyncio
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -33,17 +34,28 @@ _qa_json = PROJECT_ROOT / "output" / "qa_final.json"
 _npy = PROJECT_ROOT / "output" / "qa_embeddings.npy"
 if _qa_json.exists() and _npy.exists():
     store.load(json_path=_qa_json, npy_path=_npy)
+else:
+    print(
+        "[eval_chat] qa_final.json or qa_embeddings.npy not found — "
+        "run Steps 1–3 of the pipeline first.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
-from lmnr import evaluate  # type: ignore[import]  # noqa: E402
+from lmnr import evaluate  # noqa: E402  # type: ignore[import]
 
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
 _golden_path = PROJECT_ROOT / "eval" / "golden_retrieval.json"
+if not _golden_path.exists():
+    print(f"[eval_chat] Golden dataset not found: {_golden_path}", file=sys.stderr)
+    sys.exit(1)
+
 with open(_golden_path, encoding="utf-8") as _f:
     _golden_raw: list[dict] = json.load(_f)
 
 # Use first 10 scenarios to keep cost low.
-data = [
+_dataset = [
     {
         "data": {"question": item["query"]},
         "target": {
@@ -58,15 +70,15 @@ data = [
 
 # ── Executor ──────────────────────────────────────────────────────────────────
 
-async def _call_rag_chat(question: str) -> dict:
-    from app.core.chat import rag_chat  # noqa: E402 — deferred to avoid circular init
+async def chat_executor(data: dict) -> dict:
+    """Run rag_chat and return answer + metadata.
 
-    return await rag_chat(question)
+    Declared async so lmnr calls it directly (not via run_in_executor),
+    which preserves the OpenTelemetry context chain for correct span nesting.
+    """
+    from app.core.chat import rag_chat  # deferred to avoid circular init
 
-
-def chat_executor(data: dict) -> dict:
-    """Run rag_chat and return answer + metadata."""
-    result = asyncio.run(_call_rag_chat(data["question"]))
+    result = await rag_chat(data["question"])
     return {
         "answer": result.get("answer", ""),
         "sources": result.get("sources", []),
@@ -76,12 +88,12 @@ def chat_executor(data: dict) -> dict:
 
 # ── Evaluators ────────────────────────────────────────────────────────────────
 
-def has_answer(output: dict, *_) -> float:
+def has_answer(output: dict, *_: object) -> float:
     """1 if the answer is non-trivially long (> 50 chars)."""
     return float(len(output.get("answer", "").strip()) > 50)
 
 
-def has_sources(output: dict, *_) -> float:
+def has_sources(output: dict, *_: object) -> float:
     """1 if at least 1 source was retrieved."""
     return float(output.get("source_count", 0) > 0)
 
@@ -112,7 +124,7 @@ def top_source_in_expected_category(output: dict, target: dict) -> float:
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 evaluate(
-    data=data,
+    data=_dataset,
     executor=chat_executor,
     evaluators={
         "has_answer": has_answer,

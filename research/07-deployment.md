@@ -384,3 +384,83 @@ make audit-top       # Top 30 最常被存取的 QA
 ```
 
 ---
+
+---
+
+## Laminar Observability 整合（2026-02-28）
+
+### 初始化方式
+
+**FastAPI（`app/main.py`）**：
+```python
+from lmnr import Laminar
+Laminar.initialize(project_api_key=os.getenv("LMNR_PROJECT_API_KEY"))
+# 在 module load 時執行一次（非 lifespan，避免熱重啟問題）
+```
+
+**Pipeline CLI scripts（02–05）**：
+```python
+from utils.observability import init_laminar, flush_laminar
+
+def main(args):
+    init_laminar()
+    try:
+        do_work()
+    finally:
+        flush_laminar()    # 必須！避免 in-flight spans 在 process exit 時丟失
+```
+
+### @observe 裝飾器
+
+```python
+from utils.observability import observe    # pipeline scripts
+from lmnr import observe                   # app/ 層（直接 import）
+
+@observe(name="step_name")
+def my_step(input_data: str) -> dict:
+    ...
+```
+
+### lmnr eval CLI
+
+```bash
+pip install 'lmnr>=0.5.0'
+export LMNR_PROJECT_API_KEY=<key>
+
+lmnr eval                           # 掃描 evals/ 目錄，執行所有 eval_*.py
+lmnr eval evals/eval_retrieval.py   # 單一腳本
+python evals/eval_retrieval.py      # 也可直接用 python 執行
+```
+
+### CI/CD 整合（建議）
+
+```yaml
+# .github/workflows/eval.yml
+- name: Run Laminar evals
+  env:
+    LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
+  run: |
+    lmnr eval evals/eval_retrieval.py
+    lmnr eval evals/eval_extraction.py
+    # eval_chat.py 需要 OPENAI_API_KEY，在 nightly 跑
+```
+
+### Online Scoring 工具（`utils/laminar_scoring.py`）
+
+```python
+from utils.laminar_scoring import score_trace, score_rag_response
+
+# 在 @observe 函式內取得 trace_id
+from lmnr import Laminar
+span_ctx = Laminar.get_laminar_span_context()
+trace_id = str(span_ctx.trace_id) if span_ctx else None
+
+score_rag_response(trace_id=trace_id, answer=answer, sources=sources, query=message)
+```
+
+### 環境變數
+
+| 變數 | 用途 | 必要性 |
+|------|------|--------|
+| `LMNR_PROJECT_API_KEY` | Laminar tracing + evals | 無此 key 時 silently skip，不 crash |
+| `OPENAI_API_KEY` | eval_chat.py + pipeline scripts | eval_chat.py 和 pipeline 必需 |

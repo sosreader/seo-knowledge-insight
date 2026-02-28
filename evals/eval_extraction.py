@@ -25,36 +25,48 @@ from lmnr import evaluate  # type: ignore[import]
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
 _golden_path = PROJECT_ROOT / "eval" / "golden_extraction.json"
+if not _golden_path.exists():
+    print(f"[eval_extraction] Golden dataset not found: {_golden_path}", file=sys.stderr)
+    sys.exit(1)
+
 with open(_golden_path, encoding="utf-8") as _f:
     _golden_raw: list[dict] = json.load(_f)
 
 _QA_PER_MEETING_DIR = PROJECT_ROOT / "output" / "qa_per_meeting"
 
 # Only include cases where the extraction output already exists on disk.
-data: list[dict] = []
-for item in _golden_raw:
-    qa_path = _QA_PER_MEETING_DIR / item["per_meeting_qa_file"]
-    if not qa_path.exists():
+_dataset: list[dict] = []
+for _item in _golden_raw:
+    _qa_path = _QA_PER_MEETING_DIR / _item["per_meeting_qa_file"]
+    if not _qa_path.exists():
         continue
 
-    with open(qa_path, encoding="utf-8") as _f:
-        qa_output: dict | list = json.load(_f)
+    with open(_qa_path, encoding="utf-8") as _f:
+        _qa_output: dict | list = json.load(_f)
 
-    data.append(
+    _dataset.append(
         {
             "data": {
-                "source_file": item["source_file"],
-                "qa_output": qa_output,
+                "source_file": _item["source_file"],
+                "qa_output": _qa_output,
             },
             "target": {
-                "min_qa_count": item["min_qa_count"],
-                "max_qa_count": item["max_qa_count"],
-                "must_extract_keywords": item["must_extract_keywords"],
-                "should_not_extract": item.get("should_not_extract", []),
-                "description": item["description"],
+                "min_qa_count": _item["min_qa_count"],
+                "max_qa_count": _item["max_qa_count"],
+                "must_extract_keywords": _item["must_extract_keywords"],
+                "should_not_extract": _item.get("should_not_extract", []),
+                "description": _item["description"],
             },
         }
     )
+
+if not _dataset:
+    print(
+        "[eval_extraction] No extraction outputs found in "
+        f"{_QA_PER_MEETING_DIR}. Run Step 2 first.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 # ── Executor ──────────────────────────────────────────────────────────────────
@@ -117,7 +129,7 @@ def no_admin_content(output: dict, target: dict) -> float:
     return 1.0
 
 
-def avg_confidence(output: dict, *_) -> float:
+def avg_confidence(output: dict, *_: object) -> float:
     """Average confidence score across all extracted Q&A pairs (0–1)."""
     qa_pairs: list[dict] = output.get("qa_pairs", [])
     if not qa_pairs:
@@ -129,7 +141,7 @@ def avg_confidence(output: dict, *_) -> float:
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 evaluate(
-    data=data,
+    data=_dataset,
     executor=extraction_executor,
     evaluators={
         "qa_count_in_range": qa_count_in_range,

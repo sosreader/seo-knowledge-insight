@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 
 import numpy as np
-from lmnr import Laminar, observe
+from lmnr import observe
 from openai import AsyncOpenAI
 
 from app import config
@@ -119,14 +119,7 @@ async def rag_chat(
 
     logger.debug("rag_chat: %d sources used, answer length=%d", len(sources), len(answer))
 
-    # 取得 trace_id 後發送 online evaluation scores
-    span_ctx = Laminar.get_laminar_span_context()
-    trace_id = str(span_ctx.trace_id) if span_ctx else None
-    score_rag_response(
-        trace_id=trace_id,
-        answer=answer,
-        sources=sources,
-        query=message,
-    )
+    # 在 @observe span 內附加 rule-based evaluation scores（Laminar.event）
+    score_rag_response(answer=answer, sources=sources, query=message)
 
     return {"answer": answer, "sources": sources}

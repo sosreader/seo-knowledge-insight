@@ -353,3 +353,91 @@ python scripts/run_pipeline.py --step 5 --sample 50 --with-source
 詳見：`~/.claude/skills/learned/openai-reasoning-model-no-response-format.md`
 
 ---
+
+
+---
+
+## Laminar Eval 框架（2026-02-28 實作紀錄）
+
+> 本節記錄將 SEO QA pipeline 接入 Laminar 的完整 eval 設計決策。
+
+### 三層 Eval 架構
+
+```
+Layer 1: Tracing（@observe）
+  → 每個 LLM 呼叫都建立 span，記錄 input/output/latency
+
+Layer 2: Online Scoring（LaminarClient.evaluators.score()）
+  → 在 @observe 函式內，LLM 回應後立即發送 rule-based scores
+  → 不需要額外 LLM 呼叫（binary + continuous 指標）
+
+Layer 3: Offline Evals（lmnr.evaluate()）
+  → 批次評估，用 golden dataset 驗證能力品質
+  → 可排程執行，結果顯示在 Laminar dashboard
+```
+
+### Online Evaluators 設計原則
+
+**Rule-based（免費，無延遲）**：
+- `answer_length`: `float(len(answer) > 50)` — 回答是否非空
+- `has_sources`: `float(len(sources) > 0)` — 是否有知識庫引用
+- `top_source_score`: cosine similarity 最佳命中 — 量化 retrieval 品質
+- `source_count`: `min(count/5, 1.0)` — 引用數規範化
+
+**LLM-as-Judge（有費用）**：
+- 僅用於 offline eval 批次評估（不在每次 API 呼叫中執行）
+- 用 `evaluate()` 的 `evaluators` 參數傳入 async judge 函式
+- 適合：answer_relevance、faithfulness、coherence 等主觀維度
+
+### Offline Eval 腳本結構（lmnr pattern）
+
+```python
+from lmnr import evaluate
+
+data = [
+    {"data": {"input": ...}, "target": {"expected": ...}},
+]
+
+def executor(data: dict) -> dict:
+    return {"output": my_function(data["input"])}
+
+def binary_evaluator(output: dict, target: dict) -> float:
+    return 1.0 if condition else 0.0
+
+def continuous_evaluator(output: dict, target: dict) -> float:
+    return some_score_between_0_and_1(output, target)
+
+evaluate(
+    data=data,
+    executor=executor,
+    evaluators={"name_a": binary_evaluator, "name_b": continuous_evaluator},
+    group_name="capability_name",   # 用於在 dashboard 追蹤趨勢
+)
+```
+
+**規則**：
+- 每個 eval 至少 2 個 evaluators（一個 binary，一個 continuous）
+- `group_name` 統一命名格式：`{capability}_quality`
+- 腳本放在 `evals/eval_{capability}.py`，可用 `lmnr eval` 批次執行
+
+### Eval 覆蓋率表（本專案）
+
+| Capability | Eval file | Evaluators | Golden dataset |
+|------------|-----------|------------|----------------|
+| Retrieval | `evals/eval_retrieval.py` | keyword_hit_rate, top1_category_match, top5_category_coverage | `eval/golden_retrieval.json` (307 筆) |
+| Extraction | `evals/eval_extraction.py` | qa_count_in_range, keyword_coverage, no_admin_content, avg_confidence | `eval/golden_extraction.json` |
+| Chat (E2E) | `evals/eval_chat.py` | has_answer, has_sources, answer_keyword_coverage, top_source_in_expected_category | 前 10 retrieval scenarios |
+
+### lmnr 0.5.x SDK 已知 API 差異
+
+官方文件使用 `Laminar.get_trace_id()`，但 lmnr 0.5.x 沒有此方法。
+
+正確做法：
+
+```python
+span_ctx = Laminar.get_laminar_span_context()
+trace_id = str(span_ctx.trace_id) if span_ctx else None   # UUID → str
+span_id  = str(span_ctx.span_id)  if span_ctx else None
+```
+
+詳見 `~/.claude/skills/learned/laminar-0.5x-span-context-api.md`。

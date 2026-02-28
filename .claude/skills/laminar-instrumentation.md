@@ -34,9 +34,11 @@ Non-instrumented LLM calls are treated as incomplete work.
 
 ### 4. Online scoring (rag_chat only)
 
-- [ ] After each `rag_chat` response, `score_rag_response()` is called with
-      the `trace_id` from `Laminar.get_trace_id()`.
+- [ ] `score_rag_response(answer=..., sources=..., query=...)` is called
+      **inside** the `@observe(name="rag_chat")` function body, before it returns.
 - [ ] `score_rag_response` is imported from `utils.laminar_scoring`.
+- [ ] No `LaminarClient` or `trace_id` plumbing is needed — `Laminar.event()`
+      attaches to the current span automatically.
 
 ### 5. Offline evaluations
 
@@ -80,14 +82,8 @@ async def rag_chat(message: str, history: list[dict] | None = None) -> dict:
     answer = resp.choices[0].message.content or ""
     sources = [...]
 
-    span_ctx = Laminar.get_laminar_span_context()
-    trace_id = str(span_ctx.trace_id) if span_ctx else None
-    score_rag_response(
-        trace_id=trace_id,
-        answer=answer,
-        sources=sources,
-        query=message,
-    )
+    # score_rag_response uses Laminar.event() internally — no trace_id needed
+    score_rag_response(answer=answer, sources=sources, query=message)
     return {"answer": answer, "sources": sources}
 ```
 
