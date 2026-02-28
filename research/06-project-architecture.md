@@ -105,7 +105,6 @@ Notion 會議紀錄（87 份，2023–2026）
 
 ---
 
-
 ---
 
 ## 22. 架構圖與變更紀錄（Architecture Diagram & Changelog）
@@ -129,66 +128,85 @@ flowchart TD
     N[Notion API<br/>87 份會議 2023-2026] --> S1
 
     subgraph Pipeline["離線知識蒸餾 Pipeline"]
+        PF[utils/pipeline_deps.py<br/>preflight_check<br/>StepDependency 宣告式檢查] -.->|每個 Script 啟動前| S1
+        PF -.-> S2
+        PF -.-> S3
+        PF -.-> S4
+        PF -.-> S5
         S1[Step 1: fetch_notion.py<br/>增量擷取 + Markdown 轉換] --> MD[raw_data/markdown/*.md]
         MD --> S2[Step 2: extract_qa.py<br/>gpt-5.2 萃取 Q&A<br/>+ Attribution Tag 補充]
         S2 --> RAW[output/qa_all_raw.json<br/>~700 筆原始 Q&A]
         RAW --> S3[Step 3: dedupe_classify.py<br/>embedding 去重 + gpt-5-mini 分類]
         S3 --> QA[output/qa_final.json<br/>703 筆 + 10 分類]
-        S3 --> EMB[output/qa_embeddings.npy<br/>703 × 1536 維向量]
+        S3 --> EMB[output/qa_embeddings.npy<br/>703 x 1536 維向量]
     end
 
-    subgraph Eval["評估層"]
-        QA --> S5[Step 5: evaluate.py<br/>LLM-as-Judge × 5 維度]
+    subgraph Eval["評估層 v1.4 v1.5"]
+        GoldenSets["eval/ Golden Sets<br/>extraction(5) dedup(40) qa(50) report(5)"]
+        QA --> S5[Step 5: evaluate.py<br/>LLM-as-Judge 5 維度<br/>+ 4 新評估函式]
         EMB --> S5
-        S5 --> ER[eval_report.json<br/>Completeness 3.85 / Accuracy 3.95]
+        GoldenSets --> S5
+        S5 --> ER[eval_report.json<br/>Completeness 3.85<br/>+ threshold sweep]
     end
 
-    subgraph RAG_Flow["RAG 週報 + API"]
-        GS[Google Sheets 指標 TSV] --> S4[Step 4: generate_report.py<br/>異常偵測 + Hybrid Search + RAG]
+    subgraph RAG_Search["RAG和Hybrid Search v1.5"]
+        GS[Google Sheets 指標 TSV] --> S4[Step 4: generate_report.py<br/>異常偵測 Hybrid Search RAG]
         QA --> S4
         EMB --> S4
+        SE["SearchEngine v1.5<br/>compute_keyword_boost"] -.->|kw match| S4
         S4 --> RPT[report_YYYYMMDD.md]
-
-        QA --> API[SEO Insight API<br/>FastAPI + numpy cosine]
-        EMB --> API
-        API --> EP["POST /api/v1/search<br/>POST /api/v1/chat<br/>GET  /api/v1/qa"]
     end
 
-    subgraph AuditTrail["Audit Trail（2026-02-28）"]
+    subgraph RAG_API["API Layer 知識存取"]
+        QA --> API[SEO Insight API<br/>FastAPI SearchEngine]
+        EMB --> API
+        SE -.->|import 函式| API
+        API --> EP["POST /api/v1/search<br/>POST /api/v1/chat<br/>GET /api/v1/qa"]
+    end
+
+    subgraph AuditTrail["Audit Trail v1.0"]
         S1 -->|fetch events| AL["audit_logger.py<br/>output/fetch_logs/"]
         EP -->|access events| AL2["audit_logger.py<br/>output/access_logs/"]
-        AL --> ATQ["audit_trail.py<br/>fetch / access / report"]
+        AL --> ATQ["audit_trail.py<br/>query tool"]
         AL2 --> ATQ
     end
 
-    subgraph Observability["可觀測性（2026-02-28）"]
-        API -->|auto-instrument| LM["Laminar SDK<br/>lmnr + @observe"]
-        LM --> LD["laminar.sh dashboard<br/>Traces / Spans / Sessions"]
+    subgraph Observability["可觀測性 v1.1 v1.4"]
+        S2 -->|observe| LM["Laminar SDK<br/>lmnr observe"]
+        S3 -->|observe| LM
+        S4 -->|observe| LM
+        S5 -->|observe| LM
+        API -->|auto trace| LM
+        LM --> LD["laminar.sh dashboard<br/>Traces Spans"]
     end
 
     subgraph Deploy["部署"]
         API --> Docker[Docker Image]
         Docker --> ECR[AWS ECR]
-        ECR --> EC2[EC2 + SSM<br/>port 8001]
+        ECR --> EC2[EC2 SSM<br/>port 8001]
     end
 ```
 
 ### 架構變更紀錄（Architecture Changelog）
 
-| 日期       | 版本 | 變更內容                                               | 影響範圍                                           |
-| ---------- | ---- | ------------------------------------------------------ | -------------------------------------------------- |
-| 2023-03    | v0.1 | 初始 Pipeline：Step 1-3，Notion 擷取 + Q&A 萃取 + 去重 | —                                                  |
-| 2026-02-27 | v0.2 | 新增 Step 4（RAG 週報生成）+ Step 5（評估層）          | `scripts/`                                         |
-| 2026-02-27 | v0.3 | 新增 SEO Insight API（FastAPI）+ ECR/EC2 部署          | `app/` 新增                                        |
-| 2026-02-27 | v0.4 | 修復 BUG-001（分類評估）+ BUG-002（Retrieval Judge）   | `scripts/05_evaluate.py`                           |
-| 2026-02-27 | v0.5 | 新增 `[補充]` Attribution Tag 機制提升 Completeness    | `utils/openai_helper.py`, `scripts/05_evaluate.py` |
-| 2026-02-27 | v0.6 | KW Hit Rate 改善：TypeA/TypeB 診斷 + Fuzzy 匹配（54% → 78%）+ `--debug-retrieval` + `--eval-reranking` | `config.py`, `scripts/04_generate_report.py`, `scripts/05_evaluate.py` |
-| 2026-02-28 | v0.7 | 死碼清理：移除 10 項未使用 import/參數/函式/常數（vulture 80% 信心門檻），26 tests passing | `app/core/chat.py`, `utils/`, `scripts/`, `config.py`, `app/config.py` |
-| 2026-02-28 | v0.8 | 安全審查修復：config.py fail-fast env helpers（`_require_env`, `_get_float_env`, `_get_int_env`）；Google Sheets SSRF 防護（domain 白名單 + sheet_id/gid 格式驗證 + HTTP 狀態檢查 + 回應大小限制 10MB）；移除 `__import__` 非標準用法 | `config.py`, `scripts/04_generate_report.py`, `scripts/05_evaluate.py` |
-| 2026-02-28 | v0.9 | Fetch 管道優化：max_depth 10→3；新增 `--since` 增量篩選（1d/7d/日期）；避免重複 meta 查詢；預期快 50-85% | `scripts/01_fetch_notion.py`, `utils/notion_client.py`，新增 `docs/FETCH_OPTIMIZATION_GUIDE.md` |
-| 2026-02-28 | v1.0 | Audit Trail：全 fetch + API 存取 JSONL 日誌（session_id 關聯、zero side-effects）；`scripts/audit_trail.py` query CLI；`make audit/audit-top` shortcuts | `utils/audit_logger.py`（new），`scripts/audit_trail.py`（new），`scripts/01_fetch_notion.py`, `utils/notion_client.py`, `app/routers/search.py`, `app/routers/chat.py`, `app/routers/qa.py` |
-| 2026-02-28 | v1.1 | Laminar observability：`lmnr` 套件 + `Laminar.initialize()` 加入 `app/main.py`，所有 LLM 呼叫自動 trace；修復 `opentelemetry-semantic-conventions-ai 0.4.14` 缺少 `LLM_SYSTEM` 等 3 個屬性的相容問題 | `app/main.py`, `requirements_api.txt`, `.env.example` |
-
+| 日期       | 版本 | 變更內容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 影響範圍                                                                                                                                                                                     |
+| ---------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2023-03    | v0.1 | 初始 Pipeline：Step 1-3，Notion 擷取 + Q&A 萃取 + 去重                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | —                                                                                                                                                                                            |
+| 2026-02-27 | v0.2 | 新增 Step 4（RAG 週報生成）+ Step 5（評估層）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `scripts/`                                                                                                                                                                                   |
+| 2026-02-27 | v0.3 | 新增 SEO Insight API（FastAPI）+ ECR/EC2 部署                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `app/` 新增                                                                                                                                                                                  |
+| 2026-02-27 | v0.4 | 修復 BUG-001（分類評估）+ BUG-002（Retrieval Judge）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `scripts/05_evaluate.py`                                                                                                                                                                     |
+| 2026-02-27 | v0.5 | 新增 `[補充]` Attribution Tag 機制提升 Completeness                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `utils/openai_helper.py`, `scripts/05_evaluate.py`                                                                                                                                           |
+| 2026-02-27 | v0.6 | KW Hit Rate 改善：TypeA/TypeB 診斷 + Fuzzy 匹配（54% → 78%）+ `--debug-retrieval` + `--eval-reranking`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `config.py`, `scripts/04_generate_report.py`, `scripts/05_evaluate.py`                                                                                                                       |
+| 2026-02-28 | v0.7 | 死碼清理：移除 10 項未使用 import/參數/函式/常數（vulture 80% 信心門檻），26 tests passing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `app/core/chat.py`, `utils/`, `scripts/`, `config.py`, `app/config.py`                                                                                                                       |
+| 2026-02-28 | v0.8 | 安全審查修復：config.py fail-fast env helpers（`_require_env`, `_get_float_env`, `_get_int_env`）；Google Sheets SSRF 防護（domain 白名單 + sheet_id/gid 格式驗證 + HTTP 狀態檢查 + 回應大小限制 10MB）；移除 `__import__` 非標準用法                                                                                                                                                                                                                                                                                                                                                                                                            | `config.py`, `scripts/04_generate_report.py`, `scripts/05_evaluate.py`                                                                                                                       |
+| 2026-02-28 | v0.9 | Fetch 管道優化：max_depth 10→3；新增 `--since` 增量篩選（1d/7d/日期）；避免重複 meta 查詢；預期快 50-85%                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `scripts/01_fetch_notion.py`, `utils/notion_client.py`，新增 `docs/FETCH_OPTIMIZATION_GUIDE.md`                                                                                              |
+| 2026-02-28 | v1.0 | Audit Trail：全 fetch + API 存取 JSONL 日誌（session_id 關聯、zero side-effects）；`scripts/audit_trail.py` query CLI；`make audit/audit-top` shortcuts                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `utils/audit_logger.py`（new），`scripts/audit_trail.py`（new），`scripts/01_fetch_notion.py`, `utils/notion_client.py`, `app/routers/search.py`, `app/routers/chat.py`, `app/routers/qa.py` |
+| 2026-02-28 | v1.1 | Laminar observability：`lmnr` 套件 + `Laminar.initialize()` 加入 `app/main.py`，所有 LLM 呼叫自動 trace；修復 `opentelemetry-semantic-conventions-ai 0.4.14` 缺少 `LLM_SYSTEM` 等 3 個屬性的相容問題                                                                                                                                                                                                                                                                                                                                                                                                                                             | `app/main.py`, `requirements_api.txt`, `.env.example`                                                                                                                                        |
+| 2026-02-28 | v1.2 | 模組化 Pipeline 計畫：各 Script 可直接執行（不需 `run_pipeline.py`），統一 pre-flight 依賴檢查 + 新鮮度警告。計畫文件：`.claude/plan/modular-pipeline-with-dep-checks.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 計畫階段，尚未實作                                                                                                                                                                           |
+| 2026-02-28 | v1.3 | DB 遷移策略計畫：釐清 `output/*` → PostgreSQL + pgvector 對應；識別唯一破壞性風險（`GET /qa/{id}` sequential int）；MVC 需做 3 件事（stable_id + canonical endpoint + store 欄位）。計畫文件：`.claude/plan/db-migration-strategy.md`                                                                                                                                                                                                                                                                                                                                                                                                            | 計畫階段，尚未實作                                                                                                                                                                           |
+| 2026-02-28 | v1.4 | **模組化 Pipeline 實作完成**：(1) `utils/pipeline_deps.py` — `StepDependency` frozen dataclass + `preflight_check()` 統一依賴檢查；(2) `config.py` 改 PEP 562 lazy loading（`import config` 不再觸發 env 驗證）；(3) 5 個 script 各自加入 `--check` flag + 宣告式依賴；(4) `run_pipeline.py` 移除 `check_config()`，改用 `parse_known_args()` 轉發 + `--check`/`--dry-run`；(5) Code review 修正：`PreflightError` 從 `SystemExit` 改為 `Exception`、`04_generate_report.py` import 去重、arg forwarding 限單步模式；(6) 新增 14 個 `config.py` lazy loading 測試（total 96 tests）；(7) Makefile 新增 `make check`；(8) README 更新分步執行文件 | `utils/pipeline_deps.py`（new），`tests/test_pipeline_deps.py`（new），`tests/test_config_lazy.py`（new），`config.py`，`scripts/01-05`，`scripts/run_pipeline.py`，`Makefile`，`README.md`  |
+| 2026-02-28 | v1.4 | Laminar 全 pipeline tracing：`utils/observability.py`（`init_laminar` / `flush_laminar` / `observe` no-op shim）；`@observe()` 裝飾器套用至 5 支 scripts + `openai_helper`；`openai_helper` 結構化呼叫統一輸出；`scripts/02` CLASSIFY prompt 加入 2×10 few-shot examples（68% → 80%+ 分類目標）                                                                                                                                                                                                                                                                                                                                                  | `utils/observability.py`（new），`requirements.txt`（lmnr≥0.5.0），`utils/openai_helper.py`，`scripts/02_extract_qa.py`–`05_evaluate.py`                                                     |
+| 2026-02-28 | v1.5 | Research-grade eval 體系：golden sets 四份（extraction 5 + dedup 40 pairs + qa 50 items + report 5）；`utils/search_engine.py`（new，`SearchEngine` + 模組級 `compute_keyword_boost`）；`app/core/store.py` 新增 `hybrid_search()`；`config.py` 新增 `SEMANTIC_WEIGHT=0.7 / KEYWORD_WEIGHT=0.3`；`scripts/05_evaluate.py` 新增 4 函式（`evaluate_extraction/dedup/dedup_threshold_sweep/report_quality`）+ 7 CLI flags；`04_generate_report.py` 消除 `_compute_keyword_boost` 重複（改 delegate）                                                                                                                                                | `eval/`（4 golden JSONs），`utils/search_engine.py`（new），`app/core/store.py`，`config.py`，`scripts/04_generate_report.py`，`scripts/05_evaluate.py`                                      |
 
 ### 更新架構圖的 SOP
 

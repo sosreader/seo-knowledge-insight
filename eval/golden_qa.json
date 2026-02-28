@@ -78,5 +78,309 @@
     "expected_difficulty": "進階",
     "expected_evergreen": false,
     "note": "特定演算法更新，有時效性"
+  },
+  {
+    "question": "canonical 指向錯誤 URL 時，Google 會怎麼處理？",
+    "answer": "Google 可能忽略錯誤的 canonical，自行根據訊號判斷標準版本。這可能導致重複頁面互相競爭、爬蟲預算浪費，以及 GSC 中「系統選擇的 canonical」與設定不符。",
+    "expected_category": "索引與檢索",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "canonical 技術問題"
+  },
+  {
+    "question": "Sitemap 中的 URL 數量過多會影響爬蟲效率嗎？",
+    "answer": "單一 Sitemap 檔案上限為 50,000 個 URL 或 50MB。若網站 URL 量大，應分割為多個 Sitemap 並用 Sitemap Index 管理。Sitemap 中應只列出想被索引的正式 URL，避免加入篩選器或分頁 URL。",
+    "expected_category": "索引與檢索",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "Sitemap 最佳化屬於索引與檢索"
+  },
+  {
+    "question": "已發現但未編入索引的頁面數量持續增加，怎麼診斷？",
+    "answer": "「已發現 - 未索引」增加有幾種可能：(1) 內容品質不夠（Google 判斷不值得收錄）；(2) 爬蟲預算不足（Google 發現但未及爬取）；(3) 頁面回應太慢。可在 GSC Coverage 報表逐一用「測試網址」功能排查。",
+    "expected_category": "索引與檢索",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "GSC Coverage 診斷"
+  },
+  {
+    "question": "外部連結品質如何影響 Google 的權重傳遞？",
+    "answer": "高品質、高權威的外部連結傳遞更多 PageRank。連結的 anchor text 也傳遞主題相關訊號。低品質垃圾網站的連結效果有限，Google 通常會自動忽略。",
+    "expected_category": "連結策略",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "外部連結品質"
+  },
+  {
+    "question": "為什麼重要頁面的內部連結數量越多越好？",
+    "answer": "內部連結數量越多，代表該頁面在網站結構中越「重要」，Googlebot 也會更頻繁抓取。同時，每條內部連結都傳遞相對的 PageRank，集中連結重要頁面可提升其分量。",
+    "expected_category": "連結策略",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "內部連結與 PageRank"
+  },
+  {
+    "question": "Disavow 工具的正確使用時機是什麼？",
+    "answer": "Disavow 僅適用於確認有害連結（如負面 SEO 攻擊）且無法手動聯繫移除時。Google 官方建議謹慎使用，因為演算法本身已對多數垃圾連結有忽視機制。若非有手動懲罰警告，不建議輕易操作。",
+    "expected_category": "連結策略",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "Disavow 工具適用時機"
+  },
+  {
+    "question": "Search Console 中 CTR 下降但排名無明顯變化，如何分析？",
+    "answer": "CTR 下降而排名穩定，代表 SERP 片段外觀出了問題。常見原因：(1) title/meta description 不夠吸引人；(2) SERP 新增競爭版位（如 PAA、Rich Result）；(3) 競爭對手優化了片段。建議 A/B 測試改善 title 文案，同時觀察目標關鍵字的 SERP 外觀變化。",
+    "expected_category": "搜尋表現分析",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "CTR 下降分析"
+  },
+  {
+    "question": "位置平均上升但點擊卻沒有增加，背離現象如何解讀？",
+    "answer": "位置上升可能是長尾關鍵字佔比增加（這些關鍵字搜尋量低），導致加權平均位置改善但整體點擊未跟進。另一個原因是 Rich Snippet 讓使用者直接在 SERP 獲取答案，不需要點擊。",
+    "expected_category": "搜尋表現分析",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "位置與點擊背離分析"
+  },
+  {
+    "question": "如何用 Search Console 找出最有潛力提升排名的關鍵字？",
+    "answer": "在 GSC 的「搜尋結果」中，篩選位置在 4–15 之間的關鍵字（第 2-2.5 頁附近）。這些關鍵字已有曝光但排名不夠高，透過內容優化或增加內部連結，有望突破到第一頁。",
+    "expected_category": "搜尋表現分析",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "GSC 關鍵字機會挖掘"
+  },
+  {
+    "question": "關鍵字密度的最佳比例是多少？",
+    "answer": "Google 並沒有明確的關鍵字密度標準，過度強調密度概念已過時。現在更重要的是語意相關性：自然使用目標關鍵字及其同義詞、相關詞，讓內容對讀者有真實幫助，避免強制堆砌。",
+    "expected_category": "內容策略",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "關鍵字密度 → 內容策略"
+  },
+  {
+    "question": "Meta description 的最佳字數限制是多少？",
+    "answer": "Google 的 SERP 通常截斷在約 160 個英文字元（中文約 80-90 字）。但 Google 有時會自行重寫 description，無論如何，meta description 仍然影響點擊率，因為它是用戶在 SERP 看到的描述文字。",
+    "expected_category": "內容策略",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "Meta description 長度，屬於內容策略（title tag 優化層面）"
+  },
+  {
+    "question": "E-E-A-T 中的「Experience（經驗）」如何在內容中展現？",
+    "answer": "Experience 強調作者對主題的第一手實際體驗：(1) 在文章中分享具體操作案例而非純理論；(2) 加入作者個人的真實使用心得；(3) 產品評測提供真實照片和使用數據。這對 YMYL 類（健康、財務）頁面尤其重要。",
+    "expected_category": "內容策略",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "E-E-A-T Experience → 內容策略"
+  },
+  {
+    "question": "主題聚合（Topic Cluster）中支柱頁面應該多長多詳細？",
+    "answer": "支柱頁面要對主題有廣度的覆蓋（通常 2000+ 字），但不需要過度細化每個子主題（那是群集文章的任務）。關鍵是讓 Google 理解你的網站對整個主題有完整的覆蓋能力，然後透過雙向連結把支柱頁和群集文章串起來。",
+    "expected_category": "內容策略",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "Topic Cluster 支柱頁面建構"
+  },
+  {
+    "question": "AMP 與 Mobile-first Indexing 的關係是什麼？",
+    "answer": "AMP 是加速行動頁面的技術，而 Mobile-first Indexing 是 Google 優先使用手機版頁面內容建立索引的政策。兩者是獨立的：不使用 AMP 也可以有良好的 Mobile-first 表現，關鍵是手機版頁面的內容要完整。",
+    "expected_category": "Discover與AMP",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "AMP 與 Mobile-first Indexing 區分"
+  },
+  {
+    "question": "Google Discover 的封面圖片尺寸有什麼要求？",
+    "answer": "Discover 強烈建議使用大尺寸圖片（至少 1200px 寬），並設定 max-image-preview:large 允許 Google 顯示大圖。小圖或低品質封面圖會降低文章進入 Discover 的機率。",
+    "expected_category": "Discover與AMP",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "Discover 圖片要求"
+  },
+  {
+    "question": "AMP 頁面的 canonical 應該指向哪個版本？",
+    "answer": "AMP 頁面的 canonical 應該指向對應的非 AMP 版本（正式 URL）。同時，非 AMP 版本應在 head 加上 alternate 標記指向 AMP 版本，形成正確的 AMP–canonical 配對。",
+    "expected_category": "Discover與AMP",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "AMP canonical 設定"
+  },
+  {
+    "question": "結構化資料 VideoObject 的哪些欄位是必填的？",
+    "answer": "Google 要求影片結構化資料包含：name（影片名稱）、description、thumbnailUrl（縮圖）、uploadDate（上傳日期）。建議補充：duration、contentUrl 或 embedUrl。任何必填欄位缺失都可能導致影片從 SERP 外觀消失。",
+    "expected_category": "技術SEO",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "VideoObject 結構化資料欄位"
+  },
+  {
+    "question": "URL 結構對 SEO 的影響有多大？",
+    "answer": "清晰的 URL 結構有助於 Google 理解頁面主題，並改善使用者體驗。建議：(1) 使用短而描述性的 URL slug（包含關鍵字）；(2) 避免動態參數（使用靜態 URL）；(3) 一旦 URL 上線不要輕易更改，避免失去既有的 SEO 權重。",
+    "expected_category": "技術SEO",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "URL 結構設計"
+  },
+  {
+    "question": "Breadcrumb 結構化資料對 SEO 有什麼好處？",
+    "answer": "Breadcrumb（導覽標記）讓 Google 在 SERP 顯示網站層級路徑，取代純 URL。研究顯示帶有 Breadcrumb 的搜尋結果通常點擊率較高，因為使用者可以直接看出頁面在網站中的位置。",
+    "expected_category": "技術SEO",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "Breadcrumb 結構化資料"
+  },
+  {
+    "question": "HTTPS 遷移後排名下降應該怎麼排查？",
+    "answer": "HTTPS 遷移排名下降排查：(1) 確認 robots.txt 沒有封鎖 HTTPS URL；(2) 確認所有 HTTP 都有 301 導向到 HTTPS；(3) 確認 canonical 已更新為 HTTPS；(4) 重新在 GSC 提交 HTTPS 版本的 Sitemap；(5) 給 Google 2–4 週重新爬取更新索引的時間。",
+    "expected_category": "技術SEO",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "HTTPS 遷移排查"
+  },
+  {
+    "question": "GA4 中 Organic Search 和 Organic Social 的差別是什麼？",
+    "answer": "Organic Search 是使用者從搜尋引擎（Google、Bing 等）的搜尋結果頁點擊進入的流量。Organic Social 則是從社群媒體（Facebook、Twitter 等）的非付費貼文進入的流量。Discover 流量在 GA4 通常被歸為 Organic Social 或 Unassigned，而非 Organic Search。",
+    "expected_category": "GA與數據追蹤",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "GA4 流量分類"
+  },
+  {
+    "question": "如何在 GA4 中區分 Discover 和真正的社群流量？",
+    "answer": "在 GA4 中難以直接區分 Discover 和 Facebook/Twitter 等社群流量，因為 Discover 通常沒有 referrer URL。最準確的方式是使用 Search Console 的 Discover 報表獲取 Discover 數據，然後對比 GA4 的整體 Organic Social 趨勢。",
+    "expected_category": "GA與數據追蹤",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "GA4 Discover 歸因問題"
+  },
+  {
+    "question": "GA4 中 Event 和 Conversion 有什麼區別？",
+    "answer": "在 GA4 中，所有互動都是 Events（事件）。Conversion（轉換）是被標記為重要的特定事件，你可以在 GA4 後台把任何事件標記為轉換。預設的轉換事件包含 purchase、generate_lead 等，自訂事件需手動標記。",
+    "expected_category": "GA與數據追蹤",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "GA4 事件追蹤基礎"
+  },
+  {
+    "question": "Vocus 平台的文章 URL 結構如何影響 SEO？",
+    "answer": "Vocus 的 /article/ 路徑下的文章是平台的主要索引來源。自訂網域設定後，文章 URL 改為自有域名，有助於建立獨立的品牌 SEO 資產。平台預設的 slug 通常是文章標題的中文拼音，建議設定清楚的關鍵字 slug。",
+    "expected_category": "平台策略",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "Vocus 平台 URL 結構"
+  },
+  {
+    "question": "在 Vocus 上經營方案頁對 SEO 有什麼幫助？",
+    "answer": "方案頁（訂閱頁）的 SEO 影響有限，因為它通常是轉換導向而非流量導向的頁面。SEO 角度來看，重要的是確保方案頁不被 noindex，以及使用正確的 canonical，避免產生重複頁面問題。",
+    "expected_category": "平台策略",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "Vocus 方案頁 SEO"
+  },
+  {
+    "question": "Google SGE（AI 概覽）對 SEO 流量有什麼長期影響？",
+    "answer": "SGE 讓使用者在 SERP 即可獲取摘要答案，資訊型關鍵字的點擊率預計下降。長期策略建議：(1) 強化深度、獨特見解的內容（SGE 難以生成）；(2) 著重品牌型和交易型關鍵字；(3) 優化能被 AI 引用的結構化內容，獲取 SGE 引用流量。",
+    "expected_category": "演算法與趨勢",
+    "expected_difficulty": "進階",
+    "expected_evergreen": false,
+    "note": "SGE 對 SEO 的影響"
+  },
+  {
+    "question": "Google Helpful Content System 要求的「以人為本的內容」怎麼定義？",
+    "answer": "Helpful Content 的核心是「真正為讀者服務」的內容：(1) 具備真實的第一手經驗（Experience）；(2) 有深度且有獨特觀點，不是重新包裝其他來源；(3) 讀者讀完覺得滿意，不需要再去別處找補充；(4) 避免大量 AI 批量生成的薄內容。",
+    "expected_category": "演算法與趨勢",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "Helpful Content System 定義"
+  },
+  {
+    "question": "核心更新（Core Update）後排名下降的網站，應該怎麼回應？",
+    "answer": "核心更新後排名下降，Google 建議：(1) 不要急於緊急修改；(2) 評估 Google 品質評分指南（QRG）是否對你的網站有針對性；(3) 從 E-E-A-T 角度全面審視內容品質；(4) 等待下一次核心更新，有時原本下降的排名會自然恢復。",
+    "expected_category": "演算法與趨勢",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "核心更新恢復策略"
+  },
+  {
+    "question": "爬蟲預算不足時，應該優先讓哪些頁面被抓取？",
+    "answer": "優先確保高價值頁面（高流量、高轉換率、最新發布的重要文章）被頻繁抓取。管理方式：(1) 用 robots.txt 封鎖無價值 URL（如 /search?、篩選器、使用者頁面）；(2) 修正 4XX/5XX 錯誤頁面；(3) 改善伺服器 TTFB；(4) 在 Sitemap 中只列正式 URL。",
+    "expected_category": "索引與檢索",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "爬蟲預算管理，屬於索引與檢索"
+  },
+  {
+    "question": "多語言網站 hreflang 實作時常見錯誤有哪些？",
+    "answer": "常見錯誤：(1) 遺漏 x-default 標籤（沒有指向通用版本）；(2) hreflang 配對不完整（A 指向 B，但 B 沒有指回 A）；(3) hreflang 指向 404 或重新導向的 URL；(4) 錯誤使用語言代碼（如 zh 而非 zh-TW）。任何錯誤都可能讓 Google 忽略整個 hreflang 設定。",
+    "expected_category": "技術SEO",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "hreflang 常見錯誤，屬於技術 SEO"
+  },
+  {
+    "question": "Search Console 搜尋結果報表中的「曝光」和「點擊」是如何計算的？",
+    "answer": "「曝光」是搜尋結果出現在使用者螢幕上的次數（下拉捲軸未顯示不計）。「點擊」是使用者實際點擊搜尋結果的次數。兩者的計算方式可能受 Rich Results 和 AMP Carousel 影響，GSC 的說明文件有詳細的計算規則。",
+    "expected_category": "搜尋表現分析",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "GSC 曝光點擊計算"
+  },
+  {
+    "question": "Discover 流量的高峰期通常在什麼時候出現？",
+    "answer": "Discover 流量的爆發通常在一篇文章發布後 24–72 小時內，取決於主題的即時性和圖片品質。熱門話題（時事、節日、熱搜主題）有機會觸發更大規模的 Discover 推薦。流量在初期爆發後會快速回落到基準線。",
+    "expected_category": "Discover與AMP",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "Discover 流量時間規律"
+  },
+  {
+    "question": "什麼是 Google 的 Mobile-first Indexing，對 SEO 有什麼實際影響？",
+    "answer": "Mobile-first Indexing 意指 Google 主要使用頁面的手機版本來爬取、索引和排名。實際影響：(1) 確保手機版內容與桌機版完全一致（不要隱藏內容）；(2) 手機版頁面的圖片、影片、結構化資料也要完整；(3) 確認手機版 User Agent（Googlebot Smartphone）能正確訪問頁面。",
+    "expected_category": "技術SEO",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "Mobile-first Indexing 實際影響"
+  },
+  {
+    "question": "怎麼用 Search Console 確認 Mobile-first Indexing 是否正常運作？",
+    "answer": "在 GSC「設定 > 網站資訊」中可看到 Google 最後一次爬取時使用的是桌機版還是手機版 User Agent。若顯示「Googlebot smartphone」表示已正確在 Mobile-first 模式下爬取。搭配「URL 檢查工具」可確認特定頁面手機版內容是否被正確讀取。",
+    "expected_category": "搜尋表現分析",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "Mobile-first Indexing GSC 驗證"
+  },
+  {
+    "question": "圖片 SEO 中 alt text 的最佳寫法是什麼？",
+    "answer": "alt text 應準確描述圖片內容，自然包含相關關鍵字（如果適合）。避免：(1) 空的 alt（除非是裝飾性圖片）；(2) 堆砌關鍵字；(3) 用「圖片顯示了...」這樣冗餘的開頭。好的 alt text 同時有助於圖片搜尋排名和無障礙使用。",
+    "expected_category": "技術SEO",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "圖片 SEO 屬於技術 SEO"
+  },
+  {
+    "question": "當 Google News 流量突然下降，最先應該確認哪些指標？",
+    "answer": "Google News 流量下降診斷順序：(1) 確認 AMP Article 有效索引數是否下降（GSC 搜尋外觀 > AMP）；(2) 確認近期是否有 AMP 技術錯誤；(3) 比較 Discover 和 Google News 的流量趨勢是否同步，以判斷是技術問題還是演算法因素。",
+    "expected_category": "Discover與AMP",
+    "expected_difficulty": "進階",
+    "expected_evergreen": true,
+    "note": "Google News 流量診斷順序"
+  },
+  {
+    "question": "伺服器回應時間（TTFB）超過多少才算需要優化？",
+    "answer": "Google Core Web Vitals 指引建議 TTFB 應控制在 800ms 以內。超過 1800ms 被視為「需要改善」。在 SEO 實務上，TTFB 越短越好：一方面加速 Googlebot 爬取，另一方面 TTFB 是 LCP 的重要組成，直接影響頁面體驗評分。",
+    "expected_category": "技術SEO",
+    "expected_difficulty": "進階",
+    "expected_evergreen": false,
+    "note": "TTFB 數字有時效性（標準可能隨 Google 調整）"
+  },
+  {
+    "question": "如何追蹤競爭對手的 SEO 策略和關鍵字排名？",
+    "answer": "競爭對手分析工具：(1) Ahrefs / SEMrush — 查詢競爭對手的關鍵字排名、反向連結；(2) Google Search Console（自己的）— 對比自己和競爭對手在同一 SERP 的出現狀況；(3) 手動搜尋目標關鍵字，觀察哪些競爭對手穩定出現；(4) 使用 SimilarWeb 分析競爭對手的流量來源。",
+    "expected_category": "搜尋表現分析",
+    "expected_difficulty": "基礎",
+    "expected_evergreen": true,
+    "note": "競爭對手分析，搜尋表現分析的一環"
   }
 ]

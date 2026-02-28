@@ -1,0 +1,614 @@
+[
+  {
+    "id": "dup_001",
+    "qa_a": {
+      "question": "robots.txt 設定過於開放會導致哪些問題？",
+      "answer": "robots.txt 設定過於開放會讓 Google 抓取大量低品質或重複 URL，浪費爬蟲預算，造成 GSC 「已檢索未索引」數量增加。",
+      "keywords": ["robots.txt", "爬蟲預算", "索引"]
+    },
+    "qa_b": {
+      "question": "robots.txt 開放過多 URL 給 Googlebot 會怎樣？",
+      "answer": "若 robots.txt 讓 Googlebot 抓取太多無價值頁面，搜尋引擎會把預算浪費在這些頁面上，減少高品質頁面的索引機會，也會推高 GSC Coverage 的「已抓取未索引」比例。",
+      "keywords": ["robots.txt", "Googlebot", "爬蟲預算", "索引"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：robots.txt 過度開放的影響"
+  },
+  {
+    "id": "dup_002",
+    "qa_a": {
+      "question": "canonical 指向錯誤 URL 對 SEO 有什麼影響？",
+      "answer": "Google 有時會忽略錯誤的 canonical，自行選擇它認為正確的版本，導致爬蟲預算浪費和索引不明確。",
+      "keywords": ["canonical", "索引", "爬蟲"]
+    },
+    "qa_b": {
+      "question": "canonical 設定不正確，Google 會怎麼處理？",
+      "answer": "若 canonical 指向錯誤版本，Google 可能忽略設定，根據自己的判斷選擇 canonical。這會造成重複頁面競爭排名，影響索引效率。",
+      "keywords": ["canonical", "重複頁面", "索引"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：canonical 錯誤的後果"
+  },
+  {
+    "id": "dup_003",
+    "qa_a": {
+      "question": "Google Discover 流量突然大幅下降的可能原因是什麼？",
+      "answer": "Discover 流量波動大，常見原因包括：封面圖片品質不佳（Discover 要求大圖）、內容品質下降、近期演算法調整。",
+      "keywords": ["Discover", "流量", "演算法"]
+    },
+    "qa_b": {
+      "question": "Discover 流量掉了，要怎麼分析原因？",
+      "answer": "Discover 演算法不透明，流量波動是正常的。可以從以下方向分析：(1) 確認最近有無發布封面圖品質不佳的文章；(2) 觀察是否與 Google 演算法更新時間點吻合；(3) 檢查 Search Console Discover 報表，比較掉量前後的文章類型。",
+      "keywords": ["Discover", "流量分析", "演算法", "GSC"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：Discover 流量下降分析"
+  },
+  {
+    "id": "dup_004",
+    "qa_a": {
+      "question": "AMP Article 頁面索引數下降對流量有什麼影響？",
+      "answer": "AMP Article 是進入 Google News Top Stories 焦點新聞版位的主要路徑，索引數下降會直接影響焦點新聞流量。",
+      "keywords": ["AMP Article", "索引", "Top Stories", "Google News"]
+    },
+    "qa_b": {
+      "question": "AMP Article 索引減少，Google News 流量為什麼也會掉？",
+      "answer": "Google News 的「焦點新聞」版位主要顯示有效索引的 AMP Article。當 AMP Article 索引數下降，進入 Top Stories 的機會減少，Google News 流量自然同步下滑。",
+      "keywords": ["AMP Article", "Google News", "Top Stories", "索引"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：AMP Article 索引與 Google News 流量的關係"
+  },
+  {
+    "id": "dup_005",
+    "qa_a": {
+      "question": "CTR 下降但排名沒有明顯變化，應該怎麼分析？",
+      "answer": "排名不變但 CTR 下降，通常是 SERP 版面競爭加劇或 title/meta description 不吸引人所致。",
+      "keywords": ["CTR", "排名", "SERP", "meta description"]
+    },
+    "qa_b": {
+      "question": "Search Console 的 CTR 下降但位置沒有顯著變動，如何改善？",
+      "answer": "CTR 下降而排名穩定，代表點擊率本身出了問題。常見原因：(1) title tag 不夠吸引人；(2) SERP 新增了 Rich Snippet 或 People Also Ask 搶版面；(3) 競爭對手優化了片段外觀。建議 A/B 測試改善 title 和 meta description。",
+      "keywords": [
+        "CTR",
+        "title tag",
+        "SERP",
+        "meta description",
+        "Rich Snippet"
+      ]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：CTR 下降排名穩定的分析與改善"
+  },
+  {
+    "id": "dup_006",
+    "qa_a": {
+      "question": "Core Web Vitals LCP 超標的主要優化方向？",
+      "answer": "LCP 超標主要因為圖片過大或伺服器回應慢，可透過圖片壓縮、WebP 格式、CDN、lazy loading 改善。",
+      "keywords": ["LCP", "Core Web Vitals", "圖片優化", "CDN"]
+    },
+    "qa_b": {
+      "question": "LCP 太高要怎麼修？",
+      "answer": "LCP（最大內容渲染）超標通常來自大圖片或慢伺服器。優化方向：(1) 使用 WebP 或 AVIF 格式；(2) 部署 CDN；(3) 預載入 LCP 圖片（preload）；(4) 提升 TTFB（Time to First Byte）。",
+      "keywords": ["LCP", "Core Web Vitals", "WebP", "preload", "TTFB"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：LCP 優化方法"
+  },
+  {
+    "id": "dup_007",
+    "qa_a": {
+      "question": "內部連結的錨文字對 SEO 的影響？",
+      "answer": "錨文字傳遞主題相關訊號，應使用目標頁面關鍵字，避免「點這裡」等無意義文字。",
+      "keywords": ["內部連結", "錨文字", "關鍵字"]
+    },
+    "qa_b": {
+      "question": "如何正確設定內部連結的 anchor text？",
+      "answer": "內部連結的 anchor text（錨文字）應自然包含目標頁面主要關鍵字，讓 Google 理解目標頁面的主題。避免：(1) 完全不描述性的「按此」「更多」；(2) 過度堆砌關鍵字。理想情況下，不同入口指向同一頁面可使用略有不同的相關詞。",
+      "keywords": ["內部連結", "anchor text", "錨文字", "關鍵字"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：內部連結 anchor text 最佳做法"
+  },
+  {
+    "id": "dup_008",
+    "qa_a": {
+      "question": "GA4 的 Organic Search 工作階段不包含 Discover 流量，這是為什麼？",
+      "answer": "Discover 流量在 GA4 中通常被歸類為 Organic Social 或 Unassigned，不計入 Organic Search。",
+      "keywords": ["GA4", "Discover", "Organic Search", "歸因"]
+    },
+    "qa_b": {
+      "question": "為什麼 Discover 的流量在 GA4 裡不出現在搜尋流量中？",
+      "answer": "Google Discover 是推薦系統而非搜尋，所以 GA4 的 channel 歸因把它分到 Organic Social 或 Unassigned，而非 Organic Search。如果要追蹤 Discover 的實際貢獻，需要參考 Search Console 的 Discover 報表。",
+      "keywords": ["GA4", "Discover", "歸因", "Channel", "GSC"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：Discover 在 GA4 的歸因問題"
+  },
+  {
+    "id": "dup_009",
+    "qa_a": {
+      "question": "主題聚合策略（Topic Cluster）如何部署？",
+      "answer": "建立支柱頁面覆蓋主題廣度，再透過群集文章深化子主題，並以雙向內部連結串接。",
+      "keywords": ["Topic Cluster", "主題聚合", "支柱頁面", "內部連結"]
+    },
+    "qa_b": {
+      "question": "怎麼用 Topic Cluster 提升關鍵字覆蓋廣度？",
+      "answer": "Topic Cluster 架構：(1) 建立「支柱頁面」涵蓋主題全貌；(2) 每個子主題建立「群集文章」，由支柱頁面連到各群集，各群集也要連回支柱；(3) 讓 Google 理解你對該主題的全面覆蓋程度與主題權威性。",
+      "keywords": [
+        "Topic Cluster",
+        "支柱頁面",
+        "群集文章",
+        "主題聚合",
+        "內部連結"
+      ]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：Topic Cluster 架構"
+  },
+  {
+    "id": "dup_010",
+    "qa_a": {
+      "question": "Sitemap 索引率下降代表什麼問題？",
+      "answer": "Sitemap 索引率下降表示 Google 收錄的頁面佔 Sitemap 提交頁面的比例降低，可能是內容品質問題或技術錯誤。",
+      "keywords": ["Sitemap", "索引率", "Coverage"]
+    },
+    "qa_b": {
+      "question": "GSC 中 Sitemap 提交的頁面索引比例降低，怎麼診斷？",
+      "answer": "Sitemap 索引率＝已索引頁數/提交總頁數。比例下降可能原因：(1) 新增了品質較低的內容被 Google 拒收；(2) 伺服器錯誤阻擋 Googlebot；(3) canonical 設定問題讓 Google 索引了其他版本而非 Sitemap 中的 URL。",
+      "keywords": ["Sitemap", "索引率", "GSC", "Coverage", "canonical"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：Sitemap 索引率下降的診斷"
+  },
+  {
+    "id": "dup_011",
+    "qa_a": {
+      "question": "結構化資料 FAQ 移除後流量會有什麼變化？",
+      "answer": "FAQ Rich Result 被移除後，SERP 上的額外問答版面消失，可能降低曝光和點擊。",
+      "keywords": ["FAQ", "結構化資料", "Rich Result", "SERP"]
+    },
+    "qa_b": {
+      "question": "Google 宣布停用 FAQ Rich Result 後對 SEO 有什麼影響？",
+      "answer": "Google 於 2023 年縮減 FAQ Rich Result 的顯示範圍後，大量網站的 SERP 版面縮小，曝光量下降。這類格式移除表示光靠結構化資料標記取得流量優勢的紅利消失，需靠內容本身取勝。",
+      "keywords": ["FAQ", "Rich Result", "結構化資料", "SERP", "曝光"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：FAQ Rich Result 消失的影響"
+  },
+  {
+    "id": "dup_012",
+    "qa_a": {
+      "question": "如何判斷哪些頁面導致 「已發現 - 未編入索引」增加？",
+      "answer": "在 GSC 的「索引 > 頁面」報表中，篩選「已找到 - 未索引」，逐筆確認原因是內容品質還是爬取頻率不足。",
+      "keywords": ["GSC", "已找到未索引", "索引", "Coverage"]
+    },
+    "qa_b": {
+      "question": "GSC 顯示「已發現但未建立索引」的頁面增加，要怎麼處理？",
+      "answer": "「已發現未索引」意指 Google 知道頁面存在但還沒收錄。可能原因：(1) 內容品質不夠；(2) 爬蟲預算不足；(3) 頁面負載太慢。排查方式：在 GSC Coverage 報表點入「已發現 - 未索引」，逐一用「測試網址」功能確認頁面是否可以被收錄。",
+      "keywords": ["GSC", "已發現未索引", "爬蟲預算", "Coverage"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：已發現未索引的原因與排查"
+  },
+  {
+    "id": "dup_013",
+    "qa_a": {
+      "question": "E-E-A-T 對 SEO 排名有什麼實際影響？",
+      "answer": "E-E-A-T（經驗、專業、權威、可信）是 Google 品質評分準則，特別影響 YMYL 頁面的排名。",
+      "keywords": ["E-E-A-T", "YMYL", "品質", "排名"]
+    },
+    "qa_b": {
+      "question": "如何強化網站的 E-E-A-T 訊號？",
+      "answer": "E-E-A-T 強化方向：(1) 作者頁面標明資歷和聯絡資訊；(2) 文章加上發布/更新日期；(3) 引用可信來源；(4) 累積外部媒體提及和反向連結；(5) 商業資訊（聯絡方式、姓名、地址）完整。對 SEO 和健康類（YMYL）網站尤其重要。",
+      "keywords": ["E-E-A-T", "作者頁面", "YMYL", "反向連結", "可信度"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：E-E-A-T 的影響與提升方式"
+  },
+  {
+    "id": "dup_014",
+    "qa_a": {
+      "question": "Disavow 工具應該在什麼時機使用？",
+      "answer": "Disavow 只有在確認受到負面 SEO 攻擊，或有大量垃圾反向連結且無法手動聯繫刪除時才使用。",
+      "keywords": ["Disavow", "反向連結", "負面SEO"]
+    },
+    "qa_b": {
+      "question": "什麼樣的反向連結需要用 Google 的 Disavow 工具處理？",
+      "answer": "Google 官方建議只在非自然、有害的反向連結已造成或可能造成手動懲罰時才使用 Disavow。實務上，除非有具體警告或流量異常下滑且链接品質極差，否則不建議輕易使用，因為 Google 演算法對多數低品質連結已有忽視機制。",
+      "keywords": ["Disavow", "反向連結", "手動懲罰", "負面SEO"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：Disavow 的適用時機"
+  },
+  {
+    "id": "dup_015",
+    "qa_a": {
+      "question": "爬蟲預算不足時應該優先處理哪些頁面？",
+      "answer": "優先確保最有價值的頁面（高流量、高轉換）能被頻繁抓取，用 robots.txt 封鎖低品質頁面。",
+      "keywords": ["爬蟲預算", "robots.txt", "索引"]
+    },
+    "qa_b": {
+      "question": "Crawl Budget 不夠吃的網站，怎麼讓 Googlebot 把資源集中到重要頁面？",
+      "answer": "爬蟲預算管理策略：(1) 用 robots.txt 封鎖不需要索引的 URL（如 /search、篩選器頁面）；(2) 避免無限滾動產生大量 URL；(3) 修正 4XX/5XX 錯誤頁面（這些頁面浪費爬蟲資源）；(4) 加快伺服器回應速度（TTFB 越短，Google 抓得越快）。",
+      "keywords": ["爬蟲預算", "Crawl Budget", "robots.txt", "TTFB"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：爬蟲預算的管理方式"
+  },
+  {
+    "id": "dup_016",
+    "qa_a": {
+      "question": "hreflang 設定錯誤對多語言 SEO 有什麼影響？",
+      "answer": "hreflang 設定錯誤會讓 Google 對語言版本產生混淆，可能導致錯誤的語言版本顯示在搜尋結果。",
+      "keywords": ["hreflang", "多語言", "國際SEO"]
+    },
+    "qa_b": {
+      "question": "多語言網站 hreflang 設定不正確會發生什麼問題？",
+      "answer": "hreflang 的目的是告訴 Google 哪個頁面對應哪個語言/地區。設定錯誤（如循環對應不完整、x-default 遺漏）會讓 Google 無法正確決定在各地區顯示哪個版本，可能讓英文頁面顯示給繁體中文用戶。",
+      "keywords": ["hreflang", "多語言", "x-default", "國際SEO"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：hreflang 設定錯誤的影響"
+  },
+  {
+    "id": "dup_017",
+    "qa_a": {
+      "question": "Google Helpful Content Update 對內容策略有什麼影響？",
+      "answer": "Helpful Content Update 降低了「為搜尋引擎而非人類寫的內容」的排名，強調真實用戶體驗。",
+      "keywords": ["Helpful Content", "演算法更新", "E-E-A-T"]
+    },
+    "qa_b": {
+      "question": "Helpful Content System 要求的「以人為本的內容」怎麼實踐？",
+      "answer": "Helpful Content 的核心是「先滿足人，再考慮搜尋引擎」。實踐重點：(1) 內容有獨特觀點或第一手經驗（Experience）；(2) 提供真正有深度的答案，而非重新包裝其他來源；(3) 避免大量 AI 生成的薄內容；(4) 清楚的作者與發布背景。",
+      "keywords": ["Helpful Content", "E-E-A-T", "以人為本", "AI內容"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：Helpful Content Update 的要求"
+  },
+  {
+    "id": "dup_018",
+    "qa_a": {
+      "question": "Video Appearance 消失可能是什麼原因？",
+      "answer": "Video Appearance 依賴正確的 VideoObject 結構化資料，若標記移除或失效，影片 SERP 外觀就會消失。",
+      "keywords": ["VideoObject", "Video Appearance", "結構化資料"]
+    },
+    "qa_b": {
+      "question": "網站的影片搜尋流量突然歸零，該如何診斷？",
+      "answer": "Video SERP 流量消失的診斷步驟：(1) 在 GSC 的「搜尋外觀 > 影片」確認影片索引狀態；(2) 用 Google 的「複合式搜尋結果測試」工具驗證 VideoObject 標記是否仍正確；(3) 確認影片縮圖、名稱、描述欄位是否完整填寫。任一環節失效都可能讓影片離開 Video SERP。",
+      "keywords": ["VideoObject", "Video Appearance", "GSC", "結構化資料"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：Video Appearance 消失的診斷"
+  },
+  {
+    "id": "dup_019",
+    "qa_a": {
+      "question": "301 重新導向設定後，SEO 權重多久會完全轉移？",
+      "answer": "一般情況下 301 重新導向的 PageRank 轉移需要數週到幾個月，取決於新 URL 的抓取頻率。",
+      "keywords": ["301重新導向", "PageRank", "權重轉移"]
+    },
+    "qa_b": {
+      "question": "域名搬遷時設定 301 redirect，排名要多久才能恢復？",
+      "answer": "域名搬遷後的排名恢復時間因站而異，通常需要 3–6 個月甚至更長。關鍵因素：(1) 原域名的既有權重；(2) Google 重新爬取並更新索引的速度；(3) 301 規則是否完整（避免抵達 404 的斷鏈）；(4) 新域名的技術品質。建議在 GSC 分別驗證新舊域名以追蹤轉移進度。",
+      "keywords": ["301重新導向", "域名搬遷", "PageRank", "GSC"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：301 重新導向的權重轉移"
+  },
+  {
+    "id": "dup_020",
+    "qa_a": {
+      "question": "頁面回應時間過慢對 SEO 的影響？",
+      "answer": "伺服器回應慢（TTFB 高）會導致 Googlebot 爬取效率下降，減少每次造訪的抓取頁數，影響索引速度。",
+      "keywords": ["TTFB", "伺服器速度", "爬蟲", "索引"]
+    },
+    "qa_b": {
+      "question": "為什麼伺服器 TTFB 高會影響 SEO 排名和索引？",
+      "answer": "TTFB（Time to First Byte）過高的雙重影響：(1) 技術 SEO 面：Googlebot 每次造訪能抓取的頁面數量下降，影響索引覆蓋率；(2) 使用者體驗面：TTFB 是 LCP 的主要組成，直接影響 Core Web Vitals 評分。Google 已確認頁面體驗是排名訊號之一。",
+      "keywords": ["TTFB", "Googlebot", "LCP", "Core Web Vitals", "爬蟲"]
+    },
+    "should_merge": true,
+    "reason": "同一知識點：TTFB 對 SEO 的雙重影響"
+  },
+  {
+    "id": "nodup_001",
+    "qa_a": {
+      "question": "robots.txt 設定過於開放會導致哪些問題？",
+      "answer": "robots.txt 過度開放讓 Googlebot 抓取低品質 URL，浪費爬蟲預算，推高「已檢索未索引」比例。",
+      "keywords": ["robots.txt", "爬蟲預算", "索引"]
+    },
+    "qa_b": {
+      "question": "如何正確設定內部連結的 anchor text？",
+      "answer": "錨文字應包含目標頁面主要關鍵字，讓 Google 理解目標頁面主題，避免「點這裡」等無意義文字。",
+      "keywords": ["內部連結", "anchor text", "關鍵字"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：robots.txt 爬蟲預算 vs 內部連結策略"
+  },
+  {
+    "id": "nodup_002",
+    "qa_a": {
+      "question": "CTR 下降但排名沒有明顯變化，怎麼分析？",
+      "answer": "排名穩定但 CTR 下降，通常是 title/meta description 不夠吸引人，或 SERP 版面競爭加劇所致。",
+      "keywords": ["CTR", "SERP", "meta description"]
+    },
+    "qa_b": {
+      "question": "Core Web Vitals LCP 超標的主要優化方向？",
+      "answer": "LCP 超標主要因圖片過大或伺服器慢，可用圖片壓縮、WebP、CDN、preload 改善。",
+      "keywords": ["LCP", "Core Web Vitals", "CDN"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：CTR 分析 vs Core Web Vitals 優化"
+  },
+  {
+    "id": "nodup_003",
+    "qa_a": {
+      "question": "E-E-A-T 對 SEO 排名有什麼實際影響？",
+      "answer": "E-E-A-T 是 Google 品質評分準則，特別影響 YMYL 頁面的排名，需強化作者專業度和可信度訊號。",
+      "keywords": ["E-E-A-T", "YMYL", "品質"]
+    },
+    "qa_b": {
+      "question": "Google Discover 流量突然大幅下降的可能原因是什麼？",
+      "answer": "Discover 流量波動大，常見原因：封面圖品質不佳、內容質量下降、演算法調整。",
+      "keywords": ["Discover", "流量", "演算法"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：E-E-A-T 內容品質 vs Discover 流量分析"
+  },
+  {
+    "id": "nodup_004",
+    "qa_a": {
+      "question": "Disavow 工具應該在什麼時機使用？",
+      "answer": "只有確認受到負面 SEO 攻擊且無法手動移除垃圾連結時才使用。",
+      "keywords": ["Disavow", "反向連結", "負面SEO"]
+    },
+    "qa_b": {
+      "question": "Sitemap 索引率下降代表什麼問題？",
+      "answer": "Sitemap 索引率下降表示 Google 收錄的頁面佔 Sitemap 提交頁面的比例降低，可能是內容品質問題。",
+      "keywords": ["Sitemap", "索引率", "Coverage"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：Disavow 連結策略 vs Sitemap 索引管理"
+  },
+  {
+    "id": "nodup_005",
+    "qa_a": {
+      "question": "GA4 的 Organic Search 工作階段不包含 Discover 流量？",
+      "answer": "Discover 在 GA4 中通常被歸類為 Organic Social 或 Unassigned，不計入 Organic Search。",
+      "keywords": ["GA4", "Discover", "Organic Search"]
+    },
+    "qa_b": {
+      "question": "hreflang 設定錯誤對多語言 SEO 有什麼影響？",
+      "answer": "hreflang 設定錯誤會讓 Google 對語言版本產生混淆，可能讓錯誤語言版本出現在搜尋結果。",
+      "keywords": ["hreflang", "多語言", "國際SEO"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：GA4 數據追蹤 vs 多語言 hreflang"
+  },
+  {
+    "id": "nodup_006",
+    "qa_a": {
+      "question": "AMP Article 頁面索引數下降對流量有什麼影響？",
+      "answer": "AMP Article 是進入 Top Stories 的主要路徑，索引數下降直接影響 Google News 流量。",
+      "keywords": ["AMP Article", "Top Stories", "Google News"]
+    },
+    "qa_b": {
+      "question": "主題聚合策略（Topic Cluster）如何部署？",
+      "answer": "建立支柱頁面覆蓋主題廣度，群集文章深化子主題，雙向內部連結串接，強化主題權威性。",
+      "keywords": ["Topic Cluster", "支柱頁面", "內部連結"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：AMP/Discover 流量 vs 內容架構策略"
+  },
+  {
+    "id": "nodup_007",
+    "qa_a": {
+      "question": "爬蟲預算不足時應該優先處理哪些頁面？",
+      "answer": "優先確保高價值頁面能被頻繁抓取，用 robots.txt 封鎖低品質頁面節省爬蟲資源。",
+      "keywords": ["爬蟲預算", "Crawl Budget", "robots.txt"]
+    },
+    "qa_b": {
+      "question": "301 重新導向設定後，SEO 權重多久會完全轉移？",
+      "answer": "通常需數週到幾個月，取決於新 URL 的抓取頻率和舊域名的既有權重。",
+      "keywords": ["301重新導向", "PageRank", "域名搬遷"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：爬蟲預算管理 vs 301 重新導向"
+  },
+  {
+    "id": "nodup_008",
+    "qa_a": {
+      "question": "結構化資料 FAQ 移除後流量會有什麼變化？",
+      "answer": "FAQ Rich Result 移除後 SERP 版面縮小，曝光量可能下降，排名本身不受直接影響。",
+      "keywords": ["FAQ", "Rich Result", "曝光"]
+    },
+    "qa_b": {
+      "question": "Video Appearance 消失可能是什麼原因？",
+      "answer": "Video Appearance 依賴正確的 VideoObject 結構化資料，標記失效後影片 SERP 外觀消失。",
+      "keywords": ["VideoObject", "Video Appearance", "結構化資料"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：FAQ 結構化資料 vs VideoObject 結構化資料（雖都是結構化資料但主題和排查方式不同）"
+  },
+  {
+    "id": "nodup_009",
+    "qa_a": {
+      "question": "Google Helpful Content Update 對內容策略有什麼影響？",
+      "answer": "Helpful Content Update 降低了「為搜尋引擎而非人類寫的內容」的排名，強調真實用戶體驗。",
+      "keywords": ["Helpful Content", "演算法更新"]
+    },
+    "qa_b": {
+      "question": "如何判斷哪些頁面導致「已發現 - 未編入索引」增加？",
+      "answer": "在 GSC「索引 > 頁面」報表中篩選「已找到 - 未索引」，逐筆確認原因是內容品質還是爬取頻率不足。",
+      "keywords": ["GSC", "已找到未索引", "Coverage"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：演算法更新判斷 vs GSC 索引診斷"
+  },
+  {
+    "id": "nodup_010",
+    "qa_a": {
+      "question": "頁面回應時間過慢對 SEO 的影響？",
+      "answer": "TTFB 高導致 Googlebot 爬取效率下降，也直接影響 LCP 進而影響 Core Web Vitals 評分。",
+      "keywords": ["TTFB", "LCP", "Core Web Vitals"]
+    },
+    "qa_b": {
+      "question": "Vocus 自訂網域設定後，原有的 vocus.cc 網址 SEO 權重如何轉移？",
+      "answer": "需設定 301 永久重新導向，將舊 URL 的權重轉移到自訂網域，並重新在 Search Console 驗證。",
+      "keywords": ["Vocus", "自訂網域", "301重新導向", "GSC"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：技術 SEO 速度優化 vs 平台策略"
+  },
+  {
+    "id": "nodup_011",
+    "qa_a": {
+      "question": "canonical 指向錯誤 URL 對 SEO 有什麼影響？",
+      "answer": "Google 可能忽略錯誤的 canonical，導致爬蟲預算浪費和索引不明確。",
+      "keywords": ["canonical", "索引"]
+    },
+    "qa_b": {
+      "question": "CTR 下降但排名沒有明顯變化，應該怎麼分析？",
+      "answer": "排名穩定但 CTR 下降通常是 title/meta description 不吸引人所致，可 A/B 測試改善片段外觀。",
+      "keywords": ["CTR", "SERP", "title tag"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：canonical 技術問題 vs CTR 分析"
+  },
+  {
+    "id": "nodup_012",
+    "qa_a": {
+      "question": "主題聚合（Topic Cluster）策略中支柱頁和群集頁怎麼分工？",
+      "answer": "支柱頁覆蓋主題廣度，群集頁深化特定子主題，雙向內部連結串接強化主題權威性。",
+      "keywords": ["Topic Cluster", "支柱頁面", "群集文章"]
+    },
+    "qa_b": {
+      "question": "Sitemap 索引率下降代表什麼問題？",
+      "answer": "Sitemap 索引率下降表示 Google 收錄比例降低，可能是內容品質問題或技術錯誤所致。",
+      "keywords": ["Sitemap", "索引率", "Coverage"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：內容架構策略 vs 索引管理"
+  },
+  {
+    "id": "nodup_013",
+    "qa_a": {
+      "question": "GA4 事件追蹤如何設定頁面滾動深度？",
+      "answer": "GA4 內建 scroll 事件追蹤 90% 滾動深度，若需更細粒度可用 GTM 自訂事件追蹤不同百分比。",
+      "keywords": ["GA4", "scroll", "GTM", "事件追蹤"]
+    },
+    "qa_b": {
+      "question": "爬蟲預算不足時，應該優先處理哪些頁面？",
+      "answer": "優先確保高價值頁面頻繁被抓，用 robots.txt 封鎖低品質頁面節省爬蟲資源。",
+      "keywords": ["爬蟲預算", "robots.txt"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：GA4 數據追蹤 vs 爬蟲預算管理"
+  },
+  {
+    "id": "nodup_014",
+    "qa_a": {
+      "question": "hreflang 設定時 x-default 有什麼用途？",
+      "answer": "x-default 指定不符合任何特定語言/地區的用戶應該看到哪個頁面版本，通常指向英文或全球通用版本。",
+      "keywords": ["hreflang", "x-default", "多語言"]
+    },
+    "qa_b": {
+      "question": "Disavow 工具應該在什麼時機使用？",
+      "answer": "只有確認受到負面 SEO 攻擊且無法手動移除時才使用；正常情況下不建議輕易使用。",
+      "keywords": ["Disavow", "反向連結", "負面SEO"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：多語言 hreflang vs 連結策略"
+  },
+  {
+    "id": "nodup_015",
+    "qa_a": {
+      "question": "Google SGE 對資訊型關鍵字有什麼影響？",
+      "answer": "SGE 讓使用者在 SERP 即可得到答案，資訊型查詢的點擊率預期下降，內容需強化品牌和交易型關鍵字佈局。",
+      "keywords": ["SGE", "AI搜尋", "CTR", "關鍵字"]
+    },
+    "qa_b": {
+      "question": "頁面回應時間過慢對 SEO 有什麼影響？",
+      "answer": "TTFB 高影響 Googlebot 爬取效率，並直接推高 LCP，影響 Core Web Vitals 評分。",
+      "keywords": ["TTFB", "LCP", "Googlebot"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：SGE/AI 搜尋趨勢 vs 技術效能優化"
+  },
+  {
+    "id": "nodup_016",
+    "qa_a": {
+      "question": "Breadcrumb 結構化資料有什麼 SEO 效益？",
+      "answer": "Breadcrumb 標記讓 Google 在 SERP 顯示網站路徑，點擊率通常較無標記的結果高。",
+      "keywords": ["Breadcrumb", "結構化資料", "SERP", "CTR"]
+    },
+    "qa_b": {
+      "question": "AMP Article 索引數下降對 Google News 流量有何影響？",
+      "answer": "AMP Article 是進入 Top Stories 的主要路徑，索引數下降直接砍掉焦點新聞版位流量。",
+      "keywords": ["AMP Article", "Google News", "Top Stories"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：結構化資料 Breadcrumb vs AMP/Discover 流量"
+  },
+  {
+    "id": "nodup_017",
+    "qa_a": {
+      "question": "如何評估一批外部連結是否需要 Disavow？",
+      "answer": "觀察連結的 spam score、相關性和 anchor text；若疑似負面 SEO 且無法聯繫移除再考慮 Disavow。",
+      "keywords": ["Disavow", "外部連結", "spam score"]
+    },
+    "qa_b": {
+      "question": "E-E-A-T 對 SEO 排名有什麼實際影響？",
+      "answer": "E-E-A-T 影響特別明顯在 YMYL 頁面，需強化作者頁面、可信度訊號和外部引用。",
+      "keywords": ["E-E-A-T", "YMYL", "可信度"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：連結評估 vs 內容品質信號"
+  },
+  {
+    "id": "nodup_018",
+    "qa_a": {
+      "question": "Video Appearance 消失可能是什麼原因？",
+      "answer": "VideoObject 結構化資料標記失效後，影片 SERP 外觀消失，影片搜尋流量可能大幅下降。",
+      "keywords": ["VideoObject", "Video Appearance", "結構化資料"]
+    },
+    "qa_b": {
+      "question": "主題聚合（Topic Cluster）策略中支柱頁和群集頁如何分工？",
+      "answer": "支柱頁覆蓋主題廣度，群集頁深化子主題，雙向連結串接強化主題權威性。",
+      "keywords": ["Topic Cluster", "支柱頁面", "內部連結"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：結構化資料影片 vs 內容架構策略"
+  },
+  {
+    "id": "nodup_019",
+    "qa_a": {
+      "question": "301 重新導向設定後，SEO 權重多久會完全轉移？",
+      "answer": "通常幾週到幾個月，取決於 Googlebot 重新爬取新 URL 的頻率和舊域名的既有權重。",
+      "keywords": ["301重新導向", "PageRank", "索引"]
+    },
+    "qa_b": {
+      "question": "如何判斷哪些頁面導致「已發現 - 未編入索引」增加？",
+      "answer": "在 GSC「索引 > 頁面」篩選「已找到 - 未索引」，逐筆用「測試網址」工具確認原因。",
+      "keywords": ["GSC", "已找到未索引", "Coverage"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：301 重新導向 vs 索引診斷（雖都與索引相關，但問題性質截然不同）"
+  },
+  {
+    "id": "nodup_020",
+    "qa_a": {
+      "question": "GA4 的 Organic Search 不包含 Discover 流量？",
+      "answer": "Discover 在 GA4 通常歸類 Organic Social 或 Unassigned，而非 Organic Search。",
+      "keywords": ["GA4", "Discover", "Organic Search"]
+    },
+    "qa_b": {
+      "question": "core Web Vitals 的 LCP 超標主要優化方向？",
+      "answer": "圖片壓縮、WebP、CDN、preload 是主要的 LCP 優化方向，需同時降低 TTFB。",
+      "keywords": ["LCP", "Core Web Vitals", "CDN"]
+    },
+    "should_merge": false,
+    "reason": "不同主題：GA4 歸因 vs 技術 SEO 效能"
+  }
+]

@@ -112,7 +112,6 @@ print(response.choices[0].finish_reason)
 
 ---
 
-
 ---
 
 ## 14. 評估維度詳解與基準線
@@ -143,7 +142,6 @@ print(response.choices[0].finish_reason)
 - **Faithfulness**：A 的內容來自原始文件，不是 AI 自行補充（Accuracy 的核心要求）
 
 ---
-
 
 ---
 
@@ -189,3 +187,93 @@ JUDGE_PROMPT = """
 
 ---
 
+## 20. Pipeline 全步驟 Eval 覆蓋（Per-step Golden Sets）
+
+> 對應 `scripts/05_evaluate.py` 的 4 個新函式（v1.5 加入）。
+
+### 設計原則
+
+每個 pipeline 步驟都有**不同的評估指標**，必須分別設計 golden set：
+
+| 步驟              | 函式                               | Golden Set                                                | 核心指標                                                    |
+| ----------------- | ---------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------- |
+| Step 2 萃取       | `evaluate_extraction()`            | `eval/golden_extraction.json`（5 cases）                  | count_accuracy, keyword_coverage_rate, hallucination_rate   |
+| Step 3 去重       | `evaluate_dedup()`                 | `eval/golden_dedup.json`（40 pairs：20 dup + 20 non-dup） | precision, recall, F1                                       |
+| Step 3 閾值最佳化 | `evaluate_dedup_threshold_sweep()` | 同上 golden pairs                                         | optimal_threshold（F1-optimal sweep 0.80–0.95）             |
+| Step 4 週報       | `evaluate_report_quality()`        | `eval/golden_report.json`（5 cases）                      | topic_coverage, kw_grounding, llm_actionability             |
+| Step 5 Q&A 品質   | `evaluate_qa_quality()`            | `eval/golden_qa.json`（50 items，10 categories）          | Relevance/Accuracy/Completeness/Granularity（LLM-as-Judge） |
+
+### Step 2 萃取評估：`evaluate_extraction()`
+
+```python
+result = evaluate_extraction(golden_cases, per_meeting_dir="output/qa_per_meeting")
+# {
+#   "count_accuracy": 0.80,         # 萃出數量與 golden 期望的 ± tolerance 內佔比
+#   "avg_keyword_coverage_rate": 0.73,  # golden 關鍵字實際出現在萃出結果的比例
+#   "avg_hallucination_rate": 0.05,     # 萃出內容無法對應到原始文字的估計比例
+# }
+```
+
+- **count_accuracy**：`abs(actual_count - expected_count) <= tolerance`（default tolerance=2）
+- **keyword_coverage_rate**：golden `expected_keywords` 中有多少出現在萃出結果的 Q+A+keywords 合集
+- **hallucination_rate**：需 LLM-as-Judge 二次確認（未來擴充）
+
+### Step 3 去重評估：`evaluate_dedup()` + threshold sweep
+
+```python
+# 單一閾值評估
+result = evaluate_dedup(golden_pairs, threshold=0.88)
+# {"precision": 0.90, "recall": 0.85, "f1": 0.875, "tp": 17, "fp": 2, "fn": 3, "tn": 18}
+
+# F1-optimal sweep（16 步，0.80–0.95）
+sweep = evaluate_dedup_threshold_sweep(golden_pairs)
+# {
+#   "optimal_threshold": 0.86,
+#   "optimal_f1": 0.91,
+#   "current_threshold": 0.88,  ← config.SIMILARITY_THRESHOLD
+#   "current_f1": 0.875,
+#   "recommendation": "降低至 0.86 可提升 F1 +0.035",
+#   "sweep": [{"threshold": 0.80, "f1": 0.82}, ...]  # 16 entries
+# }
+```
+
+**Threshold Sweep 原則**：
+
+1. 先建立 labeled golden pairs（人工標記是否為重複）
+2. 一次性計算所有 pairs 的 cosine similarity（避免 N×API 呼叫）
+3. sweep 只改門檻值，不重複呼叫 API
+4. F1-optimal 取 precision/recall 平衡點（不偏向任一側）
+
+### Step 4 週報評估：`evaluate_report_quality()`
+
+```python
+result = evaluate_report_quality(golden_cases, reports_dir="output")
+# {
+#   "avg_topic_coverage": 0.78,        # required_topics 實際出現在報告的比例
+#   "avg_kw_grounding": 0.83,          # source_qa_keywords 有多少出現在報告（接地氣）
+#   "avg_llm_grounding": 4.2,          # LLM-as-Judge 評分（1-5），每週報用 2–3 個問題
+#   "avg_llm_actionability": 3.9,      # 報告是否提供具體可行建議（1-5）
+# }
+```
+
+### CLI 整合
+
+```bash
+# 個別執行
+python scripts/run_pipeline.py --step 5 --eval-extraction
+python scripts/run_pipeline.py --step 5 --eval-dedup
+python scripts/run_pipeline.py --step 5 --dedup-threshold-sweep
+python scripts/run_pipeline.py --step 5 --eval-report
+
+# 完整評估（預設 LLM-as-Judge）
+python scripts/run_pipeline.py --step 5 --sample 50 --with-source
+```
+
+### Golden Set 設計要點
+
+- **萃取 golden**：每 case 包含 `meeting_id`、`expected_count`（±2）、`expected_keywords`、`notes`
+- **去重 golden**：40 pairs；20 dup（high sim）+ 20 non-dup（模糊相似但語意不同）；手工標記 `is_duplicate: bool`
+- **Q&A golden**：50 items；10 categories 各 ≥3 條；包含 `expected_category`、`expected_difficulty`、`expected_evergreen`
+- **週報 golden**：5 scenarios；含 `required_topics[]`、`optional_topics[]`、`source_qa_keywords[]`、`min_grounding_score`
+
+---

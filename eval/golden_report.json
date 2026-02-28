@@ -1,0 +1,94 @@
+[
+  {
+    "id": "report_weekly_baseline",
+    "description": "一般週報應包含 Discover、技術SEO 和內容策略等主題",
+    "context_queries": [
+      "本週 SEO 最重要的行動項目",
+      "Discover 流量趨勢",
+      "Technical SEO 問題"
+    ],
+    "required_topics": ["Discover", "技術SEO", "內容策略"],
+    "optional_topics": ["連結策略", "演算法更新", "GA數據"],
+    "source_qa_keywords": ["Discover", "AMP", "索引", "Core Web Vitals"],
+    "min_grounding_score": 3.5,
+    "min_qa_count_used": 5,
+    "expected_sections": ["本週重點發現", "行動建議", "下週追蹤項目"],
+    "note": "基準測試：週報必須有三個主要區段且至少引用 5 個 Q&A"
+  },
+  {
+    "id": "report_discover_focus",
+    "description": "以 Discover 為主題的週報，應集中在 Discover/AMP 相關 Q&A",
+    "context_queries": [
+      "Google Discover 流量大幅下滑怎麼辦",
+      "AMP Article 索引數下降",
+      "Discover 封面圖最佳化"
+    ],
+    "required_topics": ["Discover", "AMP"],
+    "optional_topics": ["Mobile-first Indexing", "圖片SEO", "Google News"],
+    "source_qa_keywords": ["Discover", "AMP", "封面圖", "曝光"],
+    "min_grounding_score": 3.5,
+    "min_qa_count_used": 3,
+    "expected_sections": ["Discover 流量分析", "AMP 技術問題", "改善建議"],
+    "note": "Focus 測試：只給 Discover 相關查詢，確認報告不會扯到無關主題"
+  },
+  {
+    "id": "report_technical_seo",
+    "description": "以技術 SEO 問題為主軸的診斷報告",
+    "context_queries": [
+      "robots.txt 封鎖頁面問題診斷",
+      "canonical 設定錯誤",
+      "LCP 改善方案",
+      "TTFB 過高問題"
+    ],
+    "required_topics": ["技術SEO", "索引與檢索", "Core Web Vitals"],
+    "optional_topics": ["結構化資料", "URL正規化", "hreflang"],
+    "source_qa_keywords": ["canonical", "robots.txt", "LCP", "TTFB", "索引"],
+    "min_grounding_score": 3.5,
+    "min_qa_count_used": 4,
+    "expected_sections": ["技術問題診斷", "優先修復項目", "後續監控指標"],
+    "note": "技術診斷 Focus：確認報告能正確抓到技術 SEO 類 Q&A 並給出可執行建議"
+  },
+  {
+    "id": "report_content_strategy",
+    "description": "內容策略週報，聚焦在 E-E-A-T、Topic Cluster、關鍵字佈局",
+    "context_queries": [
+      "E-E-A-T 如何在內容中展現",
+      "Topic Cluster 支柱頁面策略",
+      "內部連結 anchor text 最佳化",
+      "Meta description CTR 優化"
+    ],
+    "required_topics": ["內容策略", "連結策略"],
+    "optional_topics": ["搜尋表現分析", "演算法與趨勢", "GA與數據追蹤"],
+    "source_qa_keywords": [
+      "E-E-A-T",
+      "Topic Cluster",
+      "錨文字",
+      "meta description"
+    ],
+    "min_grounding_score": 3.5,
+    "min_qa_count_used": 4,
+    "expected_sections": [
+      "內容品質評估",
+      "連結策略建議",
+      "可優先執行的改善項目"
+    ],
+    "note": "內容策略 Focus：確認不只是表面建議，要有具體可操作的步驟"
+  },
+  {
+    "id": "report_out_of_scope_guard",
+    "description": "用非 SEO 查詢驗證報告不會生成幻覺或無關內容",
+    "context_queries": [
+      "本週電商轉換率分析",
+      "社群媒體廣告投放策略",
+      "APP 推播通知最佳化"
+    ],
+    "required_topics": [],
+    "optional_topics": ["GA與數據追蹤"],
+    "source_qa_keywords": [],
+    "min_grounding_score": 2.0,
+    "min_qa_count_used": 0,
+    "hallucination_check": true,
+    "expected_behavior": "報告應說明此類查詢與 SEO 知識庫關聯性低，而非強行生成無中生有的 SEO 建議",
+    "note": "Guard 測試：確認系統在無相關 Q&A 時不會幻覺"
+  }
+]

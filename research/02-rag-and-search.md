@@ -139,7 +139,6 @@ retrieved = [qa_pairs[i] for i in top_indices]
 
 ---
 
-
 ---
 
 ## 17. RAG 框架比較與整合策略
@@ -182,10 +181,10 @@ retrieved = [qa_pairs[i] for i in top_indices]
 
 KW Hit Rate 低時，需先分清兩種失敗類型，再決定要改什麼：
 
-| 類型   | 定義                         | 修法              |
-| ------ | ---------------------------- | ----------------- |
-| TypeA  | 正確文件在資料庫中根本不存在 | 補資料、重跑萃取  |
-| TypeB  | 正確文件已排在前面，但評估指標過嚴（exact string miss） | 修評估指標        |
+| 類型  | 定義                                                    | 修法             |
+| ----- | ------------------------------------------------------- | ---------------- |
+| TypeA | 正確文件在資料庫中根本不存在                            | 補資料、重跑萃取 |
+| TypeB | 正確文件已排在前面，但評估指標過嚴（exact string miss） | 修評估指標       |
 
 **本專案實際診斷結果（`--debug-retrieval`）**：13/13 失敗全是 TypeB。
 正確 Q&A 已在第 1 名，但 `"CTR"` 不等於 `"點擊率"`、`"探索流量"` 不等於 `"流量"`。
@@ -218,3 +217,94 @@ python scripts/05_evaluate.py --eval-retrieval --eval-reranking
 
 ---
 
+## 19. SearchEngine 模組化（utils/search_engine.py）
+
+> v1.5 新增：`utils/search_engine.py` — 將 Hybrid Search 邏輯從 `04_generate_report.py` 和 `app/core/store.py` 統一抽出。
+
+### 模組架構
+
+```
+utils/search_engine.py
+  ├── compute_keyword_boost()   ← 模組級函式（可直接 import，不需實例化）
+  └── SearchEngine              ← 封裝完整搜尋流程
+        ├── __init__(qa_pairs, qa_embeddings, semantic_weight)
+        ├── search(query, query_embedding, top_k, category, min_score)
+        ├── search_multi(queries, query_embeddings, top_k_per_query, total_max)
+        └── _keyword_boost_matrix(queries)  → delegates to compute_keyword_boost
+```
+
+### 模組級函式：`compute_keyword_boost()`
+
+**設計原則**：先把核心演算法暴露為模組級函式，再讓 class method 委派。這樣 script 可以直接 import 函式而不需要實例化整個類別。
+
+```python
+from utils.search_engine import compute_keyword_boost
+
+# 四向雙邊關鍵字匹配（返回 shape=(n_queries, n_qa) 的 boost 矩陣）
+boost_matrix = compute_keyword_boost(queries, qa_pairs)
+# queries: list[str]
+# qa_pairs: list[dict]  — 每個 dict 有 "keywords" 欄位
+# 返回: np.ndarray shape=(n_queries, n_qa)，float32
+```
+
+四種命中方式（優先序）：
+
+1. `kw_lower in query_lower` — 關鍵字完整出現在 query（正向）
+2. `any(t in kw_lower for t in query_tokens)` — query 的 token 出現在 kw
+3. `any(t in query_lower for t in kw_tokens)` — kw 的 token 出現在 query
+4. `kw_lower[:2] in query_lower` — 中文 bigram 弱命中（給 `KW_BOOST_PARTIAL` 分）
+
+### `SEMANTIC_WEIGHT` vs `KW_BOOST` 的設計區別
+
+| 參數                  | 位置        | 用途                                                      |
+| --------------------- | ----------- | --------------------------------------------------------- |
+| `SEMANTIC_WEIGHT=0.7` | `config.py` | 語意分數的權重係數（最終分 = 語意×0.7 + kw_boost）        |
+| `KEYWORD_WEIGHT=0.3`  | `config.py` | 未來保留：可用於混合排序加權                              |
+| `KW_BOOST=0.10`       | `config.py` | 每次關鍵字命中加的固定分數（上限 `KW_BOOST_MAX_HITS` 次） |
+
+> `KW_BOOST` 是加法（加到語意分上），`SEMANTIC_WEIGHT` 是乘法（縮放語意分）。
+> 兩者獨立控制，不重複計算。
+
+### `search_multi()`：週報多 query 搜尋
+
+```python
+# 04_generate_report.py 用此方式聚合多個 query 的結果
+engine = SearchEngine(qa_dicts, qa_embeddings)
+results = engine.search_multi(
+    queries=["Core Web Vitals 如何影響排名", "GA4 事件追蹤設定"],
+    query_embeddings=[emb1, emb2],
+    top_k_per_query=3,
+    total_max=15,
+)
+# 返回去重後的 QA 清單（同一 QA 不重複，按最高分排序）
+```
+
+### app/core/store.py 整合
+
+```python
+from utils.search_engine import SearchEngine
+
+@dataclass
+class QAStore:
+    _engine: Optional[SearchEngine] = field(default=None, repr=False)
+
+    def load(self, ...):
+        # ... 載入 items 後 ...
+        qa_dicts = [{"question": i.question, "answer": i.answer,
+                     "keywords": i.keywords, "category": i.category,
+                     "id": i.id} for i in self.items]
+        self._engine = SearchEngine(qa_dicts, embeddings_raw)
+
+    def hybrid_search(self, query, query_embedding, top_k=5, ...):
+        """委派給 SearchEngine，返回值映射回 QAItem（by id）。"""
+```
+
+### 使用 SearchEngine 的地方
+
+| 模組                            | 使用方式                                                            |
+| ------------------------------- | ------------------------------------------------------------------- |
+| `app/core/store.py`             | `QAStore.hybrid_search()` → delegates to `SearchEngine.search()`    |
+| `scripts/04_generate_report.py` | `_compute_keyword_boost()` → delegates to `compute_keyword_boost()` |
+| `scripts/05_evaluate.py`        | `--eval-retrieval` 模式建立暫時 `SearchEngine` 實例做 MRR 評估      |
+
+---

@@ -1,0 +1,47 @@
+[
+  {
+    "source_file": "Frank_SEO顧問會議.md",
+    "per_meeting_qa_file": "Frank_SEO顧問會議_qa.json",
+    "description": "Frank SEO 顧問會議 — 應涵蓋 AMP、Discover、索引等核心議題",
+    "min_qa_count": 5,
+    "max_qa_count": 25,
+    "must_extract_keywords": ["Discover", "AMP", "索引", "CTR", "canonical"],
+    "should_not_extract": ["行政", "日程", "下次會議", "閒聊"]
+  },
+  {
+    "source_file": "SEO_20230614.md",
+    "per_meeting_qa_file": "SEO_20230614_qa.json",
+    "description": "2023-06-14 SEO 會議 — 應涵蓋具體技術討論",
+    "min_qa_count": 3,
+    "max_qa_count": 20,
+    "must_extract_keywords": ["GSC", "SEO"],
+    "should_not_extract": ["行政", "日程", "閒聊"]
+  },
+  {
+    "source_file": "SEO_20231018.md",
+    "per_meeting_qa_file": "SEO_20231018_qa.json",
+    "description": "2023-10-18 SEO 會議 — 應涵蓋演算法更新後的討論",
+    "min_qa_count": 3,
+    "max_qa_count": 20,
+    "must_extract_keywords": ["SEO", "演算法"],
+    "should_not_extract": ["行政", "日程", "閒聊"]
+  },
+  {
+    "source_file": "SEO_會議_2023_11_01.md",
+    "per_meeting_qa_file": "SEO_會議_2023_11_01_qa.json",
+    "description": "2023-11-01 SEO 會議 — Q3/Q4 反思，應涵蓋索引、連結分析等議題",
+    "min_qa_count": 3,
+    "max_qa_count": 20,
+    "must_extract_keywords": ["SEO"],
+    "should_not_extract": ["行政", "日程", "閒聊"]
+  },
+  {
+    "source_file": "SEO_小會議_2024_02_15.md",
+    "per_meeting_qa_file": "SEO_小會議_2024_02_15_qa.json",
+    "description": "2024-02-15 SEO 小會議 — 聚焦具體問題排查",
+    "min_qa_count": 2,
+    "max_qa_count": 15,
+    "must_extract_keywords": ["SEO"],
+    "should_not_extract": ["行政", "日程", "閒聊"]
+  }
+]
