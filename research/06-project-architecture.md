@@ -187,6 +187,35 @@ flowchart TD
     end
 ```
 
+### Claude Code 模式 — 三層架構（v1.6 新增）
+
+```
+不需要 OpenAI API key 的 Slash Command 模式：
+
+Layer 1: .claude/skills/seo-qa-pipeline.md
+  ├─ 共用規則、資料結構定義、stable_id 說明
+  └─ qa_tools.py 子命令速查表
+
+Layer 2: scripts/qa_tools.py（549 行，不依賴 config）
+  ├─ pipeline-status          # 查詢 pipeline 各步驟狀態
+  ├─ list-unprocessed         # 列出待萃取 Markdown
+  ├─ merge-qa / add-meeting   # 合併或增量 Q&A
+  ├─ search --query "..."     # 關鍵字加權搜尋（top-k）
+  ├─ load-metrics --source    # 解析指標（TSV/URL）
+  └─ eval-compare             # 比較多次 eval 結果
+
+Layer 3: .claude/commands/（4 個新 slash commands）
+  ├─ /search <query>          # 搜尋知識庫
+  ├─ /chat                    # 互動式 RAG 問答
+  ├─ /generate-report <URL>   # SEO 週報生成（Step 4）
+  └─ /evaluate-qa             # 品質評估（Step 5，需 OpenAI）
+
+更新現有 commands：
+  ├─ /extract-qa              # → qa_tools.py list-unprocessed / merge-qa
+  ├─ /dedupe-classify         # → qa_tools.py pipeline-status
+  └─ /pipeline-local          # → 加入 Step 4 週報生成
+```
+
 ### 架構變更紀錄（Architecture Changelog）
 
 | 日期       | 版本 | 變更內容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 影響範圍                                                                                                                                                                                     |
@@ -207,6 +236,7 @@ flowchart TD
 | 2026-02-28 | v1.4 | **模組化 Pipeline 實作完成**：(1) `utils/pipeline_deps.py` — `StepDependency` frozen dataclass + `preflight_check()` 統一依賴檢查；(2) `config.py` 改 PEP 562 lazy loading（`import config` 不再觸發 env 驗證）；(3) 5 個 script 各自加入 `--check` flag + 宣告式依賴；(4) `run_pipeline.py` 移除 `check_config()`，改用 `parse_known_args()` 轉發 + `--check`/`--dry-run`；(5) Code review 修正：`PreflightError` 從 `SystemExit` 改為 `Exception`、`04_generate_report.py` import 去重、arg forwarding 限單步模式；(6) 新增 14 個 `config.py` lazy loading 測試（total 96 tests）；(7) Makefile 新增 `make check`；(8) README 更新分步執行文件 | `utils/pipeline_deps.py`（new），`tests/test_pipeline_deps.py`（new），`tests/test_config_lazy.py`（new），`config.py`，`scripts/01-05`，`scripts/run_pipeline.py`，`Makefile`，`README.md`  |
 | 2026-02-28 | v1.4 | Laminar 全 pipeline tracing：`utils/observability.py`（`init_laminar` / `flush_laminar` / `observe` no-op shim）；`@observe()` 裝飾器套用至 5 支 scripts + `openai_helper`；`openai_helper` 結構化呼叫統一輸出；`scripts/02` CLASSIFY prompt 加入 2×10 few-shot examples（68% → 80%+ 分類目標）                                                                                                                                                                                                                                                                                                                                                  | `utils/observability.py`（new），`requirements.txt`（lmnr≥0.5.0），`utils/openai_helper.py`，`scripts/02_extract_qa.py`–`05_evaluate.py`                                                     |
 | 2026-02-28 | v1.5 | Research-grade eval 體系：golden sets 四份（extraction 5 + dedup 40 pairs + qa 50 items + report 5）；`utils/search_engine.py`（new，`SearchEngine` + 模組級 `compute_keyword_boost`）；`app/core/store.py` 新增 `hybrid_search()`；`config.py` 新增 `SEMANTIC_WEIGHT=0.7 / KEYWORD_WEIGHT=0.3`；`scripts/05_evaluate.py` 新增 4 函式（`evaluate_extraction/dedup/dedup_threshold_sweep/report_quality`）+ 7 CLI flags；`04_generate_report.py` 消除 `_compute_keyword_boost` 重複（改 delegate）                                                                                                                                                | `eval/`（4 golden JSONs），`utils/search_engine.py`（new），`app/core/store.py`，`config.py`，`scripts/04_generate_report.py`，`scripts/05_evaluate.py`                                      |
+| 2026-02-28 | v1.6 | **Claude Code LLM 引擎完整實現**：(1) 新增 3 層架構（Layer 1: seo-qa-pipeline.md skill，Layer 2: qa_tools.py CLI 無 OpenAI 依賴，Layer 3: 4 個 slash commands）；(2) 新增 4 個 slash commands — `/search`（關鍵字加權），`/chat`（互動式 RAG），`/generate-report`（週報生成），`/evaluate-qa`（品質評估）；(3) 更新現有 commands（/extract-qa、/dedupe-classify、/pipeline-local）使用 qa_tools.py；(4) `qa_tools.py`（new，549 行，10 個子命令）— 完全不依賴 config import，使用 PROJECT_ROOT 直接路徑；(5) `scripts/05_evaluate.py` 新增 4 個 CLI flags（--provider、--extraction-engine、--model、--update-baseline）+ 版本化 eval 輸出；(6) `config.py` Lazy Loading 完全化（env var 延遲驗證 + PEP 562）；(7) 新增 2 個 learned skills（env-var-lazy-loading-multi-step、hybrid-search-keyword-boost）                                                                                                            | `.claude/skills/seo-qa-pipeline.md`，`.claude/commands/`（4 new），`scripts/qa_tools.py`（new），`config.py`，`scripts/05_evaluate.py`，`CLAUDE.md`，`utils/metrics_parser.py`，新增 `output/evals/` + `eval_baseline.json`，新增 `~/.claude/skills/learned/`（2 new）  |
 
 ### 更新架構圖的 SOP
 
