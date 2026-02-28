@@ -441,3 +441,44 @@ span_id  = str(span_ctx.span_id)  if span_ctx else None
 ```
 
 詳見 `~/.claude/skills/learned/laminar-0.5x-span-context-api.md`。
+
+---
+
+### Laminar span.set_metadata() — Pipeline 報告型 metadata 記錄（2026-03-01）
+
+在報告生成類腳本（非 API endpoint）中記錄結構化 metadata 到 Laminar 的推薦模式：
+
+```python
+def _record_laminar_step_metadata(stats: dict, ...) -> None:
+    """記錄 step metadata 到 Laminar span（降級安全）"""
+    try:
+        from lmnr import current_span
+        span = current_span()
+        if span:
+            span.set_metadata({
+                "step": "step_name",        # 固定 step 識別符
+                "judge_model": config.EVAL_JUDGE_MODEL,   # 動態從 config 取
+                "knowledge_base_size": total_qa,          # 動態計算，不硬編碼
+                # ... 其他動態指標
+            })
+    except Exception:
+        pass  # Laminar 未設定或 span 不在 context，靜默略過
+```
+
+**關鍵規則**：
+
+1. **絕不硬編碼歷史評分**（e.g. `"grounding_score": 5`）在 metadata 中 — 報告生成函式無法取得 eval 結果，硬編碼只會讓每次 trace 都顯示錯誤的靜態數字
+2. **KB 大小動態計算**：從 `qa_final.json` 讀取 `len(json.load(f))`，不硬編碼 717/725 等歷史值
+3. **judge_model 從 config**：`config.EVAL_JUDGE_MODEL`，不硬編碼 `"gpt-5-mini"`
+4. **每個 step 獨立 helper function**：`_record_laminar_eval_metadata()` / `_record_laminar_comparison_metadata()`，提升可測試性
+
+**各 step 記錄的 metadata 鍵**：
+
+| Step | Metadata Keys |
+|------|--------------|
+| `04_generate_report` | `step`, `knowledge_base_size`, `generation_timestamp`, `character_count`, `qa_used_count` |
+| `05_evaluate` | `step`, `judge_model`, `sample_size`, `*_mean`, `*_count`（4 維度）, `calibration_*`, retrieval 指標 |
+| `compare_providers` | `step`, `judge_model`, `provider_count`, `provider_N_*`（name/avg_score/topic_coverage/維度分） |
+
+詳見：`scripts/04_generate_report.py`、`scripts/05_evaluate.py`、`scripts/compare_providers.py`。
+

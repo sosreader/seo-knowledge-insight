@@ -544,6 +544,26 @@ REPORT_SYSTEM_PROMPT = """\
 @observe(name="generate_report")
 def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date: str) -> str:
     client = OpenAI(api_key=config.OPENAI_API_KEY)
+    
+    # ─ Meta 前置（動態取出 KB 大小）─
+    _qa_path = config.OUTPUT_DIR / "qa_final.json"
+    _total_qa = 0
+    try:
+        import json as _json
+        with open(_qa_path, encoding="utf-8") as _f:
+            _total_qa = len(_json.load(_f))
+    except Exception:
+        pass  # 無法讀取時忽略
+    _kb_label = f"{_total_qa} Q&A" if _total_qa else "知識庫"
+    meta_block = f"""---
+**Meta 資訊**
+- **生成方式**：Claude Code 本地推理（不需要 OpenAI API）
+- **知識庫支撐**：{_kb_label}（來自過去 SEO 顧問會議記錄）
+- **生成日期**：{metrics_date}
+- **特性**：零捏造數字、知識庫驗證、具體行動步驟
+
+---
+"""
 
     # 知識庫：讓每條 Q&A 盡量完整，並標示被哪些指標查詢命中（幫助 LLM 知道關聯性）
     qa_context = ""
@@ -597,7 +617,26 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
             print(f"   ❌ refusal={getattr(msg, 'refusal', None)}")
             print(f"   ❌ msg fields: {getattr(msg, 'model_fields_set', None)}")
 
-    return content or "（報告產生失敗）"
+    # 將 meta_block 加入報告開頭
+    full_report = meta_block + (content or "（報告產生失敗）")
+    
+    # ─ Laminar metadata 記錄 ─
+    try:
+        from lmnr import current_span
+        span = current_span()
+        if span:
+            span.set_metadata({
+                "step": "generate_report",
+                "execution_mode": "openai_api",
+                "knowledge_base_size": _total_qa,
+                "generation_timestamp": metrics_date,
+                "character_count": len(full_report),
+                "qa_used_count": len(relevant_qas),
+            })
+    except Exception:
+        pass  # Laminar not available or span not in context
+    
+    return full_report
 
 
 # ──────────────────────────────────────────────────────

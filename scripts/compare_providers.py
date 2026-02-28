@@ -273,6 +273,48 @@ def _score_cell(dim: dict | None) -> str:
     return "N/A"
 
 
+# ──────────────────────────────────────────────────────
+# Laminar metadata 記錄
+# ──────────────────────────────────────────────────────
+
+def _record_laminar_comparison_metadata(results: list[dict], judge_model: str, provider_count: int) -> None:
+    """記錄 Provider 比較 metadata 到 Laminar"""
+    try:
+        from lmnr import current_span
+        span = current_span()
+        if span:
+            # 計算各 provider 的成績
+            metadata = {
+                "step": "compare_providers",
+                "judge_model": judge_model,
+                "provider_count": provider_count,
+            }
+            
+            # 逐個 provider 記錄
+            for i, result in enumerate(sorted(results, key=lambda r: r.get("avg_score") or 0, reverse=True)):
+                provider = result.get("provider", "unknown")
+                prefix = f"provider_{i+1}"
+                metadata[f"{prefix}_name"] = provider
+                metadata[f"{prefix}_avg_score"] = result.get("avg_score") or 0
+                metadata[f"{prefix}_topic_coverage"] = result.get("topic_coverage", 0)
+                
+                # 各維度分數
+                if isinstance(result.get("grounding"), dict):
+                    metadata[f"{prefix}_grounding"] = result["grounding"].get("score", 0)
+                if isinstance(result.get("actionability"), dict):
+                    metadata[f"{prefix}_actionability"] = result["actionability"].get("score", 0)
+                if isinstance(result.get("relevance"), dict):
+                    metadata[f"{prefix}_relevance"] = result["relevance"].get("score", 0)
+            
+            span.set_metadata(metadata)
+    except Exception:
+        pass  # Laminar not available or span not in context
+
+
+# ──────────────────────────────────────────────────────
+# 報告生成
+# ──────────────────────────────────────────────────────
+
 def generate_comparison_report(
     results: list[dict],
     golden_case: dict,
@@ -483,6 +525,9 @@ def main() -> None:
 
     # ── 產出報告 ──
     report_md = generate_comparison_report(results, golden_case, judge_model)
+    
+    # 記錄 Laminar 元數據
+    _record_laminar_comparison_metadata(results, judge_model, len(provider_files))
 
     if args.output:
         out_path = Path(args.output)

@@ -749,9 +749,11 @@ def generate_eval_report_md(
     """產生人類可讀的 Markdown 評估報告"""
     lines = [
         "# Q&A 品質評估報告\n",
+        "**[Meta] 評估方式：LLM-as-Judge（gpt-5-mini）| 檢索引擎：Embedding + 關鍵字強化**\n",
         f"- 評估樣本數：{sample_size}",
         f"- 帶原始來源驗證：{'是' if with_source else '否'}",
         f"- 評估日期：{datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"- 總體評分：{sum(stats.get(d, {}).get('mean', 0) for d in ['relevance', 'accuracy', 'completeness', 'granularity']) / 4:.2f}/5",
         "",
     ]
 
@@ -851,6 +853,48 @@ def generate_eval_report_md(
         lines.append("⚠️ Top-1 Precision 低於 70%，排序品質不佳，建議加入 cross-encoder reranking\n")
 
     return "\n".join(lines)
+
+
+# ──────────────────────────────────────────────────────
+# Laminar metadata 記錄
+# ──────────────────────────────────────────────────────
+
+def _record_laminar_eval_metadata(stats: dict, sample_size: int, retrieval_stats: dict | None = None) -> None:
+    """記錄評估 metadata 到 Laminar"""
+    try:
+        from lmnr import current_span
+        span = current_span()
+        if span:
+            metadata = {
+                "step": "evaluate",
+                "sample_size": sample_size,
+                "judge_model": getattr(config, "EVAL_JUDGE_MODEL", "gpt-5-mini"),
+            }
+            
+            # 四維度評分
+            for dim in ["relevance", "accuracy", "completeness", "granularity"]:
+                if dim in stats:
+                    metadata[f"{dim}_mean"] = stats[dim].get("mean", 0)
+                    metadata[f"{dim}_count"] = stats[dim].get("count", 0)
+            
+            # Confidence 校準
+            if "confidence_calibration" in stats:
+                cal = stats["confidence_calibration"]
+                metadata["calibration_appropriate"] = cal.get("合理", 0)
+                metadata["calibration_overconfident"] = cal.get("偏高", 0)
+                metadata["calibration_underconfident"] = cal.get("偏低", 0)
+            
+            # Retrieval 指標
+            if retrieval_stats and "error" not in retrieval_stats:
+                metadata["retrieval_test_cases"] = retrieval_stats.get("total_cases", 0)
+                metadata["keyword_hit_rate"] = retrieval_stats.get("avg_keyword_hit_rate", 0)
+                metadata["category_hit_rate"] = retrieval_stats.get("avg_category_hit_rate", 0)
+                metadata["mean_reciprocal_rank"] = retrieval_stats.get("avg_mrr", 0)
+                metadata["llm_precision"] = retrieval_stats.get("llm_top1_precision", 0)
+            
+            span.set_metadata(metadata)
+    except Exception:
+        pass  # Laminar not available or span not in context
 
 
 # ──────────────────────────────────────────────────────
@@ -1565,6 +1609,9 @@ def main(args: argparse.Namespace) -> None:
     )
     md_path = config.OUTPUT_DIR / "eval_report.md"
     md_path.write_text(md_report, encoding="utf-8")
+
+    # 記錄 Laminar 元數據
+    _record_laminar_eval_metadata(stats, sample_size, retrieval_stats=retrieval_stats)
 
     # 印出摘要
     print("\n" + "=" * 60)
