@@ -4,13 +4,7 @@
     "description": "給定同一份 SEO 數據（2026-02-28 週報原始指標），比較不同 AI provider 輸出的洞察品質",
     "prompt_summary": "分析 seo 數據給我 insight（輸入為含曝光/點擊/CTR/索引/Discover/GA 等多維度的試算表數據）",
     "data_snapshot": "2026-02-28 週：曝光 63,673,783（週+31.8%）、點擊 1,397,190（週+20.3%）、CTR 2.19%（月-10.9%）、檢索未索引 394,406（月+36.2%）、週平均回應時間 948ms（週+72.7%）、GA 工作階段月-16%",
-    "required_topics": [
-      "CTR",
-      "檢索未索引",
-      "回應時間",
-      "Discover",
-      "建議"
-    ],
+    "required_topics": ["CTR", "檢索未索引", "回應時間", "Discover", "建議"],
     "optional_topics": [
       "AI 搜尋流量",
       "tags",

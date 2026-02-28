@@ -8,6 +8,7 @@
 ## 目的
 
 驗證 seo-knowledge-insight 系統相對於通用 LLM（ChatGPT / Claude / Gemini）的差異：
+
 - 是否更接地（grounding）於原始數據？
 - 建議是否更可執行（actionability）？
 - 分析是否更聚焦（relevance）於 SEO 診斷？
@@ -36,12 +37,12 @@ scripts/
 
 `output/provider_<label>_<YYYYMMDD>.md`
 
-| 檔案名 | Provider |
-|--------|----------|
-| `provider_chatgpt_gpt52_<date>.md` | ChatGPT GPT-5.2 |
-| `provider_claude_sonnet46_<date>.md` | Claude Sonnet 4.6 |
-| `provider_gemini_research_<date>.md` | Gemini 2.0 深入研究 |
-| `provider_gemini_thinking_<date>.md` | Gemini 2.0 思考型 |
+| 檔案名                                 | Provider                     |
+| -------------------------------------- | ---------------------------- |
+| `provider_chatgpt_gpt52_<date>.md`     | ChatGPT GPT-5.2              |
+| `provider_claude_sonnet46_<date>.md`   | Claude Sonnet 4.6            |
+| `provider_gemini_research_<date>.md`   | Gemini 2.0 深入研究          |
+| `provider_gemini_thinking_<date>.md`   | Gemini 2.0 思考型            |
 | `provider_system_seoinsight_<date>.md` | 本系統 seo-knowledge-insight |
 
 ---
@@ -98,14 +99,14 @@ scripts/
       "CTR": ["點擊率", "CTR"],
       "回應時間": ["回應時間", "TTFB", "伺服器回應"],
       "Discover": ["Discover", "探索"],
-      "建議": ["建議", "行動", "優先"]
+      "建議": ["建議", "行動", "優先"],
     },
     "evaluation_criteria": {
       "grounding": "分析中的數字/趨勢是否忠實呈現原始資料（不捏造）",
       "actionability": "建議是否具體可執行（有明確行動步驟）",
-      "relevance": "分析是否緊扣 SEO 診斷主題，未偏題"
-    }
-  }
+      "relevance": "分析是否緊扣 SEO 診斷主題，未偏題",
+    },
+  },
 ]
 ```
 
@@ -119,11 +120,11 @@ scripts/
 
 ## 評估維度說明（LLM-as-Judge，gpt-5-mini）
 
-| 維度 | 說明 | 1分 | 5分 |
-|------|------|-----|-----|
-| **Grounding** | 數字是否忠實於原始資料 | 捏造/誇大數字 | 所有數字可在數據中找到 |
-| **Actionability** | 建議是否具體可執行 | 空泛方向 | 有明確行動步驟與查詢範本 |
-| **Relevance** | 分析是否聚焦 SEO 診斷 | 大量偏題 | 完全聚焦，沒有不必要填充 |
+| 維度              | 說明                   | 1分           | 5分                      |
+| ----------------- | ---------------------- | ------------- | ------------------------ |
+| **Grounding**     | 數字是否忠實於原始資料 | 捏造/誇大數字 | 所有數字可在數據中找到   |
+| **Actionability** | 建議是否具體可執行     | 空泛方向      | 有明確行動步驟與查詢範本 |
+| **Relevance**     | 分析是否聚焦 SEO 診斷  | 大量偏題      | 完全聚焦，沒有不必要填充 |
 
 ### 已知限制
 
@@ -143,13 +144,13 @@ scripts/
 
 **Judge**：gpt-5-mini
 
-| Provider | 字元數 | 主題覆蓋 | Grounding | Actionability | Relevance | **平均** |
-|----------|--------|---------|-----------|---------------|-----------|---------|
-| system_seoinsight | 5,011 | 80% | **5** | **5** | **5** | **5.0** |
-| chatgpt_gpt52 | 2,582 | 100% | 3 | 4 | 5 | 4.0 |
-| gemini_thinking | 1,787 | 80% | 3 | 4 | 5 | 4.0 |
-| claude_sonnet46 | 1,225 | 60% | 1 | 3 | 5 | 3.0 |
-| gemini_research | 19,896 | 80% | 1 | 3 | 3 | 2.33 |
+| Provider          | 字元數 | 主題覆蓋 | Grounding | Actionability | Relevance | **平均** |
+| ----------------- | ------ | -------- | --------- | ------------- | --------- | -------- |
+| system_seoinsight | 5,011  | 80%      | **5**     | **5**         | **5**     | **5.0**  |
+| chatgpt_gpt52     | 2,582  | 100%     | 3         | 4             | 5         | 4.0      |
+| gemini_thinking   | 1,787  | 80%      | 3         | 4             | 5         | 4.0      |
+| claude_sonnet46   | 1,225  | 60%      | 1         | 3             | 5         | 3.0      |
+| gemini_research   | 19,896 | 80%      | 1         | 3             | 3         | 2.33     |
 
 **主要觀察**：
 

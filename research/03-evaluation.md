@@ -281,6 +281,7 @@ python scripts/run_pipeline.py --step 5 --sample 50 --with-source
 目前 extraction（5 筆）和 report（5 筆）golden set 樣本數偏小（建議 ≥20 筆達統計顯著性，參考「樣本數 n≥30 原則」）。
 
 **影響**：
+
 - 5 筆樣本只能檢測巨幅品質變化（±20%），無法發現細微回歸（±5%）
 - 95% 信心區間寬度 ≈ ±35%，決策的確信度有限
 
@@ -291,6 +292,7 @@ python scripts/run_pipeline.py --step 5 --sample 50 --with-source
 **Wang et al.（2023, ICLR）** 提出的自洽推理方法：對同一問題採樣多次，取多數意見（majority vote），比單次採樣更穩定。
 
 **本專案建議應用場景**：
+
 - Accuracy 維度：目前單次評估，建議 3 次採樣後取中位數，減少 Judge 隨機波動
 - 成本估算：700 筆 Q&A × 3 倍採樣 × `gpt-5-mini` $0.10/1M tokens ≈ 額外 $0.03
 
@@ -315,13 +317,13 @@ python scripts/run_pipeline.py --step 5 --sample 50 --with-source
 
 ### 結果
 
-| Provider | Grounding | Actionability | Relevance | 平均 |
-|---|---|---|---|---|
-| system_seoinsight | 5 | 5 | 5 | **5.00** |
-| chatgpt | 4 | 4 | 4 | **4.00** |
-| gemini_thinking | 4 | 4 | 4 | **4.00** |
-| claude | 3 | 3 | 3 | **3.00** |
-| gemini_research | 3 | 2 | 2 | **2.33** |
+| Provider          | Grounding | Actionability | Relevance | 平均     |
+| ----------------- | --------- | ------------- | --------- | -------- |
+| system_seoinsight | 5         | 5             | 5         | **5.00** |
+| chatgpt           | 4         | 4             | 4         | **4.00** |
+| gemini_thinking   | 4         | 4             | 4         | **4.00** |
+| claude            | 3         | 3             | 3         | **3.00** |
+| gemini_research   | 3         | 2             | 2         | **2.33** |
 
 ### 為何 system_seoinsight 5.0 滿分
 
@@ -343,6 +345,7 @@ python scripts/run_pipeline.py --step 5 --sample 50 --with-source
 **根因**：reasoning model（`gpt-5-mini-2025-08-07`）將大量 tokens 用於 `reasoning_tokens`，導致 `output_tokens` 耗盡，content 被截斷為空。
 
 **修正**：
+
 - 移除 `response_format` 參數，改用 prompt 指示輸出 JSON
 - 設定 `max_completion_tokens >= 4096`（而非預設 1024）
 - 加上重試邏輯（空白 → sleep 1s → retry）

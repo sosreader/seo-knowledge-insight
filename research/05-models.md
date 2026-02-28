@@ -86,6 +86,7 @@ if "category_judgment" not in result:
 ### reasoning_tokens 特性
 
 gpt-5-mini 屬於 reasoning model，回應中的 `completion_tokens_details` 包含：
+
 ```json
 {
   "reasoning_tokens": 1024,
@@ -102,6 +103,7 @@ gpt-5-mini 屬於 reasoning model，回應中的 `completion_tokens_details` 包
 **根因**：reasoning model 先算完 reasoning tokens，再輸出 content。若 token budget 不足，content 被截斷。JSON schema constraint 進一步增加輸出成本。
 
 **正確做法**：
+
 ```python
 # 錯誤：response_format + reasoning model
 openai.chat.completions.create(
