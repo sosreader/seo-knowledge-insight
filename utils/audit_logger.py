@@ -69,8 +69,8 @@ ACCESS_LOGS_DIR = _OUTPUT_DIR / "access_logs"
 
 def _now_iso() -> str:
     """回傳 UTC ISO 時間戳 2026-02-28T10:00:00.000Z"""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + \
-           f"{datetime.now(timezone.utc).microsecond // 1000:03d}Z"
+    now = datetime.now(timezone.utc)
+    return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
 
 
 def _today_str() -> str:

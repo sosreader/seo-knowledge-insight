@@ -239,7 +239,93 @@ LLM_RESPONSE_MODEL = "gen_ai.response.model"
 
 ---
 
-## 21. API 請求追蹤：Audit Trail（2026-02-28 新增）
+## 23. API 安全：Auth + Rate Limit（OWASP Top 10 風險修復）
+
+> v1.8 識別的 CRITICAL 缺口，本章說明標準做法。
+
+### OWASP API Security Top 10（2023）識別的風險
+
+| API 風險          | 本專案現況      | 修復優先度 | 修復工時 |
+| ----------------- | --------------- | --------- | ------- |
+| **API2:2023 — Broken Authentication**（無認證） | `/api/v1/*` 無 API Key 驗證 | CRITICAL | 2h      |
+| **API4:2023 — Unrestricted Resource Consumption**（無速率限制） | `/api/v1/chat` 每次消耗 GPT token，無限制 | CRITICAL | 2h      |
+| **API1:2023 — Broken Object Level Authorization** | `GET /api/v1/qa/{id}` 無權限檢查（當前所有 QA 公開） | LOW | —       |
+
+### FastAPI API Key 驗證實作（`Depends()` pattern）
+
+標準做法：
+
+```python
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import APIKeyHeader
+
+router = APIRouter()
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+def verify_api_key(api_key: str = Depends(api_key_header)):
+    """驗證 API Key，格式 'sk-...'。"""
+    expected = os.getenv("API_KEY")
+    if not api_key or api_key != expected:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid or missing API key"
+        )
+    return api_key
+
+@router.post("/api/v1/chat")
+async def chat(body: ChatRequest, api_key: str = Depends(verify_api_key)):
+    # api_key 已驗證，可安全使用
+    return await rag_chat(body.message)
+```
+
+**設定**（`.env`）：
+```
+API_KEY=sk-your-secret-key-here
+```
+
+### Rate Limiting：slowapi（FastAPI 官方推薦）
+
+安裝：`pip install slowapi`
+
+```python
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+
+@router.post("/api/v1/chat")
+@limiter.limit("10/minute")  # 每分鐘最多 10 次
+async def chat(body: ChatRequest, request: Request):
+    return await rag_chat(body.message)
+```
+
+**觀測**：命中限制時自動回傳 429 Too Many Requests（RFC 6585）。
+
+### Response Envelope Pattern（Microsoft REST API Guidelines 2024）
+
+統一所有回應格式，方便前端錯誤處理：
+
+```python
+@dataclass
+class APIResponse(Generic[T]):
+    success: bool
+    data: Optional[T] = None
+    error: Optional[str] = None
+    metadata: Optional[dict] = None
+
+# 成功
+return APIResponse(success=True, data=results)
+
+# 錯誤
+return APIResponse(success=False, error="Invalid query", metadata={"timestamp": "..."})
+```
+
+---
+
+## 24. API 請求追蹤：Audit Trail（2026-02-28 新增）
 
 > 資料安全需求：確認哪些 QA 資料被哪些 IP 存取過。
 

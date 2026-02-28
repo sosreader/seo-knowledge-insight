@@ -77,3 +77,62 @@ if "category_judgment" not in result:
 
 ---
 
+## gpt-5-mini Reasoning Token 行為
+
+### 模型版本
+
+現用：`gpt-5-mini-2025-08-07`
+
+### reasoning_tokens 特性
+
+gpt-5-mini 屬於 reasoning model，回應中的 `completion_tokens_details` 包含：
+```json
+{
+  "reasoning_tokens": 1024,
+  "output_tokens": 512
+}
+```
+
+`reasoning_tokens` 是模型內部「思考」消耗的 tokens，不出現在 content 中。如果 `max_completion_tokens` 設定過低（預設 1024），reasoning 本身就可能耗盡預算，導致 `content = ""`。
+
+### 與 `response_format` 的相容性問題
+
+**症狀**：搭配 `json_schema` response_format，回傳 `content` 為空字串或 None。
+
+**根因**：reasoning model 先算完 reasoning tokens，再輸出 content。若 token budget 不足，content 被截斷。JSON schema constraint 進一步增加輸出成本。
+
+**正確做法**：
+```python
+# 錯誤：response_format + reasoning model
+openai.chat.completions.create(
+    model="gpt-5-mini-2025-08-07",
+    response_format={"type": "json_schema", ...},  # 造成空 content
+    max_completion_tokens=1024,  # 太小
+)
+
+# 正確：prompt-based JSON + 足夠的 token budget
+openai.chat.completions.create(
+    model="gpt-5-mini-2025-08-07",
+    # 不傳 response_format
+    max_completion_tokens=4096,  # 足夠 reasoning + output
+    messages=[..., {"role": "user", "content": "...請以 JSON 格式輸出..."}],
+)
+```
+
+### 偵測 reasoning model
+
+```python
+details = response.choices[0].message.model_dump().get("usage", {})
+# 或
+details = response.usage.completion_tokens_details
+is_reasoning = getattr(details, "reasoning_tokens", 0) > 0
+```
+
+### 本專案受影響的地方
+
+- `scripts/compare_providers.py` — Judge 呼叫（已修正）
+- 未來任何使用 gpt-5-mini 搭配 `response_format` 的場景
+
+詳見：`~/.claude/skills/learned/openai-reasoning-model-no-response-format.md`
+
+---

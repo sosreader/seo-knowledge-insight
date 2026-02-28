@@ -9,16 +9,17 @@
 
 **短答：目前不需要，但有明確的升級觸發條件。**
 
-| 面向 | 現況 | 潛在痛點 |
-|------|------|----------|
-| Pipeline Step 2 Q&A 萃取 | 每次執行都重跑 OpenAI，已有 `qa_per_meeting/*.json` 作為隱式 cache | 重新執行時若 Markdown 沒改，仍會重建（浪費 token） |
-| Pipeline Step 3 去重+分類 | 批量呼叫 embedding + LLM merge；輸出到 `qa_final.json` | 每次跑都重算全量 embedding |
-| Pipeline Step 4 週報生成 | 同一份指標 + 同版本知識庫 → 每次都重新產生報告 | 相同輸入無 cache，反覆消耗 token |
-| API Chat | 每次 `/chat` 都呼叫 embedding API + GPT | 相同問題重複收費；無 server-side session |
-| API Session | history 由 client 攜帶，server 無狀態 | 單機 OK；多實例後 session 無法共享 |
-| 部署規模 | 單一 uvicorn process，in-memory store | scale out 後 QAStore 各自載入，embedding cache 無法共享 |
+| 面向                      | 現況                                                               | 潛在痛點                                                |
+| ------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------- |
+| Pipeline Step 2 Q&A 萃取  | 每次執行都重跑 OpenAI，已有 `qa_per_meeting/*.json` 作為隱式 cache | 重新執行時若 Markdown 沒改，仍會重建（浪費 token）      |
+| Pipeline Step 3 去重+分類 | 批量呼叫 embedding + LLM merge；輸出到 `qa_final.json`             | 每次跑都重算全量 embedding                              |
+| Pipeline Step 4 週報生成  | 同一份指標 + 同版本知識庫 → 每次都重新產生報告                     | 相同輸入無 cache，反覆消耗 token                        |
+| API Chat                  | 每次 `/chat` 都呼叫 embedding API + GPT                            | 相同問題重複收費；無 server-side session                |
+| API Session               | history 由 client 攜帶，server 無狀態                              | 單機 OK；多實例後 session 無法共享                      |
+| 部署規模                  | 單一 uvicorn process，in-memory store                              | scale out 後 QAStore 各自載入，embedding cache 無法共享 |
 
 **觸發升級 Redis 的條件：**
+
 1. API 需要 horizontal scaling（多 pod/process）
 2. Chat 有大量重複問題（命中率 > 30% 時 cache 值回）
 3. pipeline 需要 scheduled 定期執行（避免重複萃取）
@@ -37,6 +38,7 @@ SETNX key value           # set-if-not-exist（分散式鎖的建構塊）
 ```
 
 **本專案用途：**
+
 - LLM response cache：`hash(prompt) → json_response`
 - Embedding cache：`hash(text) → base64_encoded_vector`
 - 週報 cache：`hash(metrics_tsv + qa_version) → report_markdown`
@@ -53,6 +55,7 @@ EXPIRE session:abc 86400  # TTL 1天
 ```
 
 **本專案用途：**
+
 - Session store：`session:{id}` → `{history: [...], created_at, last_active}`
 - Pipeline run metadata：`pipeline:run:{run_id}` → `{step, status, started_at, token_used}`
 
@@ -66,6 +69,7 @@ ZRANGE leaderboard 0 9 WITHSCORES REV   # top-10
 ```
 
 **本專案用途：**
+
 - 熱門查詢追蹤：記錄使用者問了哪些問題、哪些 Q&A 被取用最多次
 - 決定哪些 embedding 值得納入 cache（依使用頻率淘汰冷門 cache）
 
@@ -83,6 +87,7 @@ for msg in redis.subscribe("pipeline:events"):
 ```
 
 **本專案用途：**
+
 - Pipeline 完成通知 → API server 自動熱載 QAStore（不需要重啟）
 - Step 4 週報產出 → 推送通知
 
@@ -96,6 +101,7 @@ XREAD COUNT 100 STREAMS audit:chat 0
 ```
 
 **本專案用途：**
+
 - 取代目前的 JSONL 稽核日誌（`output/access_logs/`）
 - 支援 consumer group，多個消費者（分析、告警）同時讀取
 
@@ -103,13 +109,13 @@ XREAD COUNT 100 STREAMS audit:chat 0
 
 ### 2.6 TTL 策略（所有資料類型通用）
 
-| Cache 類型 | 建議 TTL | 理由 |
-|-----------|---------|------|
-| Embedding（查詢向量） | 24 小時 | 相同問題在同一天多次出現機率高 |
-| RAG 答案 | 2 小時 | 知識庫可能更新 |
-| Session（對話歷史） | 7 天 | 合理的對話保留期 |
-| Pipeline 結果（週報） | 30 天 | 同份指標不會重算 |
-| Meeting Q&A 萃取 | 永久（以 hash 為 key） | 只要 Markdown 沒改就不重萃取 |
+| Cache 類型            | 建議 TTL               | 理由                           |
+| --------------------- | ---------------------- | ------------------------------ |
+| Embedding（查詢向量） | 24 小時                | 相同問題在同一天多次出現機率高 |
+| RAG 答案              | 2 小時                 | 知識庫可能更新                 |
+| Session（對話歷史）   | 7 天                   | 合理的對話保留期               |
+| Pipeline 結果（週報） | 30 天                  | 同份指標不會重算               |
+| Meeting Q&A 萃取      | 永久（以 hash 為 key） | 只要 Markdown 沒改就不重萃取   |
 
 ---
 
@@ -456,17 +462,18 @@ def _load_versions() -> dict:
 
 **目標：讓 Step 2/4 不重複消耗 token**
 
-| # | 任務 | 檔案 | 估計工時 |
-|---|------|------|----------|
-| 1 | 建立 `utils/pipeline_cache.py` | 新增 | 1h |
-| 2 | Step 2 整合 cache（per-meeting 萃取） | `scripts/02_extract_qa.py` | 1h |
-| 3 | Step 3 整合 embedding cache | `utils/openai_helper.py` | 1h |
-| 4 | Step 4 整合 report cache | `scripts/04_generate_report.py` | 1h |
-| 5 | 建立 `utils/pipeline_version.py` | 新增 | 1h |
-| 6 | `.gitignore` 加入 `output/.cache/` | `.gitignore` | 5min |
-| 7 | 測試：相同輸入跑兩次驗證 cache hit | `tests/test_cache.py` | 1h |
+| #   | 任務                                  | 檔案                            | 估計工時 |
+| --- | ------------------------------------- | ------------------------------- | -------- |
+| 1   | 建立 `utils/pipeline_cache.py`        | 新增                            | 1h       |
+| 2   | Step 2 整合 cache（per-meeting 萃取） | `scripts/02_extract_qa.py`      | 1h       |
+| 3   | Step 3 整合 embedding cache           | `utils/openai_helper.py`        | 1h       |
+| 4   | Step 4 整合 report cache              | `scripts/04_generate_report.py` | 1h       |
+| 5   | 建立 `utils/pipeline_version.py`      | 新增                            | 1h       |
+| 6   | `.gitignore` 加入 `output/.cache/`    | `.gitignore`                    | 5min     |
+| 7   | 測試：相同輸入跑兩次驗證 cache hit    | `tests/test_cache.py`           | 1h       |
 
 **預期效果：**
+
 - Step 2 重跑時，未修改的 Markdown 全數命中 cache，節省 ~90% token
 - Step 4 同一週指標重跑，直接回傳 cache，節省 100% token
 
@@ -476,27 +483,27 @@ def _load_versions() -> dict:
 
 **觸發條件：** API 需要多 instance、chat 呼叫量顯著增加
 
-| # | 任務 | 檔案 | 估計工時 |
-|---|------|------|----------|
-| 1 | 建立 `utils/redis_cache.py` | 新增 | 1h |
-| 2 | 建立 `utils/cache.py` 統一入口 | 新增 | 30min |
-| 3 | `config.py` 加入 CACHE_BACKEND / REDIS_* 設定 | `config.py` | 30min |
-| 4 | API chat embedding cache | `app/core/chat.py` | 1h |
-| 5 | API RAG answer semantic cache | `app/core/chat.py` | 1h |
-| 6 | `docker-compose.yml` 加入 Redis service | 新增/修改 | 30min |
-| 7 | 測試：Redis cache 命中率驗證 | `tests/test_redis_cache.py` | 1h |
+| #   | 任務                                           | 檔案                        | 估計工時 |
+| --- | ---------------------------------------------- | --------------------------- | -------- |
+| 1   | 建立 `utils/redis_cache.py`                    | 新增                        | 1h       |
+| 2   | 建立 `utils/cache.py` 統一入口                 | 新增                        | 30min    |
+| 3   | `config.py` 加入 CACHE*BACKEND / REDIS*\* 設定 | `config.py`                 | 30min    |
+| 4   | API chat embedding cache                       | `app/core/chat.py`          | 1h       |
+| 5   | API RAG answer semantic cache                  | `app/core/chat.py`          | 1h       |
+| 6   | `docker-compose.yml` 加入 Redis service        | 新增/修改                   | 30min    |
+| 7   | 測試：Redis cache 命中率驗證                   | `tests/test_redis_cache.py` | 1h       |
 
 ---
 
 ### Phase 3：進階功能（視需求）
 
-| 功能 | 說明 | 前提條件 |
-|------|------|----------|
-| Server-side Session | `app/core/session.py` + `/chat` route 改回傳 session_id | Phase 2 Redis 就緒 |
-| Pipeline Auto-Reload | Step 3 完成後 Pub/Sub 通知 API 熱載 QAStore | Phase 2 Redis 就緒 |
-| Audit Log → Redis Streams | 取代 JSONL 檔案，支援即時查詢 | Phase 2 Redis 就緒 |
-| Semantic Dedup Cache | 去重時已計算過的 pair 不重算 cosine | Phase 1 磁碟 cache 先驗證 ROI |
-| Hot Query Tracking | SortedSet 記錄問題頻率 → 優化知識庫 | Phase 2 |
+| 功能                      | 說明                                                    | 前提條件                      |
+| ------------------------- | ------------------------------------------------------- | ----------------------------- |
+| Server-side Session       | `app/core/session.py` + `/chat` route 改回傳 session_id | Phase 2 Redis 就緒            |
+| Pipeline Auto-Reload      | Step 3 完成後 Pub/Sub 通知 API 熱載 QAStore             | Phase 2 Redis 就緒            |
+| Audit Log → Redis Streams | 取代 JSONL 檔案，支援即時查詢                           | Phase 2 Redis 就緒            |
+| Semantic Dedup Cache      | 去重時已計算過的 pair 不重算 cosine                     | Phase 1 磁碟 cache 先驗證 ROI |
+| Hot Query Tracking        | SortedSet 記錄問題頻率 → 優化知識庫                     | Phase 2                       |
 
 ---
 
@@ -504,13 +511,13 @@ def _load_versions() -> dict:
 
 以下是常見的「誤用 Redis」情境，本專案目前不屬於這些：
 
-| 情境 | 為什麼目前不需要 |
-|------|----------------|
-| 分散式 Session | API 是 stateless single instance |
-| Rate Limiting | 沒有公開 API，不需要 |
-| Message Queue | Pipeline 是 CLI sequential，無 async job |
-| Leaderboard | 使用量尚小，SQLite 或 JSON 更輕量 |
-| Pub/Sub | 單進程不需要跨進程通訊 |
+| 情境           | 為什麼目前不需要                         |
+| -------------- | ---------------------------------------- |
+| 分散式 Session | API 是 stateless single instance         |
+| Rate Limiting  | 沒有公開 API，不需要                     |
+| Message Queue  | Pipeline 是 CLI sequential，無 async job |
+| Leaderboard    | 使用量尚小，SQLite 或 JSON 更輕量        |
+| Pub/Sub        | 單進程不需要跨進程通訊                   |
 
 **結論：Phase 1 磁碟 cache 解決 80% 的 token 浪費問題，且無部署依賴。**
 **Redis 在 Phase 2 才真正發揮價值（API scale out、embedding cache 共享）。**
@@ -519,14 +526,14 @@ def _load_versions() -> dict:
 
 ## 六、Token 節省估算
 
-| 步驟 | 目前每次消耗 | Cache 後 | 節省 |
-|------|------------|---------|------|
-| Step 2 全量萃取（30份會議） | ~150,000 tokens | ~0（全命中） | 100% |
-| Step 2 增量（1份新會議） | ~5,000 tokens | 5,000 tokens | 0%（新內容） |
-| Step 3 全量 embedding（300 QA） | ~30,000 tokens embed | ~0（版本未變） | 100% |
-| Step 3 分類（300 QA） | ~60,000 tokens | ~0 | 100% |
-| Step 4 週報生成 | ~8,000 tokens | 0（同週指標） | 100% |
-| API chat（每次） | ~500 tokens | 0（相同問題） | ~30%（估計命中率） |
+| 步驟                            | 目前每次消耗         | Cache 後       | 節省               |
+| ------------------------------- | -------------------- | -------------- | ------------------ |
+| Step 2 全量萃取（30份會議）     | ~150,000 tokens      | ~0（全命中）   | 100%               |
+| Step 2 增量（1份新會議）        | ~5,000 tokens        | 5,000 tokens   | 0%（新內容）       |
+| Step 3 全量 embedding（300 QA） | ~30,000 tokens embed | ~0（版本未變） | 100%               |
+| Step 3 分類（300 QA）           | ~60,000 tokens       | ~0             | 100%               |
+| Step 4 週報生成                 | ~8,000 tokens        | 0（同週指標）  | 100%               |
+| API chat（每次）                | ~500 tokens          | 0（相同問題）  | ~30%（估計命中率） |
 
 ---
 
@@ -551,5 +558,5 @@ output/
 
 ---
 
-*計畫產出日期：2026-02-28*
-*適用版本：目前 seo-knowledge-insight 架構（單一 FastAPI + CLI pipeline）*
+_計畫產出日期：2026-02-28_
+_適用版本：目前 seo-knowledge-insight 架構（單一 FastAPI + CLI pipeline）_

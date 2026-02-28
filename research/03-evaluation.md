@@ -276,4 +276,77 @@ python scripts/run_pipeline.py --step 5 --sample 50 --with-source
 - **Q&A golden**：50 items；10 categories 各 ≥3 條；包含 `expected_category`、`expected_difficulty`、`expected_evergreen`
 - **週報 golden**：5 scenarios；含 `required_topics[]`、`optional_topics[]`、`source_qa_keywords[]`、`min_grounding_score`
 
+### 樣本數不足的統計風險
+
+目前 extraction（5 筆）和 report（5 筆）golden set 樣本數偏小（建議 ≥20 筆達統計顯著性，參考「樣本數 n≥30 原則」）。
+
+**影響**：
+- 5 筆樣本只能檢測巨幅品質變化（±20%），無法發現細微回歸（±5%）
+- 95% 信心區間寬度 ≈ ±35%，決策的確信度有限
+
+**未來擴充建議**：每個場景增加至 ≥20 筆，共 100+ golden cases。
+
+### Self-Consistency 採樣減少隨機性
+
+**Wang et al.（2023, ICLR）** 提出的自洽推理方法：對同一問題採樣多次，取多數意見（majority vote），比單次採樣更穩定。
+
+**本專案建議應用場景**：
+- Accuracy 維度：目前單次評估，建議 3 次採樣後取中位數，減少 Judge 隨機波動
+- 成本估算：700 筆 Q&A × 3 倍採樣 × `gpt-5-mini` $0.10/1M tokens ≈ 額外 $0.03
+
+---
+
+## 五大 AI Provider 比較評估
+
+> 參考：`scripts/compare_providers.py`、`research/09-provider-comparison.md`、`eval/golden_seo_analysis.json`
+
+### 實驗設計
+
+**任務**：給定相同 SEO GSC 資料（impressions/clicks/CTR/position 表），五個 Provider 各自生成分析報告，Judge 模型（gpt-5.2）對每份報告的 grounding、actionability、relevance 三個維度進行 1–5 分打分。
+
+**五個 Provider**：
+| Provider | 描述 |
+|---|---|
+| `system_seoinsight` | 本專案 `04_generate_report.py` 生成的結構化報告 |
+| `chatgpt` | ChatGPT 手動操作輸出 |
+| `gemini_thinking` | Google Gemini 思考模式 |
+| `claude` | Anthropic Claude 直接輸出 |
+| `gemini_research` | Google Gemini Deep Research 模式 |
+
+### 結果
+
+| Provider | Grounding | Actionability | Relevance | 平均 |
+|---|---|---|---|---|
+| system_seoinsight | 5 | 5 | 5 | **5.00** |
+| chatgpt | 4 | 4 | 4 | **4.00** |
+| gemini_thinking | 4 | 4 | 4 | **4.00** |
+| claude | 3 | 3 | 3 | **3.00** |
+| gemini_research | 3 | 2 | 2 | **2.33** |
+
+### 為何 system_seoinsight 5.0 滿分
+
+1. **Grounding**：報告引用數字時加上 `(參考：...)` 格式，Judge 可以追溯每項論斷到原始資料
+2. **Actionability**：每個洞察附帶具體行動建議，而非泛泛而論
+3. **Relevance**：推論型結論加上 `(推論)` 標籤，讓 Judge 區分事實與推斷
+
+### Golden Case 設計原則（來自本次實驗）
+
+1. **提供結構化資料**：Judge 需要有數字可查核；純文字分析很難判斷 grounding
+2. **輸出格式要有說明**：告訴 LLM Judge 要評估的是哪份檔案，避免格式混淆
+3. **reason 欄位必填**：Judge prompt 要求 reason 非空，否則分數缺乏解釋
+4. **多維度分離評分**：將 grounding / actionability / relevance 分開評估，比單一分更有診斷價值
+
+### gpt-5-mini + `response_format` 導致空白輸出
+
+**現象**：Judge 呼叫 `gpt-5-mini` 搭配 `json_schema` response_format，回傳 `content = ""`（空字串）。
+
+**根因**：reasoning model（`gpt-5-mini-2025-08-07`）將大量 tokens 用於 `reasoning_tokens`，導致 `output_tokens` 耗盡，content 被截斷為空。
+
+**修正**：
+- 移除 `response_format` 參數，改用 prompt 指示輸出 JSON
+- 設定 `max_completion_tokens >= 4096`（而非預設 1024）
+- 加上重試邏輯（空白 → sleep 1s → retry）
+
+詳見：`~/.claude/skills/learned/openai-reasoning-model-no-response-format.md`
+
 ---

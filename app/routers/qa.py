@@ -68,10 +68,10 @@ def get_categories() -> CategoriesResponse:
 
 @router.get("/{item_id}", response_model=QAResponse)
 def get_qa_item(item_id: int) -> QAResponse:
-    for item in store.items:
-        if item.id == item_id:
-            return _to_schema(item)
-    raise HTTPException(status_code=404, detail=f"QA id={item_id} not found")
+    item = store.get_item_by_id(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"QA id={item_id} not found")
+    return _to_schema(item)
 
 
 @router.get("", response_model=QAListResponse)

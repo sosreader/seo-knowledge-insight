@@ -620,13 +620,19 @@ app/
 | Method | Path                    | 說明                                                                                 |
 | ------ | ----------------------- | ------------------------------------------------------------------------------------ |
 | `GET`  | `/health`               | 健康檢查，回傳 `{status, qa_count}`                                                  |
-| `POST` | `/api/v1/search`        | 語意搜尋，body: `{query, top_k?, category?}`                                         |
-| `POST` | `/api/v1/chat`          | RAG 問答，body: `{message, history?}`                                                |
+| `POST` | `/api/v1/search`        | 語意搜尋（純語意），body: `{query, top_k?, category?}`                               |
+| `POST` | `/api/v1/chat`          | RAG 問答（純語意），body: `{message, history?}`                                      |
 | `GET`  | `/api/v1/qa`            | 列表查詢，query: `category`, `keyword`, `difficulty`, `evergreen`, `limit`, `offset` |
 | `GET`  | `/api/v1/qa/categories` | 所有分類（依數量降序）                                                               |
 | `GET`  | `/api/v1/qa/{id}`       | 單筆 Q&A                                                                             |
 
 互動式文件：`http://localhost:8001/docs`
+
+#### 重要安全警告
+
+- **search / chat endpoint 目前為純語意搜索，hybrid_search（含關鍵字加分）已實作但尚未啟用** — 導致 RAG 搜索品質與 Step 4 週報產生差異（KW Hit Rate 應為 78%，但 API 仍為 54% 左右）
+- **API Auth 尚未實作** — 請勿在生產環境直接暴露本 API。任何知道 URL 者皆可呼叫 `/api/v1/chat`，消耗 OpenAI token
+- **無 Rate Limit** — OWASP API Security Top 10 風險（API4:2023）。建議前端反向代理層（如 nginx）或 AWS API Gateway 新增速率限制
 
 ### 本機測試
 

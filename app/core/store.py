@@ -41,6 +41,8 @@ class QAStore:
     embeddings: np.ndarray = field(default_factory=lambda: np.empty((0, 1536)))
     # Hybrid search engine（load() 後初始化）
     _engine: Optional[SearchEngine] = field(default=None, repr=False)
+    # O(1) id 查詢索引（load() 後建立）
+    _id_index: dict = field(default_factory=dict, repr=False)
 
     def load(
         self,
@@ -74,6 +76,9 @@ class QAStore:
         norms = np.where(norms == 0, 1.0, norms)
         self.embeddings = embeddings_raw / norms
 
+        # 建立 id → QAItem 索引，讓 get_item_by_id() 達到 O(1) 查詢
+        self._id_index = {item.id: item for item in self.items}
+
         logger.info("QAStore loaded: %d items, embeddings shape %s", len(self.items), self.embeddings.shape)
 
         # 初始化 hybrid search engine（shared embeddings，不重算）
@@ -98,6 +103,10 @@ class QAStore:
                 embeddings_raw.shape[0],
             )
             self._engine = None
+
+    def get_item_by_id(self, qa_id: int) -> Optional[QAItem]:
+        """O(1) id 查詢，load() 後可用；若不存在回傳 None。"""
+        return self._id_index.get(qa_id)
 
     def search(
         self,

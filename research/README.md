@@ -15,6 +15,8 @@
 | [05-models.md](./05-models.md) | 模型選擇決策 / Embedding 模型比較 |
 | [06-project-architecture.md](./06-project-architecture.md) | 本專案架構 / 決策紀錄 / Changelog |
 | [07-deployment.md](./07-deployment.md) | FastAPI RAG API 化 / ECR + EC2 部署 |
+| [08-fetch-optimization.md](./08-fetch-optimization.md) | Notion 爬取優化 / ETag / 增量更新 |
+| [09-provider-comparison.md](./09-provider-comparison.md) | AI Provider 輸出品質比較方法論與歷次跑分結果 |
 
 ---
 

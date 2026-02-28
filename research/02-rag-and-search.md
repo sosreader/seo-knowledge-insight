@@ -265,6 +265,27 @@ boost_matrix = compute_keyword_boost(queries, qa_pairs)
 > `KW_BOOST` 是加法（加到語意分上），`SEMANTIC_WEIGHT` 是乘法（縮放語意分）。
 > 兩者獨立控制，不重複計算。
 
+### Reciprocal Rank Fusion（RRF）— 未來改進方向
+
+目前本專案用線性加權混合 semantic score + keyword boost：
+
+```python
+final_score = semantic_weight * cosine_sim + keyword_boost
+```
+
+**Cormack et al.（2009, SIGIR）提出的 RRF 公式**，對 score scale 不敏感、更 robust：
+
+```
+RRF(d) = Σ 1/(k + rank_i(d))
+```
+
+其中 `k=60`（業界預設），`rank_i(d)` 是文件 d 在第 i 個排序器的排名。
+
+**優勢**：不需要調整權重參數（`SEMANTIC_WEIGHT`, `KW_BOOST`），不同排序器的分數差異大時仍穩定。
+**當前決策**：線性加權已驗證可行（KW Hit Rate 54% → 78%），RRF 列為 MEDIUM 優先改進路徑。
+
+---
+
 ### `search_multi()`：週報多 query 搜尋
 
 ```python
@@ -308,11 +329,13 @@ class QAStore:
 | `scripts/05_evaluate.py`        | `--eval-retrieval` 模式建立暫時 `SearchEngine` 實例做 MRR 評估      |
 
 ---
+
 ## 本專案 Pipeline Cache 設計（v1.6）
 
 ### 為什麼需要 Pipeline Cache？
 
 RAG pipeline 有多個 LLM 呼叫點，每次重跑都重複付費：
+
 - Step 2 萃取：`gpt-5.2` 解讀完整會議記錄（最貴，每份 ~2k tokens）
 - Step 3 embedding：`text-embedding-3-small` × 700 筆
 - Step 3 classify：`gpt-5-mini` × 700 筆（每 Q&A 一次 classify）
@@ -328,6 +351,7 @@ RAG pipeline 有多個 LLM 呼叫點，每次重跑都重複付費：
 ```
 
 設計來自 Git（git object storage）和 IPFS：
+
 - 不依賴時間、順序或檔名
 - 同一份會議記錄無論何時跑，永遠命中同一個 cache entry
 - 不同輸入即使只差一個字，也對應不同 key（無碰撞）
@@ -352,13 +376,13 @@ output/.cache/
 
 ### Cache 整合點與 cache key 設計
 
-| Namespace   | Cache Key                              | Cached Value                    | 位置                         |
-| ----------- | -------------------------------------- | ------------------------------- | ---------------------------- |
-| extraction  | 原始 Markdown content                  | Q&A pairs list（不含 source）   | `02_extract_qa.py`            |
-| embedding   | 單一文字 text                          | `list[float]` 向量              | `openai_helper.get_embeddings` |
-| classify    | `question + "\n\n" + answer`           | `{category, difficulty, ...}`   | `openai_helper.classify_qa`   |
-| merge       | sorted Q&A pairs JSON                  | `{question, answer, keywords, source_dates}` | `openai_helper.merge_similar_qas` |
-| report      | metrics_summary + QA version ID        | `{"report_text": str}`          | `04_generate_report.py`       |
+| Namespace  | Cache Key                       | Cached Value                                 | 位置                              |
+| ---------- | ------------------------------- | -------------------------------------------- | --------------------------------- |
+| extraction | 原始 Markdown content           | Q&A pairs list（不含 source）                | `02_extract_qa.py`                |
+| embedding  | 單一文字 text                   | `list[float]` 向量                           | `openai_helper.get_embeddings`    |
+| classify   | `question + "\n\n" + answer`    | `{category, difficulty, ...}`                | `openai_helper.classify_qa`       |
+| merge      | sorted Q&A pairs JSON           | `{question, answer, keywords, source_dates}` | `openai_helper.merge_similar_qas` |
+| report     | metrics_summary + QA version ID | `{"report_text": str}`                       | `04_generate_report.py`           |
 
 ### 重要設計決策
 
@@ -381,10 +405,11 @@ tmp.replace(path)
 ### 版本 Registry（utils/pipeline_version.py）
 
 每次 Step 3/4 完成後，呼叫 `record_artifact()` 記錄：
+
 - content hash（16 char）→ 偵測內容變動
 - 使用 / 節省的 tokens
 - artifacts 路徑（不可變 JSON snapshot）
 
-*`output/.versions/registry.json` 納入 git，step artifacts 本身 gitignored（可從 cache 重建）。*
+_`output/.versions/registry.json` 納入 git，step artifacts 本身 gitignored（可從 cache 重建）。_
 
 ---

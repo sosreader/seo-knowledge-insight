@@ -79,8 +79,11 @@ def client():
         # lifespan 已執行完畢，現在安全覆蓋
         store.items = list(FAKE_ITEMS)
         store.embeddings = FAKE_EMBEDDINGS.copy()
+        # _id_index 必須與 items 同步，否則 get_item_by_id() 會查到舊資料
+        store._id_index = {item.id: item for item in store.items}
         yield c
 
     # 清空，讓下一個 fixture 從乾淨狀態開始
     store.items = []
     store.embeddings = np.empty((0, 1536), dtype=np.float32)
+    store._id_index = {}

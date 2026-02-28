@@ -1,0 +1,48 @@
+[
+  {
+    "id": "seo_metrics_analysis_20260228",
+    "description": "給定同一份 SEO 數據（2026-02-28 週報原始指標），比較不同 AI provider 輸出的洞察品質",
+    "prompt_summary": "分析 seo 數據給我 insight（輸入為含曝光/點擊/CTR/索引/Discover/GA 等多維度的試算表數據）",
+    "data_snapshot": "2026-02-28 週：曝光 63,673,783（週+31.8%）、點擊 1,397,190（週+20.3%）、CTR 2.19%（月-10.9%）、檢索未索引 394,406（月+36.2%）、週平均回應時間 948ms（週+72.7%）、GA 工作階段月-16%",
+    "required_topics": [
+      "CTR",
+      "檢索未索引",
+      "回應時間",
+      "Discover",
+      "建議"
+    ],
+    "optional_topics": [
+      "AI 搜尋流量",
+      "tags",
+      "salon",
+      "關鍵字",
+      "EEAT",
+      "Crawl Budget",
+      "sitemap",
+      "工作階段"
+    ],
+    "source_qa_keywords": [
+      "CTR",
+      "檢索未索引",
+      "回應時間",
+      "Discover",
+      "索引",
+      "Organic Search",
+      "伺服器"
+    ],
+    "topic_aliases": {
+      "CTR": ["點擊率", "CTR"],
+      "檢索未索引": ["檢索未索引", "未索引"],
+      "回應時間": ["回應時間", "TTFB", "伺服器回應"],
+      "Discover": ["Discover", "探索"],
+      "建議": ["建議", "行動", "優先"]
+    },
+    "min_grounding_score": 3,
+    "evaluation_criteria": {
+      "grounding": "分析中的數字、百分比、趨勢是否忠實呈現原始資料（不捏造數據、不誇大）",
+      "actionability": "提出的建議是否具體可執行（有明確的行動步驟，非空泛的方向）",
+      "relevance": "分析是否緊扣 SEO 診斷主題，未偏題至無關行銷話題"
+    },
+    "note": "Provider 比較基準：ChatGPT GPT5.2 vs Gemini（深入研究 + 思考型）vs Claude Sonnet 4.6，同 prompt、同數據"
+  }
+]

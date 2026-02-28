@@ -43,7 +43,7 @@ class SearchResponse(BaseModel):
 @router.post("", response_model=SearchResponse)
 async def search(req: SearchRequest, request: Request) -> SearchResponse:
     embedding = await get_embedding(req.query)
-    hits = store.search(embedding, top_k=req.top_k, category=req.category)
+    hits = store.hybrid_search(req.query, embedding, top_k=req.top_k, category=req.category)
 
     results = [
         SearchResult(

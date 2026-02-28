@@ -81,8 +81,8 @@ async def rag_chat(
     # 1. embed 用戶問題
     query_vec = await get_embedding(message)
 
-    # 2. 語意搜尋
-    hits = store.search(query_vec, top_k=config.CHAT_CONTEXT_K)
+    # 2. Hybrid 搜尋（語意 + 關鍵字 boost）
+    hits = store.hybrid_search(message, query_vec, top_k=config.CHAT_CONTEXT_K)
 
     # 3. 組 context
     context = _format_context(hits)

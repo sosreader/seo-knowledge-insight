@@ -570,7 +570,7 @@ def classify_qa(question: str, answer: str) -> dict:
     client = _client()
 
     response = client.chat.completions.create(
-        model="gpt-5-mini",  # 分類用小模型省成本（GPT-5 系列）
+        model=config.CLASSIFY_MODEL,  # 分類用小模型省成本，預設 gpt-5-mini，可透過 CLASSIFY_MODEL env 覆蓋
         messages=[
             {"role": "system", "content": CLASSIFY_SYSTEM_PROMPT},
             {"role": "user", "content": f"Q: {question}\n\nA: {answer}"},
