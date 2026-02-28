@@ -169,6 +169,63 @@ Notion API → [步驟1] fetch → raw_data/notion_json/ + markdown/
 
 ---
 
+## Claude Code 模式 — qa_tools.py CLI（Layer 2 資料介面）
+
+### 架構總覽（三層）
+
+```
+Layer 3：Slash Commands（/search / /chat / /generate-report / /evaluate-qa / /pipeline-local）
+Layer 2：scripts/qa_tools.py（I/O 操作，無 OpenAI 依賴）
+Layer 1：.claude/skills/seo-qa-pipeline.md（此文件，規則與 schema）
+```
+
+### qa_tools.py 子命令速查
+
+```bash
+# 狀態查詢
+python scripts/qa_tools.py pipeline-status          # pipeline 各步驟狀態
+python scripts/qa_tools.py list-unprocessed         # 待萃取的 Markdown 檔
+python scripts/qa_tools.py list-needs-review        # needs_review=true 的 merged Q&A
+
+# 資料操作（無 OpenAI）
+python scripts/qa_tools.py merge-qa                 # per-meeting JSON → qa_all_raw.json
+python scripts/qa_tools.py add-meeting --file <path>       # 增量加入新會議（情境 A）
+python scripts/qa_tools.py fix-meeting --source-file <f>   # 目標性刪除/標記（情境 B）
+python scripts/qa_tools.py fix-meeting --source-file <f> --dry-run  # 預覽影響範圍
+python scripts/qa_tools.py diff-snapshot --before <snapshot>        # 與快照比對
+
+# 搜尋（無 OpenAI）
+python scripts/qa_tools.py search --query "canonical 索引"     # 關鍵字加權搜尋
+python scripts/qa_tools.py search --query "Discover" --top-k 10     # 回傳更多筆
+python scripts/qa_tools.py search --query "AMP" --category "Discover與AMP"  # 限定分類
+
+# 指標解析（無 OpenAI）
+python scripts/qa_tools.py load-metrics --source "https://docs.google.com/..."
+python scripts/qa_tools.py load-metrics --source metrics.tsv  # 本機 TSV 檔
+
+# Eval 比較
+python scripts/qa_tools.py eval-compare             # 跨 provider eval 比較表
+```
+
+### stable_id 說明
+
+每筆 Q&A 的確定性 ID：`sha256(source_file::question[:120])[:16]`
+
+- 重跑 Step 3 後 `stable_id` 不變（不同於 `id` 流水號）
+- 合併後的 Q&A：`sha256(sorted([src_id1, src_id2, ...]))[:16]`
+- `output/qa_embeddings_index.json`：`{stable_id: npy_row_index}` 映射
+
+### output/evals/ 結構
+
+```
+output/
+├── evals/                          # 版本化 eval 結果（.gitignore 忽略）
+│   └── {date}_{provider}_{engine}.json
+└── eval_baseline.json              # 受保護基準線（需 --update-baseline 才更新）
+```
+
+---
+
 ## 最近改動（2026-02-28 Dead Code Cleanup）
 
 ### 移除的項目

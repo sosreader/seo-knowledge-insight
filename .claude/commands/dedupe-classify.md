@@ -8,7 +8,7 @@
 先確認 `output/qa_all_raw.json` 存在：
 
 ```bash
-.venv/bin/python scripts/list_pipeline_state.py --step 3
+.venv/bin/python scripts/qa_tools.py pipeline-status
 ```
 
 若不存在，告知使用者先執行 `/extract-qa`。

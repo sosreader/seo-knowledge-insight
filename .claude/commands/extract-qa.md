@@ -16,7 +16,7 @@
 執行以下命令，列出尚未萃取的 Markdown 檔案：
 
 ```bash
-.venv/bin/python scripts/list_pipeline_state.py --step 2
+.venv/bin/python scripts/qa_tools.py list-unprocessed
 ```
 
 - 如果所有檔案都已處理完畢，輸出 "全部完成" 並結束。
@@ -52,7 +52,7 @@
 確認全部 Task 都已完成後，執行：
 
 ```bash
-.venv/bin/python scripts/list_pipeline_state.py --merge
+.venv/bin/python scripts/qa_tools.py merge-qa
 ```
 
 這會把所有 `output/qa_per_meeting/*_qa.json` 合併成 `output/qa_all_raw.json`。

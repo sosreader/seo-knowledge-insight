@@ -127,12 +127,42 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 
 ## Available Claude Commands
 
-- `/run-pipeline` — 執行 pipeline（查看用法）
+### Pipeline 命令（需要 OpenAI API key）
+
+- `/run-pipeline` — 執行完整 pipeline（Steps 1–5，使用 OpenAI）
+
+### Claude Code 模式命令（不需要 OpenAI API key）
+
+- `/pipeline-local` — 完整 pipeline Steps 1–4（你是 LLM 引擎）
+- `/extract-qa` — 只執行 Step 2 Q&A 萃取（parallel sub-agents）
+- `/dedupe-classify` — 只執行 Step 3 去重 + 分類
+- `/generate-report <URL 或路徑>` — 生成 SEO 週報（解析指標 + 知識庫搜尋）
+- `/search <問題>` — 搜尋知識庫（關鍵字加權，回傳 top-K Q&A）
+- `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
+
+### 評估命令（需要 OpenAI API key）
+
+- `/evaluate-qa` — Q&A 品質評估（LLM-as-Judge）+ 與基準線比較
+
+### 開發工具命令
+
 - `/tdd` — 測試驅動開發工作流（先寫測試）
 - `/plan` — 建立實作計畫，等待確認後再動手
 - `/code-review` — Python 程式碼品質審查
 - `/build-fix` — 修復建置 / 型別錯誤
 - `/learn-eval` — 萃取本 session 可重用模式並存為 skill
+
+### Claude Code 模式 vs OpenAI 模式
+
+| 功能 | OpenAI 模式 | Claude Code 模式 |
+|------|------------|-----------------|
+| Q&A 萃取 | `gpt-5.2` API | Claude Code 直接讀 Markdown |
+| 去重 + 分類 | `text-embedding-3-small` + `gpt-5.2` | 語意理解取代向量 |
+| 指標解析 | `fetch_from_sheets()` | `qa_tools.py load-metrics` |
+| 知識庫搜尋 | `text-embedding-3-small` + cosine | `qa_tools.py search`（關鍵字加權）|
+| 週報生成 | `gpt-5.2` API | Claude Code 直接推理 |
+| Q&A 品質評估 | `gpt-5.2` + `gpt-5-mini` | 需要 OpenAI（LLM Judge） |
+| 需要 API key | OPENAI_API_KEY | 不需要 |
 
 ---
 
