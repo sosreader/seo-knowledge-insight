@@ -392,8 +392,7 @@ def _push_laminar_kb_snapshot(qa_pairs: list[dict]) -> None:
         )
         print(f"   Laminar 知識庫快照已推送（{len(sample)} 筆樣本 → group: qa_knowledge_base）")
     except Exception as exc:
-        import logging as _logging
-        _logging.getLogger(__name__).warning(
+        logger.warning(
             "Laminar KB snapshot push failed (non-fatal): %s", exc
         )
 

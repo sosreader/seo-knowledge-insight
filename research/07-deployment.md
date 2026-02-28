@@ -461,12 +461,27 @@ make audit-top       # Top 30 最常被存取的 QA
 
 ### 初始化方式
 
-**FastAPI（`app/main.py`）**：
+**FastAPI（`app/main.py`）—重要：initialize() 必須在所有 app import 之前**：
+
+> **❗屏障**：`Laminar.initialize()` 會 monkey-patch openai / anthropic 等 SDK。
+> 若在 `from app.routers import chat`（間接 import openai）之後才初始化，patch 失效，
+> 導致 dashboard Top LLM spans / Tokens / Cost 全空白。
 
 ```python
-from lmnr import Laminar
-Laminar.initialize(project_api_key=os.getenv("LMNR_PROJECT_API_KEY"))
-# 在 module load 時執行一次（非 lifespan，避免熱重啟問題）
+# app/main.py 頂部，所有其他 import 之前
+import os
+_lmnr_key = os.getenv("LMNR_PROJECT_API_KEY", "")
+try:
+    from lmnr import Laminar
+    if _lmnr_key:
+        Laminar.initialize(project_api_key=_lmnr_key)
+except ImportError:
+    Laminar = None  # type: ignore
+
+# — 之後才是所有 FastAPI / app.routers 等 import —
+from fastapi import FastAPI
+from app.routers import chat, qa, search
+# ...
 ```
 
 **Pipeline CLI scripts（02–05）**：
