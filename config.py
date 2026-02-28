@@ -110,6 +110,8 @@ _LAZY_ATTRS: Dict[str, _LazyEnv] = {
     "OPENAI_EMBEDDING_MODEL": _LazyEnv(
         "OPENAI_EMBEDDING_MODEL", default="text-embedding-3-small"
     ),
+    "EVAL_JUDGE_MODEL": _LazyEnv("EVAL_JUDGE_MODEL", default="gpt-5-mini"),
+    "EVAL_RERANK_MODEL": _LazyEnv("EVAL_RERANK_MODEL", default="gpt-5-nano"),
     "SHEETS_URL": _LazyEnv("SHEETS_URL", default=""),
 }
 

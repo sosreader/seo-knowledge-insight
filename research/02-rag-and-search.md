@@ -308,3 +308,83 @@ class QAStore:
 | `scripts/05_evaluate.py`        | `--eval-retrieval` 模式建立暫時 `SearchEngine` 實例做 MRR 評估      |
 
 ---
+## 本專案 Pipeline Cache 設計（v1.6）
+
+### 為什麼需要 Pipeline Cache？
+
+RAG pipeline 有多個 LLM 呼叫點，每次重跑都重複付費：
+- Step 2 萃取：`gpt-5.2` 解讀完整會議記錄（最貴，每份 ~2k tokens）
+- Step 3 embedding：`text-embedding-3-small` × 700 筆
+- Step 3 classify：`gpt-5-mini` × 700 筆（每 Q&A 一次 classify）
+- Step 3 merge：`gpt-5.2` 對相似組做合併判斷
+- Step 4 report：`gpt-5.2` 生成完整週報（每週一次）
+
+**Cache 的前提：pipeline 是確定性的 — 相同輸入永遠產生相同輸出。**
+
+### Content-Addressed Cache 原理
+
+```
+輸入 → SHA256 → 16 bytes hex → 作為 cache key
+```
+
+設計來自 Git（git object storage）和 IPFS：
+- 不依賴時間、順序或檔名
+- 同一份會議記錄無論何時跑，永遠命中同一個 cache entry
+- 不同輸入即使只差一個字，也對應不同 key（無碰撞）
+
+### 本專案 Cache 架構（utils/pipeline_cache.py）
+
+```
+output/.cache/
+  extraction/
+    4a/4a3f...json    ← SHA256 前兩碼作為子目錄（防單目錄爆炸）
+    ...
+  embedding/
+    b2/b2c1...json    ← 每個文字 → embedding 向量 (list[float])
+    ...
+  classify/
+    ...               ← question + "\n\n" + answer → {category, difficulty, evergreen}
+  merge/
+    ...               ← sorted Q&A pair JSON → merged Q&A
+  report/
+    ...               ← metrics_tsv + qa_version_id → report Markdown
+```
+
+### Cache 整合點與 cache key 設計
+
+| Namespace   | Cache Key                              | Cached Value                    | 位置                         |
+| ----------- | -------------------------------------- | ------------------------------- | ---------------------------- |
+| extraction  | 原始 Markdown content                  | Q&A pairs list（不含 source）   | `02_extract_qa.py`            |
+| embedding   | 單一文字 text                          | `list[float]` 向量              | `openai_helper.get_embeddings` |
+| classify    | `question + "\n\n" + answer`           | `{category, difficulty, ...}`   | `openai_helper.classify_qa`   |
+| merge       | sorted Q&A pairs JSON                  | `{question, answer, keywords, source_dates}` | `openai_helper.merge_similar_qas` |
+| report      | metrics_summary + QA version ID        | `{"report_text": str}`          | `04_generate_report.py`       |
+
+### 重要設計決策
+
+**extraction cache 不存 source_file/title/date**：這些是派生自 Markdown 路徑的 metadata，不是 LLM 輸出的一部分。命中 cache 後重新套用 enrichment，保持 cache 內容 source-agnostic 且可重用。
+
+**merge cache 不存 merged_from**：`merged_from` 記錄哪些原始 Q&A 被合併，這是 runtime 的 structural info（index 關係），不是 LLM 決定的語意內容。LLM 輸出的是 `{question, answer, keywords}`，這才是可 cache 的。
+
+**report cache key 包含 QA version ID**：報告依賴 Q&A 知識庫版本，相同指標但不同知識庫版本應生成不同報告。`get_latest_version(3)` 取得 Step 3 的版本 ID 作為 key 的一部分。
+
+### Atomic Write 防止 Partial Write 污染
+
+```python
+# 先寫 .tmp，再 rename（POSIX 上是 atomic）
+tmp.write_text(json.dumps(value))
+tmp.replace(path)
+```
+
+若 process 中途 crash，`.tmp` 不會被誤讀為有效 cache entry。
+
+### 版本 Registry（utils/pipeline_version.py）
+
+每次 Step 3/4 完成後，呼叫 `record_artifact()` 記錄：
+- content hash（16 char）→ 偵測內容變動
+- 使用 / 節省的 tokens
+- artifacts 路徑（不可變 JSON snapshot）
+
+*`output/.versions/registry.json` 納入 git，step artifacts 本身 gitignored（可從 cache 重建）。*
+
+---

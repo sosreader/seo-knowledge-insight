@@ -266,7 +266,7 @@ def evaluate_retrieval(
 
         # ── Debug：失敗診斷 ──
         if debug:
-            all_retrieved_kws_wide = set()
+            all_retrieved_kws_wide: set[str] = set()
             for qa in wide_retrieved:
                 all_retrieved_kws_wide.update(kw.lower() for kw in qa.get("keywords", []))
             kw_hits_wide = sum(1 for kw in expected_kws if kw in all_retrieved_kws_wide)
@@ -291,12 +291,12 @@ def evaluate_retrieval(
                     print(f"  ⚠️  失敗類型: TypeB（正確答案存在但排在第 {best_correct_rank} 名）")
                     print(f"  排名第 {best_correct_rank}（score={best_correct_score:.4f}）: {best_correct_q}")
                 else:
-                    print(f"  ❌ 失敗類型: TypeA（資料庫無覆蓋此 keywords）")
+                    print("  ❌ 失敗類型: TypeA（資料庫無覆蓋此 keywords）")
                 print(f"  未命中 keywords: {missing_kws}")
 
         # Keyword Hit Rate: 檢查 retrieved Q&A 的 keywords 是否覆蓋 expected_keywords
         # 使用子字串雙向匹配（"流量" 可命中 "探索流量"；"影片" 可命中 "影片縮圖"）
-        all_retrieved_kws = set()
+        all_retrieved_kws: set[str] = set()
         for qa in retrieved:
             all_retrieved_kws.update(kw.lower() for kw in qa.get("keywords", []))
 
@@ -308,7 +308,7 @@ def evaluate_retrieval(
                 for rkw in retrieved_kws
             )
 
-        kw_hits = sum(1 for kw in expected_kws if _kw_fuzzy_hit(kw, all_retrieved_kws))
+        kw_hits: int = sum(1 for kw in expected_kws if _kw_fuzzy_hit(kw, all_retrieved_kws))
         kw_hit_rate = kw_hits / len(expected_kws) if expected_kws else 0
 
         # Category Hit Rate: 是否有至少一筆 Q&A 的 category 在 expected_categories
@@ -373,7 +373,7 @@ def _llm_rerank_retrieval(query: str, candidates: list[dict], top_k: int = 5) ->
 
     try:
         resp = client.chat.completions.create(
-            model="gpt-5-nano",
+            model=config.EVAL_RERANK_MODEL,
             messages=[{"role": "user", "content":
                 f"查詢：{query}\n\n候選：\n\n" + "\n\n".join(items) +
                 f"\n\n回傳與查詢最相關的 {top_k} 個 index（0-based），相關性遞減。"
@@ -389,7 +389,7 @@ def _llm_rerank_retrieval(query: str, candidates: list[dict], top_k: int = 5) ->
         )
         content = resp.choices[0].message.content
         if not content:
-            print(f"⚠️ _llm_rerank_retrieval：LLM 回傳空內容，使用原始排序")
+            print("⚠️ _llm_rerank_retrieval：LLM 回傳空內容，使用原始排序")
             return candidates[:top_k]
         ranked = json.loads(content).get("ranked_indices", [])
         valid = [i for i in ranked if isinstance(i, int) and 0 <= i < len(candidates)]
@@ -411,15 +411,15 @@ def _llm_judge_retrieval_relevance(query: str, qa: dict) -> bool:
 
     user_msg = (
         f"搜尋查詢：{query}\n\n"
-        f"檢索到的 Q&A：\n"
+        "檢索到的 Q&A：\n"
         f"Q: {qa['question']}\n"
         f"A: {qa['answer'][:500]}\n\n"
-        f"這個 Q&A 是否與搜尋查詢相關？請回答 relevant 或 not_relevant。"
+        "這個 Q&A 是否與搜尋查詢相關？請回答 relevant 或 not_relevant。"
     )
 
     try:
         response = client.chat.completions.create(
-            model="gpt-5-mini",
+            model=config.EVAL_JUDGE_MODEL,
             messages=[
                 {"role": "system", "content": "你是 SEO 資訊檢索品質評審員。判斷檢索到的 Q&A 是否與搜尋查詢相關。只回答 JSON。"},
                 {"role": "user", "content": user_msg},
@@ -481,7 +481,7 @@ def evaluate_qa_quality(
         user_msg += f"--- 原始會議紀錄（節錄）---\n{source_text[:3000]}\n\n"
 
     user_msg += (
-        f"--- 萃取的 Q&A ---\n"
+        "--- 萃取的 Q&A ---\n"
         f"Q: {qa['question']}\n"
         f"A: {qa['answer']}\n"
         f"Keywords: {', '.join(qa.get('keywords', []))}\n"
@@ -599,14 +599,14 @@ def evaluate_classification(qa: dict) -> dict:
     user_msg = (
         f"Q: {qa['question']}\n"
         f"A: {qa['answer']}\n\n"
-        f"系統標記的分類：\n"
+        "系統標記的分類：\n"
         f"- category: {qa.get('category', 'N/A')}\n"
         f"- difficulty: {qa.get('difficulty', 'N/A')}\n"
         f"- evergreen: {qa.get('evergreen', 'N/A')}\n"
     )
 
     response = client.chat.completions.create(
-        model="gpt-5-mini",
+        model=config.EVAL_JUDGE_MODEL,
         messages=[
             {"role": "system", "content": CLASSIFY_EVAL_PROMPT},
             {"role": "user", "content": user_msg},
@@ -1155,7 +1155,7 @@ def evaluate_report_quality(
                 "請評估這份 SEO 週報的品質，回傳 JSON。"
             )
             resp = client.chat.completions.create(
-                model="gpt-5-mini",
+                model=config.EVAL_JUDGE_MODEL,
                 messages=[
                     {
                         "role": "system",
@@ -1583,14 +1583,14 @@ def main(args: argparse.Namespace) -> None:
         print(f"   Evergreen 合理率: {classify_stats['evergreen_accuracy']:.0%}")
 
     if retrieval_stats and "error" not in retrieval_stats:
-        print(f"\n   Retrieval 品質：")
+        print("\n   Retrieval 品質：")
         print(f"   KW 命中率: {retrieval_stats['avg_keyword_hit_rate']:.0%}")
         print(f"   分類命中率: {retrieval_stats['avg_category_hit_rate']:.0%}")
         print(f"   MRR: {retrieval_stats['avg_mrr']:.2f}")
         print(f"   Top-1 Precision: {retrieval_stats['llm_top1_precision']:.0%}")
 
     if extraction_stats and "error" not in extraction_stats:
-        print(f"\n   萃取品質：")
+        print("\n   萃取品質：")
         print(f"   Count Accuracy: {extraction_stats['count_accuracy']:.0%}")
         print(f"   Keyword Coverage: {extraction_stats['avg_keyword_coverage_rate']:.0%}")
         print(f"   Hallucination Rate: {extraction_stats['avg_hallucination_rate']:.0%}")
@@ -1605,7 +1605,7 @@ def main(args: argparse.Namespace) -> None:
         print(f"\n   閾值掃描：{dedup_sweep_stats.get('recommendation', '')}")
 
     if report_eval_stats and "error" not in report_eval_stats:
-        print(f"\n   週報品質：")
+        print("\n   週報品質：")
         if report_eval_stats.get("avg_llm_grounding") is not None:
             print(f"   Grounding:     {report_eval_stats['avg_llm_grounding']:.1f}/5")
         if report_eval_stats.get("avg_llm_actionability") is not None:
@@ -1638,7 +1638,7 @@ def compare_eval_reports(path1: str, path2: str) -> None:
     p1, p2 = Path(path1).name, Path(path2).name
 
     print(f"\n{'='*60}")
-    print(f"📊 評估結果比較")
+    print("📊 評估結果比較")
     print(f"   A: {p1}")
     print(f"   B: {p2}")
     print(f"{'='*60}\n")

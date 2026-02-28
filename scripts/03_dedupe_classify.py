@@ -37,6 +37,7 @@ except ModuleNotFoundError:
 from utils.openai_helper import get_embeddings, merge_similar_qas, classify_qa
 from utils.pipeline_deps import preflight_check, StepDependency
 from utils.observability import init_laminar, flush_laminar, observe
+from utils.pipeline_version import record_artifact
 from scripts.dedupe_helpers import _cosine_similarity_matrix
 
 
@@ -113,7 +114,7 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
 
     # 重複的合併
     if groups:
-        print(f"\n🔄 合併重複 Q&A ...")
+        print("\n🔄 合併重複 Q&A ...")
         for group_i, group in enumerate(tqdm(groups, desc="  合併中")):
             group_qas = [qa_pairs[idx] for idx in group]
 
@@ -147,26 +148,34 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
 
 @observe(name="classify_all_qas")
 def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
-    """對每個 Q&A 加分類標籤"""
+    """對每個 Q&A 加分類標籤（回傳新 list，不直接修改傳入的 list）"""
     print(f"\n🏷️  分類標籤（共 {len(qa_pairs)} 個 Q&A）")
 
+    result: list[dict] = []
     for qa in tqdm(qa_pairs, desc="  分類中"):
         try:
             labels = classify_qa(qa["question"], qa["answer"])
-            qa["category"] = labels.get("category", "其他")
-            qa["difficulty"] = labels.get("difficulty", "基礎")
-            qa["evergreen"] = labels.get("evergreen", True)
+            new_qa = {
+                **qa,
+                "category": labels.get("category", "其他"),
+                "difficulty": labels.get("difficulty", "基礎"),
+                "evergreen": labels.get("evergreen", True),
+            }
         except Exception as e:
             tqdm.write(f"  ⚠️  分類失敗: {e}")
-            qa["category"] = "其他"
-            qa["difficulty"] = "基礎"
-            qa["evergreen"] = True
+            new_qa = {
+                **qa,
+                "category": "其他",
+                "difficulty": "基礎",
+                "evergreen": True,
+            }
 
+        result.append(new_qa)
         time.sleep(0.3)  # rate limit
 
     # 統計
-    categories = {}
-    for qa in qa_pairs:
+    categories: dict[str, int] = {}
+    for qa in result:
         cat = qa.get("category", "其他")
         categories[cat] = categories.get(cat, 0) + 1
 
@@ -174,7 +183,7 @@ def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
     for cat, count in sorted(categories.items(), key=lambda x: -x[1]):
         print(f"   - {cat}: {count}")
 
-    return qa_pairs
+    return result
 
 
 def main(args: argparse.Namespace) -> None:
@@ -233,21 +242,25 @@ def main(args: argparse.Namespace) -> None:
         print("\n⏭️  跳過分類")
 
     # 加上流水號 id（顯示用）和確認 stable_id（跨系統引用用）
-    for i, qa in enumerate(qa_pairs, 1):
-        qa["id"] = i
-        if not qa.get("stable_id"):
-            qa["stable_id"] = compute_stable_id(
+    final_qa_pairs = [
+        {
+            **qa,
+            "id": i,
+            "stable_id": qa.get("stable_id") or compute_stable_id(
                 qa.get("source_file", ""),
                 qa["question"],
-            )
+            ),
+        }
+        for i, qa in enumerate(qa_pairs, 1)
+    ]
 
     # 輸出最終結果
     final_output = {
         "version": "1.0",
-        "total_count": len(qa_pairs),
+        "total_count": len(final_qa_pairs),
         "original_count": raw_data.get("total_qa_count", 0),
         "meetings_processed": raw_data.get("meetings_processed", 0),
-        "qa_database": qa_pairs,
+        "qa_database": final_qa_pairs,
     }
 
     final_path = config.OUTPUT_DIR / "qa_final.json"
@@ -255,6 +268,14 @@ def main(args: argparse.Namespace) -> None:
         json.dumps(final_output, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+    # ── Layer 2: Version Registry ──────────────────────────────
+    version_entry = record_artifact(
+        step=3,
+        data=final_output,
+        metadata={"qa_count": len(final_qa_pairs)},
+    )
+    print(f"\n🔖 版本記録: {version_entry['version_id']}")
 
     # QA DB 快照：複製到 output/snapshots/ 供版本比較
     snapshot_dir = config.OUTPUT_DIR / "snapshots"
@@ -264,14 +285,14 @@ def main(args: argparse.Namespace) -> None:
     shutil.copy2(final_path, snap_path)
 
     # 持久化 embedding 向量（Step 4 語意搜尋可直接載入，免重算）
-    _persist_embeddings(qa_pairs)
+    _persist_embeddings(final_qa_pairs)
 
     # 同時輸出一份人類可讀的 Markdown
-    _export_readable_md(qa_pairs)
+    _export_readable_md(final_qa_pairs)
 
     print("\n" + "=" * 60)
-    print(f"✅ 步驟 3 完成！")
-    print(f"   最終 Q&A 數量: {len(qa_pairs)}")
+    print("✅ 步驟 3 完成！")
+    print(f"   最終 Q&A 數量: {len(final_qa_pairs)}")
     print(f"   JSON: {final_path}")
     print(f"   快照: {snap_path}")
     print(f"   Embeddings: {config.OUTPUT_DIR / 'qa_embeddings.npy'}")

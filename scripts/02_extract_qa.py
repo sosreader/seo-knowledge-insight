@@ -29,6 +29,7 @@ except ModuleNotFoundError:
     import config
 
 from utils.openai_helper import extract_qa_from_text
+from utils.pipeline_cache import cache_get, cache_set
 from utils.pipeline_deps import preflight_check, StepDependency
 from utils.observability import init_laminar, flush_laminar, observe
 from scripts.extract_qa_helpers import (
@@ -40,7 +41,9 @@ from scripts.extract_qa_helpers import (
 
 @observe(name="process_single_meeting")
 def process_single_meeting(md_path: Path) -> dict:
-    """處理單份會議紀錄"""
+    """處理單份會議紀錄（LLM 呼叫有 content-addressed cache 保護）"""
+    import copy
+
     content = md_path.read_text(encoding="utf-8")
     filename = md_path.stem
 
@@ -60,10 +63,26 @@ def process_single_meeting(md_path: Path) -> dict:
     print(f"  📄 {title}")
     print(f"     字數: {len(content)}")
 
+    # ── Layer 1 cache check ──────────────────────────────────
+    # Key = markdown content（title/date 均由 content 衍生，deterministic）
+    # Value = extract_qa_from_text() 的 LLM 輸出（不含 source 欄位）
+    cached = cache_get("extraction", content)
+    if cached is not None:
+        qa_count = len(cached.get("qa_pairs", []))
+        print(f"     [cache hit] {qa_count} Q&A")
+        # Deep-copy 避免 cache 被後續 mutation 污染
+        meeting_result = copy.deepcopy(cached)
+        for qa in meeting_result.get("qa_pairs", []):
+            qa["source_file"] = md_path.name
+            qa["source_title"] = title
+            qa["source_date"] = date
+        return meeting_result
+
+    # ── Cache miss：呼叫 OpenAI ──────────────────────────────
     # 如果內容太長，分段處理
     max_chars = config.MAX_TOKENS_PER_CHUNK * 3  # 大約 3 chars per token
     if len(content) > max_chars:
-        print(f"     ⚠️  內容較長，分段處理 ...")
+        print("     ⚠️  內容較長，分段處理 ...")
         chunks = _split_content(content, max_chars)
         all_qa_pairs = []
         for chunk_i, chunk in enumerate(chunks, 1):
@@ -79,7 +98,10 @@ def process_single_meeting(md_path: Path) -> dict:
     else:
         meeting_result = extract_qa_from_text(content, title, date)
 
-    # 為每個 Q&A 加上來源資訊
+    # ── 寫入 cache（source 欄位不在 cache 中，以保持 content-addressable）
+    cache_set("extraction", content, meeting_result)
+
+    # ── 為每個 Q&A 加上來源資訊 ──────────────────────────────
     for qa in meeting_result.get("qa_pairs", []):
         qa["source_file"] = md_path.name
         qa["source_title"] = title
@@ -246,7 +268,7 @@ def main(args: argparse.Namespace) -> None:
     )
 
     print("\n" + "=" * 60)
-    print(f"✅ 步驟 2 完成！")
+    print("✅ 步驟 2 完成！")
     print(f"   本次處理: {newly_processed} 份")
     print(f"   總計 Q&A: {merged_output['total_qa_count']} 個")
     print(f"   單份結果: {config.QA_PER_MEETING_DIR}")

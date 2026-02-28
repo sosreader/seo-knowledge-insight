@@ -6,3 +6,8 @@ output/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Pipeline artifact cache（內容定址，gitignored）
+output/.cache/
+# Version artifacts（定期快照，用 registry.json 追蹤）
+output/.versions/step*/

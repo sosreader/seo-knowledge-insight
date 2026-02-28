@@ -21,12 +21,14 @@ utils/pipeline_deps.py — 統一的 pipeline 依賴檢查
 """
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -97,18 +99,18 @@ def preflight_check(
     # 3. 輸出結果
     header = f"[{step_name}] " if step_name else ""
     for w in warnings:
-        print(f"   {w}")
+        logger.warning("   %s", w)
     if errors:
         for e in errors:
-            print(f"   {e}")
-        print(f"\n{header}依賴檢查失敗，請先處理上述問題")
+            logger.error("   %s", e)
+        logger.error("\n%s依賴檢查失敗，請先處理上述問題", header)
         if not check_only:
             if _exit:
                 sys.exit(1)
             else:
                 raise PreflightError(errors, warnings)
     else:
-        print(f"   ✅ {header}依賴檢查通過")
+        logger.info("   ✅ %s依賴檢查通過", header)
 
     return errors, warnings
 
@@ -119,8 +121,10 @@ def _check_glob_dep(
     warnings: list[str],
 ) -> None:
     """檢查目錄 glob 模式的依賴"""
-    assert dep.glob_pattern is not None
-    assert dep.min_count is not None
+    if dep.glob_pattern is None or dep.min_count is None:
+        raise ValueError(
+            "_check_glob_dep called with dep.glob_pattern or dep.min_count as None"
+        )
 
     matches = list(dep.path.glob(dep.glob_pattern))
     if len(matches) < dep.min_count:
@@ -165,8 +169,8 @@ def _check_freshness(
     warnings: list[str],
 ) -> None:
     """檢查檔案新鮮度，超過閾值加入 warnings"""
-    mtime = datetime.fromtimestamp(path.stat().st_mtime)
-    age = datetime.now() - mtime
+    mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    age = datetime.now(tz=timezone.utc) - mtime
     if age > timedelta(days=max_age_days):
         warnings.append(
             f"⚠️  {path.name} 已 {age.days} 天未更新"

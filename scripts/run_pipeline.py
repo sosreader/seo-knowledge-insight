@@ -19,7 +19,6 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import List, Optional
 
 try:
     import config
@@ -37,7 +36,7 @@ STEP_SCRIPTS = {
 }
 
 
-def run_step(script_name: str, extra_args: Optional[List[str]] = None) -> bool:
+def run_step(script_name: str, extra_args: list[str] | None = None) -> bool:
     """執行子腳本，回傳是否成功"""
     script_path = Path(__file__).parent / script_name
     cmd = [sys.executable, str(script_path)] + (extra_args or [])
