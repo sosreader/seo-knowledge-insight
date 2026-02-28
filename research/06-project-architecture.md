@@ -180,13 +180,25 @@ flowchart TD
         S4 -->|record_artifact| PV
     end
 
-    subgraph Observability["可觀測性 v1.1 v1.4"]
+    subgraph Observability["可觀測性 v1.1 v1.4 v1.10"]
         S2 -->|observe| LM["Laminar SDK<br/>lmnr observe"]
         S3 -->|observe| LM
         S4 -->|observe| LM
         S5 -->|observe| LM
         API -->|auto trace| LM
         LM --> LD["laminar.sh dashboard<br/>Traces Spans"]
+    end
+
+    subgraph OfflineEvals["離線評估 v1.10"]
+        GoldenSets2["eval/ Golden Sets<br/>retrieval(307) extraction chat(10)"]
+        GoldenSets2 --> EvalR["evals/eval_retrieval.py<br/>keyword_hit_rate<br/>category_match"]
+        GoldenSets2 --> EvalE["evals/eval_extraction.py<br/>qa_count<br/>keyword_coverage"]
+        GoldenSets2 --> EvalC["evals/eval_chat.py<br/>answer_length<br/>has_sources"]
+        EvalR -->|lmnr eval| LM
+        EvalE -->|lmnr eval| LM
+        EvalC -->|lmnr eval| LM
+        EP -->|score_rag_response| OS["laminar_scoring.py<br/>online scores"]
+        OS -->|attach to trace| LM
     end
 
     subgraph Deploy["部署"]
@@ -220,6 +232,7 @@ flowchart TD
 | 2026-02-28 | v1.7 | **Code Quality 大掃除**：修復 5 個 HIGH + 7 個 MEDIUM 程式碼品質問題（129 tests ✓）。(1) `utils/pipeline_deps.py`：`assert` → `if/raise`（執行期驗證）、`datetime.now()` → `tz=timezone.utc`（DST 防禦）、`print()` → `logging`、移除未使用 typing imports；(2) `utils/openai_helper.py`：刪除重複 `observe` shim，改 `from utils.observability import observe`；(3) `config.py`：新增 `EVAL_JUDGE_MODEL` 和 `EVAL_RERANK_MODEL` lazy env vars；(4) `scripts/05_evaluate.py`：4 個硬編碼模型 → `config.EVAL_*_MODEL`、3 個 mypy 型別標記；(5) `scripts/04_generate_report.py`：刪除 `METRIC_QUERY_MAP` 重複宣告、移除硬編碼模型；(6) `scripts/03_dedupe_classify.py`：`classify_all_qas()` 改 return new list（immutability）、`main()` 改 list comprehension、dict 型別標記；(7) `scripts/run_pipeline.py`：移除 typing imports、改原生語法；(8) 批次移除 19 個 f-string 無佔位符；(9) 萃取 4 個可重用 patterns 存 learned skills | `utils/pipeline_deps.py`，`utils/openai_helper.py`，`config.py`，`scripts/{02,03,04,05}_*.py`，`scripts/run_pipeline.py`                                                                                                                                                   |
 | 2026-02-28 | v1.8 | **Architect Review + Refactor Clean**：(1) 架構 review 識別 12 個技術決策，附業界/學術研究支撐；(2) 發現 CRITICAL 缺口：API 層無 Auth + 無 Rate Limit（OWASP API Top10 風險）；(3) 發現 HIGH 缺口：`SearchEngine.hybrid_search()` 已實作但 search/chat endpoint 未啟用，等同 v1.5 搜索品質提升在線上未生效；(4) Refactor：`_now_iso()` 雙次 datetime 調用修復、`get_qa_item()` O(n)→O(1) dict 索引、`classify_qa()` 硬編碼模型修正、search/chat 改用 hybrid_search；(5) 新增「技術決策學術支撐」章節（13 個決策，每個附論文/RFC 引用）；(6) 架構圖標注 API 層安全缺口與 hybrid_search 未啟用現況                                                                                                                                                                                                                                                                                                                                   | `app/routers/search.py`，`app/core/chat.py`，`app/core/store.py`，`utils/audit_logger.py`，`utils/openai_helper.py`，`research/06-project-architecture.md`                                                                                                                 |
 | 2026-02-28 | v1.9 | **Provider 比較基準 + Bug 修復**：(1) 新增 `scripts/compare_providers.py`（LLM-as-Judge 5-provider 橫向比較）+ `eval/golden_seo_analysis.json`；(2) 加入 Laminar tracing（`@observe` + `init_laminar`/`flush_laminar` in CLI）；(3) 修復 Bug：path resolution 迴圈內 mutation → list comprehension；(4) 修復 Bug：retry loop exception swallowing（`return` → `continue`）；(5) 新增 K. Provider 比較基準架構章節；(6) 更新 research/03-evaluation.md、05-models.md 知識庫；(7) 萃取 3 個 instinct（openai-reasoning-no-response-format、retry-exception-not-just-empty、laminar-observe-cli-scripts）                                                                                                                                                                                                                                                                                                                             | `scripts/compare_providers.py`（new），`eval/golden_seo_analysis.json`（new），`output/provider_*.md`，`research/03-evaluation.md`，`research/05-models.md`，`research/09-provider-comparison.md`                                                                          |
+| 2026-02-28 | v1.10 | **Laminar 離線評估系統**：(1) 新建 `evals/` 目錄（4 個 Python 模組），Laminar SDK 整合離線品質監控；(2) `utils/laminar_scoring.py`（new）— rule-based online scoring，4 個 lightweight evaluators（answer_length、has_sources、top_source_score、source_count），無額外 LLM 呼叫，自動附屬 rag_chat trace；(3) `evals/eval_retrieval.py` — 307 筆 golden retrieval set，keyword_hit_rate + category matching 評估；(4) `evals/eval_extraction.py` — extraction quality 評估（Q&A 計數、keyword coverage、無管理內容）；(5) `evals/eval_chat.py` — 10 scenario chat end-to-end 評估；(6) `.claude/skills/laminar-instrumentation.md`（new）— 強制執行 Laminar 計測規則；(7) PLAN_SEO_INSIGHT.md 新增 §3.0 「Laminar Eval 實作現況」；(8) 更新 README.md 文件架構 + 新增「步驟 6：Laminar 離線評估」；(9) 修復 app/core/chat.py 新增 online scoring 整合（v1.10 已完成） | `evals/`（new 4 files），`utils/laminar_scoring.py`（new），`.claude/skills/laminar-instrumentation.md`（new），`app/core/chat.py`，`PLAN_SEO_INSIGHT.md`，`README.md` |
 
 ### 更新架構圖的 SOP
 

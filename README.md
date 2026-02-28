@@ -28,6 +28,11 @@ seo-knowledge-insight/
 │   └── openai_helper.py         # OpenAI API 封裝
 ├── tests/
 │   └── test_core.py             # 核心邏輯 unit tests（23 個）
+├── evals/                       # Laminar 離線評估（v1.10 新增）
+│   ├── __init__.py              # Package 初始化
+│   ├── eval_retrieval.py        # Retrieval 品質評估（keyword hit rate 等）
+│   ├── eval_extraction.py       # Q&A 萃取品質評估
+│   └── eval_chat.py             # RAG chat 端到端品質評估
 ├── raw_data/                    # 原始資料（source of truth）
 │   ├── notion_json/             # Notion API 回傳的原始 JSON
 │   ├── markdown/                # 轉換後的 Markdown（含圖片引用）
@@ -41,7 +46,9 @@ seo-knowledge-insight/
     ├── metrics_sample.tsv      # 範例指標資料（可替换為實際資料）
     ├── report_YYYYMMDD.md       # 產生的每週 SEO 週報
     ├── eval_report.json         # 品質評估報告（JSON）
-    └── eval_report.md           # 品質評估報告（Markdown）
+    ├── eval_report.md           # 品質評估報告（Markdown）
+    ├── fetch_logs/              # Step 1 fetch 事件 JSONL（Audit Trail）
+    └── access_logs/             # API 存取事件 JSONL（Audit Trail）
 ```
 
 ---
@@ -684,6 +691,50 @@ GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workfl
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding 模型               |
 | `CORS_ORIGINS`           | `http://localhost:3000`  | 逗號分隔多個 origin          |
 | `CHAT_CONTEXT_K`         | `5`                      | RAG chat 帶入的 context 筆數 |
+
+---
+
+## 步驟 6：Laminar 離線評估（v1.10）
+
+### 概述
+
+基於 Laminar SDK 的離線評估系統，自動監控檢索、萃取、RAG chat 三個環節的品質。所有評估皆無需 OpenAI API（pure Python / SQL 邏輯）。
+
+### 啟動方式
+
+**前提**：安裝 Laminar SDK 並設定 API key
+
+```bash
+pip install lmnr
+export LMNR_PROJECT_API_KEY=<your-key-from-laminar.sh>
+```
+
+**執行全部評估**：
+
+```bash
+# 方式 1：Laminar CLI（推薦）
+lmnr eval
+
+# 方式 2：直接執行各評估腳本
+python evals/eval_retrieval.py
+python evals/eval_extraction.py
+python evals/eval_chat.py
+```
+
+**檢視結果**：
+
+```
+# Laminar 儀表板
+https://laminar.sh/app/evals
+```
+
+### 評估維度
+
+| 評估類型 | 檔案 | 測試集 | 評估指標 |
+|---------|------|--------|---------|
+| **Retrieval 品質** | `evals/eval_retrieval.py` | golden_retrieval.json (307 筆) | Keyword Hit Rate、Category Hit Rate、MRR |
+| **Extraction 品質** | `evals/eval_extraction.py` | golden_extraction.json | Q&A 計數、Keyword Coverage、無管理內容 |
+| **Chat 品質** | `evals/eval_chat.py` | 前 10 retrieval scenarios | 回答長度、來源涵蓋、關鍵字匹配 |
 
 ---
 
