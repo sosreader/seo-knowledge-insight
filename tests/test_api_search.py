@@ -31,7 +31,7 @@ class TestSearch:
     def test_returns_results(self, client, mock_embedding):
         resp = client.post("/api/v1/search", json={"query": "Discover 流量"})
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert "results" in body
         assert "total" in body
         assert body["total"] == len(body["results"])
@@ -39,8 +39,8 @@ class TestSearch:
     def test_result_schema(self, client, mock_embedding):
         resp = client.post("/api/v1/search", json={"query": "canonical"})
         assert resp.status_code == 200
-        if resp.json()["total"] > 0:
-            item = resp.json()["results"][0]
+        if resp.json()["data"]["total"] > 0:
+            item = resp.json()["data"]["results"][0]
             required = {
                 "id", "question", "answer", "keywords",
                 "category", "difficulty", "evergreen",
@@ -50,13 +50,13 @@ class TestSearch:
 
     def test_score_between_0_and_1(self, client, mock_embedding):
         resp = client.post("/api/v1/search", json={"query": "AMP"})
-        for result in resp.json()["results"]:
+        for result in resp.json()["data"]["results"]:
             assert 0.0 <= result["score"] <= 1.0
 
     def test_top_k_limit(self, client, mock_embedding):
         resp = client.post("/api/v1/search", json={"query": "SEO", "top_k": 2})
         assert resp.status_code == 200
-        assert len(resp.json()["results"]) <= 2
+        assert len(resp.json()["data"]["results"]) <= 2
 
     def test_category_filter(self, client, mock_embedding):
         resp = client.post(
@@ -64,7 +64,7 @@ class TestSearch:
             json={"query": "AMP", "top_k": 5, "category": "Discover與AMP"},
         )
         assert resp.status_code == 200
-        for r in resp.json()["results"]:
+        for r in resp.json()["data"]["results"]:
             assert r["category"] == "Discover與AMP"
 
     def test_empty_query_returns_422(self, client):

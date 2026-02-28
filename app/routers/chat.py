@@ -9,6 +9,8 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.chat import rag_chat
+from app.core.limiter import limiter
+from app.core.schemas import ApiResponse
 from utils import audit_logger
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
@@ -45,8 +47,9 @@ class ChatResponse(BaseModel):
     sources: list[SourceItem]
 
 
-@router.post("", response_model=ChatResponse)
-async def chat(req: ChatRequest, request: Request) -> ChatResponse:
+@router.post("", response_model=ApiResponse[ChatResponse])
+@limiter.limit("20/minute")
+async def chat(req: ChatRequest, request: Request) -> ApiResponse[ChatResponse]:
     history = [{"role": m.role, "content": m.content} for m in req.history]
     result = await rag_chat(req.message, history=history or None)
 
@@ -61,7 +64,9 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         client_ip=client_ip,
     )
 
-    return ChatResponse(
-        answer=result["answer"],
-        sources=[SourceItem(**s) for s in result["sources"]],
+    return ApiResponse.ok(
+        ChatResponse(
+            answer=result["answer"],
+            sources=[SourceItem(**s) for s in result["sources"]],
+        )
     )

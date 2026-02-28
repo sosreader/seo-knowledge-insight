@@ -11,6 +11,10 @@ from fastapi.testclient import TestClient
 
 from app.core.store import QAItem, store
 
+# 測試用 API Key — conftest 啟動前先注入 env，讓 config.API_KEY 讀到此值
+_TEST_API_KEY = "test-secret-key"
+API_KEY_HEADER = {"X-API-Key": _TEST_API_KEY}
+
 
 # ─────────────────────────── fake data ────────────────────────────────────────
 
@@ -66,13 +70,18 @@ FAKE_EMBEDDINGS = np.zeros((len(FAKE_ITEMS), 1536), dtype=np.float32)
 # ─────────────────────────── fixtures ─────────────────────────────────────────
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
     """
-    TestClient 搭配假 store。
+    TestClient 搭配假 store，並注入測試用 API key。
 
     lifespan 會在 TestClient.__enter__ 時執行 store.load()（載入真實資料），
     因此在進入 context 後立即用 FAKE_ITEMS 覆蓋，確保測試資料隔離。
     """
+    monkeypatch.setenv("SEO_API_KEY", _TEST_API_KEY)
+    # 同步更新已載入的 config 模組
+    import app.config as app_config
+    monkeypatch.setattr(app_config, "API_KEY", _TEST_API_KEY)
+
     from app.main import app
 
     with TestClient(app) as c:
@@ -81,6 +90,8 @@ def client():
         store.embeddings = FAKE_EMBEDDINGS.copy()
         # _id_index 必須與 items 同步，否則 get_item_by_id() 會查到舊資料
         store._id_index = {item.id: item for item in store.items}
+        # 預設帶入 API key header，讓所有 API 測試不需逐一補 header
+        c.headers.update(API_KEY_HEADER)
         yield c
 
     # 清空，讓下一個 fixture 從乾淨狀態開始

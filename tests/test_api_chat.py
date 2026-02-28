@@ -47,7 +47,7 @@ class TestChat:
     def test_returns_answer_and_sources(self, client, mock_openai):
         resp = client.post("/api/v1/chat", json={"message": "Discover 流量怎麼了？"})
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert "answer" in body
         assert "sources" in body
         assert isinstance(body["answer"], str)
@@ -56,7 +56,7 @@ class TestChat:
     def test_sources_schema(self, client, mock_openai):
         resp = client.post("/api/v1/chat", json={"message": "canonical 設定問題"})
         assert resp.status_code == 200
-        for src in resp.json()["sources"]:
+        for src in resp.json()["data"]["sources"]:
             required = {"id", "question", "category", "source_title", "source_date", "score"}
             assert required.issubset(src.keys())
             assert 0.0 <= src["score"] <= 1.0
@@ -71,7 +71,7 @@ class TestChat:
             json={"message": "那 AMP 驗證失敗怎麼辦？", "history": history},
         )
         assert resp.status_code == 200
-        assert "answer" in resp.json()
+        assert "answer" in resp.json()["data"]
 
     def test_empty_history_is_allowed(self, client, mock_openai):
         resp = client.post(
@@ -121,4 +121,4 @@ class TestChat:
         ):
             resp = client.post("/api/v1/chat", json={"message": "測試問題"})
         assert resp.status_code == 200
-        assert resp.json()["answer"] == ""
+        assert resp.json()["data"]["answer"] == ""

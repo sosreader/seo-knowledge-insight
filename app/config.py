@@ -27,5 +27,8 @@ CORS_ORIGINS: list[str] = [
     if o.strip()
 ]
 
+# API Key 認證（Phase A）— 若未設則為空字串（開發模式放行）
+API_KEY: str = os.getenv("SEO_API_KEY", "")
+
 # ── RAG ─────────────────────────────────────────────────
 CHAT_CONTEXT_K: int = int(os.getenv("CHAT_CONTEXT_K", "5"))

@@ -239,89 +239,159 @@ LLM_RESPONSE_MODEL = "gen_ai.response.model"
 
 ---
 
-## 23. API 安全：Auth + Rate Limit（OWASP Top 10 風險修復）
+## 23. API 安全：Auth + Rate Limit（v1.11 已實作，2026-02-28）
 
-> v1.8 識別的 CRITICAL 缺口，本章說明標準做法。
+> v1.8 識別的 CRITICAL 缺口，v1.11 完整修復。實作位置：`app/core/security.py`、`app/core/limiter.py`、`app/core/schemas.py`。
 
-### OWASP API Security Top 10（2023）識別的風險
+### OWASP API Security Top 10（2023）識別的風險 — 修復狀態
 
-| API 風險          | 本專案現況      | 修復優先度 | 修復工時 |
+| API 風險          | v1.8 現況      | v1.11 修復方式 | 狀態 |
 | ----------------- | --------------- | --------- | ------- |
-| **API2:2023 — Broken Authentication**（無認證） | `/api/v1/*` 無 API Key 驗證 | CRITICAL | 2h      |
-| **API4:2023 — Unrestricted Resource Consumption**（無速率限制） | `/api/v1/chat` 每次消耗 GPT token，無限制 | CRITICAL | 2h      |
-| **API1:2023 — Broken Object Level Authorization** | `GET /api/v1/qa/{id}` 無權限檢查（當前所有 QA 公開） | LOW | —       |
+| **API2:2023 — Broken Authentication** | `/api/v1/*` 無 API Key 驗證 | `verify_api_key` FastAPI dependency，`X-API-Key` header | ✅ 已修復 |
+| **API4:2023 — Unrestricted Resource Consumption** | `/api/v1/chat` 無速率限制 | slowapi：chat 20/min・search/qa 60/min | ✅ 已修復 |
+| **API3:2023 — Broken Object Property Authorization** | 例外洩漏 Python traceback | 全局 `@app.exception_handler(Exception)` 統一 500 | ✅ 已修復 |
+| **API1:2023 — Broken Object Level Authorization** | `GET /api/v1/qa/{id}` 無細粒度權限 | 所有 QA 資料公開（低風險，當前不需修復） | ℹ️ 可接受 |
 
-### FastAPI API Key 驗證實作（`Depends()` pattern）
+### Phase A — API Key 認證（`app/core/security.py`）
 
-標準做法：
+**關鍵設計決策**：避免循環相依，`verify_api_key` 中 lazy import `app.config`。
+開發模式（`SEO_API_KEY` 未設定）→ 自動放行 + 警告，方便本地開發。
 
 ```python
-from fastapi import APIRouter, Depends, HTTPException, status
+# app/core/security.py
+from fastapi import HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 
-router = APIRouter()
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-def verify_api_key(api_key: str = Depends(api_key_header)):
-    """驗證 API Key，格式 'sk-...'。"""
-    expected = os.getenv("API_KEY")
+async def verify_api_key(api_key: str = Security(_api_key_header)) -> str:
+    from app import config as app_config  # lazy import 防止 circular
+    expected: str = app_config.API_KEY
+    if not expected:
+        # 未設定 → 開發模式放行，生產環境應設定！
+        logger.warning("SEO_API_KEY is not set — authentication DISABLED")
+        return ""
     if not api_key or api_key != expected:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid or missing API key"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key",
+            headers={"WWW-Authenticate": "ApiKey"},
         )
     return api_key
+```
 
-@router.post("/api/v1/chat")
-async def chat(body: ChatRequest, api_key: str = Depends(verify_api_key)):
-    # api_key 已驗證，可安全使用
-    return await rag_chat(body.message)
+**掛載方式**（`app/main.py`）：統一在 `include_router` 時掛上，router 本身不需感知 auth：
+
+```python
+_auth = [Depends(verify_api_key)]
+app.include_router(search.router, dependencies=_auth)
+app.include_router(chat.router, dependencies=_auth)
+app.include_router(qa.router, dependencies=_auth)
+# /health 不在此列，不需認證
 ```
 
 **設定**（`.env`）：
+
 ```
-API_KEY=sk-your-secret-key-here
+SEO_API_KEY=your-secret-api-key-here   # openssl rand -hex 32 生成
 ```
 
-### Rate Limiting：slowapi（FastAPI 官方推薦）
+### Phase B — Rate Limiting（`app/core/limiter.py`）
 
-安裝：`pip install slowapi`
+**設計重點**：`limiter` 抽成獨立模組，避免 `app.main` ← routers ← `app.main` 循環相依。
 
 ```python
+# app/core/limiter.py  ← 單例，各 router import
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-
 limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
-@router.post("/api/v1/chat")
-@limiter.limit("10/minute")  # 每分鐘最多 10 次
-async def chat(body: ChatRequest, request: Request):
-    return await rag_chat(body.message)
+# app/main.py
+from app.core.limiter import limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# app/routers/chat.py
+from app.core.limiter import limiter
+
+@router.post("")
+@limiter.limit("20/minute")
+async def chat(req: ChatRequest, request: Request) -> ApiResponse[ChatResponse]:
+    ...
 ```
 
-**觀測**：命中限制時自動回傳 429 Too Many Requests（RFC 6585）。
+**速率表**（符合 PLAN_API_SECURITY.md 設計）：
 
-### Response Envelope Pattern（Microsoft REST API Guidelines 2024）
+| Endpoint              | Limit         | 說明              |
+| --------------------- | ------------- | ----------------- |
+| `POST /api/v1/chat`   | 20/min per IP | 消耗 OpenAI token |
+| `POST /api/v1/search` | 60/min per IP | 純語意搜索        |
+| `GET /api/v1/qa`      | 60/min per IP | 列表查詢          |
 
-統一所有回應格式，方便前端錯誤處理：
+命中限制時回傳 **429 Too Many Requests**（RFC 6585）。
+
+### Phase C — 全局 Exception Handler（`app/main.py`）
 
 ```python
-@dataclass
-class APIResponse(Generic[T]):
-    success: bool
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Unhandled exception: %s", exc, exc_info=True)   # 伺服器端完整 log
+    return JSONResponse(
+        status_code=500,
+        content={"data": None, "error": "Internal server error", "meta": {}},
+    )
+```
+
+**測試策略**：使用 `TestClient(app, raise_server_exceptions=False)` 讓測試能接到 500 response（starlette 參數名稱，非 `raise_server_errors`）。
+
+### Phase D — Response Envelope（`app/core/schemas.py`）
+
+採用 Pydantic Generic Model，型別安全且 OpenAPI 文件自動生成：
+
+```python
+# app/core/schemas.py
+from typing import Generic, Optional, TypeVar
+from pydantic import BaseModel, Field
+import uuid
+
+T = TypeVar("T")
+
+class ApiResponse(BaseModel, Generic[T]):
     data: Optional[T] = None
     error: Optional[str] = None
-    metadata: Optional[dict] = None
+    meta: dict = Field(default_factory=dict)
 
-# 成功
-return APIResponse(success=True, data=results)
+    @classmethod
+    def ok(cls, data: T) -> "ApiResponse[T]":
+        return cls(data=data, error=None,
+                   meta={"request_id": str(uuid.uuid4()), "version": "1.0"})
 
-# 錯誤
-return APIResponse(success=False, error="Invalid query", metadata={"timestamp": "..."})
+    @classmethod
+    def fail(cls, message: str) -> "ApiResponse[None]":
+        return cls(data=None, error=message,
+                   meta={"request_id": str(uuid.uuid4()), "version": "1.0"})
 ```
+
+**回應格式**：
+
+```json
+{
+  "data": { "items": [...], "total": 3 },
+  "error": null,
+  "meta": { "request_id": "550e8400-...", "version": "1.0" }
+}
+```
+
+### 測試覆蓋（`tests/test_api_security.py`）— 17 個測試
+
+- `test_no_key_returns_401` / `test_wrong_key_returns_401` / `test_correct_key_returns_200`
+- `test_401_body_does_not_leak_traceback`
+- `test_health_does_not_require_auth`（/health 不需認證）
+- `test_{search,chat,qa_single,qa_categories}_requires_auth`（4 個 endpoint）
+- `test_unhandled_exception_returns_500_without_traceback`（Phase C）
+- `test_successful_response_has_data_key` / `test_meta_has_request_id_and_version`（Phase D）
+
+**conftest.py 調整**：`client` fixture 改用 `monkeypatch` 注入 `SEO_API_KEY`，並在 `TestClient` context 前 `c.headers.update(API_KEY_HEADER)` 預設帶入 key，所有現有測試無需逐一修改。
 
 ---
 

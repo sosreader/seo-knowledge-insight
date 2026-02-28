@@ -7,11 +7,16 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from lmnr import Laminar
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app import config
+from app.core.limiter import limiter
+from app.core.security import verify_api_key
 from app.core.store import store
 from app.routers import chat, qa, search
 
@@ -45,6 +50,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── Phase B：Rate Limit 狀態掛載 ─────────────────────────────────────────────
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
@@ -53,9 +62,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(search.router)
-app.include_router(chat.router)
-app.include_router(qa.router)
+# ── Phase C：全局 Exception Handler ──────────────────────────────────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"data": None, "error": "Internal server error", "meta": {}},
+    )
+
+
+# ── Phase A：Auth dependency 掛在所有 /api/v1 路由 ───────────────────────────
+_auth = [Depends(verify_api_key)]
+
+app.include_router(search.router, dependencies=_auth)
+app.include_router(chat.router, dependencies=_auth)
+app.include_router(qa.router, dependencies=_auth)
 
 
 @app.get("/health", tags=["infra"])

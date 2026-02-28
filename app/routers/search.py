@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 
 from app import config
 from app.core.chat import get_embedding
+from app.core.limiter import limiter
+from app.core.schemas import ApiResponse
 from app.core.store import store
 from utils import audit_logger
 
@@ -40,8 +42,9 @@ class SearchResponse(BaseModel):
     total: int
 
 
-@router.post("", response_model=SearchResponse)
-async def search(req: SearchRequest, request: Request) -> SearchResponse:
+@router.post("", response_model=ApiResponse[SearchResponse])
+@limiter.limit("60/minute")
+async def search(req: SearchRequest, request: Request) -> ApiResponse[SearchResponse]:
     embedding = await get_embedding(req.query)
     hits = store.hybrid_search(req.query, embedding, top_k=req.top_k, category=req.category)
 
@@ -72,4 +75,4 @@ async def search(req: SearchRequest, request: Request) -> SearchResponse:
         client_ip=client_ip,
     )
 
-    return SearchResponse(results=results, total=len(results))
+    return ApiResponse.ok(SearchResponse(results=results, total=len(results)))

@@ -10,11 +10,11 @@
 
 v1.8 架構審查（`research/06-project-architecture.md` 第 23 節）發現 API 層存在三個安全缺口：
 
-| 缺口 | OWASP 分類 | 說明 |
-|------|-----------|------|
-| 無認證 | API2:2023 Broken Authentication | 任何人可呼叫 `/api/v1/chat`，直接消耗 OpenAI token |
-| 無速率限制 | API4:2023 Unrestricted Resource Consumption | burst 攻擊可耗盡 OpenAI 月額度 |
-| 錯誤訊息未遮蔽 | API3:2023 Broken Object Property Authorization | 未捕獲的例外會洩漏 Python traceback |
+| 缺口           | OWASP 分類                                     | 說明                                               |
+| -------------- | ---------------------------------------------- | -------------------------------------------------- |
+| 無認證         | API2:2023 Broken Authentication                | 任何人可呼叫 `/api/v1/chat`，直接消耗 OpenAI token |
+| 無速率限制     | API4:2023 Unrestricted Resource Consumption    | burst 攻擊可耗盡 OpenAI 月額度                     |
+| 錯誤訊息未遮蔽 | API3:2023 Broken Object Property Authorization | 未捕獲的例外會洩漏 Python traceback                |
 
 **業界支撐**：OWASP API Security Top 10（2023）、RFC 6585（HTTP 429）、Microsoft REST API Guidelines（2024）。
 
@@ -23,22 +23,28 @@ v1.8 架構審查（`research/06-project-architecture.md` 第 23 節）發現 AP
 本專案有兩條獨立的使用路徑，安全考量不同：
 
 #### 路徑 1：API 層（網路暴露）— ⚠️ CRITICAL 缺口
+
 ```
 前端 / 外部呼叫 → FastAPI /api/v1/* → OpenAI
 ```
+
 **缺口**：無 Auth、無 Rate Limit、錯誤訊息洩漏（本 plan 處理）
 
 #### 路徑 2：本地 CLI / 直接執行（無網路暴露）— ✅ 已防護
+
 ```
 make pipeline / scripts/*.py / slash commands → 直接讀寫本地檔案
 ```
+
 **已有防護**（v0.8 以來）：
+
 - SSRF 防護：Google Sheets domain 白名單 + sheet_id/gid 格式驗證（`04_generate_report.py` L71-130）
 - JSON schema 驗證：Structured Output strict mode，100% 符合才接受（`openai_helper.py`）
 - Env fail-fast：PEP 562 lazy loading，只驗證當前 step 所需的 API key（`config.py`）
 - `.env` 隔離：`.gitignore` 排除，未簽入版控
 
 **剩下的低風險問題**（內部工具，不緊急）：
+
 - **Prompt injection from Notion**：內容直接進 LLM prompt，但前提是 Notion 存取權已被入侵（Notion 層面防護）
 - **`.env` 文件權限**：建議 `chmod 600`（執行腳本的人本身就有寫入權，攻擊面極小）
 - **Path traversal in CLI**：`--output` 參數可指定任意路徑，但本地執行者權限本身就包含此操作
@@ -94,16 +100,19 @@ app.include_router(
 ```
 
 **config.py 新增**：
+
 ```python
 "API_KEY": _LazyEnv("SEO_API_KEY", required=True),
 ```
 
 **.env.example 新增**：
+
 ```
 SEO_API_KEY=your-secret-api-key-here
 ```
 
 **測試**：
+
 - 無 header → 401
 - 錯誤 key → 401
 - 正確 key → 200
@@ -117,17 +126,18 @@ SEO_API_KEY=your-secret-api-key-here
 **套件**：`slowapi`（FastAPI 官方推薦，基於 `limits` 和 `redis` / in-memory 後端）
 
 **安裝**：
+
 ```bash
 pip install slowapi
 ```
 
 **Rate 設定**（對齊 PLAN_SEO_INSIGHT.md 第 2.4 節）：
 
-| Endpoint | Limit | 說明 |
-|----------|-------|------|
-| `POST /api/v1/chat` | 20/min per IP | 消耗 OpenAI token |
-| `POST /api/v1/search` | 60/min per IP | 純語意搜索 |
-| `GET /api/v1/qa` | 60/min per IP | 列表查詢 |
+| Endpoint              | Limit         | 說明              |
+| --------------------- | ------------- | ----------------- |
+| `POST /api/v1/chat`   | 20/min per IP | 消耗 OpenAI token |
+| `POST /api/v1/search` | 60/min per IP | 純語意搜索        |
+| `GET /api/v1/qa`      | 60/min per IP | 列表查詢          |
 
 **實作位置**：`app/main.py`
 
@@ -179,6 +189,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 **目標**：統一所有 API 回應格式（Microsoft REST API Guidelines 2024）。
 
 **目標格式**：
+
 ```json
 {
   "data": { ... },
@@ -219,13 +230,13 @@ Phase A + B + C 可在同一個 PR 完成（共 ~5h），Phase D 建議在前端
 
 這些來自 v1.8 Architect Review，與安全無關但同樣重要：
 
-| 項目 | 說明 | 估計 | 優先 |
-|------|------|------|------|
-| Golden set 擴充 | extraction 5→20 筆，report 5→10 筆，提升統計顯著性（n≥30 原則） | 3h | MEDIUM |
-| Hybrid Search → RRF | 線性加權改為 Reciprocal Rank Fusion（Cormack 2009, SIGIR），消除 score scale 問題 | 4h | MEDIUM |
-| Prometheus metrics | `/metrics` endpoint，追蹤 P50/P95/P99 延遲、cache hit rate、token usage | 2h | MEDIUM |
-| `app/config.py` 合併 | 與 `config.py` 重複定義 `OPENAI_API_KEY` 等，統一為 lazy env | 1h | MEDIUM |
-| Admin reload endpoint | `POST /admin/reload` 讓 pipeline 更新後 API 熱載，不需重啟 | 1h | LOW |
+| 項目                  | 說明                                                                              | 估計 | 優先   |
+| --------------------- | --------------------------------------------------------------------------------- | ---- | ------ |
+| Golden set 擴充       | extraction 5→20 筆，report 5→10 筆，提升統計顯著性（n≥30 原則）                   | 3h   | MEDIUM |
+| Hybrid Search → RRF   | 線性加權改為 Reciprocal Rank Fusion（Cormack 2009, SIGIR），消除 score scale 問題 | 4h   | MEDIUM |
+| Prometheus metrics    | `/metrics` endpoint，追蹤 P50/P95/P99 延遲、cache hit rate、token usage           | 2h   | MEDIUM |
+| `app/config.py` 合併  | 與 `config.py` 重複定義 `OPENAI_API_KEY` 等，統一為 lazy env                      | 1h   | MEDIUM |
+| Admin reload endpoint | `POST /admin/reload` 讓 pipeline 更新後 API 熱載，不需重啟                        | 1h   | LOW    |
 
 ---
 

@@ -39,12 +39,15 @@ Notion 會議紀錄（87 份，2023–2026）
   Retrieval 品質：語意搜尋 + gpt-5-mini 相關性判斷
             ↓ output/eval_report.json
 
-══════════════ API 層（2026-02-27 新增）══════════════
+══════════════ API 層（2026-02-27 新增；v1.9 加入安全層）══════════════
 
 [SEO Insight API] app/ — FastAPI，讀 Step 3 產出進記憶體
-  啟動時載入：qa_final.json（703 筆）+ qa_embeddings.npy（703×1536）
+  認證：X-API-Key header（SEO_API_KEY env）
+  速率限制：chat 20/min・search/qa 60/min（slowapi）
+  回應格式：ApiResponse[T] envelope（data / error / meta）
+  全局例外：500 不洩漏 traceback
   endpoints：
-    POST /api/v1/search  → numpy cosine 語意搜尋
+    POST /api/v1/search  → hybrid_search（語意 + 關鍵字）
     POST /api/v1/chat    → RAG 問答（gpt-5.2）
     GET  /api/v1/qa      → 篩選列表
   部署：Docker image → ECR → EC2（SSM 遠端換容器）
@@ -157,12 +160,17 @@ flowchart TD
         S4 --> RPT[report_YYYYMMDD.md]
     end
 
-    subgraph RAG_API["API Layer 知識存取（v1.8 安全缺口已識別）"]
+    subgraph RAG_API["API Layer v1.11 安全層已實作"]
         QA --> API[SEO Insight API<br/>FastAPI QAStore singleton]
         EMB --> API
-        SE -.->|hybrid_search 已實作<br/>但 search/chat<br/>尚未啟用| API
-        API --> EP["POST /api/v1/search — 純語意搜索<br/>POST /api/v1/chat — 純語意搜索<br/>GET /api/v1/qa"]
-        AUTH["Auth: 尚未實作<br/>Rate Limit: 尚未實作<br/>OWASP API Top10 風險"] -.->|CRITICAL 缺口| EP
+        SE -.->|hybrid_search| API
+        API --> SEC["app/core/security.py<br/>verify_api_key<br/>X-API-Key header<br/>SEO_API_KEY env"]
+        API --> LIM["app/core/limiter.py<br/>slowapi Limiter<br/>chat:20/min search:60/min qa:60/min"]
+        API --> EXC["@app.exception_handler<br/>500 不流展 traceback"]
+        SEC --> EP["POST /api/v1/search — 60/min<br/>POST /api/v1/chat — 20/min<br/>GET  /api/v1/qa — 60/min"]
+        LIM --> EP
+        EXC --> EP
+        EP --> ENV["ApiResponse[T]<br/>data / error / meta<br/>request_id + version"]
     end
 
     subgraph AuditTrail["Audit Trail v1.0"]
@@ -233,6 +241,7 @@ flowchart TD
 | 2026-02-28 | v1.8 | **Architect Review + Refactor Clean**：(1) 架構 review 識別 12 個技術決策，附業界/學術研究支撐；(2) 發現 CRITICAL 缺口：API 層無 Auth + 無 Rate Limit（OWASP API Top10 風險）；(3) 發現 HIGH 缺口：`SearchEngine.hybrid_search()` 已實作但 search/chat endpoint 未啟用，等同 v1.5 搜索品質提升在線上未生效；(4) Refactor：`_now_iso()` 雙次 datetime 調用修復、`get_qa_item()` O(n)→O(1) dict 索引、`classify_qa()` 硬編碼模型修正、search/chat 改用 hybrid_search；(5) 新增「技術決策學術支撐」章節（13 個決策，每個附論文/RFC 引用）；(6) 架構圖標注 API 層安全缺口與 hybrid_search 未啟用現況                                                                                                                                                                                                                                                                                                                                   | `app/routers/search.py`，`app/core/chat.py`，`app/core/store.py`，`utils/audit_logger.py`，`utils/openai_helper.py`，`research/06-project-architecture.md`                                                                                                                 |
 | 2026-02-28 | v1.9 | **Provider 比較基準 + Bug 修復**：(1) 新增 `scripts/compare_providers.py`（LLM-as-Judge 5-provider 橫向比較）+ `eval/golden_seo_analysis.json`；(2) 加入 Laminar tracing（`@observe` + `init_laminar`/`flush_laminar` in CLI）；(3) 修復 Bug：path resolution 迴圈內 mutation → list comprehension；(4) 修復 Bug：retry loop exception swallowing（`return` → `continue`）；(5) 新增 K. Provider 比較基準架構章節；(6) 更新 research/03-evaluation.md、05-models.md 知識庫；(7) 萃取 3 個 instinct（openai-reasoning-no-response-format、retry-exception-not-just-empty、laminar-observe-cli-scripts）                                                                                                                                                                                                                                                                                                                             | `scripts/compare_providers.py`（new），`eval/golden_seo_analysis.json`（new），`output/provider_*.md`，`research/03-evaluation.md`，`research/05-models.md`，`research/09-provider-comparison.md`                                                                          |
 | 2026-02-28 | v1.10 | **Laminar 離線評估系統**：(1) 新建 `evals/` 目錄（4 個 Python 模組），Laminar SDK 整合離線品質監控；(2) `utils/laminar_scoring.py`（new）— rule-based online scoring，4 個 lightweight evaluators（answer_length、has_sources、top_source_score、source_count），無額外 LLM 呼叫，自動附屬 rag_chat trace；(3) `evals/eval_retrieval.py` — 307 筆 golden retrieval set，keyword_hit_rate + category matching 評估；(4) `evals/eval_extraction.py` — extraction quality 評估（Q&A 計數、keyword coverage、無管理內容）；(5) `evals/eval_chat.py` — 10 scenario chat end-to-end 評估；(6) `.claude/skills/laminar-instrumentation.md`（new）— 強制執行 Laminar 計測規則；(7) PLAN_SEO_INSIGHT.md 新增 §3.0 「Laminar Eval 實作現況」；(8) 更新 README.md 文件架構 + 新增「步驟 6：Laminar 離線評估」；(9) 修復 app/core/chat.py 新增 online scoring 整合（v1.10 已完成） | `evals/`（new 4 files），`utils/laminar_scoring.py`（new），`.claude/skills/laminar-instrumentation.md`（new），`app/core/chat.py`，`PLAN_SEO_INSIGHT.md`，`README.md` |
+| 2026-02-28 | v1.11 | **API 安全層實作（OWASP API Top10 CRITICAL 缺口修復）**：(1) Phase A—`app/core/security.py`（new），`verify_api_key` FastAPI dependency，`SEO_API_KEY` env lazy 讀取，未設則開發模式放行 + warn；(2) Phase B—`app/core/limiter.py`（new），slowapi 單例，chat: 20/min、search/qa: 60/min，429 RFC 6585；(3) Phase C—`@app.exception_handler(Exception)` 全局 500 handler，不流展 Python traceback；(4) Phase D—`app/core/schemas.py`（new），`ApiResponse[T]` 泛型 Envelope，`data / error / meta{request_id, version}`；(5) 所有 /api/v1/* router 更新為 Envelope 回傳 + limiter 裝飾器；(6) health endpoint 不需認證；(7) conftest.py 改用 monkeypatch 注入測試 API Key；(8) `tests/test_api_security.py`（new）— 17 個安全測試；(9) 全部 141 tests 通過 | `app/core/security.py`（new），`app/core/limiter.py`（new），`app/core/schemas.py`（new），`tests/test_api_security.py`（new），`app/main.py`，`app/config.py`，`app/routers/{chat,search,qa}.py`，`requirements_api.txt`，`.env.example`，`tests/conftest.py` |
 
 ### 更新架構圖的 SOP
 

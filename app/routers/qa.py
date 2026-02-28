@@ -10,6 +10,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from app.core.limiter import limiter
+from app.core.schemas import ApiResponse
 from app.core.store import QAItem, store
 from utils import audit_logger
 
@@ -61,20 +63,23 @@ def _to_schema(item: QAItem) -> QAResponse:
 
 # ──────────── routes ────────────
 
-@router.get("/categories", response_model=CategoriesResponse)
-def get_categories() -> CategoriesResponse:
-    return CategoriesResponse(categories=store.categories())
+@router.get("/categories", response_model=ApiResponse[CategoriesResponse])
+@limiter.limit("60/minute")
+def get_categories(request: Request) -> ApiResponse[CategoriesResponse]:
+    return ApiResponse.ok(CategoriesResponse(categories=store.categories()))
 
 
-@router.get("/{item_id}", response_model=QAResponse)
-def get_qa_item(item_id: int) -> QAResponse:
+@router.get("/{item_id}", response_model=ApiResponse[QAResponse])
+@limiter.limit("60/minute")
+def get_qa_item(request: Request, item_id: int) -> ApiResponse[QAResponse]:
     item = store.get_item_by_id(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail=f"QA id={item_id} not found")
-    return _to_schema(item)
+    return ApiResponse.ok(_to_schema(item))
 
 
-@router.get("", response_model=QAListResponse)
+@router.get("", response_model=ApiResponse[QAListResponse])
+@limiter.limit("60/minute")
 def list_qa(
     request: Request,
     category: Optional[str] = Query(default=None),
@@ -83,7 +88,7 @@ def list_qa(
     evergreen: Optional[bool] = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-) -> QAListResponse:
+) -> ApiResponse[QAListResponse]:
     items, total = store.list_qa(
         category=category,
         keyword=keyword,
@@ -109,9 +114,11 @@ def list_qa(
         client_ip=client_ip,
     )
 
-    return QAListResponse(
-        items=[_to_schema(i) for i in items],
-        total=total,
-        offset=offset,
-        limit=limit,
+    return ApiResponse.ok(
+        QAListResponse(
+            items=[_to_schema(i) for i in items],
+            total=total,
+            offset=offset,
+            limit=limit,
+        )
     )

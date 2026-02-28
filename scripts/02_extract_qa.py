@@ -31,6 +31,7 @@ except ModuleNotFoundError:
 from utils.openai_helper import extract_qa_from_text
 from utils.pipeline_cache import cache_get, cache_set
 from utils.pipeline_deps import preflight_check, StepDependency
+from utils.pipeline_version import record_artifact
 from utils.observability import init_laminar, flush_laminar, observe
 from scripts.extract_qa_helpers import (
     _extract_date_from_title,
@@ -228,6 +229,15 @@ def main(args: argparse.Namespace) -> None:
         merged_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
         qa_count = merged["total_qa_count"]
         print(f"   📊 合併結果已更新: {qa_count} 個 Q&A")
+        version_entry = record_artifact(
+            step=2,
+            data=merged,
+            metadata={
+                "qa_count": merged["total_qa_count"],
+                "meetings_processed": merged["meetings_processed"],
+            },
+        )
+        print(f"   🔖 版本記録: {version_entry['version_id']}")
         return
 
     total_files = len(md_files)
@@ -266,6 +276,17 @@ def main(args: argparse.Namespace) -> None:
         json.dumps(merged_output, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+    # ── Layer 2: Version Registry ──────────────────────────────
+    version_entry = record_artifact(
+        step=2,
+        data=merged_output,
+        metadata={
+            "qa_count": merged_output["total_qa_count"],
+            "meetings_processed": merged_output["meetings_processed"],
+        },
+    )
+    print(f"\n🔖 版本記録: {version_entry['version_id']}")
 
     print("\n" + "=" * 60)
     print("✅ 步驟 2 完成！")
