@@ -29,6 +29,8 @@ except ModuleNotFoundError:
     import config
 
 from utils.openai_helper import extract_qa_from_text
+from utils.pipeline_deps import preflight_check, StepDependency
+from utils.observability import init_laminar, flush_laminar, observe
 from scripts.extract_qa_helpers import (
     _extract_date_from_title,
     _extract_date_from_content,
@@ -36,6 +38,7 @@ from scripts.extract_qa_helpers import (
 )
 
 
+@observe(name="process_single_meeting")
 def process_single_meeting(md_path: Path) -> dict:
     """處理單份會議紀錄"""
     content = md_path.read_text(encoding="utf-8")
@@ -125,9 +128,26 @@ def _rebuild_merged_from_per_meeting() -> dict:
 
 
 def main(args: argparse.Namespace) -> None:
-    if not config.OPENAI_API_KEY:
-        print("❌ 請設定 OPENAI_API_KEY（在 .env）")
-        sys.exit(1)
+    init_laminar()
+
+    # ── Pre-flight 依賴檢查 ──
+    preflight_check(
+        deps=[
+            StepDependency(
+                path=config.RAW_MD_DIR,
+                required=True,
+                min_count=1,
+                glob_pattern="*.md",
+                max_age_days=14,
+                hint="請先執行 python scripts/01_fetch_notion.py",
+            ),
+        ],
+        env_keys=["OPENAI_API_KEY"],
+        step_name="Step 2: Q&A 萃取",
+        check_only=getattr(args, "check", False),
+    )
+    if getattr(args, "check", False):
+        return
 
     force = args.force
 
@@ -233,11 +253,14 @@ def main(args: argparse.Namespace) -> None:
     print(f"   合併結果: {merged_path}")
     print("=" * 60)
 
+    flush_laminar()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用 OpenAI 萃取 Q&A")
     parser.add_argument("--limit", type=int, default=0, help="只處理前 N 份")
     parser.add_argument("--file", default="", help="只處理指定檔案名稱")
     parser.add_argument("--force", action="store_true", help="強制重新處理所有檔案（忽略已完成的）")
+    parser.add_argument("--check", action="store_true", help="只執行依賴檢查，不實際執行")
     args = parser.parse_args()
     main(args)

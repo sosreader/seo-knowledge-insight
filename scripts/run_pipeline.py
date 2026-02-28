@@ -2,14 +2,15 @@
 """
 主控流程：一鍵執行完整 pipeline
 
-    python scripts/run_pipeline.py              # 完整流程
+    python scripts/run_pipeline.py              # 完整流程 (step 1->2->3)
     python scripts/run_pipeline.py --step 1     # 只執行步驟 1
     python scripts/run_pipeline.py --step 2     # 只執行步驟 2
     python scripts/run_pipeline.py --step 3     # 只執行步驟 3
     python scripts/run_pipeline.py --step 4 --input metrics.tsv  # 產生週報
     python scripts/run_pipeline.py --step 5                      # 品質評估
     python scripts/run_pipeline.py --step 5 --sample 50          # 抽樣 50 筆評估
-    python scripts/run_pipeline.py --dry-run    # 檢查設定但不執行
+    python scripts/run_pipeline.py --check      # 只檢查所有步驟的依賴
+    python scripts/run_pipeline.py --dry-run    # 同 --check（向下相容）
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import List, Optional
 
 try:
     import config
@@ -25,21 +27,18 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import config
 
-
-def check_config() -> list[str]:
-    """驗證設定，回傳問題列表"""
-    issues = []
-    if not config.NOTION_TOKEN:
-        issues.append("❌ NOTION_TOKEN 未設定")
-    if not config.NOTION_PARENT_PAGE_ID:
-        issues.append("❌ NOTION_PARENT_PAGE_ID 未設定")
-    if not config.OPENAI_API_KEY:
-        issues.append("❌ OPENAI_API_KEY 未設定（步驟 2、3 需要）")
-    return issues
+# ── 子腳本對照表 ─────────────────────────────────────
+STEP_SCRIPTS = {
+    1: "01_fetch_notion.py",
+    2: "02_extract_qa.py",
+    3: "03_dedupe_classify.py",
+    4: "04_generate_report.py",
+    5: "05_evaluate.py",
+}
 
 
-def run_step(script_name: str, extra_args: list[str] | None = None) -> bool:
-    """執行子腳本"""
+def run_step(script_name: str, extra_args: Optional[List[str]] = None) -> bool:
+    """執行子腳本，回傳是否成功"""
     script_path = Path(__file__).parent / script_name
     cmd = [sys.executable, str(script_path)] + (extra_args or [])
 
@@ -61,164 +60,59 @@ def main() -> None:
         help="只執行指定步驟（0=全部 1-3）",
     )
     parser.add_argument(
-        "--sample",
-        type=int,
-        default=30,
-        help="步驟 5：評估抽樣數量（預設 30）",
-    )
-    parser.add_argument(
-        "--with-source",
+        "--check",
         action="store_true",
-        help="步驟 5：帶入原始 Markdown 驗證 Accuracy/Faithfulness",
-    )
-    parser.add_argument(
-        "--eval-retrieval",
-        action="store_true",
-        help="步驟 5：評估 Retrieval 品質",
-    )
-    parser.add_argument(
-        "--filter",
-        default=None,
-        help="步驟 1 的標題篩選關鍵字",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=0,
-        help="步驟 2 只處理前 N 份（測試用）",
+        help="只執行依賴檢查，不實際跑（各子腳本的 preflight_check）",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="只檢查設定，不實際執行",
+        help="同 --check（向下相容）",
     )
-    parser.add_argument(
-        "--skip-dedup",
-        action="store_true",
-        help="步驟 3 跳過去重",
-    )
-    parser.add_argument(
-        "--skip-classify",
-        action="store_true",
-        help="步驟 3 跳過分類",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="強制重新處理（忽略增量比對，適用於步驟 1、2）",
-    )
-    parser.add_argument(
-        "--input", "-i",
-        default=None,
-        help="步驟 4：TSV 指標檔案路徑",
-    )
-    parser.add_argument(
-        "--output", "-o",
-        default=None,
-        help="步驟 4：報告輸出路徑（預設 output/report_YYYYMMDD.md）",
-    )
-    parser.add_argument(
-        "--no-qa",
-        action="store_true",
-        help="步驟 4：不使用 Q&A 知識庫",
-    )
-    parser.add_argument(
-        "--tab",
-        default="vocus",
-        help="步驟 4：Google Sheets 分頁名稱（預設: vocus）",
-    )
-    args = parser.parse_args()
+    # 其餘 args 透過 parse_known_args 轉發給子腳本
+    args, remaining = parser.parse_known_args()
+
+    # --dry-run 向下相容：等同 --check
+    check_only = args.check or args.dry_run
 
     print("=" * 60)
     print("🚀 SEO Q&A 資料庫建構 Pipeline")
     print("=" * 60)
 
-    # 檢查設定
-    print("\n🔍 檢查設定 ...")
-    issues = check_config()
-
-    # 根據要執行的步驟，放寬檢查
-    if args.step == 1:
-        issues = [i for i in issues if "NOTION" in i]
-    elif args.step in (2, 3, 4):
-        issues = [i for i in issues if "OPENAI" in i]
-
-    if issues:
-        for issue in issues:
-            print(f"   {issue}")
-        print("\n💡 請複製 .env.example 為 .env 並填入正確的值")
-        sys.exit(1)
-    else:
-        print("   ✅ 設定檢查通過")
-
-    if args.dry_run:
-        print("\n🏁 Dry run 完成，設定正確！")
-        return
+    if check_only:
+        print("\n🔍 依賴檢查模式（不實際執行）")
 
     start = time.time()
     # 步驟 4 是獨立的報告產生流程，不列入預設 1-2-3 pipeline
     steps_to_run = [args.step] if args.step else [1, 2, 3]
 
     for step in steps_to_run:
-        if step == 1:
-            extra = []
-            if args.filter:
-                extra += ["--filter", args.filter]
-            if args.force:
-                extra.append("--force")
-            ok = run_step("01_fetch_notion.py", extra)
-        elif step == 2:
-            extra = []
-            if args.limit:
-                extra += ["--limit", str(args.limit)]
-            if args.force:
-                extra.append("--force")
-            ok = run_step("02_extract_qa.py", extra)
-        elif step == 3:
-            extra = []
-            if args.skip_dedup:
-                extra.append("--skip-dedup")
-            if args.skip_classify:
-                extra.append("--skip-classify")
-            if args.limit:
-                extra += ["--limit", str(args.limit)]
-            ok = run_step("03_dedupe_classify.py", extra)
-        elif step == 4:
-            extra = []
-            if args.input:
-                extra += ["--input", args.input]
-            if args.output:
-                extra += ["--output", args.output]
-            if args.no_qa:
-                extra.append("--no-qa")
-            if hasattr(args, "tab") and args.tab and args.tab != "vocus":
-                extra += ["--tab", args.tab]
-            ok = run_step("04_generate_report.py", extra)
-        elif step == 5:
-            extra = []
-            if args.sample:
-                extra += ["--sample", str(args.sample)]
-            if args.with_source:
-                extra.append("--with-source")
-            if args.eval_retrieval:
-                extra.append("--eval-retrieval")
-            ok = run_step("05_evaluate.py", extra)
-        else:
+        script = STEP_SCRIPTS.get(step)
+        if not script:
             continue
 
+        # 只在單步模式時轉發 remaining args（避免 step-specific flags 傳給不相關的步驟）
+        extra = list(remaining) if args.step else []
+        if check_only:
+            extra.append("--check")
+
+        ok = run_step(script, extra)
         if not ok:
-            print(f"\n❌ 步驟 {step} 執行失敗，中止 pipeline")
+            print(f"\n❌ 步驟 {step} {'檢查' if check_only else '執行'}失敗，中止 pipeline")
             sys.exit(1)
 
     elapsed = time.time() - start
     minutes = int(elapsed // 60)
     seconds = int(elapsed % 60)
 
-    print("\n" + "=" * 60)
-    print(f"🎉 Pipeline 完成！耗時 {minutes}m {seconds}s")
-    print(f"   📁 Raw data:  {config.RAW_MD_DIR}")
-    print(f"   📁 Q&A 資料庫: {config.OUTPUT_DIR}")
-    print("=" * 60)
+    if check_only:
+        print(f"\n🏁 依賴檢查完成！（{minutes}m {seconds}s）")
+    else:
+        print("\n" + "=" * 60)
+        print(f"🎉 Pipeline 完成！耗時 {minutes}m {seconds}s")
+        print(f"   📁 Raw data:  {config.RAW_MD_DIR}")
+        print(f"   📁 Q&A 資料庫: {config.OUTPUT_DIR}")
+        print("=" * 60)
 
 
 if __name__ == "__main__":

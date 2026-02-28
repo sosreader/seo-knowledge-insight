@@ -35,6 +35,7 @@ except ModuleNotFoundError:
 from utils.notion_client import fetch_all_meetings
 from utils.block_to_markdown import blocks_to_markdown
 from utils import audit_logger
+from utils.pipeline_deps import preflight_check
 
 
 def _load_existing_index() -> dict[str, dict]:
@@ -78,13 +79,19 @@ def _parse_since_date(since_str: str) -> str:
 
 
 async def main(args: argparse.Namespace) -> None:
+    # ── Pre-flight 依賴檢查 ──
+    preflight_check(
+        deps=[],
+        env_keys=["NOTION_TOKEN"],
+        step_name="Step 1: Notion 擷取",
+        check_only=getattr(args, "check", False),
+    )
+    if getattr(args, "check", False):
+        return
+
     parent_id = args.parent_id or config.NOTION_PARENT_PAGE_ID
     if not parent_id:
         print("❌ 請設定 NOTION_PARENT_PAGE_ID（在 .env 或 --parent-id 參數）")
-        sys.exit(1)
-
-    if not config.NOTION_TOKEN:
-        print("❌ 請設定 NOTION_TOKEN（在 .env）")
         sys.exit(1)
 
     force = args.force
@@ -247,6 +254,11 @@ if __name__ == "__main__":
         type=int,
         default=3,
         help="最大 block 遞迴深度（預設 3）",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="只執行依賴檢查，不實際執行",
     )
     args = parser.parse_args()
     asyncio.run(main(args))

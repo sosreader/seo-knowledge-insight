@@ -5,13 +5,14 @@
 ##
 ## Quick reference:
 ##   make pipeline         完整流程 step 1→2→3
+##   make check            檢查所有步驟依賴（不執行）
 ##   make step1            Notion 擷取
 ##   make step2            Q&A 萃取
 ##   make step3            去重 + 分類
 ##   make step4            週報生成（需指定 INPUT）
 ##   make step5            品質評估
 ##   make test             執行測試
-##   make dry-run          驗證設定（不執行）
+##   make dry-run          同 make check（向下相容）
 ##   make install          安裝依賴
 
 PYTHON := .venv/bin/python
@@ -31,8 +32,12 @@ pipeline: ## 完整流程：step 1 → 2 → 3
 	$(PYTHON) $(SCRIPT)
 
 .PHONY: dry-run
-dry-run: ## 只驗證設定，不實際執行
-	$(PYTHON) $(SCRIPT) --dry-run
+dry-run: ## 只驗證設定，不實際執行（同 make check）
+	$(PYTHON) $(SCRIPT) --check
+
+.PHONY: check
+check: ## 檢查所有步驟的依賴是否就緒（不執行任何 API 呼叫）
+	$(PYTHON) $(SCRIPT) --check
 
 # ── 分步驟執行 ────────────────────────────────────────
 

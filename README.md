@@ -98,60 +98,71 @@ python scripts/run_pipeline.py
 
 ### 分步執行
 
+每個步驟都可以直接執行，啟動時自動檢查前置步驟的資料是否就緒：
+
 ```bash
 # 步驟 1：從 Notion 擷取（增量模式，只抓新增/有更新的）
-python scripts/run_pipeline.py --step 1
+python scripts/01_fetch_notion.py
+python scripts/01_fetch_notion.py --force          # 全量重抓
 
-# 步驟 1 + 強制全量重抓
-python scripts/run_pipeline.py --step 1 --force
-
-# 步驟 1 + 篩選特定標題
-python scripts/run_pipeline.py --step 1 --filter "SEO 會議"
+# → 自動檢查：NOTION_TOKEN 是否已設定
 
 # 步驟 2：OpenAI 萃取 Q&A（增量模式，跳過已完成的）
-python scripts/run_pipeline.py --step 2
+python scripts/02_extract_qa.py
+python scripts/02_extract_qa.py --limit 3          # 先試 3 份
+python scripts/02_extract_qa.py --force             # 全部重新處理
 
-# 步驟 2：強制全部重新處理
-python scripts/run_pipeline.py --step 2 --force
-
-# 步驟 2：先試 3 份看效果
-python scripts/run_pipeline.py --step 2 --limit 3
+# → 自動檢查：raw_data/markdown/ 是否有 .md 檔案
 
 # 步驟 3：去重 + 分類
-python scripts/run_pipeline.py --step 3
+python scripts/03_dedupe_classify.py
+python scripts/03_dedupe_classify.py --skip-dedup   # 只分類
+python scripts/03_dedupe_classify.py --limit 30     # 測試模式
 
-# 步驟 3：只分類不去重
-python scripts/run_pipeline.py --step 3 --skip-dedup
+# → 自動檢查：output/qa_all_raw.json 是否存在
 
-# 步驟 3：測試模式（前 30 個 Q&A）
-python scripts/run_pipeline.py --step 3 --limit 30
+# 步驟 4：產生每週 SEO 週報
+python scripts/04_generate_report.py
+python scripts/04_generate_report.py --no-qa        # 不使用知識庫
+python scripts/04_generate_report.py --input metrics.tsv  # 本機檔案
 
-# 步驟 4：產生每週 SEO 週報（自動從 Google Sheets 擷取，無需手動複製）
-python scripts/run_pipeline.py --step 4
+# → 自動檢查：output/qa_final.json 是否存在（--no-qa 可跳過）
 
-# 步驟 4：指定分頁名稱（預設 vocus）
-python scripts/run_pipeline.py --step 4 --tab vocus
+# 步驟 5：品質評估
+python scripts/05_evaluate.py
+python scripts/05_evaluate.py --sample 50 --with-source
+python scripts/05_evaluate.py --eval-retrieval
 
-# 步驟 4：改用本機檔案（測試或離線用）
-python scripts/run_pipeline.py --step 4 --input metrics.tsv
-
-# 步驟 4：指定輸出路徑
-python scripts/run_pipeline.py --step 4 --output output/report_20260220.md
-
-# 步驟 5：品質評估（預設抽樣 30 筆）
-python scripts/run_pipeline.py --step 5
-
-# 步驟 5：抽樣 50 筆 + 帶原始會議紀錄驗證
-python scripts/run_pipeline.py --step 5 --sample 50 --with-source
-
-# 步驟 5：含 Retrieval 品質評估
-python scripts/run_pipeline.py --step 5 --eval-retrieval
+# → 自動檢查：output/qa_final.json（fallback: qa_all_raw.json）
 ```
 
-### 只檢查設定
+#### 只檢查依賴（不執行）
 
 ```bash
-python scripts/run_pipeline.py --dry-run
+python scripts/02_extract_qa.py --check
+# 輸出：✅ Step 2: Q&A 萃取 依賴檢查通過
+# 或：  ❌ raw_data/markdown/*.md 找到 0 個檔案（需 ≥ 1）
+#       💡 請先執行 python scripts/01_fetch_notion.py
+```
+
+#### 全流程（保留向下相容）
+
+```bash
+python scripts/run_pipeline.py              # 完整 1→2→3
+python scripts/run_pipeline.py --step 4     # 單步也行
+python scripts/run_pipeline.py --check      # 只檢查所有步驟的依賴
+python scripts/run_pipeline.py --dry-run    # 同 --check（向下相容）
+```
+
+### 透過 run_pipeline.py 分步（向下相容）
+
+```bash
+# 支援所有子腳本的 flags，透過 -- 轉發
+python scripts/run_pipeline.py --step 1 --force
+python scripts/run_pipeline.py --step 2 --limit 3
+python scripts/run_pipeline.py --step 3 --skip-dedup
+python scripts/run_pipeline.py --step 4 --tab vocus --input metrics.tsv
+python scripts/run_pipeline.py --step 5 --sample 50 --with-source --eval-retrieval
 ```
 
 ---
