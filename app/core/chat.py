@@ -6,10 +6,12 @@ from __future__ import annotations
 import logging
 
 import numpy as np
+from lmnr import Laminar, observe
 from openai import AsyncOpenAI
 
 from app import config
 from app.core.store import QAItem, store
+from utils.laminar_scoring import score_rag_response
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,7 @@ _client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
 # ─────────────────────────── embedding ────────────────────────────
 
 
+@observe(name="get_embedding")
 async def get_embedding(text: str) -> np.ndarray:
     """回傳 L2 歸一化的 embedding ndarray (float32)"""
     resp = await _client.embeddings.create(
@@ -63,6 +66,7 @@ def _item_to_source(item: QAItem, score: float) -> dict:
     }
 
 
+@observe(name="rag_chat")
 async def rag_chat(
     message: str,
     history: list[dict] | None = None,
@@ -114,4 +118,15 @@ async def rag_chat(
     sources = [_item_to_source(item, score) for item, score in hits]
 
     logger.debug("rag_chat: %d sources used, answer length=%d", len(sources), len(answer))
+
+    # 取得 trace_id 後發送 online evaluation scores
+    span_ctx = Laminar.get_laminar_span_context()
+    trace_id = str(span_ctx.trace_id) if span_ctx else None
+    score_rag_response(
+        trace_id=trace_id,
+        answer=answer,
+        sources=sources,
+        query=message,
+    )
+
     return {"answer": answer, "sources": sources}

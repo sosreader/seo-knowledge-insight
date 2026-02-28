@@ -525,6 +525,54 @@ seo-insight-api/
 
 > 參考 ECC eval-harness skill 的 Eval-Driven Development (EDD) 方法論
 
+### 3.0 Laminar Eval 實作現況（2026-02-28）
+
+#### Tracing 覆蓋率
+
+| 函式 | 檔案 | 狀態 |
+|------|------|------|
+| `extract_qa_from_text` | `utils/openai_helper.py` | ✅ `@observe` |
+| `get_embeddings` | `utils/openai_helper.py` | ✅ `@observe` |
+| `merge_similar_qas` | `utils/openai_helper.py` | ✅ `@observe` |
+| `classify_qa` | `utils/openai_helper.py` | ✅ `@observe` |
+| `get_embedding` | `app/core/chat.py` | ✅ `@observe`（2026-02-28 新增） |
+| `rag_chat` | `app/core/chat.py` | ✅ `@observe` + online scoring（2026-02-28 新增） |
+| FastAPI startup | `app/main.py` | ✅ `Laminar.initialize()` |
+| Pipeline scripts | `scripts/02-05_*.py` | ✅ `init_laminar()` + `flush_laminar()` |
+
+#### Online Scoring（`utils/laminar_scoring.py`）
+
+每次 `rag_chat` 呼叫自動附帶 4 個 rule-based scores：
+
+| Evaluator | 類型 | 說明 |
+|-----------|------|------|
+| `answer_length` | binary | 回答 > 50 字元 |
+| `has_sources` | binary | 至少 1 個來源 |
+| `top_source_score` | continuous | 最佳來源 cosine similarity |
+| `source_count` | continuous | 來源數 / 5，上限 1.0 |
+
+#### Offline Evals（`evals/` 目錄）
+
+| 腳本 | Group name | 測試集 | Evaluators |
+|------|-----------|--------|------------|
+| `evals/eval_retrieval.py` | `retrieval_quality` | `eval/golden_retrieval.json` (307 筆) | keyword_hit_rate, top1_category_match, top5_category_coverage |
+| `evals/eval_extraction.py` | `extraction_quality` | `eval/golden_extraction.json` | qa_count_in_range, keyword_coverage, no_admin_content, avg_confidence |
+| `evals/eval_chat.py` | `chat_quality` | 前 10 retrieval scenarios | has_answer, has_sources, answer_keyword_coverage, top_source_in_expected_category |
+
+執行方式：
+```bash
+export LMNR_PROJECT_API_KEY=<key>
+lmnr eval                          # 全部
+python evals/eval_retrieval.py     # 單獨
+```
+
+#### Skill 強制執行規則（`.claude/skills/laminar-instrumentation.md`）
+
+每次新增或修改 LLM/token 呼叫時，必須確認：
+1. `@observe(name="...")` 裝飾器存在
+2. CLI 腳本有 `init_laminar()` + `flush_laminar()`
+3. 對應 `evals/eval_*.py` 腳本存在或更新
+
 ### 3.1 Eval 類型
 
 | Eval 類型           | 頻率                 | 觸發方式   | 說明                                                          |
