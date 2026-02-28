@@ -18,7 +18,7 @@ AI 不知道你的私人資料（會議紀錄、客戶資料）。
 ```
 [問題] 「上次開會說 Discover 流量下降，怎麼解決？」
    ↓
-[Retrieval] 把問題轉成 embedding → 在 703 筆 Q&A 中找最相關的 5 筆
+[Retrieval] 把問題轉成 embedding → 在 725 筆 Q&A 中找最相關的 5 筆
    ↓
 [Augmented] 把這 5 筆 Q&A 塞進 prompt：
    「根據以下 SEO 知識：

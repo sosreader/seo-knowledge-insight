@@ -17,7 +17,7 @@ redis cache             →  python dict，啟動一次載入記憶體
 celery task queue       →  FastAPI lifespan 直接載入
 ```
 
-**決策依據**：703 筆 Q&A × 1536 維 = 約 4MB，遠小於 EC2 記憶體。
+**決策依據**：725 筆 Q&A × 1536 維 = 約 4MB，遠小於 EC2 記憶體。
 資料不變動（pipeline 跑完才更新），不需要即時寫入。
 
 ### FastAPI lifespan：啟動時載入資料
@@ -43,16 +43,16 @@ app = FastAPI(lifespan=lifespan)
 # app/core/store.py
 # 預先 L2 歸一化，讓點積 = cosine similarity
 norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-self.embeddings = embeddings / norms  # shape: (703, 1536)
+self.embeddings = embeddings / norms  # shape: (725, 1536)
 
 def search(self, query_vec: np.ndarray, top_k: int = 5):
-    scores = self.embeddings @ query_vec  # (703,)，dot product = cosine
+    scores = self.embeddings @ query_vec  # (725,)，dot product = cosine
     top_idx = np.argsort(scores)[::-1][:top_k]
     return [(self.items[i], float(scores[i])) for i in top_idx]
 ```
 
 **數學**：兩個 L2 歸一化向量的點積 = cosine similarity。
-矩陣乘法一次計算全部 703 筆相似度，比 for loop 快 100x+。
+矩陣乘法一次計算全部 725 筆相似度，比 for loop 快 100x+。
 
 ### RAG chat 實作模式
 
@@ -245,12 +245,12 @@ LLM_RESPONSE_MODEL = "gen_ai.response.model"
 
 ### OWASP API Security Top 10（2023）識別的風險 — 修復狀態
 
-| API 風險          | v1.8 現況      | v1.11 修復方式 | 狀態 |
-| ----------------- | --------------- | --------- | ------- |
-| **API2:2023 — Broken Authentication** | `/api/v1/*` 無 API Key 驗證 | `verify_api_key` FastAPI dependency，`X-API-Key` header | ✅ 已修復 |
-| **API4:2023 — Unrestricted Resource Consumption** | `/api/v1/chat` 無速率限制 | slowapi：chat 20/min・search/qa 60/min | ✅ 已修復 |
-| **API3:2023 — Broken Object Property Authorization** | 例外洩漏 Python traceback | 全局 `@app.exception_handler(Exception)` 統一 500 | ✅ 已修復 |
-| **API1:2023 — Broken Object Level Authorization** | `GET /api/v1/qa/{id}` 無細粒度權限 | 所有 QA 資料公開（低風險，當前不需修復） | ℹ️ 可接受 |
+| API 風險                                             | v1.8 現況                          | v1.11 修復方式                                          | 狀態      |
+| ---------------------------------------------------- | ---------------------------------- | ------------------------------------------------------- | --------- |
+| **API2:2023 — Broken Authentication**                | `/api/v1/*` 無 API Key 驗證        | `verify_api_key` FastAPI dependency，`X-API-Key` header | ✅ 已修復 |
+| **API4:2023 — Unrestricted Resource Consumption**    | `/api/v1/chat` 無速率限制          | slowapi：chat 20/min・search/qa 60/min                  | ✅ 已修復 |
+| **API3:2023 — Broken Object Property Authorization** | 例外洩漏 Python traceback          | 全局 `@app.exception_handler(Exception)` 統一 500       | ✅ 已修復 |
+| **API1:2023 — Broken Object Level Authorization**    | `GET /api/v1/qa/{id}` 無細粒度權限 | 所有 QA 資料公開（低風險，當前不需修復）                | ℹ️ 可接受 |
 
 ### Phase A — API Key 認證（`app/core/security.py`）
 
@@ -462,6 +462,7 @@ make audit-top       # Top 30 最常被存取的 QA
 ### 初始化方式
 
 **FastAPI（`app/main.py`）**：
+
 ```python
 from lmnr import Laminar
 Laminar.initialize(project_api_key=os.getenv("LMNR_PROJECT_API_KEY"))
@@ -469,6 +470,7 @@ Laminar.initialize(project_api_key=os.getenv("LMNR_PROJECT_API_KEY"))
 ```
 
 **Pipeline CLI scripts（02–05）**：
+
 ```python
 from utils.observability import init_laminar, flush_laminar
 
@@ -530,7 +532,7 @@ score_rag_response(trace_id=trace_id, answer=answer, sources=sources, query=mess
 
 ### 環境變數
 
-| 變數 | 用途 | 必要性 |
-|------|------|--------|
-| `LMNR_PROJECT_API_KEY` | Laminar tracing + evals | 無此 key 時 silently skip，不 crash |
-| `OPENAI_API_KEY` | eval_chat.py + pipeline scripts | eval_chat.py 和 pipeline 必需 |
+| 變數                   | 用途                            | 必要性                              |
+| ---------------------- | ------------------------------- | ----------------------------------- |
+| `LMNR_PROJECT_API_KEY` | Laminar tracing + evals         | 無此 key 時 silently skip，不 crash |
+| `OPENAI_API_KEY`       | eval_chat.py + pipeline scripts | eval_chat.py 和 pipeline 必需       |

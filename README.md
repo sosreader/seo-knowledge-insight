@@ -125,6 +125,7 @@ python scripts/02_extract_qa.py --force             # 全部重新處理
 python scripts/03_dedupe_classify.py
 python scripts/03_dedupe_classify.py --skip-dedup   # 只分類
 python scripts/03_dedupe_classify.py --limit 30     # 測試模式
+python scripts/03_dedupe_classify.py --rebuild-embeddings  # 修復 qa_embeddings.npy 與 qa_final.json 不一致（不需 OPENAI_API_KEY preflight）
 
 # → 自動檢查：output/qa_all_raw.json 是否存在
 
@@ -251,7 +252,7 @@ python scripts/run_pipeline.py --step 4
 ### 知識庫來源
 
 - 優先使用 `output/qa_final.json`（若 ≥50 筆，即步驟 3 完整跑過）
-- 自動降級使用 `output/qa_all_raw.json`（696 筆，步驟 2 產出）
+- 自動降級使用 `output/qa_all_raw.json`（725 筆，步驟 2 產出）
 
 ---
 
@@ -637,9 +638,8 @@ app/
 
 #### 重要安全警告
 
-- **search / chat endpoint 目前為純語意搜索，hybrid_search（含關鍵字加分）已實作但尚未啟用** — 導致 RAG 搜索品質與 Step 4 週報產生差異（KW Hit Rate 應為 78%，但 API 仍為 54% 左右）
-- **API Auth 尚未實作** — 請勿在生產環境直接暴露本 API。任何知道 URL 者皆可呼叫 `/api/v1/chat`，消耗 OpenAI token
-- **無 Rate Limit** — OWASP API Security Top 10 風險（API4:2023）。建議前端反向代理層（如 nginx）或 AWS API Gateway 新增速率限制
+- **API Auth 已實作**（v1.11）—「`SEO_API_KEY` env 管制，`X-API-Key` header；未設則開發模式放行 + warn」。**生產環境必須設定 `SEO_API_KEY`。**
+- **Rate Limit 已實作**（v1.11）— slowapi：chat 20/min、search/qa 60/min，超限回 429 RFC 6585。
 
 ### 本機測試
 
@@ -730,11 +730,11 @@ https://laminar.sh/app/evals
 
 ### 評估維度
 
-| 評估類型 | 檔案 | 測試集 | 評估指標 |
-|---------|------|--------|---------|
-| **Retrieval 品質** | `evals/eval_retrieval.py` | golden_retrieval.json (307 筆) | Keyword Hit Rate、Category Hit Rate、MRR |
-| **Extraction 品質** | `evals/eval_extraction.py` | golden_extraction.json | Q&A 計數、Keyword Coverage、無管理內容 |
-| **Chat 品質** | `evals/eval_chat.py` | 前 10 retrieval scenarios | 回答長度、來源涵蓋、關鍵字匹配 |
+| 評估類型            | 檔案                       | 測試集                         | 評估指標                                 |
+| ------------------- | -------------------------- | ------------------------------ | ---------------------------------------- |
+| **Retrieval 品質**  | `evals/eval_retrieval.py`  | golden_retrieval.json (307 筆) | Keyword Hit Rate、Category Hit Rate、MRR |
+| **Extraction 品質** | `evals/eval_extraction.py` | golden_extraction.json         | Q&A 計數、Keyword Coverage、無管理內容   |
+| **Chat 品質**       | `evals/eval_chat.py`       | 前 10 retrieval scenarios      | 回答長度、來源涵蓋、關鍵字匹配           |
 
 ---
 

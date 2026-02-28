@@ -4,16 +4,17 @@
 ## 使用前確認 .env 已設定（參考 .env.example）。
 ##
 ## Quick reference:
-##   make pipeline         完整流程 step 1→2→3
-##   make check            檢查所有步驟依賴（不執行）
-##   make step1            Notion 擷取
-##   make step2            Q&A 萃取
-##   make step3            去重 + 分類
-##   make step4            週報生成（需指定 INPUT）
-##   make step5            品質評估
-##   make test             執行測試
-##   make dry-run          同 make check（向下相容）
-##   make install          安裝依賴
+##   make pipeline           完整流程 step 1→2→3
+##   make check              檢查所有步驟依賴（不執行）
+##   make step1              Notion 擷取
+##   make step2              Q&A 萃取
+##   make step3              去重 + 分類
+##   make step4              週報生成（需指定 INPUT）
+##   make step5              品質評估
+##   make rebuild-embeddings 修復 qa_embeddings.npy 與 qa_final.json 不一致
+##   make test               執行測試
+##   make dry-run            同 make check（向下相容）
+##   make install            安裝依賴
 
 PYTHON := .venv/bin/python
 SCRIPT := scripts/run_pipeline.py
@@ -64,6 +65,10 @@ step3: ## 步驟 3：去重 + 分類
 .PHONY: step3-classify-only
 step3-classify-only: ## 步驟 3：只分類（跳過去重）
 	$(PYTHON) $(SCRIPT) --step 3 --skip-dedup
+
+.PHONY: rebuild-embeddings
+rebuild-embeddings: ## 從現有 qa_final.json 重建 qa_embeddings.npy（優先走 cache，不重跑 dedup/classify）
+	$(PYTHON) scripts/03_dedupe_classify.py --rebuild-embeddings
 
 .PHONY: step4
 step4: ## 步驟 4：週報生成（使用 Google Sheets 預設指標）

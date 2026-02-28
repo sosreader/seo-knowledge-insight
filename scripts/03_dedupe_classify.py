@@ -186,7 +186,46 @@ def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
     return result
 
 
+def _rebuild_embeddings_from_final() -> None:
+    """從現有 qa_final.json 重建 qa_embeddings.npy（優先走 cache，避免重打 API）。
+
+    設計用途：
+    - qa_final.json 已存在（Step 3 曾完整跑過）但 qa_embeddings.npy 與之不匹配時
+    - 不重跑 dedup / classify，只補齊 embedding 陣列
+    """
+    final_path = config.OUTPUT_DIR / "qa_final.json"
+    if not final_path.exists():
+        print("❌ qa_final.json 不存在，請先執行完整 Step 3")
+        return
+
+    final_data = json.loads(final_path.read_text(encoding="utf-8"))
+    qa_pairs = final_data.get("qa_database", [])
+    if not qa_pairs:
+        print("❌ qa_final.json 中沒有 qa_database，格式異常")
+        return
+
+    # 先統計 cache 命中率（不呼叫 API）
+    from utils.pipeline_cache import cache_get
+    texts = [f"{qa['question']} {qa['answer']}" for qa in qa_pairs]
+    hits = sum(1 for t in texts if cache_get("embedding", t) is not None)
+    misses = len(texts) - hits
+    print(f"\n💾 重建 embeddings（{len(texts)} 筆，cache hit {hits}，miss {misses}）")
+    if misses:
+        print(f"   ⚠️  {misses} 筆 cache miss，將呼叫 embedding API 補齊")
+
+    _persist_embeddings(qa_pairs)
+    print("\n✅ Embeddings 重建完成！")
+    print(f"   qa_embeddings.npy: {len(texts)} rows")
+
+
 def main(args: argparse.Namespace) -> None:
+    # ── Rebuild-only 模式（不需要 OPENAI_API_KEY，只走 embedding cache）──
+    if getattr(args, "rebuild_embeddings", False):
+        init_laminar()
+        _rebuild_embeddings_from_final()
+        flush_laminar()
+        return
+
     init_laminar()
 
     # ── Pre-flight 依賴檢查 ──
@@ -380,5 +419,10 @@ if __name__ == "__main__":
     parser.add_argument("--skip-classify", action="store_true", help="跳過分類")
     parser.add_argument("--limit", type=int, default=0, help="測試模式：僅處理前 N 個 Q&A（0 = 全部）")
     parser.add_argument("--check", action="store_true", help="只執行依賴檢查，不實際執行")
+    parser.add_argument(
+        "--rebuild-embeddings",
+        action="store_true",
+        help="從現有 qa_final.json 重建 qa_embeddings.npy（優先走 cache，不重跑 dedup/classify）",
+    )
     args = parser.parse_args()
     main(args)

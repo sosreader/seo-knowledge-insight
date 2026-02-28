@@ -74,7 +74,7 @@ MAX_TOKENS_PER_CHUNK = 6000   # 超過就切段，分批送給 AI
 | --------------- | ---------- | -------------- | --------------- |
 | Step 2 萃取 Q&A | gpt-5.2    | 每份文件 3K–8K | 87 份 × 平均 5K |
 | Step 3 合併     | gpt-5.2    | 每對 200–500   | 依重複數量      |
-| Step 3 分類     | gpt-5-mini | 每筆 100–200   | 703 筆 × 150    |
+| Step 3 分類     | gpt-5-mini | 每筆 100–200   | 725 筆 × 150    |
 | Step 5 評估     | gpt-5.2    | 每筆 300–600   | 30 筆 × 450     |
 
 ---
@@ -232,7 +232,7 @@ print(len(vector))  # 1536 個數字
 
 ### 本專案的使用
 
-**Step 3**：計算 703 筆 Q&A 的 embedding，儲存成 `qa_embeddings.npy`（numpy 陣列檔）。
+**Step 3**：計算 725 筆 Q&A 的 embedding，儲存成 `qa_embeddings.npy`（numpy 陣列檔）。
 
 - 去重用：找相似 Q&A（cosine ≥ 0.88 就合併）
 - 搜尋用：Step 4 / Step 5 載入，做語意搜尋
@@ -259,7 +259,7 @@ print(len(vector))  # 1536 個數字
 ```python
 import numpy as np
 
-# qa_embs shape: (703, 1536)，703 筆 Q&A 各有 1536 維向量
+# qa_embs shape: (725, 1536)，725 筆 Q&A 各有 1536 維向量
 qa_embs = np.load("output/qa_embeddings.npy")
 
 # 正規化（讓長度變成 1，方便算 cosine）
@@ -268,11 +268,10 @@ qa_norm = qa_embs / (norms + 1e-8)
 
 # 計算所有 Q&A 兩兩之間的相似度矩陣
 # similarity[i][j] = 第 i 筆和第 j 筆 Q&A 的相似度
-similarity_matrix = qa_norm @ qa_norm.T   # (703, 703)
+similarity_matrix = qa_norm @ qa_norm.T   # (725, 725)
 
 THRESHOLD = 0.88
 # 找出 similarity > 0.88 的 pair → 送給 gpt-5.2 判斷是否合併
 ```
 
 ---
-
