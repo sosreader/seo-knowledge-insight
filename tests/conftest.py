@@ -17,6 +17,7 @@ from app.core.store import QAItem, store
 FAKE_ITEMS: list[QAItem] = [
     QAItem(
         id=1,
+        stable_id="a1b2c3d4e5f60001",
         question="Discover 流量下降怎麼辦？",
         answer="可能是內容品質下降或演算法調整，建議審查最近更新的文章。",
         keywords=["Discover", "流量"],
@@ -30,6 +31,7 @@ FAKE_ITEMS: list[QAItem] = [
     ),
     QAItem(
         id=2,
+        stable_id="a1b2c3d4e5f60002",
         question="canonical 設定錯誤會影響索引嗎？",
         answer="是的，canonical 指向錯誤頁面會導致正確頁面被忽略。",
         keywords=["canonical", "索引"],
@@ -43,6 +45,7 @@ FAKE_ITEMS: list[QAItem] = [
     ),
     QAItem(
         id=3,
+        stable_id="a1b2c3d4e5f60003",
         question="AMP 驗證失敗如何排查？",
         answer="使用 Google AMP 測試工具，確認必要元素都存在。",
         keywords=["AMP", "驗證"],

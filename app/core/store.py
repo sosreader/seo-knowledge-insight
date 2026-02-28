@@ -1,6 +1,6 @@
 """
 QAStore — 啟動時載入 qa_final.json + qa_embeddings.npy 進記憶體
-提供 search（語意）和 list（篩選）兩種查詢介面
+提供 search（語意）、hybrid_search（語意+關鍵字）和 list（篩選）三種查詢介面
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from typing import Optional
 import numpy as np
 
 from app import config
+from utils.search_engine import SearchEngine
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class QAItem:
     id: int
+    stable_id: str
     question: str
     answer: str
     keywords: list[str]
@@ -37,6 +39,8 @@ class QAStore:
     items: list[QAItem] = field(default_factory=list)
     # shape: (N, embedding_dim)，每列已 L2 歸一化（方便用點積算 cosine）
     embeddings: np.ndarray = field(default_factory=lambda: np.empty((0, 1536)))
+    # Hybrid search engine（load() 後初始化）
+    _engine: Optional[SearchEngine] = field(default=None, repr=False)
 
     def load(
         self,
@@ -49,6 +53,7 @@ class QAStore:
         self.items = [
             QAItem(
                 id=qa["id"],
+                stable_id=qa.get("stable_id", ""),
                 question=qa["question"],
                 answer=qa["answer"],
                 keywords=qa.get("keywords", []),
@@ -70,6 +75,29 @@ class QAStore:
         self.embeddings = embeddings_raw / norms
 
         logger.info("QAStore loaded: %d items, embeddings shape %s", len(self.items), self.embeddings.shape)
+
+        # 初始化 hybrid search engine（shared embeddings，不重算）
+        # 若 embeddings 數量與 items 不符（如資料重算中途中斷），降級為語意搜尋
+        if len(self.items) == embeddings_raw.shape[0]:
+            qa_dicts = [
+                {
+                    "question": item.question,
+                    "answer": item.answer,
+                    "keywords": item.keywords,
+                    "category": item.category,
+                    "id": item.id,
+                }
+                for item in self.items
+            ]
+            self._engine = SearchEngine(qa_dicts, embeddings_raw)
+        else:
+            logger.warning(
+                "SearchEngine 未初始化：items (%d) 與 embeddings (%d) 數量不符，"
+                "hybrid_search 將降級為語意搜尋。請重新執行 Step 3 使兩者一致。",
+                len(self.items),
+                embeddings_raw.shape[0],
+            )
+            self._engine = None
 
     def search(
         self,
@@ -93,6 +121,39 @@ class QAStore:
 
         top_indices = np.argsort(scores)[::-1][:top_k]
         return [(self.items[i], float(scores[i])) for i in top_indices if scores[i] > 0]
+
+    def hybrid_search(
+        self,
+        query: str,
+        query_embedding: list[float] | np.ndarray,
+        top_k: int = 5,
+        category: Optional[str] = None,
+        min_score: float = 0.20,
+    ) -> list[tuple[QAItem, float]]:
+        """
+        Hybrid 搜尋（語意 + 關鍵字 boost），回傳 [(item, score), ...] 依分數降序。
+        semantic_weight 由 config.SEMANTIC_WEIGHT 控制（預設 0.7）。
+        """
+        if self._engine is None:
+            logger.warning("hybrid_search 呼叫時 SearchEngine 尚未初始化，fallback 到 search()")
+            return self.search(query_embedding, top_k=top_k, category=category)
+
+        raw_results = self._engine.search(
+            query=query,
+            query_embedding=query_embedding,
+            top_k=top_k,
+            category=category,
+            min_score=min_score,
+        )
+
+        # 將 qa_dict 映射回 QAItem（用 id 對應）
+        id_to_item = {item.id: item for item in self.items}
+        output: list[tuple[QAItem, float]] = []
+        for qa_dict, score in raw_results:
+            item = id_to_item.get(qa_dict["id"])
+            if item is not None:
+                output.append((item, score))
+        return output
 
     def list_qa(
         self,

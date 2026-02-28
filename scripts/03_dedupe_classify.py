@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import sys
@@ -34,7 +35,21 @@ except ModuleNotFoundError:
     import config
 
 from utils.openai_helper import get_embeddings, merge_similar_qas, classify_qa
+from utils.pipeline_deps import preflight_check, StepDependency
+from utils.observability import init_laminar, flush_laminar, observe
 from scripts.dedupe_helpers import _cosine_similarity_matrix
+
+
+def compute_stable_id(source_file: str, question: str) -> str:
+    """基於內容的確定性 ID，跨次執行不變。"""
+    content = f"{source_file}::{question[:120]}"
+    return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+
+def compute_stable_id_from_sources(source_ids: list[str]) -> str:
+    """合併後 Q&A 的 stable_id：由所有來源 stable_id 排序後取 hash。"""
+    content = "::".join(sorted(source_ids))
+    return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
 def find_duplicate_groups(
@@ -77,6 +92,7 @@ def find_duplicate_groups(
     return groups, unique
 
 
+@observe(name="deduplicate_qas")
 def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
     """去重並合併相似 Q&A"""
     threshold = config.SIMILARITY_THRESHOLD
@@ -112,6 +128,9 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
                 merged = merge_similar_qas(group_qas)
                 merged["is_merged"] = True
                 merged["merge_count"] = len(group_qas)
+                # stable_id 由所有來源 stable_id 排序後取 hash
+                source_ids = [qa.get("stable_id", "") for qa in group_qas]
+                merged["stable_id"] = compute_stable_id_from_sources(source_ids)
                 result.append(merged)
             except Exception as e:
                 tqdm.write(f"  ⚠️  合併失敗: {e}，保留第一筆")
@@ -126,6 +145,7 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
     return result
 
 
+@observe(name="classify_all_qas")
 def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
     """對每個 Q&A 加分類標籤"""
     print(f"\n🏷️  分類標籤（共 {len(qa_pairs)} 個 Q&A）")
@@ -158,9 +178,24 @@ def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
 
 
 def main(args: argparse.Namespace) -> None:
-    if not config.OPENAI_API_KEY:
-        print("❌ 請設定 OPENAI_API_KEY（在 .env）")
-        sys.exit(1)
+    init_laminar()
+
+    # ── Pre-flight 依賴檢查 ──
+    preflight_check(
+        deps=[
+            StepDependency(
+                path=config.OUTPUT_DIR / "qa_all_raw.json",
+                required=True,
+                max_age_days=7,
+                hint="請先執行 python scripts/02_extract_qa.py",
+            ),
+        ],
+        env_keys=["OPENAI_API_KEY"],
+        step_name="Step 3: 去重 + 分類",
+        check_only=getattr(args, "check", False),
+    )
+    if getattr(args, "check", False):
+        return
 
     print("=" * 60)
     print("🔧 步驟 3：去重、合併、分類")
@@ -168,9 +203,6 @@ def main(args: argparse.Namespace) -> None:
 
     # 讀取原始 Q&A
     raw_path = config.OUTPUT_DIR / "qa_all_raw.json"
-    if not raw_path.exists():
-        print(f"❌ 找不到 {raw_path}，請先執行步驟 2")
-        sys.exit(1)
 
     raw_data = json.loads(raw_path.read_text(encoding="utf-8"))
     qa_pairs = raw_data.get("qa_pairs", [])
@@ -179,6 +211,14 @@ def main(args: argparse.Namespace) -> None:
     if args.limit and args.limit < len(qa_pairs):
         qa_pairs = qa_pairs[: args.limit]
         print(f"⚠️  測試模式：僅處理前 {args.limit} 個 Q&A")
+
+    # 預計算 stable_id（跨次執行不變，基於 source_file + question 內容）
+    for qa in qa_pairs:
+        if not qa.get("stable_id"):
+            qa["stable_id"] = compute_stable_id(
+                qa.get("source_file", ""),
+                qa["question"],
+            )
 
     # 去重
     if not args.skip_dedup:
@@ -192,9 +232,14 @@ def main(args: argparse.Namespace) -> None:
     else:
         print("\n⏭️  跳過分類")
 
-    # 加上唯一 ID
+    # 加上流水號 id（顯示用）和確認 stable_id（跨系統引用用）
     for i, qa in enumerate(qa_pairs, 1):
         qa["id"] = i
+        if not qa.get("stable_id"):
+            qa["stable_id"] = compute_stable_id(
+                qa.get("source_file", ""),
+                qa["question"],
+            )
 
     # 輸出最終結果
     final_output = {
@@ -230,12 +275,18 @@ def main(args: argparse.Namespace) -> None:
     print(f"   JSON: {final_path}")
     print(f"   快照: {snap_path}")
     print(f"   Embeddings: {config.OUTPUT_DIR / 'qa_embeddings.npy'}")
+    print(f"   Embedding Index: {config.OUTPUT_DIR / 'qa_embeddings_index.json'}")
     print(f"   Markdown: {config.OUTPUT_DIR / 'qa_final.md'}")
     print("=" * 60)
 
+    flush_laminar()
+
 
 def _persist_embeddings(qa_pairs: list[dict]) -> None:
-    """計算並持久化 Q&A embedding，供 Step 4 語意搜尋直接載入。"""
+    """計算並持久化 Q&A embedding，供 Step 4 語意搜尋直接載入。
+    同時產生 qa_embeddings_index.json（{stable_id: row_index}），
+    使增量更新不再依賴位置耦合。
+    """
     print("\n💾 持久化 embedding 向量 ...")
     texts = [f"{qa['question']} {qa['answer']}" for qa in qa_pairs]
     embeddings = get_embeddings(texts)
@@ -243,6 +294,19 @@ def _persist_embeddings(qa_pairs: list[dict]) -> None:
     emb_path = config.OUTPUT_DIR / "qa_embeddings.npy"
     np.save(emb_path, emb_array)
     print(f"   已儲存 {emb_array.shape} 至 {emb_path}")
+
+    # 產生 stable_id → row_index 映射，供增量更新使用
+    index = {
+        qa["stable_id"]: i
+        for i, qa in enumerate(qa_pairs)
+        if qa.get("stable_id")
+    }
+    index_path = config.OUTPUT_DIR / "qa_embeddings_index.json"
+    index_path.write_text(
+        json.dumps(index, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    print(f"   已儲存 embedding index（{len(index)} 筆）至 {index_path}")
 
 
 def _export_readable_md(qa_pairs: list[dict]) -> None:
@@ -294,5 +358,6 @@ if __name__ == "__main__":
     parser.add_argument("--skip-dedup", action="store_true", help="跳過去重")
     parser.add_argument("--skip-classify", action="store_true", help="跳過分類")
     parser.add_argument("--limit", type=int, default=0, help="測試模式：僅處理前 N 個 Q&A（0 = 全部）")
+    parser.add_argument("--check", action="store_true", help="只執行依賴檢查，不實際執行")
     args = parser.parse_args()
     main(args)

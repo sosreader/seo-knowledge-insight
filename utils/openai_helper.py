@@ -16,6 +16,18 @@ from openai import OpenAI
 
 import config
 
+# Laminar observe decorator — graceful no-op if lmnr is not installed
+try:
+    from lmnr import observe  # type: ignore[import]
+except ImportError:
+    import functools as _functools
+
+    def observe(name: str | None = None, **_kwargs):  # type: ignore[misc]
+        """No-op shim when lmnr is not installed."""
+        def decorator(fn):
+            return fn
+        return decorator
+
 
 @functools.lru_cache(maxsize=1)
 def _client() -> OpenAI:
@@ -161,6 +173,7 @@ confidence: 0.7
 """
 
 
+@observe(name="extract_qa_from_text")
 def extract_qa_from_text(
     meeting_text: str,
     meeting_title: str = "",
@@ -243,6 +256,7 @@ def extract_qa_from_text(
 # Embedding
 # ──────────────────────────────────────────────────────
 
+@observe(name="get_embeddings")
 def get_embeddings(texts: list[str]) -> list[list[float]]:
     """
     對一批文字計算 embedding。
@@ -307,6 +321,7 @@ MERGE_SYSTEM_PROMPT = """\
 """
 
 
+@observe(name="merge_similar_qas")
 def merge_similar_qas(qa_group: list[dict]) -> dict:
     """
     合併一組相似的 Q&A 成一個。
@@ -372,6 +387,8 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
         {
             "source_title": qa.get("source_title", ""),
             "source_date": qa.get("source_date", ""),
+            "source_file": qa.get("source_file", ""),
+            "stable_id": qa.get("stable_id", ""),
         }
         for qa in qa_group
     ]
@@ -384,27 +401,109 @@ CLASSIFY_SYSTEM_PROMPT = """\
 分類維度：
 
 1. **category**（主分類，選一個）：
-   - 索引與檢索（Coverage、索引狀態、robots.txt、sitemap、canonical、未索引）
-   - 連結策略（內部連結、外部連結、Disavow、連結架構）
-   - 搜尋表現分析（曝光、點擊、CTR、排名變化、SERP 外觀）
-   - 內容策略（關鍵字佈局、主題聚合、延伸閱讀、內容經營）
-   - Discover與AMP（Google Discover、AMP Article、推薦流量）
-   - 技術SEO（速度、Core Web Vitals、結構化資料、URL 結構、重複頁面）
-   - GA與數據追蹤（GA4、事件追蹤、歸因分析、PWA 追蹤）
-   - 平台策略（Vocus 產品面 SEO，如自訂網域、方案頁、SEO 功能設定）
-   - 演算法與趨勢（Google 演算法更新、SERP 變化、AI 搜尋趨勢）
+   - 索引與檢索（Coverage、索引狀態、robots.txt、sitemap、canonical、未索引、重複內容）
+   - 連結策略（內部連結、外部連結、Disavow、連結架構、錨文字、反向連結）
+   - 搜尋表現分析（曝光、點擊、CTR、排名變化、SERP 外觀、位置平均）
+   - 內容策略（關鍵字佈局、主題聚合、延伸閱讀、內容經營、E-E-A-T、Meta 標籤）
+   - Discover與AMP（Google Discover、AMP Article、推薦流量、焦點新聞 Top Stories）
+   - 技術SEO（速度、Core Web Vitals、結構化資料、URL 結構、重複頁面、HTTPS、hreflang）
+   - GA與數據追蹤（GA4、事件追蹤、歸因分析、PWA 追蹤、Search Console 數據解讀）
+   - 平台策略（Vocus 產品面 SEO，如自訂網域、方案頁、SEO 功能設定、站內搜尋）
+   - 演算法與趨勢（Google 演算法更新、Helpful Content、SERP 變化、AI 搜尋趨勢、SGE）
    - 其他（以上皆不適用時才選）
 
-2. **difficulty**（難度）：基礎 / 進階
+2. **difficulty**（難度）：
+   - 基礎：概念明確、操作直觀，SEO 新手也能理解和執行
+   - 進階：需要較深技術知識或跨系統整合，適合有一定 SEO 經驗者
 
 3. **evergreen**（時效性）：
-   - true = 常青知識，不太會過時
-   - false = 可能隨演算法/平台更新而過時
+   - true = 常青知識，演算法或平台更新後仍大致適用
+   - false = 可能隨演算法/平台版本更新而過時（如特定演算法名稱、具體數字閾值）
+
+## 分類示範（few-shot examples）
+
+### 索引與檢索
+Q: robots.txt 設定過度開放導致圖片 URL 被大量爬取，應如何診斷？
+A: 修正 robots.txt 規則後，到 GSC「設定 > robots.txt」確認規則生效，並觀察「已檢索未索引」趨勢。
+→ category: 索引與檢索, difficulty: 進階, evergreen: true
+
+Q: canonical 指向帶 query string 的 URL 會有什麼問題？
+A: Google 可能忽略錯誤的 canonical，自行選擇標準版，導致爬蟲預算浪費和索引不準確。
+→ category: 索引與檢索, difficulty: 基礎, evergreen: true
+
+### 連結策略
+Q: 內部連結的錨文字應該怎麼設定才對 SEO 有益？
+A: 錨文字應包含目標頁面的主要關鍵字，避免「點這裡」等非描述性文字，但不要堆砌。
+→ category: 連結策略, difficulty: 基礎, evergreen: true
+
+Q: 如何評估一批外部連結是否需要 Disavow？
+A: 觀察連結的 spam score、相關性和 anchor text，若疑似負面 SEO 且無法聯繫移除再考慮 Disavow。
+→ category: 連結策略, difficulty: 進階, evergreen: true
+
+### 搜尋表現分析
+Q: Search Console 的 CTR 持續下降但曝光不變，通常代表什麼問題？
+A: 可能是 title/meta description 不夠吸引人，或 SERP 出現更多競爭者佔據版位，需優化片段外觀。
+→ category: 搜尋表現分析, difficulty: 基礎, evergreen: true
+
+Q: 位置平均上升但點擊下降，這個背離現象該怎麼解讀？
+A: 排名上升可能是長尾關鍵字佔比增加（搜尋量低），或 Rich Result 讓使用者直接在 SERP 得到答案。
+→ category: 搜尋表現分析, difficulty: 進階, evergreen: true
+
+### 內容策略
+Q: 主題聚合（Topic Cluster）策略中，支柱頁和群集頁應如何分工？
+A: 支柱頁覆蓋主題的廣度，群集頁深化特定子主題，內部連結雙向連接，讓 Google 理解主題權威性。
+→ category: 內容策略, difficulty: 進階, evergreen: true
+
+Q: Meta title 超過 60 字會被截斷，這對 SEO 有影響嗎？
+A: 超過閾值的 title 在 SERP 中顯示「...」，影響點擊率，但不直接影響排名；建議控制在 50–60 字。
+→ category: 內容策略, difficulty: 基礎, evergreen: false
+
+### Discover與AMP
+Q: Google Discover 流量突然下降，最可能的原因是什麼？
+A: Discover 流量波動大，常見原因包括：封面圖片品質不佳、內容與使用者興趣匹配度低、近期演算法調整。
+→ category: Discover與AMP, difficulty: 進階, evergreen: true
+
+Q: AMP Article 索引數下降對 Google News 流量有什麼影響？
+A: AMP Article 是進入 Google News Top Stories 的主要路徑；索引數下降會直接砍掉焦點新聞版位流量。
+→ category: Discover與AMP, difficulty: 進階, evergreen: true
+
+### 技術SEO
+Q: Core Web Vitals 的 LCP 太高，主要的改善方向有哪些？
+A: 常見是圖片過大或伺服器回應慢；可用 lazy loading、CDN、WebP 格式、預載入 LCP 圖片改善。
+→ category: 技術SEO, difficulty: 進階, evergreen: true
+
+Q: 結構化資料（VideoObject）消失會對 Video Appearance 有什麼影響？
+A: Video Appearance 完全依賴正確實作的 VideoObject；消失後影片SERP外觀消失，流量可能大幅下滑。
+→ category: 技術SEO, difficulty: 進階, evergreen: true
+
+### GA與數據追蹤
+Q: GA4 的 Organic Search 工作階段包含哪些流量來源？
+A: 包含 Google、Bing 等搜尋引擎的直接點擊；但 Discover 和 Google News 的流量歸屬在 GA4 中是「Organic Social」或「Unassigned」。
+→ category: GA與數據追蹤, difficulty: 進階, evergreen: false
+
+Q: 如何在 GA4 中追蹤 AMP 頁面的工作階段？
+A: AMP 頁面需透過 AMP Client ID API 和 gtag 正確串接，否則 AMP 來源流量會斷鏈成新的工作階段。
+→ category: GA與數據追蹤, difficulty: 進階, evergreen: true
+
+### 平台策略
+Q: Vocus 自訂網域設定後，原有的 vocus.cc 網址 SEO 權重如何轉移？
+A: 需要設定 301 永久重新導向，讓 Google 把舊 URL 的權重轉移到自訂網域；Search Console 也要重新驗證。
+→ category: 平台策略, difficulty: 進階, evergreen: true
+
+### 演算法與趨勢
+Q: Google 2024 年 3 月核心更新主要針對什麼內容？
+A: 主要打擊低品質、AI 批量生成的內容，強調 E-E-A-T；排名下降的網站應檢查內容原創性和作者專業度。
+→ category: 演算法與趨勢, difficulty: 進階, evergreen: false
+
+Q: Google SGE（AI 概覽）對傳統 SEO 流量有什麼影響？
+A: SGE 可能讓使用者在 SERP 即得到答案而不點擊，資訊型關鍵字 CTR 預期下降，品牌型和交易型關鍵字影響較小。
+→ category: 演算法與趨勢, difficulty: 進階, evergreen: false
 
 用繁體中文。
 """
 
 
+@observe(name="classify_qa")
 def classify_qa(question: str, answer: str) -> dict:
     """對單個 Q&A 進行分類"""
     client = _client()
