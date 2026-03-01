@@ -72,11 +72,11 @@ AI 工具（GitHub Copilot / Claude Code）可透過以下方式直接執行 pip
 
 ```bash
 make pipeline          # 完整流程 step 1→2→3
-make step1             # 只執行 Notion 擷取
-make step2             # 只執行 Q&A 萃取
-make step3             # 只執行去重 + 分類
-make step4             # 只執行週報生成
-make step5             # 只執行品質評估
+make fetch-notion      # 只執行 Notion 擷取
+make extract-qa        # 只執行 Q&A 萃取
+make dedupe-classify   # 只執行去重 + 分類
+make generate-report   # 只執行週報生成
+make evaluate-qa       # 只執行品質評估
 make dry-run           # 驗證設定（不執行）
 make test              # 執行測試
 make help              # 顯示所有可用 targets
@@ -86,7 +86,7 @@ make help              # 顯示所有可用 targets
 
 ```bash
 .venv/bin/python scripts/run_pipeline.py                        # 完整流程
-.venv/bin/python scripts/run_pipeline.py --step 2 --limit 3    # 測試用
+.venv/bin/python scripts/run_pipeline.py --step extract-qa --limit 3    # 測試用
 .venv/bin/python scripts/run_pipeline.py --dry-run             # 只驗證設定
 ```
 

@@ -38,7 +38,7 @@ make dry-run
 ### 1. 執行 Step 1（Notion 擷取）
 
 ```bash
-make step1
+make fetch-notion
 ```
 
 這只需要 `NOTION_TOKEN`，完全不使用 OpenAI。

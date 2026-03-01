@@ -117,7 +117,7 @@ Completeness 從 3.70 提升至 **3.85**，做法是引入 `[補充]` Attributio
 **在花錢跑全部之前，先跑 3 份驗證 prompt 改動是否有效：**
 
 ```bash
-python scripts/run_pipeline.py --step 2 --limit 3 --force
+python scripts/run_pipeline.py --step extract-qa --limit 3 --force
 python scripts/05_evaluate.py --sample 15 --skip-classify-eval
 # 確認 Completeness ≥ 4.0 再跑全量
 ```

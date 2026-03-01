@@ -260,13 +260,13 @@ result = evaluate_report_quality(golden_cases, reports_dir="output")
 
 ```bash
 # 個別執行
-python scripts/run_pipeline.py --step 5 --eval-extraction
-python scripts/run_pipeline.py --step 5 --eval-dedup
-python scripts/run_pipeline.py --step 5 --dedup-threshold-sweep
-python scripts/run_pipeline.py --step 5 --eval-report
+python scripts/run_pipeline.py --step evaluate-qa --eval-extraction
+python scripts/run_pipeline.py --step evaluate-qa --eval-dedup
+python scripts/run_pipeline.py --step evaluate-qa --dedup-threshold-sweep
+python scripts/run_pipeline.py --step evaluate-qa --eval-report
 
 # 完整評估（預設 LLM-as-Judge）
-python scripts/run_pipeline.py --step 5 --sample 50 --with-source
+python scripts/run_pipeline.py --step evaluate-qa --sample 50 --with-source
 ```
 
 ### Golden Set 設計要點

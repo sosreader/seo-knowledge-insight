@@ -10,9 +10,9 @@
 
 | 選項        | 說明                             |
 | ----------- | -------------------------------- |
-| (無)        | 執行完整 step 1→2→3              |
-| `--step N`  | 只執行指定步驟（1-5）            |
-| `--limit N` | step 2/3 只處理前 N 份（測試用） |
+| (無)        | 執行完整 fetch-notion→extract-qa→dedupe-classify |
+| `--step <name>` | 只執行指定步驟（fetch-notion / extract-qa / dedupe-classify / generate-report / evaluate-qa） |
+| `--limit N` | extract-qa / dedupe-classify 只處理前 N 份（測試用） |
 | `--force`   | 強制全量重處理（忽略增量比對）   |
 | `--dry-run` | 只驗證設定，不實際執行           |
 
@@ -34,22 +34,22 @@ make pipeline
 
 ```bash
 # Step 1：Notion 擷取
-make step1
+make fetch-notion
 
 # Step 2：Q&A 萃取（測試用，只處理 3 份）
-make step2-test
+make extract-qa-test
 
 # Step 2：Q&A 萃取（完整）
-make step2
+make extract-qa
 
 # Step 3：去重 + 分類
-make step3
+make dedupe-classify
 
 # Step 4：週報生成
-make step4
+make generate-report
 
 # Step 5：品質評估
-make step5
+make evaluate-qa
 ```
 
 ## 前置確認

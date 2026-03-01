@@ -2,13 +2,13 @@
 """
 主控流程：一鍵執行完整 pipeline
 
-    python scripts/run_pipeline.py              # 完整流程 (step 1->2->3)
-    python scripts/run_pipeline.py --step 1     # 只執行步驟 1
-    python scripts/run_pipeline.py --step 2     # 只執行步驟 2
-    python scripts/run_pipeline.py --step 3     # 只執行步驟 3
-    python scripts/run_pipeline.py --step 4 --input metrics.tsv  # 產生週報
-    python scripts/run_pipeline.py --step 5                      # 品質評估
-    python scripts/run_pipeline.py --step 5 --sample 50          # 抽樣 50 筆評估
+    python scripts/run_pipeline.py                              # 完整流程 (fetch-notion→extract-qa→dedupe-classify)
+    python scripts/run_pipeline.py --step fetch-notion          # 只執行 Notion 擷取
+    python scripts/run_pipeline.py --step extract-qa            # 只執行 Q&A 萃取
+    python scripts/run_pipeline.py --step dedupe-classify       # 只執行去重 + 分類
+    python scripts/run_pipeline.py --step generate-report --input metrics.tsv  # 產生週報
+    python scripts/run_pipeline.py --step evaluate-qa           # 品質評估
+    python scripts/run_pipeline.py --step evaluate-qa --sample 50              # 抽樣 50 筆評估
     python scripts/run_pipeline.py --check      # 只檢查所有步驟的依賴
     python scripts/run_pipeline.py --dry-run    # 同 --check（向下相容）
 """
@@ -26,14 +26,40 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import config
 
-# ── 子腳本對照表 ─────────────────────────────────────
+# ── 步驟名稱 → 腳本對照表 ────────────────────────────
 STEP_SCRIPTS = {
-    1: "01_fetch_notion.py",
-    2: "02_extract_qa.py",
-    3: "03_dedupe_classify.py",
-    4: "04_generate_report.py",
-    5: "05_evaluate.py",
+    "fetch-notion":    "01_fetch_notion.py",
+    "extract-qa":      "02_extract_qa.py",
+    "dedupe-classify": "03_dedupe_classify.py",
+    "generate-report": "04_generate_report.py",
+    "evaluate-qa":     "05_evaluate.py",
 }
+
+# 向下相容：數字 1-5 對應步驟名稱
+_STEP_NUMBER_MAP = {
+    1: "fetch-notion",
+    2: "extract-qa",
+    3: "dedupe-classify",
+    4: "generate-report",
+    5: "evaluate-qa",
+}
+
+
+def _parse_step(value: str) -> str:
+    """接受步驟名稱或數字（1-5），回傳步驟名稱"""
+    if value.isdigit():
+        n = int(value)
+        if n in _STEP_NUMBER_MAP:
+            return _STEP_NUMBER_MAP[n]
+        raise argparse.ArgumentTypeError(
+            f"步驟數字必須是 1-5，收到：{n}"
+        )
+    if value in STEP_SCRIPTS:
+        return value
+    valid = ", ".join(STEP_SCRIPTS.keys())
+    raise argparse.ArgumentTypeError(
+        f"未知步驟 '{value}'，有效值：{valid}"
+    )
 
 
 def run_step(script_name: str, extra_args: list[str] | None = None) -> bool:
@@ -53,10 +79,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="SEO Q&A Pipeline 主控")
     parser.add_argument(
         "--step",
-        type=int,
-        choices=[1, 2, 3, 4, 5],
-        default=0,
-        help="只執行指定步驟（0=全部 1-3）",
+        type=_parse_step,
+        default=None,
+        metavar="{fetch-notion,extract-qa,dedupe-classify,generate-report,evaluate-qa}",
+        help="只執行指定步驟（也接受數字 1-5，不指定則執行 fetch-notion→extract-qa→dedupe-classify）",
     )
     parser.add_argument(
         "--check",
@@ -75,15 +101,16 @@ def main() -> None:
     check_only = args.check or args.dry_run
 
     print("=" * 60)
-    print("🚀 SEO Q&A 資料庫建構 Pipeline")
+    print("SEO Q&A 資料庫建構 Pipeline")
     print("=" * 60)
 
     if check_only:
-        print("\n🔍 依賴檢查模式（不實際執行）")
+        print("\n依賴檢查模式（不實際執行）")
 
     start = time.time()
-    # 步驟 4 是獨立的報告產生流程，不列入預設 1-2-3 pipeline
-    steps_to_run = [args.step] if args.step else [1, 2, 3]
+    # generate-report / evaluate-qa 是獨立流程，不列入預設 pipeline
+    default_steps = ["fetch-notion", "extract-qa", "dedupe-classify"]
+    steps_to_run = [args.step] if args.step else default_steps
 
     for step in steps_to_run:
         script = STEP_SCRIPTS.get(step)
@@ -97,7 +124,7 @@ def main() -> None:
 
         ok = run_step(script, extra)
         if not ok:
-            print(f"\n❌ 步驟 {step} {'檢查' if check_only else '執行'}失敗，中止 pipeline")
+            print(f"\n步驟 {step} {'檢查' if check_only else '執行'}失敗，中止 pipeline")
             sys.exit(1)
 
     elapsed = time.time() - start
@@ -105,12 +132,12 @@ def main() -> None:
     seconds = int(elapsed % 60)
 
     if check_only:
-        print(f"\n🏁 依賴檢查完成！（{minutes}m {seconds}s）")
+        print(f"\n依賴檢查完成！（{minutes}m {seconds}s）")
     else:
         print("\n" + "=" * 60)
-        print(f"🎉 Pipeline 完成！耗時 {minutes}m {seconds}s")
-        print(f"   📁 Raw data:  {config.RAW_MD_DIR}")
-        print(f"   📁 Q&A 資料庫: {config.OUTPUT_DIR}")
+        print(f"Pipeline 完成！耗時 {minutes}m {seconds}s")
+        print(f"   Raw data:  {config.RAW_MD_DIR}")
+        print(f"   Q&A 資料庫: {config.OUTPUT_DIR}")
         print("=" * 60)
 
 

@@ -21,13 +21,13 @@ pip install -r requirements.txt
 pip install -e ".[dev]"          # 含 pytest 開發依賴
 
 # ── Makefile 快速入口（推薦 AI 工具使用） ──────────────
-make pipeline          # 完整流程 step 1→2→3
-make step1             # Notion 擷取
-make step2             # Q&A 萃取
-make step3             # 去重 + 分類
-make step4             # 週報生成
-make step5             # 品質評估
-make step2-test        # 只處理 3 份（快速驗證）
+make pipeline          # 完整流程 fetch-notion→extract-qa→dedupe-classify
+make fetch-notion      # Notion 擷取
+make extract-qa        # Q&A 萃取
+make dedupe-classify   # 去重 + 分類
+make generate-report   # 週報生成
+make evaluate-qa       # 品質評估
+make extract-qa-test   # 只處理 3 份（快速驗證）
 make dry-run           # 驗證設定（不執行）
 make test              # 執行測試
 make help              # 所有可用 targets
@@ -37,20 +37,20 @@ make help              # 所有可用 targets
 python scripts/run_pipeline.py
 
 # 分步驟執行
-python scripts/run_pipeline.py --step 1              # Notion 擷取
-python scripts/run_pipeline.py --step 2              # OpenAI Q&A 萃取
-python scripts/run_pipeline.py --step 3              # 去重 + 分類
-python scripts/run_pipeline.py --step 4              # 週報生成
-python scripts/run_pipeline.py --step 5              # 品質評估
+python scripts/run_pipeline.py --step fetch-notion              # Notion 擷取
+python scripts/run_pipeline.py --step extract-qa              # OpenAI Q&A 萃取
+python scripts/run_pipeline.py --step dedupe-classify              # 去重 + 分類
+python scripts/run_pipeline.py --step generate-report              # 週報生成
+python scripts/run_pipeline.py --step evaluate-qa              # 品質評估
 
 # 常用選項
-python scripts/run_pipeline.py --step 1 --force      # 強制全量重抓
-python scripts/run_pipeline.py --step 2 --limit 3    # 只處理 3 份（測試用）
-python scripts/run_pipeline.py --step 3 --skip-dedup # 只分類不去重
-python scripts/run_pipeline.py --step 4 --input metrics.tsv  # 本機指標檔
-python scripts/run_pipeline.py --step 5 --sample 50  # 抽樣 50 筆評估
-python scripts/run_pipeline.py --step 5 --with-source # 帶原始 Markdown 驗證
-python scripts/run_pipeline.py --step 5 --eval-retrieval # 評估 Retrieval 品質
+python scripts/run_pipeline.py --step fetch-notion --force      # 強制全量重抓
+python scripts/run_pipeline.py --step extract-qa --limit 3    # 只處理 3 份（測試用）
+python scripts/run_pipeline.py --step dedupe-classify --skip-dedup # 只分類不去重
+python scripts/run_pipeline.py --step generate-report --input metrics.tsv  # 本機指標檔
+python scripts/run_pipeline.py --step evaluate-qa --sample 50  # 抽樣 50 筆評估
+python scripts/run_pipeline.py --step evaluate-qa --with-source # 帶原始 Markdown 驗證
+python scripts/run_pipeline.py --step evaluate-qa --eval-retrieval # 評估 Retrieval 品質
 python scripts/run_pipeline.py --dry-run             # 檢查設定不執行
 
 # 測試

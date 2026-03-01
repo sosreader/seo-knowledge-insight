@@ -29,7 +29,7 @@
 | `fetch(url, { headers })`     | `requests.get(url, headers=...)`      |
 | `process.env.API_KEY`         | `os.getenv("API_KEY")`                |
 | `JSON.parse / JSON.stringify` | `json.loads / json.dumps`             |
-| `npm run build -- --flag`     | `python script.py --step 2 --limit 3` |
+| `npm run build -- --flag`     | `python script.py --step extract-qa --limit 3` |
 | `localStorage.setItem(k, v)`  | `Path("file.json").write_text(...)`   |
 | Promise chain                 | 每步結果存 JSON 檔，下步再讀          |
 

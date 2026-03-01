@@ -58,21 +58,21 @@
 
 依功能對照三種使用方式：CLI 腳本、Claude Code 指令、REST API。
 
-| 功能                    | CLI 腳本                                             | Claude Code 指令                                                                               | REST API                                    |
-| ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Notion 擷取             | `make step1`                                         | 無獨立指令 — Step 1 是 Notion API 呼叫而非 LLM 任務，`/pipeline-local` 內部仍執行 `make step1` | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
-| Q&A 萃取                | `make step2`                                         | `/extract-qa`（不需要 OpenAI）                                                                 | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
-| 去重 + 分類             | `make step3`                                         | `/dedupe-classify`（不需要 OpenAI）                                                            | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
-| 知識庫搜尋              | `python scripts/qa_tools.py search --query "..."`    | `/search <問題>`（不需要 OpenAI）                                                              | `POST /api/v1/search`                       |
-| RAG 問答                | 無對應 — 對話需維護多輪歷史狀態，CLI 單次呼叫不適合  | `/chat`（不需要 OpenAI）                                                                       | `POST /api/v1/chat`                         |
-| Q&A 列表查詢            | 無對應 — 可直接讀 `output/qa_final.json`，無獨立指令 | 無對應 — 屬結構化欄位過濾，REST 更適合                                                         | `GET /api/v1/qa`                            |
-| 單筆 Q&A 詳情           | 無對應 — 可直接讀 `output/qa_final.json`，無獨立指令 | 無對應 — 屬結構化 ID 查詢，REST 更適合                                                         | `GET /api/v1/qa/{id}`                       |
-| 所有分類                | 無對應 — 可直接讀 `output/qa_final.json`，無獨立指令 | 無對應 — 屬結構化聚合查詢，REST 更適合                                                         | `GET /api/v1/qa/categories`                 |
-| 週報生成                | `make step4`                                         | `/generate-report <URL>`（不需要 OpenAI）                                                      | 無對應 — 屬長時間離線作業，未實作非同步 job |
-| 品質評估                | `make step5`                                         | `/evaluate-qa`（**需要 OpenAI** — LLM-as-Judge）                                               | 無對應 — 屬長時間離線作業，未實作非同步 job |
-| 知識庫建構 Steps 1–3    | `make pipeline`                                      | `/pipeline-local`（不需要 OpenAI，Steps 1–4）                                                  | 無對應 — 屬長時間離線作業，未實作非同步 job |
-| 完整 pipeline Steps 1–5 | `python scripts/run_pipeline.py`                     | `/run-pipeline`（**需要 OpenAI** — Steps 1–5 含評估）                                          | 無對應 — 屬長時間離線作業，未實作非同步 job |
-| 健康檢查                | 無對應 — 服務監控端點，本地 pipeline 不適用          | 無對應 — 服務監控端點，本地 pipeline 不適用                                                    | `GET /health`                               |
+| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
+| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
+| Step 1 — Notion 擷取        | `make fetch-notion`                               | 無獨立指令 — 屬 Notion API 呼叫，非 LLM 任務，由 `/pipeline-local` 整合執行 | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
+| Step 2 — Q&A 萃取           | `make extract-qa`                                 | `/extract-qa`（不需要 OpenAI）                      | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
+| Step 3 — 去重 + 分類        | `make dedupe-classify`                            | `/dedupe-classify`（不需要 OpenAI）                 | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
+| Step 4 — 週報生成           | `make generate-report`                            | `/generate-report <URL>`（不需要 OpenAI）           | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| Step 5 — 品質評估           | `make evaluate-qa`                                | `/evaluate-qa`（需要 OpenAI — LLM-as-Judge）        | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| Steps 1–3 — 知識庫建構      | `make pipeline`                                   | `/pipeline-local`（不需要 OpenAI，含 Step 4）       | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| Steps 1–5 — 完整 Pipeline   | `python scripts/run_pipeline.py`                  | `/run-pipeline`（需要 OpenAI）                      | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| 知識庫搜尋                  | `python scripts/qa_tools.py search --query "..."` | `/search <問題>`（不需要 OpenAI）                   | `POST /api/v1/search`                       |
+| RAG 問答                    | 無對應 — 對話需維護多輪歷史狀態，CLI 單次呼叫不適合 | `/chat`（不需要 OpenAI）                           | `POST /api/v1/chat`                         |
+| Q&A 列表查詢                | 無獨立指令 — 可直接讀 `output/qa_final.json`      | 無對應 — 屬結構化欄位過濾，REST 更適合              | `GET /api/v1/qa`                            |
+| 單筆 Q&A 詳情               | 無獨立指令 — 可直接讀 `output/qa_final.json`      | 無對應 — 屬結構化 ID 查詢，REST 更適合              | `GET /api/v1/qa/{id}`                       |
+| 所有分類                    | 無獨立指令 — 可直接讀 `output/qa_final.json`      | 無對應 — 屬結構化聚合查詢，REST 更適合              | `GET /api/v1/qa/categories`                 |
+| 健康檢查                    | 無對應 — 服務監控端點，本地 pipeline 不適用       | 無對應 — 服務監控端點，本地 pipeline 不適用         | `GET /health`                               |
 
 **REST API** — 需要先啟動 `uvicorn app.main:app --port 8001`，並在 header 帶 `X-API-Key`（生產環境）。
 
@@ -233,7 +233,7 @@ python scripts/02_extract_qa.py --check
 
 ```bash
 python scripts/run_pipeline.py              # 完整 1→2→3
-python scripts/run_pipeline.py --step 4     # 單步也行
+python scripts/run_pipeline.py --step generate-report     # 單步也行
 python scripts/run_pipeline.py --check      # 只檢查所有步驟的依賴
 python scripts/run_pipeline.py --dry-run    # 同 --check（向下相容）
 ```
@@ -242,11 +242,11 @@ python scripts/run_pipeline.py --dry-run    # 同 --check（向下相容）
 
 ```bash
 # 支援所有子腳本的 flags，透過 -- 轉發
-python scripts/run_pipeline.py --step 1 --force
-python scripts/run_pipeline.py --step 2 --limit 3
-python scripts/run_pipeline.py --step 3 --skip-dedup
-python scripts/run_pipeline.py --step 4 --tab vocus --input metrics.tsv
-python scripts/run_pipeline.py --step 5 --sample 50 --with-source --eval-retrieval
+python scripts/run_pipeline.py --step fetch-notion --force
+python scripts/run_pipeline.py --step extract-qa --limit 3
+python scripts/run_pipeline.py --step dedupe-classify --skip-dedup
+python scripts/run_pipeline.py --step generate-report --tab vocus --input metrics.tsv
+python scripts/run_pipeline.py --step evaluate-qa --sample 50 --with-source --eval-retrieval
 ```
 
 ---
@@ -284,9 +284,9 @@ python scripts/run_pipeline.py --step 5 --sample 50 --with-source --eval-retriev
 
 4. **跑步驟 3** 去重和分類。
 
-5. **每週產生週報**：直接執行 `python scripts/run_pipeline.py --step 4`，腳本自動從 Google Sheets 下載最新資料並產生報告，無需手動複製貼上。
+5. **每週產生週報**：直接執行 `python scripts/run_pipeline.py --step generate-report`，腳本自動從 Google Sheets 下載最新資料並產生報告，無需手動複製貼上。
 
-6. **評估品質**：執行 `python scripts/run_pipeline.py --step 5 --sample 50`，用 LLM-as-Judge 檢查萃取品質。
+6. **評估品質**：執行 `python scripts/run_pipeline.py --step evaluate-qa --sample 50`，用 LLM-as-Judge 檢查萃取品質。
 
 7. **人工審核**：看 `output/qa_final.md`，標記需要更新或修正的內容。
 
@@ -299,7 +299,7 @@ python scripts/run_pipeline.py --step 5 --sample 50 --with-source --eval-retriev
 **一行指令搞定（最簡方式）：**
 
 ```bash
-python scripts/run_pipeline.py --step 4
+python scripts/run_pipeline.py --step generate-report
 ```
 
 腳本自動從 [Google Sheets](https://docs.google.com/spreadsheets/d/1fzttLHJfl2Tnecxg0PDKsTmj0-PT5eSsYOivTI6wRdo) 下載最新資料（無需手動複製），報告儲存至 `output/report_YYYYMMDD.md`。
@@ -357,19 +357,19 @@ python scripts/run_pipeline.py --step 4
 
 ```bash
 # 基本評估（抽樣 30 筆）
-python scripts/run_pipeline.py --step 5
+python scripts/run_pipeline.py --step evaluate-qa
 
 # 加大抽樣
-python scripts/run_pipeline.py --step 5 --sample 50
+python scripts/run_pipeline.py --step evaluate-qa --sample 50
 
 # 帶原始 Markdown 驗證 Faithfulness（更嚴格）
-python scripts/run_pipeline.py --step 5 --with-source
+python scripts/run_pipeline.py --step evaluate-qa --with-source
 
 # 含 Retrieval 品質評估
-python scripts/run_pipeline.py --step 5 --eval-retrieval
+python scripts/run_pipeline.py --step evaluate-qa --eval-retrieval
 
 # 完整評估（品質 + 分類 + Retrieval）
-python scripts/run_pipeline.py --step 5 --sample 50 --with-source --eval-retrieval
+python scripts/run_pipeline.py --step evaluate-qa --sample 50 --with-source --eval-retrieval
 ```
 
 ### 評估維度（1–5 分）

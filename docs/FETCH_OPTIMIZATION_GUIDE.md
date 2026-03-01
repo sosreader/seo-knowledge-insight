@@ -71,7 +71,7 @@ make pipeline                    # 等同於下面
 
 ```bash
 # 早上執行一次
-make step1
+make fetch-notion
 # 或等效
 .venv/bin/python scripts/01_fetch_notion.py --since 1d --block-depth 2
 ```
@@ -82,7 +82,7 @@ make step1
 
 ```bash
 # 週末執行
-make step1-force
+make fetch-notion-force
 # 或等效
 .venv/bin/python scripts/01_fetch_notion.py --force --block-depth 3
 ```
@@ -213,11 +213,11 @@ NOTION_DEFAULT_SINCE_DAYS=1
 
 ```makefile
 # 推薦增量
-step1-quick:
+fetch-notion-quick:
 	$(python) scripts/01_fetch_notion.py --since 1d --block-depth 2
 
 # 完整同步
-step1-full:
+fetch-notion-full:
 	$(python) scripts/01_fetch_notion.py --force --block-depth 3
 ```
 

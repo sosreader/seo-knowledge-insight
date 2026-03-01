@@ -81,8 +81,8 @@ def cmd_pipeline_status(_args: argparse.Namespace) -> None:
 def cmd_list_unprocessed(_args: argparse.Namespace) -> None:
     """列出待 Q&A 萃取的 Markdown 檔（委派給 list_pipeline_state.py）。"""
     sys.path.insert(0, str(PROJECT_ROOT))
-    from scripts.list_pipeline_state import list_unprocessed_step2
-    list_unprocessed_step2()
+    from scripts.list_pipeline_state import list_unprocessed_extract_qa
+    list_unprocessed_extract_qa()
 
 
 # ──────────────────────────────────────────────────────
