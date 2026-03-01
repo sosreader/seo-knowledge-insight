@@ -280,3 +280,129 @@ class TestTokenStats:
         assert stats["total_saved"] == 2000
         assert stats["by_step"][2]["used"] == 1000
         assert stats["by_step"][3]["saved"] == 2000
+
+
+# ──────────────────────────────────────────────────
+# Phase A: Version Registry 增強測試
+# ──────────────────────────────────────────────────
+
+class TestResolveStep:
+    def test_int_passthrough(self):
+        assert _pv.resolve_step(2) == 2
+
+    def test_str_name_extract_qa(self):
+        assert _pv.resolve_step("extract-qa") == 2
+
+    def test_str_digit(self):
+        assert _pv.resolve_step("3") == 3
+
+    def test_unknown_str_raises_value_error(self):
+        import pytest
+        with pytest.raises(ValueError, match="未知"):
+            _pv.resolve_step("unknown-step")
+
+    def test_wrong_type_raises_type_error(self):
+        import pytest
+        with pytest.raises(TypeError):
+            _pv.resolve_step(3.14)  # type: ignore[arg-type]
+
+
+class TestRecordArtifactStepName:
+    def test_entry_has_step_name_field(self):
+        entry = _pv.record_artifact(step=2, data={"test": True})
+        assert entry.get("step_name") == "extract-qa"
+
+    def test_str_step_name_accepted(self):
+        entry = _pv.record_artifact(step="extract-qa", data={"str_step": True})
+        assert entry["step"] == 2
+
+    def test_label_stored_in_entry(self):
+        entry = _pv.record_artifact(step=3, data={"label_test": True}, label="全量重跑@2026-03-02")
+        assert entry.get("label") == "全量重跑@2026-03-02"
+
+    def test_no_label_key_absent(self):
+        entry = _pv.record_artifact(step=3, data={"no_label": True})
+        assert "label" not in entry
+
+
+class TestLabelVersion:
+    def test_label_existing_version(self):
+        entry = _pv.record_artifact(step=2, data={"to_label": True})
+        vid = entry["version_id"]
+        result = _pv.label_version(vid, "初版@2026-03-02")
+        assert result is not None
+        assert result.get("label") == "初版@2026-03-02"
+
+    def test_label_persists_in_registry(self):
+        entry = _pv.record_artifact(step=2, data={"persist": True})
+        vid = entry["version_id"]
+        _pv.label_version(vid, "持久標籤@2026-03-02")
+        history = _pv.get_version_history(2)
+        labeled = next((v for v in history if v["version_id"] == vid), None)
+        assert labeled is not None
+        assert labeled.get("label") == "持久標籤@2026-03-02"
+
+    def test_unknown_version_returns_none(self):
+        assert _pv.label_version("nonexistent_id", "some_label") is None
+
+    def test_overwrite_existing_label(self):
+        entry = _pv.record_artifact(step=2, data={"overwrite": True})
+        vid = entry["version_id"]
+        _pv.label_version(vid, "舊標籤@2026-02-28")
+        result = _pv.label_version(vid, "新標籤@2026-03-02")
+        assert result.get("label") == "新標籤@2026-03-02"
+
+
+class TestRegisterExistingFile:
+    def test_register_json_file(self, tmp_path):
+        f = tmp_path / "qa_final.json"
+        f.write_text('{"qa_database": []}', encoding="utf-8")
+        entry = _pv.register_existing_file(step=3, file_path=f)
+        assert entry["step"] == 3
+        assert entry["step_name"] == "dedupe-classify"
+
+    def test_idempotent(self, tmp_path):
+        f = tmp_path / "qa_test.json"
+        f.write_text('{"test": 1}', encoding="utf-8")
+        e1 = _pv.register_existing_file(step=3, file_path=f)
+        e2 = _pv.register_existing_file(step=3, file_path=f)
+        assert e1["version_id"] == e2["version_id"]
+
+    def test_with_label(self, tmp_path):
+        f = tmp_path / "labeled.json"
+        f.write_text('{"data": true}', encoding="utf-8")
+        entry = _pv.register_existing_file(step=2, file_path=f, label="帶標籤@2026-03-02")
+        assert entry.get("label") == "帶標籤@2026-03-02"
+
+    def test_file_not_found_raises(self):
+        import pytest
+        with pytest.raises(FileNotFoundError):
+            _pv.register_existing_file(step=2, file_path=Path("/nonexistent/path.json"))
+
+    def test_str_step_name(self, tmp_path):
+        f = tmp_path / "str_step.json"
+        f.write_text('{"step": "name"}', encoding="utf-8")
+        entry = _pv.register_existing_file(step="extract-qa", file_path=f)
+        assert entry["step"] == 2
+
+
+class TestVersionHistoryStepName:
+    def test_str_name_equals_int(self):
+        _pv.record_artifact(step=2, data={"hist_test": True})
+        by_int = _pv.get_version_history(2)
+        by_name = _pv.get_version_history("extract-qa")
+        assert len(by_int) == len(by_name)
+        assert by_int[0]["version_id"] == by_name[0]["version_id"]
+
+    def test_get_latest_by_str_name(self):
+        _pv.record_artifact(step=3, data={"latest_name": True})
+        by_int = _pv.get_latest_version(3)
+        by_name = _pv.get_latest_version("dedupe-classify")
+        assert by_int is not None
+        assert by_name is not None
+        assert by_int["version_id"] == by_name["version_id"]
+
+    def test_unknown_step_name_history_empty(self):
+        import pytest
+        with pytest.raises(ValueError):
+            _pv.get_version_history("nonexistent-step")

@@ -240,3 +240,134 @@ class TestPersistedEmbeddings:
 
         np.testing.assert_array_almost_equal(emb, loaded)
         assert loaded.shape == (5, 1536)
+
+
+# ──────────────────────────────────────────────────────
+# Phase B: synonym_dict 單元測試
+# ──────────────────────────────────────────────────────
+
+class TestSynonymDict:
+    def test_expand_amp_includes_full_name(self):
+        from utils.synonym_dict import expand_keywords
+        result = expand_keywords(["AMP"])
+        assert any("Accelerated Mobile Pages" in r or "加速行動網頁" in r for r in result)
+
+    def test_unknown_word_returns_original(self):
+        from utils.synonym_dict import expand_keywords
+        result = expand_keywords(["完全不存在的詞XYZ"])
+        assert "完全不存在的詞XYZ" in result
+
+    def test_no_duplicates(self):
+        from utils.synonym_dict import expand_keywords
+        result = expand_keywords(["CTR", "點擊率"])
+        assert len(result) == len(set(result))
+
+    def test_result_sorted(self):
+        from utils.synonym_dict import expand_keywords
+        result = expand_keywords(["canonical"])
+        assert result == sorted(result)
+
+
+# ──────────────────────────────────────────────────────
+# Phase B: freshness 單元測試
+# ──────────────────────────────────────────────────────
+
+class TestFreshnessDecay:
+    def test_evergreen_always_one(self):
+        from utils.freshness import compute_freshness_score
+        score = compute_freshness_score("2020-01-01", is_evergreen=True)
+        assert score == 1.0
+
+    def test_today_date_is_one(self):
+        from datetime import date
+        from utils.freshness import compute_freshness_score
+        today_str = date.today().isoformat()
+        score = compute_freshness_score(today_str, is_evergreen=False)
+        assert score == 1.0
+
+    def test_three_years_old_decays(self):
+        from utils.freshness import compute_freshness_score
+        score = compute_freshness_score("2023-01-01", is_evergreen=False, half_life_days=365)
+        assert 0.0 < score < 1.0
+
+    def test_min_score_floor(self):
+        from utils.freshness import compute_freshness_score
+        score = compute_freshness_score("2010-01-01", is_evergreen=False, half_life_days=365, min_score=0.3)
+        assert score >= 0.3
+
+    def test_invalid_date_returns_one(self):
+        from utils.freshness import compute_freshness_score
+        score = compute_freshness_score("invalid-date", is_evergreen=False)
+        assert score == 1.0
+
+
+# ──────────────────────────────────────────────────────
+# Phase B: enriched search（_apply_boosts）單元測試
+# ──────────────────────────────────────────────────────
+
+class TestEnrichedSearch:
+    def _make_engine(self, qa_pairs, embeddings):
+        from utils.search_engine import SearchEngine
+        return SearchEngine(qa_pairs, embeddings)
+
+    def test_synonym_boost_increases_score(self):
+        """有同義詞命中的 Q&A 分數應該 >= 無同義詞的同等 Q&A。"""
+        import numpy as np
+        from utils.search_engine import SearchEngine
+        # 兩筆 Q&A，第一筆關鍵字命中查詢，第二筆不命中
+        qa_pairs = [
+            {"id": 1, "question": "CTR 如何提升", "answer": "...", "keywords": ["CTR", "點擊率"],
+             "_enrichment": {"synonyms": ["點擊率", "click-through rate"], "freshness_score": 1.0}},
+            {"id": 2, "question": "索引問題", "answer": "...", "keywords": ["索引"],
+             "_enrichment": {"synonyms": [], "freshness_score": 1.0}},
+        ]
+        emb = np.random.randn(2, 4).astype(np.float32)
+        engine = SearchEngine(qa_pairs, emb)
+        # 用點擊率查詢 — CTR 的同義詞
+        results = engine.search("點擊率如何優化", np.zeros(4, dtype=np.float32), top_k=2, min_score=0.0)
+        scores = {r[0]["id"]: r[1] for r in results}
+        # id=1 有同義詞命中，分數應 > id=2
+        assert scores.get(1, 0.0) >= scores.get(2, 0.0)
+
+    def test_freshness_mod_lower_for_old_qa(self):
+        """非 evergreen 且舊的 Q&A 的 freshness_score 應低於新的。"""
+        from utils.freshness import compute_freshness_score
+        old_score = compute_freshness_score("2020-01-01", is_evergreen=False, half_life_days=365)
+        new_score = compute_freshness_score("2026-01-01", is_evergreen=False, half_life_days=365)
+        assert old_score < new_score
+
+    def test_fallback_no_enrichment(self):
+        """無 _enrichment 欄位時行為應等同原始 hybrid search。"""
+        import numpy as np
+        from utils.search_engine import SearchEngine
+        qa_pairs = [
+            {"id": 1, "question": "基礎問題", "answer": "答案", "keywords": ["基礎"]},
+        ]
+        emb = np.random.randn(1, 4).astype(np.float32)
+        engine = SearchEngine(qa_pairs, emb)
+        results = engine.search("基礎問題", np.zeros(4, dtype=np.float32), top_k=1, min_score=0.0)
+        assert len(results) == 1
+
+    def test_hybrid_search_uses_id_index(self):
+        """QAStore.hybrid_search() 應使用 _id_index 而非重新建構 dict。"""
+        import numpy as np
+        from unittest.mock import MagicMock
+        from app.core.store import QAStore, QAItem
+        store = QAStore()
+        store.items = [
+            QAItem(
+                id=1, stable_id="s1", question="Q", answer="A", keywords=[],
+                confidence=1.0, category="c", difficulty="medium", evergreen=True,
+                source_title="T", source_date="2026-01-01", is_merged=False,
+            )
+        ]
+        store._id_index = {1: store.items[0]}
+        store.embeddings = np.zeros((1, 1536), dtype=np.float32)
+        mock_engine = MagicMock()
+        mock_engine.search.return_value = [
+            ({"id": 1, "question": "Q", "answer": "A", "keywords": [], "category": "c"}, 0.9)
+        ]
+        store._engine = mock_engine
+        results = store.hybrid_search("Q", np.zeros(1536), top_k=1)
+        assert len(results) == 1
+        assert results[0][0].id == 1

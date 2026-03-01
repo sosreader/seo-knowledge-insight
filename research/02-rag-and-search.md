@@ -413,3 +413,11 @@ tmp.replace(path)
 _`output/.versions/registry.json` 納入 git，step artifacts 本身 gitignored（可從 cache 重建）。_
 
 ---
+
+## 20–25. Multi-Layer Context Architecture
+
+> 此主題已拆出至獨立檔案，包含術語定義、同義詞擴展、時效性衰減、enrichment pipeline、Learning Store、指標基準線等完整內容。
+
+**詳見：[10-multi-layer-context.md](./10-multi-layer-context.md)**
+
+---

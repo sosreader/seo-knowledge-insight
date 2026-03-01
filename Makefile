@@ -70,6 +70,10 @@ dedupe-only: ## 只去重（跳過分類，用於診斷）
 rebuild-embeddings: ## 從現有 qa_final.json 重建 qa_embeddings.npy（優先走 cache，不重跑 dedup/classify）
 	$(PYTHON) scripts/03_dedupe_classify.py --rebuild-embeddings
 
+.PHONY: enrich
+enrich: ## Offline enrichment（synonym + freshness + usage，不消耗 token）
+	$(PYTHON) scripts/enrich_qa.py
+
 .PHONY: generate-report
 generate-report: ## 週報生成（使用 Google Sheets 預設指標）
 	$(PYTHON) $(SCRIPT) --step generate-report
@@ -154,23 +158,8 @@ else:\n\
 "
 
 .PHONY: version-history
-version-history: ## 查看 pipeline 版本歷史與 token 統計
-	@$(PYTHON) -c "\
-import sys; sys.path.insert(0, '.')\n\
-from utils.pipeline_version import get_version_history, get_all_token_stats\n\
-for step in [2, 3, 4]:\n\
-    versions = get_version_history(step)\n\
-    if versions:\n\
-        print(f'\\n=== Step {step} ({len(versions)} versions) ===')\n\
-        for v in versions[:5]:\n\
-            ts = v['timestamp'][:10]\n\
-            tokens = v.get('tokens_used', 0)\n\
-            saved = v.get('tokens_saved', 0)\n\
-            print(f'  {v[\"version_id\"]}  {ts}  tokens={tokens}  saved={saved}')\n\
-stats = get_all_token_stats()\n\
-print(f'\\nTotal tokens used : {stats[\"total_used\"]:,}')\n\
-print(f'Total tokens saved: {stats[\"total_saved\"]:,}')\n\
-"
+version-history: ## 查看 pipeline 版本歷史（所有步驟的最新版本）
+	@$(PYTHON) scripts/qa_tools.py version-history
 
 # ── 稽核日誌 ─────────────────────────────────────────
 

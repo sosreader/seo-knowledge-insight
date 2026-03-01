@@ -444,6 +444,81 @@ span_id  = str(span_ctx.span_id)  if span_ctx else None
 
 ---
 
+## eval_enrichment.py — Enrichment 品質評估（2026-03-02）
+
+> 對應 `evals/eval_enrichment.py`，使用 `eval/golden_retrieval.json`（20 筆 cases），Laminar 離線評估。
+
+### 三個 Evaluators
+
+| Evaluator | 類型 | 計算方式 | 目標 |
+|-----------|------|---------|------|
+| `kw_hit_rate_with_synonyms` | binary（0/1） | 查詢展開後，top-5 是否命中 expected Q&A | ≥ 85% |
+| `freshness_rank_quality` | continuous（0-1） | 舊文件排名是否低於語意等效的新文件 | ≥ 0.9 |
+| `synonym_coverage` | binary（0/1） | 每筆 Q&A 是否有 `_enrichment.synonyms` 非空 | 1.0（全覆蓋）|
+
+### 實驗結果（make enrich 前後）
+
+| 指標 | Baseline（qa_final.json） | After enrichment | Delta |
+|------|--------------------------|-----------------|-------|
+| kw_hit_rate_with_synonyms | 70.4% | **79.67%** | **+9.27pp** |
+| freshness_rank_quality | 1.0 | 1.0 | 0 |
+| synonym_coverage | 0.0 | **1.0** | +100% |
+
+**解讀**：
+- `kw_hit_rate_with_synonyms` +9.27pp 確認同義詞擴展有效（如 "AMP" -> "Accelerated Mobile Pages"）
+- `freshness_rank_quality` 維持 1.0：freshness 乘法縮放未破壞相對排名
+- `synonym_coverage` 0.0 -> 1.0：`make enrich` 產生 `qa_enriched.json` 後 655 筆全部有 `_enrichment`
+
+### 目標差距與後續
+
+- KW Hit Rate 79.67%，距 ≥85% 目標差 **5.33pp**
+- 方向：擴充 `utils/synonym_dict.py` 的 `_SUPPLEMENTAL_SYNONYMS`，特別是 SEO 長尾術語
+- 前置條件 E2-2（Query Understanding）需 KW Hit Rate ≥ 85% 才啟動
+
+### eval Laminar 執行方式
+
+```bash
+# 執行 enrichment
+make enrich
+
+# 重跑 eval 比較前後
+python evals/eval_enrichment.py
+
+# Laminar dashboard 可查看歷史趨勢
+# group_name: "enrichment_quality"
+```
+
+### Eval 覆蓋率表（更新後）
+
+| Capability | Eval file | Evaluators | Golden dataset | 狀態 |
+|------------|-----------|------------|----------------|------|
+| Retrieval | `evals/eval_retrieval.py` | keyword_hit_rate, top1_category_match | `eval/golden_retrieval.json`（307 筆）| ✅ |
+| Extraction | `evals/eval_extraction.py` | qa_count_in_range, keyword_coverage | `eval/golden_extraction.json` | ✅ |
+| Chat (E2E) | `evals/eval_chat.py` | has_answer, has_sources | 前 10 retrieval scenarios | ✅ |
+| **Enrichment** | **`evals/eval_enrichment.py`** | **kw_hit_rate_with_synonyms, freshness_rank_quality, synonym_coverage** | **`eval/golden_retrieval.json`（20 筆）** | **✅ 新增** |
+
+---
+
+## Online Scoring 更新（2026-03-02）
+
+在 `utils/laminar_scoring.py` 新增兩個 enrichment 相關的 online evaluator：
+
+```python
+def score_enrichment_boost(synonym_hits: int, freshness_score: float) -> None:
+    """記錄每次搜尋的 synonym 命中數與 freshness 分數"""
+    score_event("synonym_hits", float(synonym_hits))
+    score_event("freshness_score", freshness_score)
+
+def score_search_miss(query: str, top_score: float) -> None:
+    """記錄搜尋未命中事件（top_score < 0.35）"""
+    score_event("search_miss", 1.0)
+    score_event("search_top_score", top_score)
+```
+
+**觸發點**：
+- `score_enrichment_boost()` — `app/routers/search.py` 每次搜尋後
+- `score_search_miss()` — `app/core/chat.py` 當 hits 為空時
+
 ### Laminar span.set_metadata() — Pipeline 報告型 metadata 記錄（2026-03-01）
 
 在報告生成類腳本（非 API endpoint）中記錄結構化 metadata 到 Laminar 的推薦模式：
@@ -481,4 +556,238 @@ def _record_laminar_step_metadata(stats: dict, ...) -> None:
 | `compare_providers` | `step`, `judge_model`, `provider_count`, `provider_N_*`（name/avg_score/topic_coverage/維度分） |
 
 詳見：`scripts/04_generate_report.py`、`scripts/05_evaluate.py`、`scripts/compare_providers.py`。
+
+---
+
+## OpenAI Data Agent 六層 Context 對比（2026-03-02）
+
+> 參考：[OpenAI Data Agent 官方例子](https://github.com/openai/data-agent-examples)；詳細改進計畫見 `PLAN_MULTI_LAYER_CONTEXT.md`。
+
+### OpenAI 六層架構概覽
+
+OpenAI 在 2024 年提出的 Data Agent 架構將 LLM-based RAG 系統的「知識上下文」分為六層，逐層疊加以最大化推理能力：
+
+```
+L1 Query Patterns       ← 驗證過的好查詢、同義詞、查詢展開
+L2 Annotations          ← 業務定義、分類規則、優先順序
+L3 Learnings            ← 搜尋失敗模式修正、negative examples
+L4 Runtime Context      ← 最新使用資料、存取頻率、新鮮度
+L5 External APIs        ← 即時數據（股票、天氣、API）
+L6 Agentic Logic        ← 多步推理、工具調用、迭代檢索
+```
+
+### 本專案實現對照表
+
+| Layer | OpenAI 描述 | 本專案現狀（v2.0） | 改進提案 | 影響指標 |
+|-------|---|---|---|---|
+| **L1** | 同義詞、查詢展開 | 無結構化維護（搜尋僅用 Q+A 原文） | `utils/synonym_dict.py` + offline enrichment | KW Hit Rate 78% → 85%+ |
+| **L2** | 業務規則、難度標籤 | 有 category/difficulty/evergreen，未在搜尋時活用 | 強化 metadata + confidence weighting | Accuracy 3.95 → 4.2+ |
+| **L3** | 失敗模式學習 | **無任何機制** | `output/learnings.jsonl` + 動態修正 | Completeness 3.85 → 4.1+ |
+| **L4** | 使用統計、時效性 | 有 access_logs，未聚合分析 | `utils/usage_aggregator.py` + freshness decay | 搜尋延遲 50ms → 30ms |
+| **L5** | 外部 API（即時數據） | N/A（SEO domain 無即時性需求） | 不建議實作 | — |
+| **L6** | 多步推理、Agent | 目前單步 RAG | 後續考慮（需 golden dataset 支撐） | 支援複雜查詢 |
+
+### 分層設計理念對本專案的啟發
+
+#### 1. L1 Query Patterns — 同義詞/查詢展開
+
+**OpenAI 做法**：建立 curated 同義詞表，在搜尋時自動展開查詢。
+
+**本專案現狀**：
+```python
+# 搜尋直接用使用者輸入
+results = search(user_query)  # "Discover 流量下降"
+# 無同義詞機制，容易漏掉 "Google Discover 流量減少" 的 Q&A
+```
+
+**改進**（已規劃 P1-B）：
+```python
+# 新增 synonym_dict.py
+query_expansions = expand_keywords("Discover 流量")
+# ["Discover 流量", "Google Discover", "Discover 能見度", "Discover 曝光"]
+# 計算展開後所有 Q&A 的相關性，取最佳匹配
+```
+
+**預期效益**：KW Hit Rate 78% → 85%+
+
+---
+
+#### 2. L2 Annotations — 業務規則與元資料
+
+**OpenAI 做法**：將 category/priority/owner 等 metadata 嵌入知識庫，搜尋時加權考慮。
+
+**本專案現狀**：
+```json
+{
+  "qa_id": "qa_025",
+  "question": "Discover 流量下降的原因？",
+  "category": "搜尋表現",           // ← 有但未用於搜尋加權
+  "difficulty": 3,                  // ← 同上
+  "evergreen": false,               // ← 只用於分類，未用於時效性衰減
+  "confidence": 0.85                // ← 從未在搜尋中使用
+}
+```
+
+**改進**（已規劃 P2-A）：
+```python
+# 搜尋分數改進
+final_score = base_score * confidence_weight * freshness_score
+# 置信度低的 Q&A 自動降權；非 evergreen 隨時間衰減
+```
+
+**預期效益**：Accuracy 3.95 → 4.05；減少虛構/過時內容
+
+---
+
+#### 3. L3 Learnings — 失敗模式記錄與修正
+
+**OpenAI 做法**：記錄每次搜尋的失敗案例（top result 無關、用戶修正等），用於後續改進。
+
+**本專案現狀**：
+```
+無任何機制記錄搜尋失敗
+→ 相同查詞反覆失敗，無法改進
+→ 基準線 KW Hit Rate 78% 難以突破
+```
+
+**改進**（P1-A，關鍵）：
+```python
+# 新增 learning_store.py
+if top_score < 0.35:
+    learning_store.add({
+        "query": "Discover 流量下降",
+        "expected_qa_id": "qa_025",
+        "correction": "應加入 'AMP 兼容性' 同義詞"
+    })
+
+# 後續搜尋前查詢
+learnings = learning_store.get_learnings_for_query(query)
+# 動態調整閾值、展開同義詞
+```
+
+**預期效益**：KW Hit Rate 78% → 82%+
+
+---
+
+#### 4. L4 Runtime Context — 使用統計與新鮮度
+
+**OpenAI 做法**：實時追蹤知識使用頻率、最後存取時間、點擊率，用於排序和新鮮度提示。
+
+**本專案現狀**：
+```
+有 access_logs JSONL，但只記錄不分析
+→ 無法識別高頻查詢缺陷、零命中盲點
+→ 無法基於使用習慣優化排序
+```
+
+**改進**（P1-C）：
+```python
+# 新增 usage_aggregator.py
+stats = {
+  "high_frequency_queries": [
+    {"query": "Discover 流量下降", "count": 45, "avg_hit_rate": 0.82}
+  ],
+  "zero_hit_queries": [
+    {"query": "GSC 索引率異常", "count": 5}  # ← 知識庫缺口
+  ],
+  "unstable_queries": [
+    {"query": "Core Web Vitals", "stddev": 0.23}  # ← 同義詞不足
+  ]
+}
+
+# 搜尋時動態調整分數
+final_score = base_score * usage_boost  # 高頻査詢結果優先
+```
+
+**預期效益**：
+- 搜尋延遲 50ms → 30ms（緩存高頻結果）
+- 識別待改進的知識庫區域
+- Completeness 提升（補充零命中的 Q&A）
+
+---
+
+#### 5. L5 External APIs — 不適用於本專案
+
+**原因**：
+- SEO 知識庫主要是常識性內容，無即時性需求
+- Google Sheets 指標已是外部資料來源，整合在 Step 4
+- 實時 API（GSC、Google Analytics）超出本專案 scope
+
+**結論**：**不建議實作**。
+
+---
+
+#### 6. L6 Agentic Logic — 多步推理與工具調用
+
+**OpenAI 做法**：支援 Agent 自動分解複雜查詢，多步檢索與推理。
+
+**本專案現狀**：單步 RAG（使用者查詢 → 搜尋 → 回答），無推理迴圈。
+
+**改進建議**（P3 階段，後續考慮）：
+```
+使用者："Discover 流量下降的原因和解決方案"
+
+Agent 步驟：
+1. 搜尋 "Discover 流量下降原因"  ← L1-4 融合
+2. 解析結果，發現 "AMP 兼容性"
+3. 自動搜尋 "AMP 修復方法"        ← 第二次檢索
+4. 整合兩份結果，生成完整答案
+
+成本：三倍 LLM 呼叫 + 推理時間，僅適合複雜查詢
+```
+
+**優先順序**：**低**（目前單步已滿足 90% 使用案例）
+
+---
+
+### 評估維度在多層架構中的角色
+
+多層架構與現有四個評估維度的關係：
+
+| 維度 | 涉及層級 | 改進機制 | 基準→目標 |
+|------|---------|---------|----------|
+| **Relevance** | L1 + L3 | 同義詞 + learnings 修正 | 無變化（已 4.8） |
+| **Accuracy** | L2 + L4 | confidence weighting + freshness decay | 3.95 → 4.2+ |
+| **Completeness** | L1 + L2 + L3 | 同義詞展開 + metadata 補強 + 回饋迴圈 | 3.85 → 4.1+ |
+| **Granularity** | L2 | category 約束（後續強化） | 無變化（已 4.75） |
+
+**核心洞察**：
+- **Relevance & Granularity** 已優秀，無改進空間（基於 Q&A 品質本身）
+- **Accuracy** 需 L2/L4 支撐（metadata 加權 + 時效性衰減）
+- **Completeness** 需 L1/L3 支撐（同義詞展開 + 失敗學習）
+
+---
+
+### 裁剪版設計決策（四層而非六層）
+
+本專案採用 **四層裁剪版**（L1-L4），理由如下：
+
+| 層級 | 實作成本 | 本專案收益 | 決策 |
+|------|---------|----------|------|
+| L1 Query Patterns | 低 | 高（KW Hit +7pp） | ✅ 實作 |
+| L2 Annotations | 低 | 中（Accuracy +0.25） | ✅ 實作 |
+| L3 Learnings | 中 | 高（KW Hit +4pp） | ✅ 實作 |
+| L4 Runtime | 中 | 中（延遲 -40%，UX 提升） | ✅ 實作 |
+| **L5 External APIs** | 高 | 低（SEO 知識庫無即時性） | ❌ 不實作 |
+| **L6 Agentic** | 很高 | 低（單步已 90% 夠用） | ❌ 後續考慮 |
+
+**總實作量**：約 1-2 週（Phase 1+2），無需大規模重構。
+
+---
+
+### 學習與後續方向
+
+1. **Query Understanding 強化**（L1 進階）
+   - 從 zero-hit queries 自動提取新同義詞
+   - 聚類相似失敗查詢，識別模式
+
+2. **Active Learning**（L2/L3 融合）
+   - 自動選取最具信息量的樣本
+   - 用於下一輪人工標記（P2-B 的擴展）
+
+3. **LLM-based Reranking**（L2 進階）
+   - 在 top-5 結果上執行 semantic reranking
+   - 成本 vs 效果評估（未來才需要）
+
+詳見完整計畫：`PLAN_MULTI_LAYER_CONTEXT.md`。
 

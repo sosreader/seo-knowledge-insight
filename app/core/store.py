@@ -32,6 +32,10 @@ class QAItem:
     source_title: str
     source_date: str
     is_merged: bool
+    # Enrichment 欄位（來自 qa_enriched.json，可選）
+    synonyms: list[str] = field(default_factory=list)
+    freshness_score: float = 1.0
+    search_hit_count: int = 0
 
 
 @dataclass
@@ -49,7 +53,18 @@ class QAStore:
         json_path: Path = config.QA_JSON_PATH,
         npy_path: Path = config.QA_EMBEDDINGS_PATH,
     ) -> None:
-        data = json.loads(json_path.read_text(encoding="utf-8"))
+        # 優先嘗試 qa_enriched.json，失敗則 fallback qa_final.json
+        enriched_path = config.QA_ENRICHED_JSON_PATH
+        if enriched_path.exists():
+            try:
+                data = json.loads(enriched_path.read_text(encoding="utf-8"))
+                logger.info("QAStore: 載入 enriched 知識庫 %s", enriched_path)
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("QAStore: qa_enriched.json 載入失敗（%s），fallback 到 qa_final.json", exc)
+                data = json.loads(json_path.read_text(encoding="utf-8"))
+        else:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+
         raw_items = data["qa_database"]
 
         self.items = [
@@ -66,6 +81,9 @@ class QAStore:
                 source_title=qa.get("source_title", ""),
                 source_date=qa.get("source_date", ""),
                 is_merged=qa.get("is_merged", False),
+                synonyms=qa.get("_enrichment", {}).get("synonyms", []),
+                freshness_score=float(qa.get("_enrichment", {}).get("freshness_score", 1.0)),
+                search_hit_count=int(qa.get("_enrichment", {}).get("search_hit_count", 0)),
             )
             for qa in raw_items
         ]
@@ -155,11 +173,10 @@ class QAStore:
             min_score=min_score,
         )
 
-        # 將 qa_dict 映射回 QAItem（用 id 對應）
-        id_to_item = {item.id: item for item in self.items}
+        # 將 qa_dict 映射回 QAItem（用 _id_index O(1) 查詢）
         output: list[tuple[QAItem, float]] = []
         for qa_dict, score in raw_results:
-            item = id_to_item.get(qa_dict["id"])
+            item = self._id_index.get(qa_dict["id"])
             if item is not None:
                 output.append((item, score))
         return output

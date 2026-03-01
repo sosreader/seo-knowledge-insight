@@ -109,6 +109,91 @@ def cmd_merge_qa(_args: argparse.Namespace) -> None:
     from scripts.list_pipeline_state import merge_per_meeting_jsons
     merge_per_meeting_jsons()
 
+    # 合併完成後補登 qa_all_raw.json 到 version registry
+    if QA_RAW_PATH.exists():
+        try:
+            from utils.pipeline_version import register_existing_file
+            entry = register_existing_file(step="extract-qa", file_path=QA_RAW_PATH)
+            print(f"已補登 qa_all_raw.json 到 version registry：{entry['version_id']}")
+        except Exception as exc:
+            print(f"補登 version registry 失敗（非致命）：{exc}", file=sys.stderr)
+
+
+# ──────────────────────────────────────────────────────
+# register-version / version-history / label-version
+# ──────────────────────────────────────────────────────
+
+def cmd_register_version(args: argparse.Namespace) -> None:
+    """將既有檔案補登入 version registry。"""
+    sys.path.insert(0, str(PROJECT_ROOT))
+    from utils.pipeline_version import register_existing_file
+
+    file_path = Path(args.file) if args.file else None
+    if file_path is None:
+        print("請指定 --file 或讓系統自動偵測。", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        entry = register_existing_file(
+            step=args.step,
+            file_path=file_path,
+            label=args.label or None,
+        )
+        print(f"已登記：{entry['version_id']}")
+        if entry.get("label"):
+            print(f"標籤：{entry['label']}")
+    except FileNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_version_history(args: argparse.Namespace) -> None:
+    """顯示 version registry 歷史記錄。"""
+    sys.path.insert(0, str(PROJECT_ROOT))
+    from utils.pipeline_version import get_version_history, get_latest_version, STEP_NAMES
+
+    step = args.step if args.step else None
+
+    if step:
+        try:
+            history = get_version_history(step)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            sys.exit(1)
+        print(f"步驟 {step!r} 的版本歷史：")
+        if not history:
+            print("  （尚無記錄）")
+        for entry in history:
+            label = f" [{entry['label']}]" if entry.get("label") else ""
+            ts = entry.get("timestamp", "")[:10]
+            print(f"  {entry['version_id']}{label}  ({ts})")
+    else:
+        # 顯示所有步驟的最新版本
+        print("所有步驟的最新版本：")
+        for step_num, step_name in STEP_NAMES.items():
+            latest = get_latest_version(step_num)
+            if latest:
+                label = f" [{latest['label']}]" if latest.get("label") else ""
+                ts = latest.get("timestamp", "")[:10]
+                print(f"  Step {step_num} ({step_name}): {latest['version_id']}{label}  ({ts})")
+            else:
+                print(f"  Step {step_num} ({step_name}): （尚無記錄）")
+
+
+def cmd_label_version(args: argparse.Namespace) -> None:
+    """為已登記的版本加上語意標籤。"""
+    sys.path.insert(0, str(PROJECT_ROOT))
+    from utils.pipeline_version import label_version
+
+    result = label_version(args.version_id, args.label)
+    if result is None:
+        print(f"版本 {args.version_id!r} 不存在。", file=sys.stderr)
+        sys.exit(1)
+    print(f"已標記：{args.version_id} → {args.label!r}")
+
 
 # ──────────────────────────────────────────────────────
 # add-meeting（情境 A：增量加入新會議）
@@ -808,6 +893,18 @@ def main() -> None:
     p_metrics.add_argument("--source", required=True, help="Google Sheets URL 或 TSV 路徑")
     p_metrics.add_argument("--tab", default="vocus", help="Sheets 分頁名稱（預設 vocus）")
 
+    p_reg = sub.add_parser("register-version", help="將既有檔案補登入 version registry")
+    p_reg.add_argument("--step", required=True, help="步驟名稱或編號（如 extract-qa 或 2）")
+    p_reg.add_argument("--file", required=True, help="已存在的檔案路徑")
+    p_reg.add_argument("--label", help="語意標籤（如 全量重跑@2026-03-02）")
+
+    p_hist = sub.add_parser("version-history", help="顯示 version registry 歷史記錄")
+    p_hist.add_argument("--step", help="步驟名稱或編號（不指定則顯示所有步驟）")
+
+    p_lbl = sub.add_parser("label-version", help="為已登記的版本加上語意標籤")
+    p_lbl.add_argument("--version-id", required=True, help="版本 ID")
+    p_lbl.add_argument("--label", required=True, help="語意標籤")
+
     sub.add_parser("eval-compare", help="跨 provider eval 比較表")
 
     p_sample = sub.add_parser("eval-sample", help="從 qa_final.json 抽樣 N 筆 Q&A")
@@ -835,6 +932,9 @@ def main() -> None:
         "diff-snapshot":    cmd_diff_snapshot,
         "search":           cmd_search,
         "load-metrics":     cmd_load_metrics,
+        "register-version": cmd_register_version,
+        "version-history":  cmd_version_history,
+        "label-version":    cmd_label_version,
         "eval-compare":     cmd_eval_compare,
         "eval-sample":      cmd_eval_sample,
         "eval-retrieval-local": cmd_eval_retrieval_local,

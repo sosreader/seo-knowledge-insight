@@ -30,7 +30,7 @@ from app import config
 from app.core.limiter import limiter
 from app.core.security import verify_api_key
 from app.core.store import store
-from app.routers import chat, qa, search
+from app.routers import chat, feedback, qa, search
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,6 +87,7 @@ _auth = [Depends(verify_api_key)]
 app.include_router(search.router, dependencies=_auth)
 app.include_router(chat.router, dependencies=_auth)
 app.include_router(qa.router, dependencies=_auth)
+app.include_router(feedback.router, dependencies=_auth)
 
 
 @app.get("/health", tags=["infra"])

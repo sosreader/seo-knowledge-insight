@@ -90,7 +90,7 @@ def compute_keyword_boost(
 
 class SearchEngine:
     """
-    Hybrid Search 引擎：語意相似度 + 關鍵字 boost。
+    Hybrid Search 引擎：語意相似度 + 關鍵字 boost + 同義詞加成 + 時效性調整。
 
     Usage:
         engine = SearchEngine(qa_pairs, qa_embeddings)
@@ -107,7 +107,8 @@ class SearchEngine:
         Parameters
         ----------
         qa_pairs:
-            Q&A 資料，每筆需有 "question", "answer", "keywords" 欄位
+            Q&A 資料，每筆需有 "question", "answer", "keywords" 欄位；
+            若含 "_enrichment" 欄位則啟用同義詞加成和時效性調整
         qa_embeddings:
             shape (N, embedding_dim)，對應 qa_pairs 的 embedding 向量
             可以是 raw 或已歸一化版本，本建構子會自動歸一化
@@ -130,6 +131,24 @@ class SearchEngine:
         norms = np.linalg.norm(embs, axis=1, keepdims=True)
         norms = np.where(norms == 0, 1.0, norms)
         self._qa_norm: np.ndarray = embs / norms
+
+        # 預計算 enrichment 向量（從 _enrichment 欄位，防守性 .get()）
+        n = len(qa_pairs)
+        synonym_boost_val = float(getattr(config, "SYNONYM_BOOST", 0.05))
+        self._synonym_boost_vec: np.ndarray = np.array(
+            [
+                synonym_boost_val if qa.get("_enrichment", {}).get("synonyms") else 0.0
+                for qa in qa_pairs
+            ],
+            dtype=np.float32,
+        )
+        self._freshness_vec: np.ndarray = np.array(
+            [
+                float(qa.get("_enrichment", {}).get("freshness_score", 1.0))
+                for qa in qa_pairs
+            ],
+            dtype=np.float32,
+        )
 
     # ------------------------------------------------------------------
     # Public API
@@ -192,7 +211,17 @@ class SearchEngine:
         # 關鍵字 boost 矩陣
         boost_matrix = self._keyword_boost_matrix(queries)
 
-        score_matrix = sim_matrix * self._semantic_weight + boost_matrix
+        # 同義詞 bonus 矩陣 (n_queries, n_qa)
+        synonym_bonus_matrix = np.array(
+            [self._compute_synonym_bonus(q) for q in queries],
+            dtype=np.float32,
+        )
+
+        # 基礎分數矩陣（語意 + 關鍵字 + 同義詞）
+        base_matrix = sim_matrix * self._semantic_weight + boost_matrix + synonym_bonus_matrix
+
+        # 時效性調整（廣播乘以 freshness_vec，shape (n_qa,)）
+        score_matrix = base_matrix * self._freshness_vec[np.newaxis, :]
 
         collected: dict[int, dict[str, Any]] = {}
         for qi, query in enumerate(queries):
@@ -221,14 +250,44 @@ class SearchEngine:
     # ------------------------------------------------------------------
 
     def _hybrid_scores(self, query: str, query_emb: np.ndarray) -> np.ndarray:
-        """計算單一查詢的 hybrid 分數向量 (N,)。"""
+        """計算單一查詢的 hybrid 分數向量 (N,)，含同義詞加成與時效性調整。"""
         norm = np.linalg.norm(query_emb)
         q_norm = query_emb / norm if norm > 0 else query_emb
 
         semantic_scores: np.ndarray = (self._qa_norm @ q_norm) * self._semantic_weight
         boost_row = self._keyword_boost_matrix([query])[0]  # (N,)
 
-        return semantic_scores + boost_row
+        # 同義詞命中 boost（當查詢詞出現在同義詞清單中時）
+        synonym_bonus = self._compute_synonym_bonus(query)
+
+        # 基礎分數 = 語意 + 關鍵字 boost + 同義詞 bonus
+        base = semantic_scores + boost_row + synonym_bonus
+
+        # 時效性調整（乘以 freshness_score，evergreen = 1.0 不衰減）
+        return base * self._freshness_vec
+
+    def _compute_synonym_bonus(self, query: str) -> np.ndarray:
+        """
+        計算同義詞命中 bonus 向量 (N,)。
+
+        若查詢字串的任一 token 出現在 Q&A 的同義詞清單中，
+        則加上 SYNONYM_BOOST 分數。
+        """
+        query_lower = query.lower()
+        synonym_boost_val = float(getattr(config, "SYNONYM_BOOST", 0.05))
+        bonus = np.zeros(len(self._qa_pairs), dtype=np.float32)
+
+        for i, qa in enumerate(self._qa_pairs):
+            enrichment = qa.get("_enrichment", {})
+            synonyms = enrichment.get("synonyms", [])
+            if not synonyms:
+                continue
+            for syn in synonyms:
+                if syn.lower() in query_lower or query_lower in syn.lower():
+                    bonus[i] = synonym_boost_val
+                    break
+
+        return bonus
 
     def _keyword_boost_matrix(self, queries: list[str]) -> np.ndarray:
         """Delegate to module-level compute_keyword_boost."""

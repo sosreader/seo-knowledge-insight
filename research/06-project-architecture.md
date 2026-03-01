@@ -18,7 +18,7 @@ Notion 會議紀錄（87 份，2023–2026）
 [Step 2] extract_qa.py — LLM 萃取 Q&A
   模型：gpt-5.2（需要高品質理解）
   長文處理：超過 6000 tokens 自動切段
-  產出：725 筆原始 Q&A
+  產出：670 筆原始 Q&A
             ↓ output/qa_per_meeting/*.json
 
 [Step 3] dedupe_classify.py — 去重 + 分類
@@ -27,7 +27,7 @@ Notion 會議紀錄（87 份，2023–2026）
         或 Claude Code 本地語意去重（不需要 OpenAI）
   分類：gpt-5-mini 貼 10 種標籤 + difficulty + evergreen
         或 Claude Code 本地評分式關鍵字分類（不需要 OpenAI）
-  產出：717 筆去重後 Q&A（去除 8 組重複）+ 1536 維 embedding 向量
+  產出：655 筆去重後 Q&A（去除 15 組重複）+ 1536 維 embedding 向量
             ↓ output/qa_final.json + qa_embeddings.npy
 
 [Step 4] generate_report.py — RAG 週報生成
@@ -60,10 +60,27 @@ Notion 會議紀錄（87 份，2023–2026）
 [AuditLogger] utils/audit_logger.py — 零副作用 JSONL 日誌
   fetch 事件：每次 Step 1 執行記錄 session → output/fetch_logs/fetch_YYYY-MM-DD.jsonl
     log_fetch_start → log_fetch_page / log_fetch_skip → log_fetch_complete
-  access 事件：每次 API 呼叫記錄 query + returned QA IDs + client IP
+  access 事件：每次 API 呼叫記錄 query + returned QA IDs + client IP + top_score
     → output/access_logs/access_YYYY-MM-DD.jsonl
   查詢工具：scripts/audit_trail.py fetch|access|report
             ↓ make audit / make audit-top
+
+══════════════ Multi-Layer Context（2026-03-02 新增，v1.19）══════════════
+
+[Enrichment] scripts/enrich_qa.py — 離線 Q&A 豐富化（make enrich）
+  輸入：output/qa_final.json（655 筆）
+  計算：utils/synonym_dict.py（avg 11.09 個同義詞/筆，@lru_cache 執行緒安全）
+        utils/freshness.py（avg freshness 0.9076，half_life=540d，min_score=0.5）
+        output/access_logs（search_hit_count，需積累 14 天新格式 log）
+  輸出：output/qa_enriched.json（含 _enrichment 欄位）
+  store.py load()：優先載入 qa_enriched.json，fallback qa_final.json
+  SearchEngine.__init__()：預計算 synonym_boost_vec + freshness_vec（shape=(655,) numpy）
+
+[LearningStore] utils/learning_store.py — 失敗記憶 JSONL
+  record_miss()：rag_chat() top_score < 0.35 時自動記錄
+  record_feedback()：POST /api/v1/feedback（helpful / not_relevant）
+  get_relevant_learnings()：keyword token 匹配歷史失敗
+            ↓ output/learnings.jsonl
 ```
 
 ### 模型選擇邏輯
@@ -82,18 +99,22 @@ Notion 會議紀錄（87 份，2023–2026）
   → 用於：去重、Step 4/5 語意搜尋
 ```
 
-### 當前品質基準線（2026-02-27，KW Fuzzy 匹配後）
+### 當前品質基準線（最新：2026-03-02，Multi-Layer Context Phase 1 後）
 
-| 指標                | 初始 baseline | 最新數值     | 狀態                |
-| ------------------- | ------------- | ------------ | ------------------- |
-| Relevance           | 4.65          | **4.80** / 5 | ✅ 提升             |
-| Accuracy            | 3.80          | **3.95** / 5 | ✅ 提升             |
-| Completeness        | 3.70          | **3.85** / 5 | ✅ 達標（目標 3.8） |
-| Granularity         | 4.65          | **4.75** / 5 | ✅ 提升             |
-| Category 正確率     | 75%           | 68%          | 可接受（抽樣波動）  |
-| Retrieval MRR       | 0.79          | 0.75         | 可接受（±0.04）     |
-| LLM Top-1 Precision | 100%          | 100%         | ✅                  |
-| KW Hit Rate         | 54%           | **78%** ✅   | 已解決              |
+| 指標                | 初始 baseline | 最新數值       | 狀態                |
+| ------------------- | ------------- | -------------- | ------------------- |
+| Relevance           | 4.65          | **4.80** / 5   | ✅ 提升             |
+| Accuracy            | 3.80          | **3.95** / 5   | ✅ 提升             |
+| Completeness        | 3.70          | **3.85** / 5   | ✅ 達標（目標 3.8） |
+| Granularity         | 4.65          | **4.75** / 5   | ✅ 提升             |
+| Category 正確率     | 75%           | 68%            | 可接受（抽樣波動）  |
+| Retrieval MRR       | 0.79          | 0.75           | 可接受（±0.04）     |
+| LLM Top-1 Precision | 100%          | 100%           | ✅                  |
+| KW Hit Rate（eval） | 54%           | **79.67%** ✅  | +9.27pp after enrich（目標 85%）|
+| freshness_rank_quality | —          | **1.0**        | ✅                  |
+| synonym_coverage    | —             | **1.0**        | ✅                  |
+
+> ⚠️ Q&A Relevance/Accuracy 分數基於舊版 717 筆基準線，待 v2.0（655 筆）重新評估。
 
 ### 花錢前必做：小規模驗證
 
@@ -128,141 +149,15 @@ Notion 會議紀錄（87 份，2023–2026）
 
 ### 本專案架構圖（Mermaid）
 
-```mermaid
-flowchart TD
-    N[Notion API<br/>87 份會議 2023-2026] --> S1
-
-    subgraph Pipeline["離線知識蒸餾 Pipeline"]
-        PF[utils/pipeline_deps.py<br/>preflight_check<br/>StepDependency 宣告式檢查] -.->|每個 Script 啟動前| S1
-        PF -.-> S2
-        PF -.-> S3
-        PF -.-> S4
-        PF -.-> S5
-        S1[Step 1: fetch_notion.py<br/>增量擷取 + Markdown 轉換] --> MD[raw_data/markdown/*.md]
-        MD --> S2[Step 2: extract_qa.py<br/>gpt-5.2 萃取 Q&A<br/>+ Attribution Tag 補充]
-        S2 --> RAW[output/qa_all_raw.json<br/>725 筆原始 Q&A]
-        RAW --> S3[Step 3: dedupe_classify.py<br/>embedding 去重 + gpt-5-mini 分類<br/>或 Claude Code 本地關鍵字分類]
-        S3 --> QA[output/qa_final.json<br/>717 筆 + 10 分類]
-        S3 --> EMB[output/qa_embeddings.npy<br/>717 x 1536 維向量]
-    end
-
-    subgraph Eval["評估層 v1.4 v1.5 v1.17（Claude Code 本地評估）"]
-        GoldenSets["eval/ Golden Sets<br/>extraction(5) dedup(40) qa(50) report(5)"]
-        QA --> S5[Step 5: evaluate.py<br/>LLM-as-Judge<br/>4 維度評估 + 本地選項]
-        EMB --> S5
-        GoldenSets --> S5
-        S5 --> ER["eval_report.json<br/>Completeness 3.85<br/>+ eval_local_*.json<br/>(Claude Code 評分)"]
-    end
-
-    subgraph RAG_Search["RAG和Hybrid Search v1.5"]
-        GS[Google Sheets 指標 TSV] --> S4[Step 4: generate_report.py<br/>異常偵測 Hybrid Search RAG]
-        QA --> S4
-        EMB --> S4
-        SE["SearchEngine v1.5<br/>compute_keyword_boost"] -.->|kw match| S4
-        S4 --> RPT[report_YYYYMMDD.md]
-    end
-
-    subgraph RAG_API["API Layer v1.11 安全層已實作"]
-        QA --> API[SEO Insight API<br/>FastAPI QAStore singleton]
-        EMB --> API
-        SE -.->|hybrid_search| API
-        API --> SEC["app/core/security.py<br/>verify_api_key<br/>X-API-Key header<br/>SEO_API_KEY env"]
-        API --> LIM["app/core/limiter.py<br/>slowapi Limiter<br/>chat:20/min search:60/min qa:60/min"]
-        API --> EXC["@app.exception_handler<br/>500 不流展 traceback"]
-        SEC --> EP["POST /api/v1/search — 60/min<br/>POST /api/v1/chat — 20/min<br/>GET  /api/v1/qa — 60/min"]
-        LIM --> EP
-        EXC --> EP
-        EP --> ENV["ApiResponse[T]<br/>data / error / meta<br/>request_id + version"]
-    end
-
-    subgraph AuditTrail["Audit Trail v1.0"]
-        S1 -->|fetch events| AL["audit_logger.py<br/>output/fetch_logs/"]
-        EP -->|access events| AL2["audit_logger.py<br/>output/access_logs/"]
-        AL --> ATQ["audit_trail.py<br/>query tool"]
-        AL2 --> ATQ
-    end
-
-    subgraph CacheLayer["Layer 1 Content-Addressed Cache v1.6"]
-        S2 <-->|extraction cache| PC["pipeline_cache.py<br/>output/.cache/{ns}/{h[:2]}/{h}.json<br/>namespace: extraction/embedding/classify/merge/report"]
-        S3 <-->|embed/classify/merge cache| PC
-        S4 <-->|report cache| PC
-        S3 -->|record_artifact| PV["pipeline_version.py<br/>output/.versions/registry.json<br/>Immutable step artifacts"]
-        S4 -->|record_artifact| PV
-    end
-
-    subgraph Observability["可觀測性 v1.1 v1.4 v1.10"]
-        S2 -->|observe| LM["Laminar SDK<br/>lmnr observe"]
-        S3 -->|observe| LM
-        S4 -->|observe| LM
-        S5 -->|observe| LM
-        API -->|auto trace| LM
-        LM --> LD["laminar.sh dashboard<br/>Traces Spans"]
-    end
-
-    subgraph OfflineEvals["離線評估 v1.10"]
-        GoldenSets2["eval/ Golden Sets<br/>retrieval(307) extraction chat(10)"]
-        GoldenSets2 --> EvalR["evals/eval_retrieval.py<br/>keyword_hit_rate<br/>category_match"]
-        GoldenSets2 --> EvalE["evals/eval_extraction.py<br/>qa_count<br/>keyword_coverage"]
-        GoldenSets2 --> EvalC["evals/eval_chat.py<br/>answer_length<br/>has_sources"]
-        EvalR -->|lmnr eval| LM
-        EvalE -->|lmnr eval| LM
-        EvalC -->|lmnr eval| LM
-        EP -->|score_rag_response| OS["laminar_scoring.py<br/>online scores"]
-        OS -->|attach to trace| LM
-    end
-
-    subgraph Deploy["部署"]
-        API --> Docker[Docker Image]
-        Docker --> ECR[AWS ECR]
-        ECR --> EC2[EC2 SSM<br/>port 8001]
-    end
-```
+> 架構圖（最新 v1.19，含 Multi-Layer Context）維護於 [06b-architecture-diagram.md](./06b-architecture-diagram.md)
 
 ### 架構變更紀錄（Architecture Changelog）
 
-| 日期       | 版本  | 變更內容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 影響範圍                                                                                                                                                                                                                                                                   |
-| ---------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2023-03    | v0.1  | 初始 Pipeline：Step 1-3，Notion 擷取 + Q&A 萃取 + 去重                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | —                                                                                                                                                                                                                                                                          |
-| 2026-02-27 | v0.2  | 新增 Step 4（RAG 週報生成）+ Step 5（評估層）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `scripts/`                                                                                                                                                                                                                                                                 |
-| 2026-02-27 | v0.3  | 新增 SEO Insight API（FastAPI）+ ECR/EC2 部署                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `app/` 新增                                                                                                                                                                                                                                                                |
-| 2026-02-27 | v0.4  | 修復 BUG-001（分類評估）+ BUG-002（Retrieval Judge）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `scripts/05_evaluate.py`                                                                                                                                                                                                                                                   |
-| 2026-02-27 | v0.5  | 新增 `[補充]` Attribution Tag 機制提升 Completeness                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `utils/openai_helper.py`, `scripts/05_evaluate.py`                                                                                                                                                                                                                         |
-| 2026-02-27 | v0.6  | KW Hit Rate 改善：TypeA/TypeB 診斷 + Fuzzy 匹配（54% → 78%）+ `--debug-retrieval` + `--eval-reranking`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `config.py`, `scripts/04_generate_report.py`, `scripts/05_evaluate.py`                                                                                                                                                                                                     |
-| 2026-02-28 | v0.7  | 死碼清理：移除 10 項未使用 import/參數/函式/常數（vulture 80% 信心門檻），26 tests passing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `app/core/chat.py`, `utils/`, `scripts/`, `config.py`, `app/config.py`                                                                                                                                                                                                     |
-| 2026-02-28 | v0.8  | 安全審查修復：config.py fail-fast env helpers（`_require_env`, `_get_float_env`, `_get_int_env`）；Google Sheets SSRF 防護（domain 白名單 + sheet_id/gid 格式驗證 + HTTP 狀態檢查 + 回應大小限制 10MB）；移除 `__import__` 非標準用法                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `config.py`, `scripts/04_generate_report.py`, `scripts/05_evaluate.py`                                                                                                                                                                                                     |
-| 2026-02-28 | v0.9  | Fetch 管道優化：max_depth 10→3；新增 `--since` 增量篩選（1d/7d/日期）；避免重複 meta 查詢；預期快 50-85%                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `scripts/01_fetch_notion.py`, `utils/notion_client.py`，新增 `docs/FETCH_OPTIMIZATION_GUIDE.md`                                                                                                                                                                            |
-| 2026-02-28 | v1.0  | Audit Trail：全 fetch + API 存取 JSONL 日誌（session_id 關聯、zero side-effects）；`scripts/audit_trail.py` query CLI；`make audit/audit-top` shortcuts                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `utils/audit_logger.py`（new），`scripts/audit_trail.py`（new），`scripts/01_fetch_notion.py`, `utils/notion_client.py`, `app/routers/search.py`, `app/routers/chat.py`, `app/routers/qa.py`                                                                               |
-| 2026-02-28 | v1.1  | Laminar observability：`lmnr` 套件 + `Laminar.initialize()` 加入 `app/main.py`，所有 LLM 呼叫自動 trace；修復 `opentelemetry-semantic-conventions-ai 0.4.14` 缺少 `LLM_SYSTEM` 等 3 個屬性的相容問題                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `app/main.py`, `requirements_api.txt`, `.env.example`                                                                                                                                                                                                                      |
-| 2026-02-28 | v1.2  | 模組化 Pipeline 計畫：各 Script 可直接執行（不需 `run_pipeline.py`），統一 pre-flight 依賴檢查 + 新鮮度警告。計畫文件：`.claude/plan/modular-pipeline-with-dep-checks.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 計畫階段，尚未實作                                                                                                                                                                                                                                                         |
-| 2026-02-28 | v1.3  | DB 遷移策略計畫：釐清 `output/*` → PostgreSQL + pgvector 對應；識別唯一破壞性風險（`GET /qa/{id}` sequential int）；MVC 需做 3 件事（stable_id + canonical endpoint + store 欄位）。計畫文件：`.claude/plan/db-migration-strategy.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 計畫階段，尚未實作                                                                                                                                                                                                                                                         |
-| 2026-02-28 | v1.4  | **模組化 Pipeline 實作完成**：(1) `utils/pipeline_deps.py` — `StepDependency` frozen dataclass + `preflight_check()` 統一依賴檢查；(2) `config.py` 改 PEP 562 lazy loading（`import config` 不再觸發 env 驗證）；(3) 5 個 script 各自加入 `--check` flag + 宣告式依賴；(4) `run_pipeline.py` 移除 `check_config()`，改用 `parse_known_args()` 轉發 + `--check`/`--dry-run`；(5) Code review 修正：`PreflightError` 從 `SystemExit` 改為 `Exception`、`04_generate_report.py` import 去重、arg forwarding 限單步模式；(6) 新增 14 個 `config.py` lazy loading 測試（total 96 tests）；(7) Makefile 新增 `make check`；(8) README 更新分步執行文件                                                                                                                                                                                                                                                                                   | `utils/pipeline_deps.py`（new），`tests/test_pipeline_deps.py`（new），`tests/test_config_lazy.py`（new），`config.py`，`scripts/01-05`，`scripts/run_pipeline.py`，`Makefile`，`README.md`                                                                                |
-| 2026-02-28 | v1.4  | Laminar 全 pipeline tracing：`utils/observability.py`（`init_laminar` / `flush_laminar` / `observe` no-op shim）；`@observe()` 裝飾器套用至 5 支 scripts + `openai_helper`；`openai_helper` 結構化呼叫統一輸出；`scripts/02` CLASSIFY prompt 加入 2×10 few-shot examples（68% → 80%+ 分類目標）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `utils/observability.py`（new），`requirements.txt`（lmnr≥0.5.0），`utils/openai_helper.py`，`scripts/02_extract_qa.py`–`05_evaluate.py`                                                                                                                                   |
-| 2026-02-28 | v1.5  | Research-grade eval 體系：golden sets 四份（extraction 5 + dedup 40 pairs + qa 50 items + report 5）；`utils/search_engine.py`（new，`SearchEngine` + 模組級 `compute_keyword_boost`）；`app/core/store.py` 新增 `hybrid_search()`；`config.py` 新增 `SEMANTIC_WEIGHT=0.7 / KEYWORD_WEIGHT=0.3`；`scripts/05_evaluate.py` 新增 4 函式（`evaluate_extraction/dedup/dedup_threshold_sweep/report_quality`）+ 7 CLI flags；`04_generate_report.py` 消除 `_compute_keyword_boost` 重複（改 delegate）                                                                                                                                                                                                                                                                                                                                                                                                                                  | `eval/`（4 golden JSONs），`utils/search_engine.py`（new），`app/core/store.py`，`config.py`，`scripts/04_generate_report.py`，`scripts/05_evaluate.py`                                                                                                                    |
-| 2026-02-28 | v1.6  | **Layer 1 Content-Addressed Disk Cache + 版本 Registry 實作**：(1) `utils/pipeline_cache.py`（new）— SHA256 content-addressed cache，namespace 隔離，atomic write（`.tmp` → `rename`），two-level dir 防爆炸，zero external deps；(2) `utils/pipeline_version.py`（new）— 不可變 artifact registry，`record_artifact` 冪等，`get_all_token_stats()` 追蹤 cache 節省 token；(3) Step 2 cache 整合（`process_single_meeting` 命中→deepcopy+重新 enrich）；(4) Step 3 embedding/classify/merge cache 整合（`openai_helper.py`）；(5) Step 3/4 `record_artifact` 整合；(6) `.gitignore` 更新（`output/.cache/`、`output/.versions/step*/`）；(7) Makefile 新增 `cache-stats`/`cache-clear`/`version-history`；(8) 33 個新測試全數通過；(9) 修復 `config.py` 缺少 `Optional` import                                                                                                                                                     | `utils/pipeline_cache.py`（new），`utils/pipeline_version.py`（new），`tests/test_pipeline_cache.py`（new），`scripts/02_extract_qa.py`，`utils/openai_helper.py`，`scripts/03_dedupe_classify.py`，`scripts/04_generate_report.py`，`.gitignore`，`Makefile`，`config.py` |
-| 2026-02-28 | v1.7  | **Code Quality 大掃除**：修復 5 個 HIGH + 7 個 MEDIUM 程式碼品質問題（129 tests ✓）。(1) `utils/pipeline_deps.py`：`assert` → `if/raise`（執行期驗證）、`datetime.now()` → `tz=timezone.utc`（DST 防禦）、`print()` → `logging`、移除未使用 typing imports；(2) `utils/openai_helper.py`：刪除重複 `observe` shim，改 `from utils.observability import observe`；(3) `config.py`：新增 `EVAL_JUDGE_MODEL` 和 `EVAL_RERANK_MODEL` lazy env vars；(4) `scripts/05_evaluate.py`：4 個硬編碼模型 → `config.EVAL_*_MODEL`、3 個 mypy 型別標記；(5) `scripts/04_generate_report.py`：刪除 `METRIC_QUERY_MAP` 重複宣告、移除硬編碼模型；(6) `scripts/03_dedupe_classify.py`：`classify_all_qas()` 改 return new list（immutability）、`main()` 改 list comprehension、dict 型別標記；(7) `scripts/run_pipeline.py`：移除 typing imports、改原生語法；(8) 批次移除 19 個 f-string 無佔位符；(9) 萃取 4 個可重用 patterns 存 learned skills | `utils/pipeline_deps.py`，`utils/openai_helper.py`，`config.py`，`scripts/{02,03,04,05}_*.py`，`scripts/run_pipeline.py`                                                                                                                                                   |
-| 2026-02-28 | v1.8  | **Architect Review + Refactor Clean**：(1) 架構 review 識別 12 個技術決策，附業界/學術研究支撐；(2) 發現 CRITICAL 缺口：API 層無 Auth + 無 Rate Limit（OWASP API Top10 風險）；(3) 發現 HIGH 缺口：`SearchEngine.hybrid_search()` 已實作但 search/chat endpoint 未啟用，等同 v1.5 搜索品質提升在線上未生效；(4) Refactor：`_now_iso()` 雙次 datetime 調用修復、`get_qa_item()` O(n)→O(1) dict 索引、`classify_qa()` 硬編碼模型修正、search/chat 改用 hybrid_search；(5) 新增「技術決策學術支撐」章節（13 個決策，每個附論文/RFC 引用）；(6) 架構圖標注 API 層安全缺口與 hybrid_search 未啟用現況                                                                                                                                                                                                                                                                                                                                   | `app/routers/search.py`，`app/core/chat.py`，`app/core/store.py`，`utils/audit_logger.py`，`utils/openai_helper.py`，`research/06-project-architecture.md`                                                                                                                 |
-| 2026-02-28 | v1.9  | **Provider 比較基準 + Bug 修復**：(1) 新增 `scripts/compare_providers.py`（LLM-as-Judge 5-provider 橫向比較）+ `eval/golden_seo_analysis.json`；(2) 加入 Laminar tracing（`@observe` + `init_laminar`/`flush_laminar` in CLI）；(3) 修復 Bug：path resolution 迴圈內 mutation → list comprehension；(4) 修復 Bug：retry loop exception swallowing（`return` → `continue`）；(5) 新增 K. Provider 比較基準架構章節；(6) 更新 research/03-evaluation.md、05-models.md 知識庫；(7) 萃取 3 個 instinct（openai-reasoning-no-response-format、retry-exception-not-just-empty、laminar-observe-cli-scripts）                                                                                                                                                                                                                                                                                                                             | `scripts/compare_providers.py`（new），`eval/golden_seo_analysis.json`（new），`output/provider_*.md`，`research/03-evaluation.md`，`research/05-models.md`，`research/09-provider-comparison.md`                                                                          |
-| 2026-02-28 | v1.10 | **Laminar 離線評估系統**：(1) 新建 `evals/` 目錄（4 個 Python 模組），Laminar SDK 整合離線品質監控；(2) `utils/laminar_scoring.py`（new）— rule-based online scoring，4 個 lightweight evaluators（answer_length、has_sources、top_source_score、source_count），無額外 LLM 呼叫，自動附屬 rag_chat trace；(3) `evals/eval_retrieval.py` — 307 筆 golden retrieval set，keyword_hit_rate + category matching 評估；(4) `evals/eval_extraction.py` — extraction quality 評估（Q&A 計數、keyword coverage、無管理內容）；(5) `evals/eval_chat.py` — 10 scenario chat end-to-end 評估；(6) `.claude/skills/laminar-instrumentation.md`（new）— 強制執行 Laminar 計測規則；(7) PLAN_SEO_INSIGHT.md 新增 §3.0 「Laminar Eval 實作現況」；(8) 更新 README.md 文件架構 + 新增「步驟 6：Laminar 離線評估」；(9) 修復 app/core/chat.py 新增 online scoring 整合（v1.10 已完成）                                                             | `evals/`（new 4 files），`utils/laminar_scoring.py`（new），`.claude/skills/laminar-instrumentation.md`（new），`app/core/chat.py`，`PLAN_SEO_INSIGHT.md`，`README.md`                                                                                                     |
-| 2026-02-28 | v1.11 | **API 安全層實作（OWASP API Top10 CRITICAL 缺口修復）**：(1) Phase A—`app/core/security.py`（new），`verify_api_key` FastAPI dependency，`SEO_API_KEY` env lazy 讀取，未設則開發模式放行 + warn；(2) Phase B—`app/core/limiter.py`（new），slowapi 單例，chat: 20/min、search/qa: 60/min，429 RFC 6585；(3) Phase C—`@app.exception_handler(Exception)` 全局 500 handler，不流展 Python traceback；(4) Phase D—`app/core/schemas.py`（new），`ApiResponse[T]` 泛型 Envelope，`data / error / meta{request_id, version}`；(5) 所有 /api/v1/\* router 更新為 Envelope 回傳 + limiter 裝飾器；(6) health endpoint 不需認證；(7) conftest.py 改用 monkeypatch 注入測試 API Key；(8) `tests/test_api_security.py`（new）— 17 個安全測試；(9) 全部 141 tests 通過                                                                                                                                                                        | `app/core/security.py`（new），`app/core/limiter.py`（new），`app/core/schemas.py`（new），`tests/test_api_security.py`（new），`app/main.py`，`app/config.py`，`app/routers/{chat,search,qa}.py`，`requirements_api.txt`，`.env.example`，`tests/conftest.py`             |
-| 2026-03-01 | v1.12 | **Embeddings 不一致修復 + `--rebuild-embeddings` 工具**：發現 `qa_embeddings.npy` 為 (716, 1536) 但 `qa_final.json` 有 725 筆，導致 `SearchEngine` 啟動時 mismatch 降級；(1) `scripts/03_dedupe_classify.py` 新增 `_rebuild_embeddings_from_final()` — 從 `qa_final.json` 重建 embeddings，優先走 cache 避免重打 API；(2) 新增 `--rebuild-embeddings` CLI flag（早期 return，不需 preflight API key 檢查）；(3) `Makefile` 新增 `rebuild-embeddings` target；(4) 執行後 `qa_embeddings.npy` 已修正為 (725, 1536)，embedding cache 從 801 → 1526 entries；(5) QA count 全面更新：699 筆 → 725 筆（Step 2 產出），703 筆 → 725 筆（Step 3 最終）                                                                                                                                                                                                                                                                                     | `scripts/03_dedupe_classify.py`，`Makefile`                                                                                                                                                                                                                                |
-| 2026-03-01 | v1.13 | **Claude Code 本地 Pipeline（不需要 OpenAI）**：(1) Step 3 本地去重+分類：`/tmp/classify_final.py` 評分式關鍵字分類（10 類別），識別 2023-10-18 會議被兩個不同檔名雙重處理，合併 8 組重複；結果 725 → 717 筆，類別分布：索引 26%、Discover/AMP 17%、搜尋表現 16%、技術 SEO 14%、連結 10%；(2) Step 4 本地週報生成：從 `output/metrics_20260228.tsv` 解析 146 指標（49 個關注），搜尋知識庫 717 Q&A，生成 `output/report_20260228.md`；核心發現：AMP Article 月 -166%、未索引/有效月 +40%、回應時間週 +73%、沙龍/Tags 中間頁上升 +29%；(3) 無 OpenAI API key 完成完整 pipeline                                                                                                                                                                                                                                                                                                                                                      | `output/qa_final.json`（717 筆），`output/report_20260228.md`，`research/06-project-architecture.md`                                                                                                                                                                       |
-| 2026-03-02 | v1.15 | **README 文件重寫**：(1) 新增 `## 功能總覽` — 六大功能條列說明（知識庫建構/週報生成/品質評估/REST API/Claude Code 模式/Laminar 評估）；(2) 新增 `## 指令速查` — CLI / Claude Code 指令 / REST API 三欄對照表（14 個功能），所有空白格補注「無對應」原因（無獨立指令/離線批次寫入/對話狀態/結構化查詢/服務監控）；(3) 修正 `/evaluate-qa` 標注需要 OpenAI（LLM-as-Judge）；(4) 釐清 `make pipeline` 只涵蓋 Steps 1–3，補上 `python scripts/run_pipeline.py` 作為 Steps 1–5 完整入口                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `README.md`                                                                                                                                                                                                                                                                |
-| 2026-03-01 | v1.14 | **Laminar span.set_metadata() 整合（Scripts 04/05/compare）**：(1) `scripts/04_generate_report.py`：動態讀取 `qa_final.json` 計算 KB 大小，meta_block 改動態（移除硬編碼 87/717/評分），Laminar span 記錄 `step/knowledge_base_size/generation_timestamp/character_count/qa_used_count`；(2) `scripts/05_evaluate.py`：新增 `_record_laminar_eval_metadata()` helper，記錄 4 維度平均分 + confidence calibration（appropriate/overconfident/underconfident）+ retrieval 指標，judge_model 從 `config.EVAL_JUDGE_MODEL` 動態取得；(3) `scripts/compare_providers.py`：新增 `_record_laminar_comparison_metadata()` helper，記錄所有 provider 排名 + 各維度分數，移除硬編碼歷史評分表（改動態從 results 生成）；(4) Code Review 修正 3 個 MEDIUM：移除硬編碼分數/KB版本/provider歷史表；所有 try/except 確保 Laminar 不可用時降級不崩潰                                                                                              | `scripts/04_generate_report.py`，`scripts/05_evaluate.py`，`scripts/compare_providers.py`                                                                                                                                                                                  |
-| 2026-03-01 | v1.15 | **Laminar 三項整合（LLM instrumentation 修復 / CI eval / KB dataset 快照）**：(1) **Plan A**—`app/main.py`：將 `Laminar.initialize()` 移至所有 app imports 之前，修復 monkey-patch 失效導致 dashboard Top LLM spans / Tokens / Cost 全空白的根本原因；(2) **Plan B**—`.github/workflows/eval.yml`：新增 CI workflow，PR/push to main 自動執行 `lmnr eval`（retrieval + extraction），Laminar Evaluations 頁出現歷史趨勢；(3) **Plan C**—`scripts/03_dedupe_classify.py`：新增 `_push_laminar_kb_snapshot()`，Step 3 完成後推送前 50 筆 QA 到 `qa_knowledge_base` group，名稱 snapshot_YYYYMMDD_HHMM；(4) Code Review 修復：`_push_laminar_kb_snapshot` except block 的 inline `import logging` 改為 module-level logger                                                                                                                                                                                                            | `app/main.py`，`.github/workflows/eval.yml`（new），`scripts/03_dedupe_classify.py`                                                                                                                                                                                        |
-| 2026-03-02 | v1.16 | **Pipeline 步驟命名重構（描述性名稱）**：(1) 將所有 step1~5 數字編號替換為描述性步驟名稱（fetch-notion / extract-qa / dedupe-classify / generate-report / evaluate-qa），提升可讀性與語意清晰度；(2) `run_pipeline.py`：新增 `_STEP_NUMBER_MAP`（step 1~5 向下相容轉換），--step flag 接受兩種格式；(3) `Makefile`：targets 改為新名稱（如 `make fetch-notion`、`make extract-qa` 等），原 step1-5 targets 移除；(4) `list_pipeline_state.py`：輸出改用描述性名稱；(5) `qa_tools.py`：Layer 2 CLI 更新為新命名；(6) 所有文件（README.md、研究文件、命令說明、內部評論）同步更新命名；(7) 測試全數通過（141 tests）；(8) 記錄至 MEMORY.md「命名規範」章節                                                                                                                                                                                                                                                                           | `scripts/run_pipeline.py`，`Makefile`，`scripts/list_pipeline_state.py`，`scripts/qa_tools.py`，`README.md`，`research/06-project-architecture.md`                                                                                                                         |
-| 2026-03-02 | v1.17 | **Claude Code LLM-as-Judge 本地評估（/evaluate-qa-local）**：(1) `scripts/qa_tools.py` 新增 3 個子命令：`eval-sample` 抽樣 20 筆 QA + golden matching；`eval-retrieval-local` 本地檢索評估準備；`eval-save` 儲存 Claude Code 評分結果並與基準線比較；(2) `.claude/commands/evaluate-qa-local.md`（new）— 完整評估工作流（Step A 抽樣、Step B 4 維度評分、Step C 分類評估、Step D Retrieval 評估、Step E 彙整、Step F 對比報告）；(3) 移除 OpenAI 依賴：評估可完全由 Claude Code 引擎執行，無需 OpenAI API key；(4) 評分標準與 OpenAI 版相同（Relevance / Accuracy / Completeness / Granularity），額外標記 confidence_calibration / self_contained / actionable；(5) 評估結果格式向下相容，支援與基準線（4 維度平均分、Retrieval 指標、分類品質）自動比較；(6) 完整評估週期：從 `eval-sample` 準備樣本 → Claude Code 手工評分（不觸發 LLM API） → `eval-save` 儲存 → `eval-compare` 產生報告                                       | `.claude/commands/evaluate-qa-local.md`（new），`scripts/qa_tools.py`                                                                                                                                                                                                      |
-| 2026-03-02 | v1.18 | **Pipeline 全量重跑（v2.0）**：(1) Step 2 extract-qa 並行 sub-agent 處理剩餘 10 份未處理 Markdown → 87/87 會議完成，670 筆 Q&A；(2) Step 3 dedupe-classify 本地語意去重，發現 2023-10-18 會議雙重檔名處理問題，合併 15 組重複（7 雙重 + 8 語意）→ 655 筆最終；(3) Step 4 generate-report 更新週報（output/report_20260302.md），162 指標、55 關注指標、7 Q&A 引用；(4) Bug 修復：scripts/04_generate_report.py 新增 5 個缺少的 import（csv/io/urllib.error/urllib.request/urlparse）；(5) qa_final.json 升級至 v2.0（655 筆）；(6) 更新 MEMORY.md 知識庫現況 + 標記評估基準線待重新評估                                                                                                                                                                                                                                                                                                                                            | `scripts/02_extract_qa.py`，`scripts/03_dedupe_classify.py`，`scripts/04_generate_report.py`，`output/qa_final.json`，`output/report_20260302.md`，`MEMORY.md`                                                                                                             |
+> 詳細 Changelog 維護於 [06a-architecture-changelog.md](./06a-architecture-changelog.md)
 
 ### 更新架構圖的 SOP
 
-每次架構有重大調整後：
-
-1. 用 **architect agent** 討論新設計（`Task: subagent_type=everything-claude-code:architect`）
-2. 把確認後的架構更新到 `research/06-project-architecture.md` 的 Mermaid 圖
-3. 在 Architecture Changelog 新增一行（日期 + 版本 + 變更內容 + 影響範圍）
-4. 更新 MEMORY.md 的確認基準線（如有評估數字變動）
-
-> Mermaid 可以在 GitHub 預覽（直接渲染），也可以在 VS Code 安裝 Mermaid Preview 擴充套件後本機查看。
+> 維護 SOP 詳見 [06b-architecture-diagram.md](./06b-architecture-diagram.md#更新架構圖的-sop)
 
 ---
 
@@ -328,11 +223,11 @@ flowchart TD
 
 ### E. FastAPI + In-Memory QAStore
 
-**決策**：啟動時載入全量 725 筆 QA + 725×1536 embedding matrix 到 module-level singleton，FastAPI lifespan 管理。
+**決策**：啟動時載入全量 655 筆 QA + 655×1536 embedding matrix 到 module-level singleton，FastAPI lifespan 管理。
 
 **學術 / 業界支撐**：
 
-- **FAISS**（Johnson et al., 2019, _IEEE Trans. on Big Data_）：小規模向量（<100K）in-memory brute-force search 延遲 < 1ms，不需要 ANN 索引。725 筆完全在此範圍內。
+- **FAISS**（Johnson et al., 2019, _IEEE Trans. on Big Data_）：小規模向量（<100K）in-memory brute-force search 延遲 < 1ms，不需要 ANN 索引。655 筆完全在此範圍內。
 - **12-Factor App Factor VI — Stateless processes**（Wiggins, 2011, Heroku）：唯讀查詢層用 in-memory 是合理優化，不違反無狀態原則。
 - **Offline Feature Store + Online Serving**（Feast, 2019, Google/Tecton）：離線 pipeline 產出特徵 → 物化到 online store → API 讀取。與 Pipeline → qa_final.json → API 模式完全對應。
 
@@ -405,7 +300,7 @@ flowchart TD
 **學術 / 業界支撐**：
 
 - **Scaling Laws for Neural Language Models**（Kaplan et al., 2020, _arXiv:2001.08361_）：不同複雜度任務匹配不同規模模型，是經濟高效的做法。
-- **MTEB Benchmark**（Muennighoff et al., 2023, _arXiv:2210.07316_）：text-embedding-3-small 在中英文任務上性價比優於 large（差距 < 2%，價格差 5x），725 筆小規模知識庫使用 small 是正確決策。
+- **MTEB Benchmark**（Muennighoff et al., 2023, _arXiv:2210.07316_）：text-embedding-3-small 在中英文任務上性價比優於 large（差距 < 2%，價格差 5x），655 筆小規模知識庫使用 small 是正確決策。
 - **Structured Output**（OpenAI, 2024）：`json_schema` strict mode 確保 LLM 輸出 100% 符合 schema，消除 JSON parse 失敗風險。
 
 **評估**：符合。建議將 embedding 模型也放入 config lazy env，方便未來切換。
@@ -456,3 +351,117 @@ CLI scripts 不依賴 FastAPI lifespan，需要在 `main()` 手動呼叫 `init_l
 **學術支撐**：
 
 - **G-Eval**（Liu et al., 2023, _arXiv:2303.16634_）：使用 LLM-as-Judge 搭配評分維度細分，可替代人工評估；多維度評分比單一分更具診斷價值。
+
+---
+
+## v1.17 — OpenAI Data Agent 啟發的多層知識庫架構改進計畫（2026-03-02）
+
+### 核心設計決策
+
+本版本針對現有系統的 L3（Learnings）和 L4（Runtime Context）層進行系統性補強，直接對應 OpenAI Data Agent 六層架構的前四層（L1-L4）。
+
+**改進重點**（見 `PLAN_MULTI_LAYER_CONTEXT.md` 詳細計畫）：
+
+1. **L1 Query Patterns**（P1-B）：建立 SEO 領域同義詞辭典 + offline enrichment 機制
+2. **L2 Annotations**（P2-A）：強化 metadata 在搜尋中的加權（confidence + freshness）
+3. **L3 Learnings**（P1-A）：記錄搜尋失敗案例，進行動態修正（新增 `output/learnings.jsonl`）
+4. **L4 Runtime Context**（P1-C）：聚合 access logs，識別高頻查詢、零命中盲點、時效性衰減
+
+**預期效益**：
+- KW Hit Rate：78% → 85%+
+- Accuracy：3.95 → 4.2+
+- 搜尋延遲：50ms → 30ms
+- 整體實作週期：1-2 週（Phase 1）+ 2-3 週（Phase 2）
+
+**不建議引入**：
+- 向量資料庫（655 筆，numpy 已足夠快）
+- 模型 Fine-tuning（學習機制 + 人工回饋更靈活）
+- Real-time Schema Introspection（schema 穩定，無必要）
+
+### 架構圖演進
+
+**現狀（v2.0）**：
+```
+qa_final.json（655 筆）
+       ↓
+搜尋引擎（cosine + keyword boost）
+       ↓ 無時效衰減、無同義詞、無失敗記憶
+API / Chat 回答
+```
+
+**改進後（v1.17）**：
+```
+qa_final.json → enrich_qa.py → qa_enriched.json
+                                   ↓
+              [L1] synonym_dict     [L2] freshness
+              [L3] learnings        [L4] usage_stats
+                           ↓
+搜尋引擎（改進的混合分數公式）
+  final_score = (semantic * cosine + keyword_boost)
+              * (0.5 + 0.5 * confidence_weight)
+              * freshness_score
+              + synonym_boost + learning_boost + usage_boost
+                           ↓
+              API / Chat 回答 + 時效性警示
+```
+
+### 新增模組清單（Phases 1-2）
+
+| 模組 | 檔案 | 行數 | 責任層級 |
+|------|------|------|---------|
+| **L1 同義詞** | `utils/synonym_dict.py` | ~120 | Query Patterns |
+| **L4 時效性** | `utils/freshness.py` | ~60 | Runtime Context |
+| **L3 失敗學習** | `utils/learning_store.py` | ~150 | Learnings |
+| **L4 使用聚合** | `utils/usage_aggregator.py` | ~100 | Runtime Context |
+| **Enrichment 主控** | `scripts/enrich_qa.py` | ~200 | Pipeline Step |
+| **回饋路徑** | `app/routers/feedback.py` | ~80 | Annotations |
+| **合計新增** | | **~710 行** | |
+
+### 修改模組清單
+
+| 檔案 | 修改項目 | 向下相容 |
+|------|---------|--------|
+| `utils/search_engine.py` | `_hybrid_scores()` 新增 4 個加權因子 | ✅ |
+| `app/core/store.py` | 優先載入 qa_enriched.json，fallback qa_final.json | ✅ |
+| `scripts/04_generate_report.py` | Step 4 記錄 learnings（top_score < 0.35） | ✅ 副作用 |
+| `app/core/chat.py` | 整合 learning + staleness 警示 | ✅ 副作用 |
+| `config.py` | 新增 5 常數（SYNONYM_BOOST 等） | ✅ |
+| `qa_tools.py` | 新增子命令：analyze-access、annotate-category、compare-eval | ✅ |
+| `Makefile` | 新增 targets：enrich-qa、pipeline-v2、eval-compare | ✅ |
+
+### 技術亮點與設計原則
+
+1. **Offline Enrichment 機制**：避免運行時計算複雜度，所有 L1-L4 層級在離線預處理階段計算一次，API 層直接消費豐富的 metadata
+2. **Learning JSONL 為 append-only**：便於審計、調試、時序分析，無需額外維護 secondary index
+3. **Confidence-Weighted 搜尋**：將 Q&A 品質（confidence）融入分數，減少虛構/過時結果排名靠前
+4. **Staleness 警示**：對非 evergreen、超過 18 個月的結果，在 chat 回答中加入 ⚠️ 提示，提升用戶信任
+
+### 依賴與風險管理
+
+**關鍵依賴**：
+- `source_date` 欄位：若 `qa_final.json` 缺少此欄，需從 `qa_per_meeting/` 回填
+- Access logs 持續記錄：FastAPI 的 `audit_logger` 需正常運作
+
+**緩解策略**：
+- Enrichment 檔案過大 → 分塊載入（千筆級批次）
+- Learning JSONL 無限增長 → 按月輪轉，保留最近 12 個月
+- 同義詞詞典維護負擔 → 初始 100+ 詞彙後穩定；靠 P1-C zero-hit 識別新詞
+
+### 評估指標進展
+
+| 指標 | 目前（v2.0） | 目標（v1.17） | 機制 |
+|------|-------------|-------------|------|
+| KW Hit Rate | 78% | 85%+ | L1 + L3 + L4 |
+| Accuracy | 3.95 | 4.2+ | L2 + L4 |
+| Completeness | 3.85 | 4.1+ | L1 + L3 |
+| Category Acc. | 68% | 80%+ | P2-B 人工回饋 |
+| 搜尋延遲 | 50ms | 30ms | 預計算 + 緩存 |
+
+### 後續研究方向（v2.0+）
+
+- **Query Understanding 進階**：從 zero-hit queries 自動提取新同義詞
+- **Active Learning**：自動篩選最具信息量的樣本進行人工標記
+- **LLM-based Reranking**：top-5 結果上的語意再排序（成本 vs 收益評估）
+- **多步 Agent 推理**：支援複雜、多條件查詢（L6 層，後期優先）
+
+詳見完整實作計畫：`PLAN_MULTI_LAYER_CONTEXT.md`。

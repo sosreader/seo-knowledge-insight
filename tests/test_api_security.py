@@ -150,3 +150,93 @@ class TestResponseEnvelope:
         assert "version" in meta
         # request_id 應是 UUID 格式
         uuid.UUID(meta["request_id"])  # 若格式錯誤會拋例外
+
+
+# ─────────────────────────── Phase C：Feedback Endpoint ──────────────────────
+
+class TestFeedbackEndpoint:
+    def test_helpful_feedback_returns_200(self, auth_client, tmp_path, monkeypatch):
+        """POST /api/v1/feedback 回應 200 且包含 ApiResponse 結構。"""
+        import utils.learning_store as ls_mod
+        monkeypatch.setattr(ls_mod, "_LEARNINGS_PATH", tmp_path / "learnings.jsonl")
+        resp = auth_client.post(
+            "/api/v1/feedback",
+            json={"query": "canonical 問題", "qa_id": 2, "feedback": "helpful"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["error"] is None
+
+    def test_not_relevant_feedback_recorded(self, auth_client, tmp_path, monkeypatch):
+        """not_relevant feedback 應寫入 learning store。"""
+        import utils.learning_store as ls_mod
+        log_path = tmp_path / "learnings.jsonl"
+        monkeypatch.setattr(ls_mod, "_LEARNINGS_PATH", log_path)
+        auth_client.post(
+            "/api/v1/feedback",
+            json={"query": "不相關的測試查詢", "qa_id": 1, "feedback": "not_relevant"},
+        )
+        assert log_path.exists()
+        import json
+        records = [json.loads(line) for line in log_path.read_text().splitlines() if line.strip()]
+        assert len(records) >= 1
+        assert records[0]["feedback"] == "not_relevant"
+
+    def test_missing_query_returns_422(self, auth_client):
+        """缺少必填欄位 query 應回 422。"""
+        resp = auth_client.post(
+            "/api/v1/feedback",
+            json={"qa_id": 1, "feedback": "helpful"},
+        )
+        assert resp.status_code == 422
+
+    def test_invalid_feedback_type_returns_422(self, auth_client):
+        """feedback 欄位只接受 helpful / not_relevant。"""
+        resp = auth_client.post(
+            "/api/v1/feedback",
+            json={"query": "q", "qa_id": 1, "feedback": "invalid_type"},
+        )
+        assert resp.status_code == 422
+
+
+# ─────────────────────────── Phase C：LearningStore ──────────────────────────
+
+class TestLearningStore:
+    def test_record_miss_writes_jsonl(self, tmp_path, monkeypatch):
+        """record_miss() 應寫入 JSONL 記錄。"""
+        import utils.learning_store as ls_mod
+        monkeypatch.setattr(ls_mod, "_LEARNINGS_PATH", tmp_path / "learnings.jsonl")
+        from utils.learning_store import LearningStore
+        ls = LearningStore()
+        ls.record_miss("canonical 設定問題", top_score=0.15, context="search")
+        records = ls._load_all()
+        assert len(records) == 1
+        assert records[0]["query"] == "canonical 設定問題"
+
+    def test_get_relevant_learnings_returns_list(self, tmp_path, monkeypatch):
+        """get_relevant_learnings() 對有匹配的查詢應回傳非空 list。"""
+        import utils.learning_store as ls_mod
+        monkeypatch.setattr(ls_mod, "_LEARNINGS_PATH", tmp_path / "learnings.jsonl")
+        from utils.learning_store import LearningStore
+        ls = LearningStore()
+        ls.record_miss("canonical SEO 設定", top_score=0.10, context="search")
+        results = ls.get_relevant_learnings("canonical 問題")
+        assert isinstance(results, list)
+
+    def test_record_miss_idempotent_context(self, tmp_path, monkeypatch):
+        """多次 record_miss() 應累積記錄（JSONL append）。"""
+        import utils.learning_store as ls_mod
+        monkeypatch.setattr(ls_mod, "_LEARNINGS_PATH", tmp_path / "learnings.jsonl")
+        from utils.learning_store import LearningStore
+        ls = LearningStore()
+        ls.record_miss("query1", top_score=0.1, context="search")
+        ls.record_miss("query2", top_score=0.2, context="chat")
+        assert len(ls._load_all()) == 2
+
+    def test_load_all_empty_when_no_file(self, tmp_path, monkeypatch):
+        """若 JSONL 不存在，_load_all() 應回傳空 list。"""
+        import utils.learning_store as ls_mod
+        monkeypatch.setattr(ls_mod, "_LEARNINGS_PATH", tmp_path / "learnings.jsonl")
+        from utils.learning_store import LearningStore
+        ls = LearningStore()
+        assert ls._load_all() == []

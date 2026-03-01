@@ -72,3 +72,32 @@ def score_rag_response(
         top_score = float(sources[0].get("score", 0.0))
         score_event("top_source_score", top_score)
         score_event("source_count", min(len(sources) / 5.0, 1.0))
+
+
+def score_enrichment_boost(synonym_hits: int, freshness_score: float) -> None:
+    """Attach enrichment quality scores to the current Laminar span.
+
+    Records how many synonyms were matched and the freshness quality of
+    returned Q&A. Must be called inside an active @observe span.
+
+    Args:
+        synonym_hits:    Number of synonym terms that matched the query.
+        freshness_score: Average freshness score of returned Q&A (0.0–1.0).
+    """
+    score_event("synonym_hits", float(synonym_hits))
+    score_event("freshness_score", min(max(freshness_score, 0.0), 1.0))
+
+
+def score_search_miss(query: str, top_score: float) -> None:
+    """Record a search miss event to the current Laminar span.
+
+    A search miss occurs when no Q&A meets the minimum relevance threshold.
+    Tracking these helps identify coverage gaps in the knowledge base.
+
+    Args:
+        query:     The user query that produced no results.
+        top_score: The highest similarity score achieved (< threshold).
+    """
+    score_event("search_miss", 1.0)
+    score_event("search_top_score", min(max(top_score, 0.0), 1.0))
+    logger.debug("score_search_miss: query=%r top_score=%.4f", query, top_score)

@@ -6,17 +6,53 @@
 
 ## 分類索引
 
-| 檔案                                                       | 主題                                                          |
-| ---------------------------------------------------------- | ------------------------------------------------------------- |
-| [01-ai-fundamentals.md](./01-ai-fundamentals.md)           | LLM / Token / Prompt / Structured Output / Embedding / Cosine |
-| [02-rag-and-search.md](./02-rag-and-search.md)             | RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標           |
-| [03-evaluation.md](./03-evaluation.md)                     | LLM-as-Judge / Reasoning Model / 評估維度 / Judge 設計原則    |
-| [04-prompting.md](./04-prompting.md)                       | Prompt Engineering 進階（業界最佳實踐）                       |
-| [05-models.md](./05-models.md)                             | 模型選擇決策 / Embedding 模型比較                             |
-| [06-project-architecture.md](./06-project-architecture.md) | 本專案架構 / 決策紀錄 / Changelog                             |
-| [07-deployment.md](./07-deployment.md)                     | FastAPI RAG API 化 / ECR + EC2 部署                           |
-| [08-fetch-optimization.md](./08-fetch-optimization.md)     | Notion 爬取優化 / ETag / 增量更新                             |
-| [09-provider-comparison.md](./09-provider-comparison.md)   | AI Provider 輸出品質比較方法論與歷次跑分結果                  |
+| 檔案                                                                 | 主題                                                              |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [01-ai-fundamentals.md](./01-ai-fundamentals.md)                     | LLM / Token / Prompt / Structured Output / Embedding / Cosine     |
+| [02-rag-and-search.md](./02-rag-and-search.md)                       | RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標               |
+| [03-evaluation.md](./03-evaluation.md)                               | LLM-as-Judge / Reasoning Model / 評估維度 / Judge 設計原則        |
+| [04-prompting.md](./04-prompting.md)                                 | Prompt Engineering 進階（業界最佳實踐）                           |
+| [05-models.md](./05-models.md)                                       | 模型選擇決策 / Embedding 模型比較                                 |
+| [06-project-architecture.md](./06-project-architecture.md)           | 本專案架構 / Pipeline 全景 / 技術決策學術支撐                     |
+| [06a-architecture-changelog.md](./06a-architecture-changelog.md)     | 架構變更紀錄（Changelog），每次架構調整後新增一行                 |
+| [06b-architecture-diagram.md](./06b-architecture-diagram.md)         | Mermaid 架構圖 + 更新 SOP（最新 v1.19）                           |
+| [07-deployment.md](./07-deployment.md)                               | FastAPI RAG API 化 / ECR + EC2 部署                               |
+| [08-fetch-optimization.md](./08-fetch-optimization.md)               | Notion 爬取優化 / ETag / 增量更新                                 |
+| [09-provider-comparison.md](./09-provider-comparison.md)             | AI Provider 輸出品質比較方法論與歷次跑分結果                      |
+| [10-multi-layer-context.md](./10-multi-layer-context.md)             | Multi-Layer Context / enrichment / 同義詞擴展 / 時效性衰減 / Learning Store |
+
+---
+
+## 術語速查（常見未定義術語）
+
+| 術語 | 定義 | 詳細說明 |
+|------|------|---------|
+| **enrichment** | 離線預計算：對每筆 Q&A 加入同義詞、時效分數等 metadata | [10-multi-layer-context.md §23](./10-multi-layer-context.md#23-offline-enrichment-pipeline-enrich_qapy) |
+| **qa_enriched.json** | `make enrich` 產生的豐富化知識庫，含 `_enrichment` 欄位 | [10-multi-layer-context.md §23](./10-multi-layer-context.md#23-offline-enrichment-pipeline-enrich_qapy) |
+| **Learning Store** | `utils/learning_store.py`，JSONL 失敗記憶庫 | [10-multi-layer-context.md §24](./10-multi-layer-context.md#24-learning-store--staleness-feedback-loop) |
+| **Multi-Layer Context** | 三層知識庫：Knowledge + Context + Learnings | [10-multi-layer-context.md §20](./10-multi-layer-context.md#20-multi-layer-context-architecture) |
+| **Staleness** | Q&A 超過 18 個月，chat 加 ⚠️ 警示 | [10-multi-layer-context.md §24](./10-multi-layer-context.md#24-learning-store--staleness-feedback-loop) |
+| **Version Registry** | `utils/pipeline_version.py`，不可變 artifact 版本記錄 | [06-project-architecture.md §B](./06-project-architecture.md#b-immutable-artifact-version-registry-pipeline_versionpy) |
+| **hybrid_search** | 語意（cosine）+ 關鍵字（BM25 boost）混合搜尋 | [02-rag-and-search.md](./02-rag-and-search.md) |
+| **freshness_score** | `exp(-0.693 × age/540d)`，時效性衰減分數（min=0.5） | [10-multi-layer-context.md §22](./10-multi-layer-context.md#22-時效性衰減temporal-freshness-decay) |
+
+---
+
+## 當前指標現況（2026-03-02，v1.19）
+
+| 指標 | 數值 | 說明 |
+|------|------|------|
+| Q&A 總量 | 655 筆 | Step 2: 670 原始 → Step 3: 去除 15 組重複 |
+| KW Hit Rate | **79.67%** | synonym expansion 後（目標 ≥ 85%，差 5.33pp） |
+| freshness_rank_quality | **1.0** | 時效衰減正常，舊文件未擠掉新文件 |
+| synonym_coverage | **1.0** | 所有 Q&A 已完成 enrichment |
+| avg_synonyms / Q&A | 11.09 | enrichment 後平均同義詞數 |
+| avg_freshness | 0.9076 | 知識庫整體新鮮度（max=1.0） |
+| MRR | 0.75 | 平均倒數排名（目標 ≥ 0.80） |
+| Relevance | 4.80 / 5 | LLM-as-Judge（待 v2.0 重評） |
+| Accuracy | 3.95 / 5 | LLM-as-Judge（待 v2.0 重評） |
+| Completeness | 3.85 / 5 | LLM-as-Judge（待 v2.0 重評） |
+| Test 通過率 | 206 / 206 | ✅ 全通過（2026-03-02，v1.19）|
 
 ---
 

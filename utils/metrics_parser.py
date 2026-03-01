@@ -41,7 +41,7 @@ SKIP_METRICS = {"Sparklines", "#N/A", ""}
 
 # 預設 Google Sheets URL
 DEFAULT_SHEETS_URL = (
-    "https://docs.google.com/spreadsheets/d/1fzttLHJfl2Tnecxg0PDKsTmj0-PT5eSsYOivTI6wRdo"
+    "https://docs.google.com/spreadsheets/d/1i3unCxF-rx_DF5BcunC9rYTFj6BnfTUeyuHe7_AcFlM/edit?gid=0#gid=0"
 )
 
 # ── 指標語意查詢對照表 ──────────────────────────────────

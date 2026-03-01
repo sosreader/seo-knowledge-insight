@@ -4,6 +4,7 @@ RAG chat — embedding 查詢 + GPT 對話
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 import numpy as np
 from lmnr import observe
@@ -12,6 +13,7 @@ from openai import AsyncOpenAI
 from app import config
 from app.core.store import QAItem, store
 from utils.laminar_scoring import score_rag_response
+from utils.learning_store import learning_store
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +46,28 @@ _SYSTEM_PROMPT = """\
 """
 
 
+_STALENESS_THRESHOLD_MONTHS = 18
+
+
+def _is_stale(source_date: str) -> bool:
+    """判斷來源日期是否超過 18 個月（時效性警示閾值）。"""
+    try:
+        d = date.fromisoformat(source_date)
+        age_months = (date.today() - d).days / 30
+        return age_months > _STALENESS_THRESHOLD_MONTHS
+    except (ValueError, TypeError):
+        return False
+
+
 def _format_context(hits: list[tuple[QAItem, float]]) -> str:
     parts: list[str] = []
     for idx, (item, score) in enumerate(hits, 1):
+        staleness_note = ""
+        if not item.evergreen and _is_stale(item.source_date):
+            staleness_note = " [注意：此建議超過 18 個月，請確認是否仍適用]"
         parts.append(
             f"[{idx}] Q: {item.question}\n"
-            f"    A: {item.answer}\n"
+            f"    A: {item.answer}{staleness_note}\n"
             f"    (來源: {item.source_title or item.source_date}, 相似度: {score:.2f})"
         )
     return "\n\n".join(parts)
@@ -87,6 +105,14 @@ async def rag_chat(
 
     # 2. Hybrid 搜尋（語意 + 關鍵字 boost）
     hits = store.hybrid_search(message, query_vec, top_k=config.CHAT_CONTEXT_K)
+
+    # 若無搜尋結果，記錄到 learning store 供後續分析
+    if not hits:
+        learning_store.record_miss(
+            query=message,
+            top_score=0.0,
+            context="chat",
+        )
 
     # 3. 組 context
     context = _format_context(hits)

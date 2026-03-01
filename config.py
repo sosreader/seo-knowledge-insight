@@ -71,6 +71,12 @@ KW_BOOST = _get_float_env("KW_BOOST", "0.10")
 KW_BOOST_PARTIAL = _get_float_env("KW_BOOST_PARTIAL", "0.05")
 KW_BOOST_MAX_HITS = _get_int_env("KW_BOOST_MAX_HITS", "3")
 
+# ── Multi-Layer Context 常數 ──────────────────────────
+# 同義詞命中時的加分量
+SYNONYM_BOOST = _get_float_env("SYNONYM_BOOST", "0.05")
+# freshness 最低分數保底（非 evergreen Q&A 最多衰減到此值）
+FRESHNESS_MIN = _get_float_env("FRESHNESS_MIN", "0.5")
+
 
 # ── Lazy Env Vars（首次存取時才驗證）──────────────────
 # 使用 PEP 562 module-level __getattr__ 實現延遲載入

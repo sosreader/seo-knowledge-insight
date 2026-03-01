@@ -181,9 +181,10 @@ def log_search(
     returned_ids: list[int],
     source_titles: list[str],
     client_ip: str | None = None,
+    top_score: float | None = None,
 ) -> None:
     """記錄語意搜尋請求"""
-    _append_jsonl(_access_log_path(), {
+    record: dict = {
         "event": "search",
         "ts": _now_iso(),
         "query": query,
@@ -192,7 +193,10 @@ def log_search(
         "returned_ids": returned_ids,
         "source_titles": source_titles,
         "client_ip": client_ip,
-    })
+    }
+    if top_score is not None:
+        record["top_score"] = round(top_score, 4)
+    _append_jsonl(_access_log_path(), record)
 
 
 def log_chat(
@@ -200,16 +204,20 @@ def log_chat(
     returned_ids: list[int],
     source_titles: list[str],
     client_ip: str | None = None,
+    top_score: float | None = None,
 ) -> None:
     """記錄 RAG 問答請求（哪些 QA 被用來生成回答）"""
-    _append_jsonl(_access_log_path(), {
+    record: dict = {
         "event": "chat",
         "ts": _now_iso(),
         "message": message,
         "returned_ids": returned_ids,
         "source_titles": source_titles,
         "client_ip": client_ip,
-    })
+    }
+    if top_score is not None:
+        record["top_score"] = round(top_score, 4)
+    _append_jsonl(_access_log_path(), record)
 
 
 def log_list_qa(

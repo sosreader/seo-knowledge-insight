@@ -18,6 +18,7 @@ OPENAI_EMBEDDING_MODEL: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embeddin
 ROOT_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT_DIR / "output"
 QA_JSON_PATH = OUTPUT_DIR / "qa_final.json"
+QA_ENRICHED_JSON_PATH = OUTPUT_DIR / "qa_enriched.json"
 QA_EMBEDDINGS_PATH = OUTPUT_DIR / "qa_embeddings.npy"
 
 # ── API ─────────────────────────────────────────────────
