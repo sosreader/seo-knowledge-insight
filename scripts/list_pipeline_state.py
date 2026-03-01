@@ -59,12 +59,10 @@ def list_unprocessed_extract_qa() -> list[Path]:
         print("raw_data/markdown/ 目錄不存在，請先執行 fetch-notion（make fetch-notion）")
         return []
 
-    md_files = list(config.RAW_MD_DIR.glob("*.md"))
-    if not md_files:
+    already_done, unprocessed = _classify_extract_qa()
+    if not already_done and not unprocessed:
         print("raw_data/markdown/ 目錄下沒有 .md 檔案，請先執行 fetch-notion（make fetch-notion）")
         return []
-
-    already_done, unprocessed = _classify_extract_qa()
 
     print("extract-qa 狀態")
     print(f"  已完成: {len(already_done)} 份")
@@ -128,7 +126,7 @@ def merge_per_meeting_jsons() -> None:
     """
     qa_dir = config.QA_PER_MEETING_DIR
     if not qa_dir.exists():
-        print(f"❌ {qa_dir} 不存在")
+        print(f"[MISS] {qa_dir} 不存在")
         sys.exit(1)
 
     all_qa: list[dict] = []
