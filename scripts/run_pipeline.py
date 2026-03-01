@@ -113,9 +113,7 @@ def main() -> None:
     steps_to_run = [args.step] if args.step else default_steps
 
     for step in steps_to_run:
-        script = STEP_SCRIPTS.get(step)
-        if not script:
-            continue
+        script = STEP_SCRIPTS[step]
 
         # 只在單步模式時轉發 remaining args（避免 step-specific flags 傳給不相關的步驟）
         extra = list(remaining) if args.step else []

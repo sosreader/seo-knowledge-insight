@@ -26,34 +26,45 @@ except ModuleNotFoundError:
     import config
 
 
+def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
+    """
+    回傳 (already_done, unprocessed) 兩份清單（精確定義：_qa.json 存在且非空非失敗才算完成）。
+    不輸出任何內容，供 show_full_status 與 list_unprocessed_extract_qa 共用。
+    """
+    if not config.RAW_MD_DIR.exists():
+        return [], []
+    md_files = sorted(config.RAW_MD_DIR.glob("*.md"))
+    already_done: list[Path] = []
+    unprocessed: list[Path] = []
+    for md_path in md_files:
+        qa_path = config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json"
+        done = False
+        if qa_path.exists():
+            try:
+                data = json.loads(qa_path.read_text(encoding="utf-8"))
+                if data.get("qa_pairs") and "處理失敗" not in data.get("meeting_summary", ""):
+                    done = True
+            except (json.JSONDecodeError, KeyError):
+                pass
+        (already_done if done else unprocessed).append(md_path)
+    return already_done, unprocessed
+
+
 def list_unprocessed_extract_qa() -> list[Path]:
     """
     回傳尚未萃取 Q&A 的 Markdown 檔案清單。
     （沒有對應的 _qa.json，或 _qa.json 為空的檔案）
     """
     if not config.RAW_MD_DIR.exists():
-        print("❌ raw_data/markdown/ 目錄不存在，請先執行 fetch-notion（make fetch-notion）")
+        print("raw_data/markdown/ 目錄不存在，請先執行 fetch-notion（make fetch-notion）")
         return []
 
-    md_files = sorted(config.RAW_MD_DIR.glob("*.md"))
+    md_files = list(config.RAW_MD_DIR.glob("*.md"))
     if not md_files:
-        print("❌ raw_data/markdown/ 目錄下沒有 .md 檔案，請先執行 fetch-notion（make fetch-notion）")
+        print("raw_data/markdown/ 目錄下沒有 .md 檔案，請先執行 fetch-notion（make fetch-notion）")
         return []
 
-    unprocessed: list[Path] = []
-    already_done: list[Path] = []
-
-    for md_path in md_files:
-        qa_path = config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json"
-        if qa_path.exists():
-            try:
-                data = json.loads(qa_path.read_text(encoding="utf-8"))
-                if data.get("qa_pairs") and "處理失敗" not in data.get("meeting_summary", ""):
-                    already_done.append(md_path)
-                    continue
-            except (json.JSONDecodeError, KeyError):
-                pass
-        unprocessed.append(md_path)
+    already_done, unprocessed = _classify_extract_qa()
 
     print("extract-qa 狀態")
     print(f"  已完成: {len(already_done)} 份")
@@ -61,7 +72,7 @@ def list_unprocessed_extract_qa() -> list[Path]:
     print()
 
     if not unprocessed:
-        print("✅ 全部完成！所有 Markdown 檔案都已萃取 Q&A。")
+        print("全部完成！所有 Markdown 檔案都已萃取 Q&A。")
         print("   可執行：python scripts/list_pipeline_state.py --merge")
         return []
 
@@ -83,7 +94,7 @@ def check_dedupe_classify_state() -> bool:
     print("dedupe-classify 狀態")
 
     if not raw_path.exists():
-        print(f"  ❌ {raw_path} 不存在")
+        print(f"  [MISS] {raw_path} 不存在")
         print("     請先執行 extract-qa（/extract-qa 或 make extract-qa）")
         return False
 
@@ -91,22 +102,22 @@ def check_dedupe_classify_state() -> bool:
         data = json.loads(raw_path.read_text(encoding="utf-8"))
         qa_count = data.get("total_qa_count", 0)
         meetings = data.get("meetings_processed", 0)
-        print(f"  ✅ qa_all_raw.json：{qa_count} 個 Q&A（{meetings} 份會議）")
+        print(f"  [OK]   qa_all_raw.json：{qa_count} 個 Q&A（{meetings} 份會議）")
     except (json.JSONDecodeError, KeyError) as e:
-        print(f"  ❌ qa_all_raw.json 格式錯誤: {e}")
+        print(f"  [ERR]  qa_all_raw.json 格式錯誤: {e}")
         return False
 
     if final_path.exists():
         try:
             final = json.loads(final_path.read_text(encoding="utf-8"))
             final_count = final.get("total_count", 0)
-            print(f"  ℹ️  已有 qa_final.json：{final_count} 個 Q&A（可重新執行覆蓋）")
+            print(f"  [INFO] 已有 qa_final.json：{final_count} 個 Q&A（可重新執行覆蓋）")
         except (json.JSONDecodeError, KeyError):
             pass
 
     print()
     print(f"  可執行去重+分類（{qa_count} 個 Q&A）")
-    print("  ➜ 請 AI 工具執行 /dedupe-classify")
+    print("  -> 請 AI 工具執行 /dedupe-classify")
     return True
 
 
@@ -138,7 +149,7 @@ def merge_per_meeting_jsons() -> None:
                 "summary": data.get("meeting_summary", ""),
             })
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"  ⚠️  跳過 {f.name}：{e}")
+            print(f"  [SKIP] {f.name}：{e}")
             error_count += 1
             continue
 
@@ -154,11 +165,11 @@ def merge_per_meeting_jsons() -> None:
     output_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print("合併完成")
-    print(f"  ✅ 合併了 {len(summary)} 份會議")
-    print(f"  📊 共 {len(all_qa)} 個 Q&A")
+    print(f"  合併了 {len(summary)} 份會議")
+    print(f"  共 {len(all_qa)} 個 Q&A")
     if error_count:
-        print(f"  ⚠️  跳過 {error_count} 份（處理失敗或格式錯誤）")
-    print(f"  📄 輸出：{output_path}")
+        print(f"  跳過 {error_count} 份（處理失敗或格式錯誤）")
+    print(f"  輸出：{output_path}")
 
 
 def show_full_status() -> None:
@@ -172,12 +183,11 @@ def show_full_status() -> None:
     print(f"\nfetch-notion (Notion 擷取)")
     print(f"  Markdown 檔案: {md_count} 份 ({config.RAW_MD_DIR})")
 
-    # extract-qa：Q&A 萃取
-    qa_per_meeting = len(list(config.QA_PER_MEETING_DIR.glob("*_qa.json"))) if config.QA_PER_MEETING_DIR.exists() else 0
-    unprocessed = max(0, md_count - qa_per_meeting)
+    # extract-qa：Q&A 萃取（用精確定義：qa_pairs 非空且非失敗才算完成）
+    already_done, unprocessed_files = _classify_extract_qa()
     print(f"\nextract-qa (Q&A 萃取)")
-    print(f"  已萃取: {qa_per_meeting} 份")
-    print(f"  待處理: {unprocessed} 份")
+    print(f"  已萃取: {len(already_done)} 份")
+    print(f"  待處理: {len(unprocessed_files)} 份")
 
     # dedupe-classify：去重+分類
     raw_path = config.OUTPUT_DIR / "qa_all_raw.json"
@@ -203,7 +213,7 @@ def show_full_status() -> None:
     else:
         print(f"  qa_final.json: 不存在")
 
-    emb_status = "✅" if emb_path.exists() else "❌ 不存在（generate-report 需要）"
+    emb_status = "[OK]" if emb_path.exists() else "[MISS] 不存在（generate-report 需要）"
     print(f"  qa_embeddings.npy: {emb_status}")
 
     print("\n" + "=" * 60)

@@ -6,27 +6,34 @@ qa_tools.py — Claude Code 友善的 Q&A 知識庫輕量 CLI
 作為 Claude Code Slash Commands 的資料介面（Layer 2）。
 
 子命令：
-  pipeline-status    顯示 pipeline 各步驟狀態
-  list-unprocessed   列出待 Q&A 萃取的 Markdown 檔
-  list-needs-review  列出 needs_review=true 的 merged Q&A
-  merge-qa           合併 per-meeting JSON → qa_all_raw.json
-  add-meeting        增量加入新會議 Q&A（情境 A）
-  fix-meeting        目標性刪除/標記異常會議的 Q&A（情境 B）
-  diff-snapshot      與快照比對，列出新增/刪除/變更的 Q&A
-  search             關鍵字搜尋知識庫（無 OpenAI）
-  load-metrics       從 Google Sheets / TSV 解析 SEO 指標
-  eval-compare       跨 provider eval 結果比較表
+  pipeline-status        顯示 pipeline 各步驟狀態
+  list-unprocessed       列出待 Q&A 萃取的 Markdown 檔
+  list-needs-review      列出 needs_review=true 的 merged Q&A
+  merge-qa               合併 per-meeting JSON → qa_all_raw.json
+  add-meeting            增量加入新會議 Q&A（情境 A）
+  fix-meeting            目標性刪除/標記異常會議的 Q&A（情境 B）
+  diff-snapshot          與快照比對，列出新增/刪除/變更的 Q&A
+  search                 關鍵字搜尋知識庫（無 OpenAI）
+  load-metrics           從 Google Sheets / TSV 解析 SEO 指標
+  eval-compare           跨 provider eval 結果比較表
+  eval-sample            從 qa_final.json 抽樣 N 筆 Q&A（供 Claude Code 評估）
+  eval-retrieval-local   規則式 Retrieval 評估（KW/MRR/Cat，無 OpenAI）
+  eval-save              儲存 Claude Code 評估結果（版本化 JSON）
 
 用法範例：
     python scripts/qa_tools.py pipeline-status
     python scripts/qa_tools.py search --query "canonical"
     python scripts/qa_tools.py load-metrics --source "https://docs.google.com/..."
     python scripts/qa_tools.py eval-compare
+    python scripts/qa_tools.py eval-sample --size 20 --seed 42 --with-golden
+    python scripts/qa_tools.py eval-retrieval-local
+    python scripts/qa_tools.py eval-save --input result.json --extraction-engine claude-code
 """
 from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -40,7 +47,11 @@ QA_FINAL_PATH = OUTPUT_DIR / "qa_final.json"
 QA_RAW_PATH = OUTPUT_DIR / "qa_all_raw.json"
 EVALS_DIR = OUTPUT_DIR / "evals"
 EVAL_BASELINE_PATH = OUTPUT_DIR / "eval_baseline.json"
+EVAL_SAMPLE_PATH = OUTPUT_DIR / "eval_sample.json"
 SNAPSHOTS_DIR = OUTPUT_DIR / "snapshots"
+EVAL_DIR = PROJECT_ROOT / "eval"
+GOLDEN_QA_PATH = EVAL_DIR / "golden_qa.json"
+GOLDEN_RETRIEVAL_PATH = EVAL_DIR / "golden_retrieval.json"
 
 
 # ──────────────────────────────────────────────────────
@@ -187,14 +198,10 @@ def cmd_add_meeting(args: argparse.Namespace) -> None:
     existing_data = json.loads(QA_FINAL_PATH.read_text(encoding="utf-8"))
     existing_db: list[dict] = existing_data.get("qa_database", [])
     max_id = max((qa.get("id", 0) for qa in existing_db), default=0)
-    for i, qa in enumerate(to_add, start=1):
-        qa["id"] = max_id + i
-    new_db = existing_db + to_add
-    existing_data["qa_database"] = new_db
-    existing_data["total_count"] = len(new_db)
-    existing_data["last_updated"] = datetime.now().strftime("%Y-%m-%d")
-    _write_atomic(QA_FINAL_PATH, existing_data)
-    print(f"\n已新增 {len(to_add)} 筆 Q&A 到 qa_final.json（總計 {len(new_db)} 筆）。")
+    to_add_with_id = [{**qa, "id": max_id + i} for i, qa in enumerate(to_add, start=1)]
+    new_db = existing_db + to_add_with_id
+    _write_atomic(QA_FINAL_PATH, {**existing_data, "qa_database": new_db, "total_count": len(new_db), "last_updated": datetime.now().strftime("%Y-%m-%d")})
+    print(f"\n已新增 {len(to_add_with_id)} 筆 Q&A 到 qa_final.json（總計 {len(new_db)} 筆）。")
     print("建議執行 /evaluate-qa 驗證品質，或 /dedupe-classify 重新去重。")
 
 
@@ -281,15 +288,10 @@ def cmd_fix_meeting(args: argparse.Namespace) -> None:
         print("\n沒有需要處理的 Q&A。")
         return
 
-    for qa in to_flag:
-        qa["needs_review"] = True
-
-    new_db = unchanged + to_flag
+    flagged = [{**qa, "needs_review": True} for qa in to_flag]
+    new_db = unchanged + flagged
     existing_data = json.loads(QA_FINAL_PATH.read_text(encoding="utf-8"))
-    existing_data["qa_database"] = new_db
-    existing_data["total_count"] = len(new_db)
-    existing_data["last_updated"] = datetime.now().strftime("%Y-%m-%d")
-    _write_atomic(QA_FINAL_PATH, existing_data)
+    _write_atomic(QA_FINAL_PATH, {**existing_data, "qa_database": new_db, "total_count": len(new_db), "last_updated": datetime.now().strftime("%Y-%m-%d")})
     print(f"\n完成：刪除 {len(to_delete)} 筆，標記 {len(to_flag)} 筆為 needs_review。")
     print("執行 list-needs-review 可查看待複審清單。")
 
