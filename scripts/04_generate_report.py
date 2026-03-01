@@ -24,6 +24,10 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
+import csv
+import io
+import urllib.error
+import urllib.request
 from urllib.parse import urlparse
 
 import numpy as np
@@ -53,14 +57,12 @@ from utils.metrics_parser import (
     CORE_METRICS,
     SKIP_METRICS,
     METRIC_QUERY_MAP,
-    fetch_from_sheets,
-    parse_metrics_tsv,
-    detect_anomalies,
 )
 
 # 注意：ALERT_THRESHOLD_MONTHLY / ALERT_THRESHOLD_WEEKLY / CORE_METRICS /
-#       SKIP_METRICS / METRIC_QUERY_MAP / fetch_from_sheets / parse_metrics_tsv /
-#       detect_anomalies 已移至 utils/metrics_parser.py
+#       SKIP_METRICS / METRIC_QUERY_MAP 常數來自 utils/metrics_parser.py
+#       fetch_from_sheets / parse_metrics_tsv / detect_anomalies 在本檔案本地定義
+#       （含有本地 helper 函式：_parse_sheets_url、_validate_sheet_id 等）
 
 
 
@@ -157,7 +159,7 @@ def fetch_from_sheets(url_or_id: str, tab: str = "vocus") -> str:
         f"https://{_ALLOWED_HOST}/spreadsheets/d/{sheet_id}"
         f"/export?format=csv&id={sheet_id}&gid={gid}"
     )
-    print(f"   下載: {csv_url}")
+    logger.info("下載: %s", csv_url)
     req = urllib.request.Request(csv_url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=30) as resp:
         if resp.status != 200:
@@ -309,7 +311,7 @@ def _load_persisted_embeddings(qa_count: int) -> np.ndarray | None:
         return None
     emb = np.load(emb_path)
     if emb.shape[0] != qa_count:
-        print(f"   ⚠️  Embedding 數量 ({emb.shape[0]}) 與 Q&A 數量 ({qa_count}) 不匹配，重新計算")
+        logger.warning("Embedding 數量 (%d) 與 Q&A 數量 (%d) 不匹配，重新計算", emb.shape[0], qa_count)
         return None
     return emb
 
@@ -550,11 +552,10 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
     _qa_path = config.OUTPUT_DIR / "qa_final.json"
     _total_qa = 0
     try:
-        import json as _json
         with open(_qa_path, encoding="utf-8") as _f:
-            _total_qa = len(_json.load(_f))
-    except Exception:
-        pass  # 無法讀取時忽略
+            _total_qa = len(json.load(_f))
+    except Exception as e:
+        logger.warning("無法讀取 qa_final.json 以取得 KB 大小：%s", e)
     _kb_label = f"{_total_qa} Q&A" if _total_qa else "知識庫"
     meta_block = f"""---
 **Meta 資訊**

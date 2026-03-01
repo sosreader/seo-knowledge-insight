@@ -1,39 +1,15 @@
 #!/usr/bin/env python3
 """
-qa_tools.py — Claude Code 友善的 Q&A 知識庫輕量 CLI
+qa_tools.py — Claude Code 友善的 Q&A 知識庫輕量 CLI（無需 OpenAI）
 
-不需要 OpenAI API 即可執行所有資料查詢與操作。
-作為 Claude Code Slash Commands 的資料介面（Layer 2）。
-
-子命令：
-  pipeline-status        顯示 pipeline 各步驟狀態
-  list-unprocessed       列出待 Q&A 萃取的 Markdown 檔
-  list-needs-review      列出 needs_review=true 的 merged Q&A
-  merge-qa               合併 per-meeting JSON → qa_all_raw.json
-  add-meeting            增量加入新會議 Q&A（情境 A）
-  fix-meeting            目標性刪除/標記異常會議的 Q&A（情境 B）
-  diff-snapshot          與快照比對，列出新增/刪除/變更的 Q&A
-  search                 關鍵字搜尋知識庫（無 OpenAI）
-  load-metrics           從 Google Sheets / TSV 解析 SEO 指標
-  eval-compare           跨 provider eval 結果比較表
-  eval-sample            從 qa_final.json 抽樣 N 筆 Q&A（供 Claude Code 評估）
-  eval-retrieval-local   規則式 Retrieval 評估（KW/MRR/Cat，無 OpenAI）
-  eval-save              儲存 Claude Code 評估結果（版本化 JSON）
-
-用法範例：
-    python scripts/qa_tools.py pipeline-status
-    python scripts/qa_tools.py search --query "canonical"
-    python scripts/qa_tools.py load-metrics --source "https://docs.google.com/..."
-    python scripts/qa_tools.py eval-compare
-    python scripts/qa_tools.py eval-sample --size 20 --seed 42 --with-golden
-    python scripts/qa_tools.py eval-retrieval-local
-    python scripts/qa_tools.py eval-save --input result.json --extraction-engine claude-code
+子命令一覽請執行 ``python scripts/qa_tools.py -h``。
 """
 from __future__ import annotations
 
 import argparse
 import json
 import random
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -335,12 +311,7 @@ def cmd_diff_snapshot(args: argparse.Namespace) -> None:
 # ──────────────────────────────────────────────────────
 
 def cmd_search(args: argparse.Namespace) -> None:
-    """
-    關鍵字搜尋知識庫（無 OpenAI）。
-
-    評分：query token 與 question/answer/keywords 的重疊數，加權：
-      keywords 命中 ×3 / question 命中 ×2 / answer 命中 ×1
-    """
+    """關鍵字搜尋知識庫（無 OpenAI）。"""
     query = args.query
     top_k = args.top_k
     category = getattr(args, "category", None)
@@ -349,24 +320,8 @@ def cmd_search(args: argparse.Namespace) -> None:
     if not qas:
         sys.exit(1)
 
-    tokens = set(query.lower().split())
-    scored: list[tuple[dict, float]] = []
-
-    for qa in qas:
-        if category and qa.get("category") != category:
-            continue
-        kw_tokens = set(kw.lower() for kw in qa.get("keywords", []))
-        q_tokens = set(qa.get("question", "").lower().split())
-        a_tokens = set(qa.get("answer", "").lower().split())
-        score = (
-            len(tokens & kw_tokens) * 3
-            + len(tokens & q_tokens) * 2
-            + len(tokens & a_tokens) * 1
-        )
-        if score > 0:
-            scored.append((qa, float(score)))
-
-    results = sorted(scored, key=lambda x: -x[1])[:top_k]
+    pool = [qa for qa in qas if qa.get("category") == category] if category else qas
+    results = _keyword_search(query, pool, top_k=top_k)
 
     if not results:
         print(f"沒有找到與 '{query}' 相關的 Q&A。")
@@ -421,6 +376,331 @@ def cmd_load_metrics(args: argparse.Namespace) -> None:
         monthly_str = f"{monthly*100:+.1f}%" if isinstance(monthly, float) else "N/A"
         weekly_str = f"{weekly*100:+.1f}%" if isinstance(weekly, float) else "N/A"
         print(f"  [{flag:10s}] {name:<30s}  月: {monthly_str:>8s}  週: {weekly_str:>8s}")
+
+
+# ──────────────────────────────────────────────────────
+# eval-sample（抽樣 Q&A 供 Claude Code 評估）
+# ──────────────────────────────────────────────────────
+
+def cmd_eval_sample(args: argparse.Namespace) -> None:
+    """從 qa_final.json 隨機抽樣 N 筆 Q&A，輸出 JSON（--with-golden 做分類對照）。"""
+    size = args.size
+    seed = args.seed
+    with_golden = getattr(args, "with_golden", False)
+
+    qas = _load_qa_final()
+    if not qas:
+        sys.exit(1)
+
+    rng = random.Random(seed)
+    sample_size = min(size, len(qas))
+    sampled = rng.sample(qas, sample_size)
+
+    # 如果要做分類對照，載入 golden_qa.json 做 question 匹配
+    golden_map: dict[str, dict] = {}
+    if with_golden and GOLDEN_QA_PATH.exists():
+        golden = json.loads(GOLDEN_QA_PATH.read_text(encoding="utf-8"))
+        for g in golden:
+            golden_map[g["question"].strip()] = g
+
+    output_items: list[dict] = []
+    for qa in sampled:
+        question = qa.get("question", "")
+        answer = qa.get("answer", "")
+        item: dict = {
+            "stable_id": qa.get("stable_id", qa.get("id", "")),
+            "question": question,
+            "answer": answer,
+            "keywords": qa.get("keywords", []),
+            "confidence": qa.get("confidence", "N/A"),
+            "category": qa.get("category", ""),
+            "difficulty": qa.get("difficulty", ""),
+            "evergreen": qa.get("evergreen", ""),
+            "source_title": qa.get("source_title", ""),
+            "source_date": qa.get("source_date", ""),
+        }
+        # 匹配 golden 做分類對照
+        g = golden_map.get(question.strip())
+        if g:
+            item = {
+                **item,
+                "expected_category": g.get("expected_category", ""),
+                "expected_difficulty": g.get("expected_difficulty", ""),
+                "expected_evergreen": g.get("expected_evergreen", ""),
+            }
+        output_items.append(item)
+
+    result = {
+        "sample_size": len(output_items),
+        "seed": seed,
+        "with_golden": with_golden,
+        "golden_matched": sum(1 for i in output_items if "expected_category" in i),
+        "sampled_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "items": output_items,
+    }
+
+    # 寫入檔案 + stdout
+    EVAL_SAMPLE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _write_atomic(EVAL_SAMPLE_PATH, result)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+# ──────────────────────────────────────────────────────
+# eval-retrieval-local（規則式 Retrieval 評估，無 OpenAI）
+# ──────────────────────────────────────────────────────
+
+def _kw_fuzzy_hit(exp_kw: str, retrieved_kws: set[str]) -> bool:
+    """子字串雙向匹配（與 05_evaluate.py 相同邏輯）。"""
+    kw = exp_kw.lower()
+    return any(
+        kw in rkw or (len(rkw) >= 2 and rkw in kw)
+        for rkw in retrieved_kws
+    )
+
+
+def _keyword_search(query: str, qas: list[dict], top_k: int = 5) -> list[tuple[dict, float]]:
+    """關鍵字加權搜尋（與 cmd_search 相同邏輯，回傳 (qa, score) 清單）。"""
+    tokens = set(query.lower().split())
+    scored: list[tuple[dict, float]] = []
+
+    for qa in qas:
+        kw_tokens = set(kw.lower() for kw in qa.get("keywords", []))
+        q_tokens = set(qa.get("question", "").lower().split())
+        a_tokens = set(qa.get("answer", "").lower().split())
+        score = (
+            len(tokens & kw_tokens) * 3
+            + len(tokens & q_tokens) * 2
+            + len(tokens & a_tokens) * 1
+        )
+        if score > 0:
+            scored.append((qa, float(score)))
+
+    return sorted(scored, key=lambda x: -x[1])[:top_k]
+
+
+def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
+    """規則式 Retrieval 評估（KW Hit Rate / MRR / Cat Hit Rate），輸出 top-1 供 LLM 判斷。"""
+    top_k = getattr(args, "top_k", 5)
+
+    if not GOLDEN_RETRIEVAL_PATH.exists():
+        print(f"golden_retrieval.json 不存在：{GOLDEN_RETRIEVAL_PATH}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        golden_cases = json.loads(GOLDEN_RETRIEVAL_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        print(f"golden_retrieval.json 格式錯誤：{e}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(golden_cases, list):
+        print("golden_retrieval.json 應為 JSON array", file=sys.stderr)
+        sys.exit(1)
+
+    qas = _load_qa_final()
+    if not qas:
+        sys.exit(1)
+
+    case_results: list[dict] = []
+
+    for case in golden_cases:
+        query = case.get("query", "")
+        if not query:
+            continue
+        expected_kws = [kw.lower() for kw in case.get("expected_keywords", [])]
+        expected_cats = case.get("expected_categories", [])
+
+        results = _keyword_search(query, qas, top_k=top_k)
+        retrieved = [r[0] for r in results]
+        retrieved_scores = [r[1] for r in results]
+
+        # KW Hit Rate（fuzzy 匹配）
+        all_retrieved_kws: set[str] = set()
+        for qa in retrieved:
+            all_retrieved_kws.update(kw.lower() for kw in qa.get("keywords", []))
+
+        kw_hits = sum(1 for kw in expected_kws if _kw_fuzzy_hit(kw, all_retrieved_kws))
+        kw_hit_rate = kw_hits / len(expected_kws) if expected_kws else 0
+
+        # Category Hit Rate
+        retrieved_cats = {qa.get("category", "") for qa in retrieved}
+        cat_hits = len(retrieved_cats & set(expected_cats))
+        cat_hit_rate = cat_hits / len(expected_cats) if expected_cats else 0
+
+        # MRR: 找第一個 category 命中的位置
+        first_relevant_rank = 0
+        for rank, qa in enumerate(retrieved, 1):
+            if qa.get("category", "") in expected_cats:
+                first_relevant_rank = rank
+                break
+        mrr = 1 / first_relevant_rank if first_relevant_rank > 0 else 0
+
+        top1 = retrieved[0] if retrieved else {}
+        case_results.append({
+            "scenario": case.get("scenario", ""),
+            "query": query,
+            "keyword_hit_rate": round(kw_hit_rate, 2),
+            "category_hit_rate": round(cat_hit_rate, 2),
+            "mrr": round(mrr, 2),
+            "top1_question": top1.get("question", ""),
+            "top1_answer": top1.get("answer", "")[:500],
+            "top1_category": top1.get("category", ""),
+            "top1_score": retrieved_scores[0] if retrieved_scores else 0,
+            "top_k_questions": [qa.get("question", "")[:60] for qa in retrieved],
+        })
+
+    # 彙整統計
+    if not case_results:
+        print("所有 golden case 均無結果。", file=sys.stderr)
+        sys.exit(1)
+
+    avg_kw_hit = sum(c["keyword_hit_rate"] for c in case_results) / len(case_results)
+    avg_cat_hit = sum(c["category_hit_rate"] for c in case_results) / len(case_results)
+    avg_mrr = sum(c["mrr"] for c in case_results) / len(case_results)
+
+    output = {
+        "search_engine": "keyword",
+        "total_cases": len(case_results),
+        "avg_keyword_hit_rate": round(avg_kw_hit, 2),
+        "avg_category_hit_rate": round(avg_cat_hit, 2),
+        "avg_mrr": round(avg_mrr, 2),
+        "note": "llm_top1_relevant 需由 Claude Code 逐一判斷",
+        "case_details": case_results,
+    }
+
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+
+
+# ──────────────────────────────────────────────────────
+# eval-save（儲存 Claude Code 評估結果）
+# ──────────────────────────────────────────────────────
+
+_REQUIRED_SECTIONS = {"generation", "retrieval", "classification"}
+_GENERATION_DIMS = {"relevance", "accuracy", "completeness", "granularity"}
+_SAFE_ENGINE_RE = re.compile(r"[^a-zA-Z0-9_\-]")
+
+
+def _validate_eval_result(data: dict) -> list[str]:
+    """驗證 eval 結果 JSON 結構，回傳錯誤清單（空 = 通過）。"""
+    errors: list[str] = []
+    missing = _REQUIRED_SECTIONS - set(data.keys())
+    if missing:
+        errors.append(f"缺少必要區塊：{missing}")
+        return errors
+
+    gen = data["generation"]
+    if not isinstance(gen, dict):
+        errors.append("generation 應為 dict")
+    else:
+        missing_dims = _GENERATION_DIMS - set(gen.keys())
+        if missing_dims:
+            errors.append(f"generation 缺少維度：{missing_dims}")
+        for dim in _GENERATION_DIMS & set(gen.keys()):
+            val = gen[dim]
+            if not isinstance(val, (int, float)) or val < 1 or val > 5:
+                errors.append(f"generation.{dim} 應為 1-5 的數值，實際：{val}")
+
+    ret = data["retrieval"]
+    if not isinstance(ret, dict):
+        errors.append("retrieval 應為 dict")
+    else:
+        for key in ["kw_hit_rate", "mrr"]:
+            if key not in ret:
+                errors.append(f"retrieval 缺少 {key}")
+
+    cls = data["classification"]
+    if not isinstance(cls, dict):
+        errors.append("classification 應為 dict")
+    else:
+        if "category_accuracy" not in cls:
+            errors.append("classification 缺少 category_accuracy")
+
+    return errors
+
+
+def cmd_eval_save(args: argparse.Namespace) -> None:
+    """儲存 Claude Code 評估結果為版本化 JSON（output/evals/{date}_claude-code_{engine}.json）。"""
+    input_path = Path(args.input)
+    raw_engine = getattr(args, "extraction_engine", "claude-code")
+    engine = _SAFE_ENGINE_RE.sub("_", raw_engine)
+    update_baseline = getattr(args, "update_baseline", False)
+
+    if not input_path.exists():
+        print(f"輸入檔案不存在：{input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        data = json.loads(input_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        print(f"JSON 格式錯誤：{e}", file=sys.stderr)
+        sys.exit(1)
+
+    errors = _validate_eval_result(data)
+    if errors:
+        print("eval 結果驗證失敗：", file=sys.stderr)
+        for err in errors:
+            print(f"  - {err}", file=sys.stderr)
+        sys.exit(1)
+
+    # 補充 metadata（immutable）
+    today = datetime.now().strftime("%Y-%m-%d")
+    data = {
+        **data,
+        "provider": "claude-code",
+        "extraction_engine": engine,
+        "date": today,
+    }
+
+    # 寫入版本化 JSON（路徑驗證防 traversal）
+    EVALS_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{today}_claude-code_{engine}.json"
+    eval_path = EVALS_DIR / filename
+    if not eval_path.resolve().is_relative_to(EVALS_DIR.resolve()):
+        print("輸出路徑異常，拒絕寫入。", file=sys.stderr)
+        sys.exit(1)
+    _write_atomic(eval_path, data)
+    print(f"已儲存：{eval_path}")
+
+    # Baseline 比較
+    if EVAL_BASELINE_PATH.exists():
+        try:
+            baseline = json.loads(EVAL_BASELINE_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            print("基準線檔案格式錯誤，跳過比較。", file=sys.stderr)
+            return
+        base_gen = baseline.get("generation", {})
+        new_gen = data["generation"]
+
+        base_avg = sum(base_gen.get(d, 0) for d in _GENERATION_DIMS) / len(_GENERATION_DIMS)
+        new_avg = sum(new_gen.get(d, 0) for d in _GENERATION_DIMS) / len(_GENERATION_DIMS)
+        delta = new_avg - base_avg
+
+        print(f"\n基準線比較：")
+        print(f"  基準線平均：{base_avg:.2f}")
+        print(f"  本次平均：{new_avg:.2f}")
+        print(f"  差異：{delta:+.2f}")
+
+        for dim in sorted(_GENERATION_DIMS):
+            bv = base_gen.get(dim, 0)
+            nv = new_gen.get(dim, 0)
+            d = nv - bv
+            print(f"  {dim}: {nv:.2f} (基準: {bv:.2f}, {d:+.2f})")
+
+        if update_baseline:
+            if delta >= 0.05:
+                new_baseline = {
+                    "version": "baseline",
+                    "date": today,
+                    "sample_size": data.get("sample_size", 20),
+                    "note": f"由 /evaluate-qa-local 更新（delta={delta:+.2f}）",
+                    "generation": new_gen,
+                    "retrieval": data["retrieval"],
+                    "classification": data["classification"],
+                }
+                _write_atomic(EVAL_BASELINE_PATH, new_baseline)
+                print(f"\n基準線已更新（delta={delta:+.2f} >= 0.05）")
+            else:
+                print(f"\n未更新基準線（delta={delta:+.2f} < 0.05）")
+    else:
+        print("（無基準線可比較）")
 
 
 # ──────────────────────────────────────────────────────
@@ -530,6 +810,19 @@ def main() -> None:
 
     sub.add_parser("eval-compare", help="跨 provider eval 比較表")
 
+    p_sample = sub.add_parser("eval-sample", help="從 qa_final.json 抽樣 N 筆 Q&A")
+    p_sample.add_argument("--size", type=int, default=20, help="抽樣筆數（預設 20）")
+    p_sample.add_argument("--seed", type=int, default=42, help="隨機種子（預設 42）")
+    p_sample.add_argument("--with-golden", action="store_true", help="載入 golden_qa.json 做分類對照")
+
+    p_ret_local = sub.add_parser("eval-retrieval-local", help="規則式 Retrieval 評估（無 OpenAI）")
+    p_ret_local.add_argument("--top-k", type=int, default=5, help="每個 case 取 top-K（預設 5）")
+
+    p_save = sub.add_parser("eval-save", help="儲存 Claude Code 評估結果")
+    p_save.add_argument("--input", required=True, help="評估結果 JSON 路徑")
+    p_save.add_argument("--extraction-engine", default="claude-code", help="萃取引擎（預設 claude-code）")
+    p_save.add_argument("--update-baseline", action="store_true", help="若超過基準線 +0.05 則更新")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -543,6 +836,9 @@ def main() -> None:
         "search":           cmd_search,
         "load-metrics":     cmd_load_metrics,
         "eval-compare":     cmd_eval_compare,
+        "eval-sample":      cmd_eval_sample,
+        "eval-retrieval-local": cmd_eval_retrieval_local,
+        "eval-save":        cmd_eval_save,
     }
     dispatch[args.cmd](args)
 

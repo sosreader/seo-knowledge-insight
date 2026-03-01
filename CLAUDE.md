@@ -139,6 +139,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/generate-report <URL 或路徑>` — 生成 SEO 週報（解析指標 + 知識庫搜尋）
 - `/search <問題>` — 搜尋知識庫（關鍵字加權，回傳 top-K Q&A）
 - `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
+- `/evaluate-qa-local` — Q&A 品質評估（Claude Code 作為 Judge，不需要 OpenAI）
 
 ### 評估命令（需要 OpenAI API key）
 
@@ -161,7 +162,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 | 指標解析 | `fetch_from_sheets()` | `qa_tools.py load-metrics` |
 | 知識庫搜尋 | `text-embedding-3-small` + cosine | `qa_tools.py search`（關鍵字加權）|
 | 週報生成 | `gpt-5.2` API | Claude Code 直接推理 |
-| Q&A 品質評估 | `gpt-5.2` + `gpt-5-mini` | 需要 OpenAI（LLM Judge） |
+| Q&A 品質評估 | `gpt-5.2` + `gpt-5-mini` | `/evaluate-qa-local`（Claude Code 作為 Judge） |
 | 需要 API key | OPENAI_API_KEY | 不需要 |
 
 ---

@@ -203,7 +203,10 @@ python scripts/qa_tools.py search --query "AMP" --category "Discover與AMP"  # �
 python scripts/qa_tools.py load-metrics --source "https://docs.google.com/..."
 python scripts/qa_tools.py load-metrics --source metrics.tsv  # 本機 TSV 檔
 
-# Eval 比較
+# Eval（無 OpenAI）
+python scripts/qa_tools.py eval-sample --size 20 --seed 42 --with-golden  # 抽樣 Q&A
+python scripts/qa_tools.py eval-retrieval-local     # 規則式 Retrieval 評估
+python scripts/qa_tools.py eval-save --input <json> --extraction-engine claude-code  # 儲存結果
 python scripts/qa_tools.py eval-compare             # 跨 provider eval 比較表
 ```
 
