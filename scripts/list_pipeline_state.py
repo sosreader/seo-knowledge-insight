@@ -220,10 +220,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Pipeline 狀態查詢工具（供 AI 工具使用，不需要 OpenAI API）"
     )
+    _STEP_MAP = {"2": "extract-qa", "3": "dedupe-classify"}
+
+    def _parse_step_state(value: str) -> str:
+        if value in _STEP_MAP:
+            return _STEP_MAP[value]
+        if value in ("extract-qa", "dedupe-classify"):
+            return value
+        raise argparse.ArgumentTypeError(
+            f"有效值：extract-qa, dedupe-classify（也接受數字 2 或 3），收到：{value!r}"
+        )
+
     parser.add_argument(
         "--step",
-        choices=["extract-qa", "dedupe-classify"],
-        help="查詢指定步驟狀態（extract-qa 或 dedupe-classify）",
+        type=_parse_step_state,
+        metavar="{extract-qa,dedupe-classify}",
+        help="查詢指定步驟狀態（extract-qa 或 dedupe-classify，也接受數字 2 或 3）",
     )
     parser.add_argument("--merge", action="store_true", help="合併 per-meeting JSON → qa_all_raw.json")
     parser.add_argument("--status", action="store_true", help="顯示完整 pipeline 狀態")

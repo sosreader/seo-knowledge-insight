@@ -181,7 +181,7 @@ def cmd_add_meeting(args: argparse.Namespace) -> None:
 
     # 更新 qa_final.json
     if not QA_FINAL_PATH.exists():
-        print("qa_final.json 不存在，請先執行 Step 3 產生基底。")
+        print("qa_final.json 不存在，請先執行 dedupe-classify 產生基底。")
         sys.exit(1)
 
     existing_data = json.loads(QA_FINAL_PATH.read_text(encoding="utf-8"))
