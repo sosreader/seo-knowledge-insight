@@ -2,6 +2,82 @@
 
 從 Notion 上累積兩年的 SEO 顧問會議紀錄中，自動萃取結構化的問答資料庫。
 
+## 功能總覽
+
+本系統提供六大功能，自動化建構並維護企業 SEO 知識庫。新使用者可在 1 分鐘內快速理解系統能力。
+
+### 1. 知識庫建構 Pipeline（步驟 1–3）
+
+- **Notion 增量擷取** — 自動對比 `last_edited_time`，只抓新增或有更新的會議紀錄（無需手動篩選）
+- **OpenAI 自動萃取** — 用 `gpt-5.2` 將會議 Markdown 解析為結構化 Q&A（What/Why/How/Evidence）
+- **Embedding 去重合併** — 基於 cosine similarity 與 `text-embedding-3-small` 自動合併重複 Q&A
+- **智能分類標籤** — 10 個分類（技術 SEO、內容策略、連結建設等），用 `gpt-5-mini` 自動標記難度與時效性
+- **目前規模** — 87 場會議、725 筆原始 Q&A、717 筆去重後 Q&A
+
+### 2. 每週 SEO 週報生成（步驟 4）
+
+- **自動指標拉取** — 從 Google Sheets 讀取週度指標（無需手動複製貼上）
+- **異常值偵測** — 月趨勢 ±15% 或週趨勢 ±20% 自動標記異常
+- **知識庫 Hybrid Search** — 將異常指標對應到相關 Q&A，生成行動建議
+- **完整報告輸出** — Markdown 格式，包含概覽、指標分析、異常原因、Todo 與相關知識補充
+
+### 3. Q&A 品質評估（步驟 5）
+
+- **五維度 LLM-as-Judge** — Relevance、Accuracy、Completeness、Granularity、Faithfulness（各 1–5 分）
+- **Retrieval 品質指標** — Keyword Hit Rate（78% ✓）、MRR、LLM Top-1 Precision（100% ✓）
+- **分類準確度檢驗** — Category、Difficulty、Evergreen 標籤驗證
+- **對標基準線** — 自動與歷史 eval 比較進度（Completeness 3.85、Accuracy 3.95）
+
+### 4. REST API 服務（FastAPI，`app/`）
+
+- **語意搜尋** — `POST /api/v1/search`（Embedding cosine similarity + 關鍵字加權）
+- **RAG 問答** — `POST /api/v1/chat`（知識庫檢索 + OpenAI 生成回答）
+- **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢）
+- **API 安全** — v1.11 新增 API Key 認證（`X-API-Key` header）與 Rate Limit（chat 20/min、search/qa 60/min）
+
+### 5. Claude Code 模式（不需要 OpenAI API Key）
+
+- **`/search`** — 知識庫語意搜尋（Claude 本身作為 LLM 引擎）
+- **`/chat`** — 互動式 RAG 問答（Claude 推理 + 本地知識庫）
+- **`/generate-report`** — SEO 週報生成（解析指標、知識庫搜尋、推薦行動）
+- **`/pipeline-local`** — 完整 Pipeline Steps 1–4（無需 OpenAI API）
+
+### 6. Laminar 離線評估（v1.10）
+
+- **自動監控三環節** — Retrieval 品質、Q&A Extraction、RAG Chat 端到端表現
+- **無需額外 API** — 基於 Laminar SDK，純 Python/SQL 邏輯，不消耗 OpenAI tokens
+- **儀表板可視化** — 所有指標匯總至 Laminar 後台（laminar.sh/app/evals）
+
+---
+
+**快速開始**：[前置準備](#前置準備)
+
+---
+
+## 指令速查
+
+依功能對照三種使用方式：CLI 腳本、Claude Code 指令、REST API。
+
+| 功能                    | CLI 腳本                                             | Claude Code 指令                                                                               | REST API                                    |
+| ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Notion 擷取             | `make step1`                                         | 無獨立指令 — Step 1 是 Notion API 呼叫而非 LLM 任務，`/pipeline-local` 內部仍執行 `make step1` | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
+| Q&A 萃取                | `make step2`                                         | `/extract-qa`（不需要 OpenAI）                                                                 | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
+| 去重 + 分類             | `make step3`                                         | `/dedupe-classify`（不需要 OpenAI）                                                            | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
+| 知識庫搜尋              | `python scripts/qa_tools.py search --query "..."`    | `/search <問題>`（不需要 OpenAI）                                                              | `POST /api/v1/search`                       |
+| RAG 問答                | 無對應 — 對話需維護多輪歷史狀態，CLI 單次呼叫不適合  | `/chat`（不需要 OpenAI）                                                                       | `POST /api/v1/chat`                         |
+| Q&A 列表查詢            | 無對應 — 可直接讀 `output/qa_final.json`，無獨立指令 | 無對應 — 屬結構化欄位過濾，REST 更適合                                                         | `GET /api/v1/qa`                            |
+| 單筆 Q&A 詳情           | 無對應 — 可直接讀 `output/qa_final.json`，無獨立指令 | 無對應 — 屬結構化 ID 查詢，REST 更適合                                                         | `GET /api/v1/qa/{id}`                       |
+| 所有分類                | 無對應 — 可直接讀 `output/qa_final.json`，無獨立指令 | 無對應 — 屬結構化聚合查詢，REST 更適合                                                         | `GET /api/v1/qa/categories`                 |
+| 週報生成                | `make step4`                                         | `/generate-report <URL>`（不需要 OpenAI）                                                      | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| 品質評估                | `make step5`                                         | `/evaluate-qa`（**需要 OpenAI** — LLM-as-Judge）                                               | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| 知識庫建構 Steps 1–3    | `make pipeline`                                      | `/pipeline-local`（不需要 OpenAI，Steps 1–4）                                                  | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| 完整 pipeline Steps 1–5 | `python scripts/run_pipeline.py`                     | `/run-pipeline`（**需要 OpenAI** — Steps 1–5 含評估）                                          | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| 健康檢查                | 無對應 — 服務監控端點，本地 pipeline 不適用          | 無對應 — 服務監控端點，本地 pipeline 不適用                                                    | `GET /health`                               |
+
+**REST API** — 需要先啟動 `uvicorn app.main:app --port 8001`，並在 header 帶 `X-API-Key`（生產環境）。
+
+---
+
 ## 架構流程
 
 ```
