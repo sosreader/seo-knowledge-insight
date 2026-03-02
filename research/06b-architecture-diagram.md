@@ -82,15 +82,15 @@ flowchart TD
     end
 
     subgraph Observability["可觀測性 v1.19 完整整合（FastAPI+CLI+Evals）"]
-        S2 -->|@observe + init_laminar| LM["Laminar SDK v0.5<br/>OpenTelemetry-based<br/>lmnr observe"]
-        S3 -->|@observe + init_laminar| LM
-        S4 -->|@observe + init_laminar| LM
-        S5 -->|@observe + init_laminar| LM
-        QT["qa_tools.py 6 subcommands<br/>@observe + flush_laminar"] -->|search/merge_qa/etc| LM
-        API -->|auto OpenAI trace| LM
-        EC["evals/eval_chat.py<br/>Laminar.initialize()"] -->|lmnr eval| LM
+        S2 -->|"@observe + init_laminar"| LM["Laminar SDK v0.5<br/>OpenTelemetry-based<br/>lmnr observe"]
+        S3 -->|"@observe + init_laminar"| LM
+        S4 -->|"@observe + init_laminar"| LM
+        S5 -->|"@observe + init_laminar"| LM
+        QT["qa_tools.py 6 subcommands<br/>@observe + flush_laminar"] -->|"search/merge_qa/etc"| LM
+        API -->|"auto OpenAI trace"| LM
+        EC["evals/eval_chat.py<br/>Laminar.initialize()"] -->|"lmnr eval"| LM
         LM --> LD["Laminar Dashboard<br/>Traces + Spans + Events"]
-        OS -.->|score_event| LM
+        OS -.->|"score_event"| LM
     end
 
     subgraph OfflineEvals["離線評估 v1.10"]

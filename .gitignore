@@ -11,3 +11,12 @@ __pycache__/
 output/.cache/
 # Version artifacts（定期快照，用 registry.json 追蹤）
 output/.versions/step*/
+
+# Python virtual environment
+.venv/
+
+# Playwright MCP server cache
+.playwright-mcp/
+
+# Local screenshots
+laminar-*.png
