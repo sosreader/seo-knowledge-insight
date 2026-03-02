@@ -561,7 +561,7 @@ def _record_laminar_step_metadata(stats: dict, ...) -> None:
 
 ## OpenAI Data Agent 六層 Context 對比（2026-03-02）
 
-> 參考：[OpenAI Data Agent 官方例子](https://github.com/openai/data-agent-examples)；詳細改進計畫見 `PLAN_MULTI_LAYER_CONTEXT.md`。
+> 參考：[OpenAI Data Agent 官方例子](https://github.com/openai/data-agent-examples)；詳細改進計畫見 `plans/in-progress/multi-layer-context.md`。
 
 ### OpenAI 六層架構概覽
 
@@ -789,5 +789,5 @@ Agent 步驟：
    - 在 top-5 結果上執行 semantic reranking
    - 成本 vs 效果評估（未來才需要）
 
-詳見完整計畫：`PLAN_MULTI_LAYER_CONTEXT.md`。
+詳見完整計畫：`plans/in-progress/multi-layer-context.md`。
 

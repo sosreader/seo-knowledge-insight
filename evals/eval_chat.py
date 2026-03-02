@@ -21,11 +21,25 @@ Run:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+# Initialise Laminar BEFORE any OpenAI client is constructed so the
+# opentelemetry-instrumentation-openai auto-patcher can wrap it.
+_lmnr_key = os.getenv("LMNR_PROJECT_API_KEY", "")
+try:
+    from lmnr import Laminar  # type: ignore[import]
+
+    if _lmnr_key:
+        Laminar.initialize(project_api_key=_lmnr_key)
+except ImportError:
+    pass
+except Exception as _exc:
+    print(f"[eval_chat] Laminar.initialize() failed: {_exc}", file=sys.stderr)
 
 # Bootstrap QAStore before importing app modules that depend on it.
 from app.core.store import store  # noqa: E402

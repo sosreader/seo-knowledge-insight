@@ -65,6 +65,27 @@ Notion 會議紀錄（87 份，2023–2026）
   查詢工具：scripts/audit_trail.py fetch|access|report
             ↓ make audit / make audit-top
 
+══════════════ Observability（2026-03-02 新增，v1.19）══════════════
+
+[Laminar Tracing] OpenTelemetry-based distributed tracing（optional）
+  FastAPI lifespan：Laminar.initialize() @ startup
+  CLI scripts：init_laminar() @ main() 開始 + flush_laminar() @ finally 區塊
+  @observe 裝飾器：
+    app/core/chat.py：rag_chat（自動 OpenAI 追蹤）
+    evals/eval_chat.py：eval_rag_chat（評估步驟追蹤）
+    scripts/qa_tools.py：6 個子命令
+      - merge_qa、search、load_metrics、eval_sample、eval_retrieval_local、eval_save
+
+[Laminar Scoring] 即時評估事件附加
+  score_event()：generic event 記錄
+  score_rag_response()：answer_length、has_sources、top_source_score、source_count
+  score_enrichment_boost()：synonym_hits、freshness_score（Multi-Layer Context 指標）
+  score_qa_tools_operation()：qa_tools.py count + duration_ms
+
+[TestIsolation] 測試隔離
+  conftest.py：monkeypatch.delenv("LMNR_PROJECT_API_KEY") → 防止測試 traces 洩漏
+              ↓ make test（200+ tests，traces 隔離）
+
 ══════════════ Multi-Layer Context（2026-03-02 新增，v1.19）══════════════
 
 [Enrichment] scripts/enrich_qa.py — 離線 Q&A 豐富化（make enrich）
@@ -231,7 +252,7 @@ Notion 會議紀錄（87 份，2023–2026）
 - **12-Factor App Factor VI — Stateless processes**（Wiggins, 2011, Heroku）：唯讀查詢層用 in-memory 是合理優化，不違反無狀態原則。
 - **Offline Feature Store + Online Serving**（Feast, 2019, Google/Tecton）：離線 pipeline 產出特徵 → 物化到 online store → API 讀取。與 Pipeline → qa_final.json → API 模式完全對應。
 
-**評估**：符合當前規模（4.3MB）。DB 遷移路徑：pgvector（PLAN_SEO_INSIGHT.md）。
+**評估**：符合當前規模（4.3MB）。DB 遷移路徑：pgvector（`plans/in-progress/seo-insight.md`）。
 
 ---
 
@@ -279,15 +300,56 @@ Notion 會議紀錄（87 份，2023–2026）
 
 ---
 
-### I. Observability — Laminar SDK（OpenTelemetry-based）
+### I. Observability — Laminar SDK（OpenTelemetry-based，v1.19 完全整合）
 
-**決策**：`@observe()` 裝飾器套用於所有 LLM 調用，no-op shim 確保 API key 未設定時優雅降級。
+**決策**：`@observe()` 裝飾器套用於所有 LLM 調用 + CLI 子命令，no-op shim 確保 API key 未設定時優雅降級。
+
+**實作進展（v1.19，2026-03-02）**：
+
+新增模組：
+- `utils/observability.py`：`init_laminar()` + `flush_laminar()` + `start_cli_span()` context manager，CLI script 專用初始化
+  - `@observe(name=...)` re-export from lmnr with no-op fallback
+  - 多次調用 `init_laminar()` 為 safe（idempotent）
+  - LMNR_PROJECT_API_KEY 未設定時優雅降級（不影響 pipeline 執行）
+
+- `utils/laminar_scoring.py`：在 active span 內記錄評估分數
+  - `score_event(name, value)`：通用 Laminar event 記錄
+  - `score_rag_response(answer, sources, query)`：rag_chat span 內記錄 4 個即時評分
+    - answer_length、has_sources、top_source_score、source_count
+  - `score_enrichment_boost(synonym_hits, freshness_score)`：Multi-Layer Context enrichment 指標
+  - `score_qa_tools_operation(operation, item_count, duration_ms)`：qa_tools.py 子命令計時和計數
+
+- `evals/eval_chat.py`：Laminar 自動 OpenAI instrumentation（`Laminar.initialize()` in main）
+
+- `tests/conftest.py`：測試隔離（`monkeypatch.delenv("LMNR_PROJECT_API_KEY")` 防止測試 traces 洩漏到 Laminar）
+
+**qa_tools.py 集成**（6 個子命令）：
+```python
+@observe(name="qa_tools.merge_qa")       # Step 2 QA 合併
+@observe(name="qa_tools.search")         # 知識庫搜尋
+@observe(name="qa_tools.load_metrics")   # 指標載入
+@observe(name="qa_tools.eval_sample")    # 評估採樣
+@observe(name="qa_tools.eval_retrieval_local")  # 本地 retrieval 評估
+@observe(name="qa_tools.eval_save")      # 評估檔案儲存
+```
+
+**依賴更新**（requirements.txt，2026-03-02）：
+```
+lmnr[openai]>=0.5.0
+opentelemetry-semantic-conventions-ai>=0.4.13,<0.4.14
+```
+
+**Laminar 呼叫路徑**：
+- FastAPI lifespan：app/main.py 啟動時 `Laminar.initialize()`
+- CLI scripts：各 step script 呼叫 `init_laminar()` at main() 開始 + `flush_laminar()` at 結束（finally 區塊）
+- evals：eval_chat.py 手動初始化 + LLM auto-instrumentation
 
 **學術 / 業界支撐**：
 
 - **OpenTelemetry Specification**（CNCF, 2023）：distributed tracing 是 cloud-native 應用的標準可觀測性手段。
 - **Observability Engineering**（Majors et al., 2022, O'Reilly）：三大支柱 — traces、metrics、logs。本專案有 traces（Laminar）和 logs（audit_logger），**缺 metrics**。
 - **Prometheus + Grafana 業界標準**（2024）：Prometheus metrics + `/metrics` endpoint 是生產監控標準。
+- **OpenTelemetry Auto-Instrumentation**（Google + Datadog, 2023）：SDK 自動捕捉 HTTP client 呼叫（OpenAI、Google Sheets），無需手動攔截。
 
 **評估**：traces + logs 已具備，缺 metrics（P50/P95/P99 延遲、cache hit rate、token usage）。建議加入 `prometheus-fastapi-instrumentator`。
 
@@ -360,7 +422,7 @@ CLI scripts 不依賴 FastAPI lifespan，需要在 `main()` 手動呼叫 `init_l
 
 本版本針對現有系統的 L3（Learnings）和 L4（Runtime Context）層進行系統性補強，直接對應 OpenAI Data Agent 六層架構的前四層（L1-L4）。
 
-**改進重點**（見 `PLAN_MULTI_LAYER_CONTEXT.md` 詳細計畫）：
+**改進重點**（見 `plans/in-progress/multi-layer-context.md` 詳細計畫）：
 
 1. **L1 Query Patterns**（P1-B）：建立 SEO 領域同義詞辭典 + offline enrichment 機制
 2. **L2 Annotations**（P2-A）：強化 metadata 在搜尋中的加權（confidence + freshness）
@@ -464,4 +526,93 @@ qa_final.json → enrich_qa.py → qa_enriched.json
 - **LLM-based Reranking**：top-5 結果上的語意再排序（成本 vs 收益評估）
 - **多步 Agent 推理**：支援複雜、多條件查詢（L6 層，後期優先）
 
-詳見完整實作計畫：`PLAN_MULTI_LAYER_CONTEXT.md`。
+詳見完整實作計畫：`plans/in-progress/multi-layer-context.md`。
+
+---
+
+## v1.19 — Observability 全面整合與 CLI Laminar 追蹤（2026-03-02）
+
+### 核心新增
+
+**Laminar 完全整合** — 從 FastAPI 層擴展至 CLI 層和評估層：
+
+1. **新增 utils/observability.py**
+   - `init_laminar()`：CLI 腳本啟動時初始化（safe 多次調用）
+   - `flush_laminar()`：main() finally 區塊提交待送出的 spans
+   - `start_cli_span(name, input_data)`：CLI 子命令級 context manager（TOOL type）
+   - `@observe` re-export：from lmnr，with no-op shim when lmnr not installed
+   - 無條件降級：LMNR_PROJECT_API_KEY 未設定時 pipeline 正常執行
+
+2. **新增 utils/laminar_scoring.py**
+   - 在 active span 內即時記錄評估指標（不另起 LLM 呼叫）
+   - `score_event(name, value)`：通用 Laminar event
+   - `score_rag_response(answer, sources, query)`：RAG 回答 4 維度
+   - `score_enrichment_boost(synonym_hits, freshness_score)`：Multi-Layer enrichment 指標
+   - `score_qa_tools_operation(operation, item_count, duration_ms)`：CLI 操作計時
+
+3. **evals/eval_chat.py 整合**
+   - `Laminar.initialize()` @ main() 開始（before store import）
+   - OpenAI auto-instrumentation：所有 gpt-5.2 呼叫自動追蹤
+
+4. **scripts/qa_tools.py @observe 裝飾器**
+   ```
+   merge_qa (Step 2 QA 合併)
+   search (知識庫搜尋)
+   load_metrics (Google Sheets 指標載入)
+   eval_sample (評估採樣)
+   eval_retrieval_local (本地 retrieval 評估)
+   eval_save (評估結果存檔)
+   ```
+
+5. **tests/conftest.py 隔離**
+   - `monkeypatch.delenv("LMNR_PROJECT_API_KEY", raising=False)`
+   - 防止測試 traces 洩漏到 Laminar dashboard（test isolation）
+
+### 依賴更新
+
+```
+lmnr[openai]>=0.5.0                                        # +new
+opentelemetry-semantic-conventions-ai>=0.4.13,<0.4.14    # +new, pinned
+```
+
+Laminar 版本 0.5.x 變更重點：
+- `Laminar.initialize(project_api_key=...)`：取代 0.4.x 的 `Laminar(project_api_key=...)`
+- `Laminar.start_as_current_span(name, input, span_type)`：新增 span_type 參數（TOOL, LLM, etc.）
+- `Laminar.event(name, value)`：Span 內記錄事件（用於即時評分）
+- `Laminar.flush()`：確保待送 spans 在 process exit 前提交
+
+### 架構演變
+
+**呼叫路徑**：
+```
+FastAPI lifespan                CLI scripts              evals
+    ↓                              ↓                        ↓
+Laminar.initialize()          init_laminar()        Laminar.initialize()
+    ↓                              ↓                        ↓
+@observe 自動捕捉            @observe 裝飾器        @observe 裝飾器
+  LLM/HTTP 呼叫               + start_cli_span       + score_event
+    ↓                              ↓                        ↓
+Laminar dashboard ←─── Laminar.flush() ←─── Laminar.event()
+```
+
+### 測試涵蓋
+
+- 206+ tests passing（包括新增 observability 隔離測試）
+- monkeypatch 保證 LMNR_PROJECT_API_KEY 在測試環境未設定
+- 測試分層：unit（pure logic） + integration（external calls mocked）
+
+### 後續優化方向
+
+1. **Metrics 補全**：Prometheus endpoint + `/metrics`
+   - P50/P95/P99 延遲、cache hit rate、token usage per operation
+2. **Laminar Dashboard 自訂**：在 Laminar UI 新增 custom evaluator（based on score_event）
+3. **Trace Retention Policy**：超過 7 天的舊 traces 自動清理
+
+### 質量檢查清單
+
+- ✅ `init_laminar()` idempotent（多次調用安全）
+- ✅ LMNR_PROJECT_API_KEY 未設定時 pipeline 正常執行（no-op shim）
+- ✅ 所有 CLI script 呼叫 flush_laminar()（finally 區塊）
+- ✅ 測試隔離（LMNR_PROJECT_API_KEY 未設定）
+- ✅ score_event 失敗不中斷業務（try-except + logger.debug）
+- ✅ requirements.txt pinned version 確保相容性

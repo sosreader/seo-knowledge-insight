@@ -16,6 +16,20 @@ from pathlib import Path
 
 # 禁止 import config：避免 _require_env("OPENAI_API_KEY") 在啟動時觸發
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Laminar observability（safe no-op if lmnr not installed）
+sys.path.insert(0, str(PROJECT_ROOT))
+from utils.observability import init_laminar, flush_laminar, observe  # noqa: E402
+from utils.laminar_scoring import score_event  # noqa: E402
+
+
+class CLIError(Exception):
+    """Non-zero exit with a message already printed to stderr."""
+
+    def __init__(self, code: int = 1):
+        self.code = code
+
+
 OUTPUT_DIR = PROJECT_ROOT / "output"
 RAW_MD_DIR = PROJECT_ROOT / "raw_data" / "markdown"
 QA_PER_MEETING_DIR = OUTPUT_DIR / "qa_per_meeting"
@@ -103,6 +117,7 @@ def cmd_list_needs_review(_args: argparse.Namespace) -> None:
 # merge-qa
 # ──────────────────────────────────────────────────────
 
+@observe(name="qa_tools.merge_qa")
 def cmd_merge_qa(_args: argparse.Namespace) -> None:
     """合併 per-meeting JSON → qa_all_raw.json（委派給 list_pipeline_state.py）。"""
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -395,6 +410,7 @@ def cmd_diff_snapshot(args: argparse.Namespace) -> None:
 # search（關鍵字搜尋，無 OpenAI）
 # ──────────────────────────────────────────────────────
 
+@observe(name="qa_tools.search")
 def cmd_search(args: argparse.Namespace) -> None:
     """關鍵字搜尋知識庫（無 OpenAI）。"""
     query = args.query
@@ -403,7 +419,7 @@ def cmd_search(args: argparse.Namespace) -> None:
 
     qas = _load_qa_final()
     if not qas:
-        sys.exit(1)
+        raise CLIError(1)
 
     pool = [qa for qa in qas if qa.get("category") == category] if category else qas
     results = _keyword_search(query, pool, top_k=top_k)
@@ -412,6 +428,7 @@ def cmd_search(args: argparse.Namespace) -> None:
         print(f"沒有找到與 '{query}' 相關的 Q&A。")
         return
 
+    score_event("results_count", float(len(results)))
     print(f"搜尋：'{query}'  找到 {len(results)} 筆（top {top_k}）\n")
     for rank, (qa, score) in enumerate(results, 1):
         sid = qa.get("stable_id", qa.get("id", "?"))
@@ -428,6 +445,7 @@ def cmd_search(args: argparse.Namespace) -> None:
 # load-metrics
 # ──────────────────────────────────────────────────────
 
+@observe(name="qa_tools.load_metrics")
 def cmd_load_metrics(args: argparse.Namespace) -> None:
     """
     從 Google Sheets URL 或本機 TSV 解析 SEO 指標。
@@ -446,7 +464,7 @@ def cmd_load_metrics(args: argparse.Namespace) -> None:
         src_path = Path(source)
         if not src_path.exists():
             print(f"檔案不存在：{src_path}", file=sys.stderr)
-            sys.exit(1)
+            raise CLIError(1)
         raw_tsv = src_path.read_text(encoding="utf-8")
 
     metrics = parse_metrics_tsv(raw_tsv)
@@ -467,6 +485,7 @@ def cmd_load_metrics(args: argparse.Namespace) -> None:
 # eval-sample（抽樣 Q&A 供 Claude Code 評估）
 # ──────────────────────────────────────────────────────
 
+@observe(name="qa_tools.eval_sample")
 def cmd_eval_sample(args: argparse.Namespace) -> None:
     """從 qa_final.json 隨機抽樣 N 筆 Q&A，輸出 JSON（--with-golden 做分類對照）。"""
     size = args.size
@@ -475,7 +494,7 @@ def cmd_eval_sample(args: argparse.Namespace) -> None:
 
     qas = _load_qa_final()
     if not qas:
-        sys.exit(1)
+        raise CLIError(1)
 
     rng = random.Random(seed)
     sample_size = min(size, len(qas))
@@ -563,26 +582,27 @@ def _keyword_search(query: str, qas: list[dict], top_k: int = 5) -> list[tuple[d
     return sorted(scored, key=lambda x: -x[1])[:top_k]
 
 
+@observe(name="qa_tools.eval_retrieval_local")
 def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
     """規則式 Retrieval 評估（KW Hit Rate / MRR / Cat Hit Rate），輸出 top-1 供 LLM 判斷。"""
     top_k = getattr(args, "top_k", 5)
 
     if not GOLDEN_RETRIEVAL_PATH.exists():
         print(f"golden_retrieval.json 不存在：{GOLDEN_RETRIEVAL_PATH}", file=sys.stderr)
-        sys.exit(1)
+        raise CLIError(1)
 
     try:
         golden_cases = json.loads(GOLDEN_RETRIEVAL_PATH.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         print(f"golden_retrieval.json 格式錯誤：{e}", file=sys.stderr)
-        sys.exit(1)
+        raise CLIError(1)
     if not isinstance(golden_cases, list):
         print("golden_retrieval.json 應為 JSON array", file=sys.stderr)
-        sys.exit(1)
+        raise CLIError(1)
 
     qas = _load_qa_final()
     if not qas:
-        sys.exit(1)
+        raise CLIError(1)
 
     case_results: list[dict] = []
 
@@ -635,7 +655,7 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
     # 彙整統計
     if not case_results:
         print("所有 golden case 均無結果。", file=sys.stderr)
-        sys.exit(1)
+        raise CLIError(1)
 
     avg_kw_hit = sum(c["keyword_hit_rate"] for c in case_results) / len(case_results)
     avg_cat_hit = sum(c["category_hit_rate"] for c in case_results) / len(case_results)
@@ -701,6 +721,7 @@ def _validate_eval_result(data: dict) -> list[str]:
     return errors
 
 
+@observe(name="qa_tools.eval_save")
 def cmd_eval_save(args: argparse.Namespace) -> None:
     """儲存 Claude Code 評估結果為版本化 JSON（output/evals/{date}_claude-code_{engine}.json）。"""
     input_path = Path(args.input)
@@ -710,20 +731,20 @@ def cmd_eval_save(args: argparse.Namespace) -> None:
 
     if not input_path.exists():
         print(f"輸入檔案不存在：{input_path}", file=sys.stderr)
-        sys.exit(1)
+        raise CLIError(1)
 
     try:
         data = json.loads(input_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         print(f"JSON 格式錯誤：{e}", file=sys.stderr)
-        sys.exit(1)
+        raise CLIError(1)
 
     errors = _validate_eval_result(data)
     if errors:
         print("eval 結果驗證失敗：", file=sys.stderr)
         for err in errors:
             print(f"  - {err}", file=sys.stderr)
-        sys.exit(1)
+        raise CLIError(1)
 
     # 補充 metadata（immutable）
     today = datetime.now().strftime("%Y-%m-%d")
@@ -740,7 +761,7 @@ def cmd_eval_save(args: argparse.Namespace) -> None:
     eval_path = EVALS_DIR / filename
     if not eval_path.resolve().is_relative_to(EVALS_DIR.resolve()):
         print("輸出路徑異常，拒絕寫入。", file=sys.stderr)
-        sys.exit(1)
+        raise CLIError(1)
     _write_atomic(eval_path, data)
     print(f"已儲存：{eval_path}")
 
@@ -758,7 +779,7 @@ def cmd_eval_save(args: argparse.Namespace) -> None:
         new_avg = sum(new_gen.get(d, 0) for d in _GENERATION_DIMS) / len(_GENERATION_DIMS)
         delta = new_avg - base_avg
 
-        print(f"\n基準線比較：")
+        print("\n基準線比較：")
         print(f"  基準線平均：{base_avg:.2f}")
         print(f"  本次平均：{new_avg:.2f}")
         print(f"  差異：{delta:+.2f}")
@@ -940,7 +961,17 @@ def main() -> None:
         "eval-retrieval-local": cmd_eval_retrieval_local,
         "eval-save":        cmd_eval_save,
     }
-    dispatch[args.cmd](args)
+
+    init_laminar()
+    exit_code = 0
+    try:
+        dispatch[args.cmd](args)
+    except CLIError as exc:
+        exit_code = exc.code
+    finally:
+        flush_laminar()
+    if exit_code:
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

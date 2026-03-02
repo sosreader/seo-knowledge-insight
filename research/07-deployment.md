@@ -320,7 +320,7 @@ async def chat(req: ChatRequest, request: Request) -> ApiResponse[ChatResponse]:
     ...
 ```
 
-**速率表**（符合 PLAN_API_SECURITY.md 設計）：
+**速率表**（符合 `plans/completed/api-security.md` 設計）：
 
 | Endpoint              | Limit         | 說明              |
 | --------------------- | ------------- | ----------------- |

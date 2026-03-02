@@ -78,6 +78,7 @@ def client(monkeypatch):
     因此在進入 context 後立即用 FAKE_ITEMS 覆蓋，確保測試資料隔離。
     """
     monkeypatch.setenv("SEO_API_KEY", _TEST_API_KEY)
+    monkeypatch.delenv("LMNR_PROJECT_API_KEY", raising=False)
     # 同步更新已載入的 config 模組
     import app.config as app_config
     monkeypatch.setattr(app_config, "API_KEY", _TEST_API_KEY)

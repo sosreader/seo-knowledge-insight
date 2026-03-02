@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +12,9 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 QA_TOOLS = PROJECT_ROOT / "scripts" / "qa_tools.py"
 PYTHON = PROJECT_ROOT / ".venv" / "bin" / "python"
+
+# Strip LMNR_PROJECT_API_KEY from subprocess env to prevent test traces
+_CLEAN_ENV = {k: v for k, v in os.environ.items() if k != "LMNR_PROJECT_API_KEY"}
 
 # 直接 import 被測函式
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -95,10 +99,12 @@ class TestEvalSampleCLI:
         result1 = subprocess.run(
             [str(PYTHON), str(QA_TOOLS), "eval-sample", "--size", "5", "--seed", "123"],
             capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+            env=_CLEAN_ENV,
         )
         result2 = subprocess.run(
             [str(PYTHON), str(QA_TOOLS), "eval-sample", "--size", "5", "--seed", "123"],
             capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+            env=_CLEAN_ENV,
         )
         assert result1.returncode == 0
         assert result2.returncode == 0
@@ -114,6 +120,7 @@ class TestEvalSampleCLI:
         result = subprocess.run(
             [str(PYTHON), str(QA_TOOLS), "eval-sample", "--size", "3", "--seed", "42"],
             capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+            env=_CLEAN_ENV,
         )
         assert result.returncode == 0
         data = json.loads(result.stdout)
@@ -129,10 +136,12 @@ class TestEvalSampleCLI:
         r1 = subprocess.run(
             [str(PYTHON), str(QA_TOOLS), "eval-sample", "--size", "10", "--seed", "1"],
             capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+            env=_CLEAN_ENV,
         )
         r2 = subprocess.run(
             [str(PYTHON), str(QA_TOOLS), "eval-sample", "--size", "10", "--seed", "999"],
             capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+            env=_CLEAN_ENV,
         )
         ids1 = [i["stable_id"] for i in json.loads(r1.stdout)["items"]]
         ids2 = [i["stable_id"] for i in json.loads(r2.stdout)["items"]]
@@ -151,6 +160,7 @@ class TestEvalRetrievalLocalCLI:
         result = subprocess.run(
             [str(PYTHON), str(QA_TOOLS), "eval-retrieval-local", "--top-k", "3"],
             capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+            env=_CLEAN_ENV,
         )
         assert result.returncode == 0
         data = json.loads(result.stdout)
@@ -166,6 +176,7 @@ class TestEvalRetrievalLocalCLI:
         result = subprocess.run(
             [str(PYTHON), str(QA_TOOLS), "eval-retrieval-local"],
             capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+            env=_CLEAN_ENV,
         )
         data = json.loads(result.stdout)
         for case in data["case_details"]:
@@ -245,6 +256,7 @@ class TestEvalSaveCLI:
         result = subprocess.run(
             [str(PYTHON), str(QA_TOOLS), "eval-save", "--input", str(input_file)],
             capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+            env=_CLEAN_ENV,
         )
         assert result.returncode == 0
         assert "已儲存" in result.stdout
@@ -271,6 +283,7 @@ class TestEvalSaveCLI:
         result = subprocess.run(
             [str(PYTHON), str(QA_TOOLS), "eval-save", "--input", str(input_file)],
             capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+            env=_CLEAN_ENV,
         )
         assert result.returncode == 0
         assert "基準線比較" in result.stdout

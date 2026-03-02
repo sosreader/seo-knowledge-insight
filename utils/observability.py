@@ -73,6 +73,30 @@ def init_laminar() -> None:
         logger.warning("Laminar.initialize() failed: %s", exc)
 
 
+def start_cli_span(
+    name: str, input_data: str = ""
+) -> "contextlib.AbstractContextManager[object]":
+    """Context manager for CLI command spans (TOOL type).
+
+    Returns Laminar.start_as_current_span if available, else a no-op context manager.
+    """
+    import contextlib
+
+    if not _initialized:
+        return contextlib.nullcontext()
+    try:
+        from lmnr import Laminar  # type: ignore[import]
+
+        return Laminar.start_as_current_span(
+            name=name,
+            input=input_data,
+            span_type="TOOL",
+        )
+    except Exception:
+        logger.debug("start_cli_span(%s) failed, falling back to no-op", name)
+        return contextlib.nullcontext()
+
+
 def flush_laminar() -> None:
     """Flush pending Laminar spans before process exit.
 

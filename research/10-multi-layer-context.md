@@ -1,7 +1,7 @@
 # Multi-Layer Context 架構（Phase 1，2026-03-02）
 
 > 屬於 [research/](./README.md)，從 [02-rag-and-search.md](./02-rag-and-search.md) 拆出。
-> 對應實作計畫：`PLAN_VERSION_REGISTRY_MULTILAYER.md`。
+> 對應實作計畫：`plans/completed/version-registry-multilayer.md`。
 
 ---
 
@@ -21,7 +21,7 @@
 
 ## 20. Multi-Layer Context Architecture
 
-> 參考：OpenAI Data Agent（March 2026）啟發，實作見 `PLAN_VERSION_REGISTRY_MULTILAYER.md`。
+> 參考：OpenAI Data Agent（March 2026）啟發，實作見 `plans/completed/version-registry-multilayer.md`。
 
 ### 架構總覽（三層）
 
@@ -287,7 +287,7 @@ Literal 型別驗證確保 feedback 值只接受合法字串，無效值回 422 
 | avg_synonyms / Q&A | 11.09 | — | — |
 | avg_freshness | 0.9076 | — | — |
 
-### 下一步（PLAN_PHASE2_LEARNING_QUERY.md）
+### 下一步（plans/active/phase2-learning-query.md）
 
 - 擴充 synonym_dict 覆蓋率，目標 KW Hit Rate ≥ 85%（差 5.33pp）
 - 2026-03-16 後執行 `make enrich`（積累 14 天含 top_score 的 access log）
