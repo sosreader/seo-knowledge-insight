@@ -144,7 +144,7 @@ step3_2026-02-28_e71549b48cdf62b7 [初版去重分類@2026-02-28]
 | synonym_coverage | 0.0 | **1.0** | +100% | — |
 
 **結論：** 同義詞擴展有效（+9.27pp），但距 ≥85% 仍差 5.33pp。
-**下一步：** 擴充 synonym_dict 覆蓋率（見 `PLAN_PHASE2_LEARNING_QUERY.md` E2-2）。
+**下一步：** 擴充 synonym_dict 覆蓋率（見 `plans/active/phase2-learning-query.md` E2-2）。
 
 ---
 

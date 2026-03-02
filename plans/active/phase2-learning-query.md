@@ -1,7 +1,7 @@
 # Phase 2：Learning Store 深化 + Query Understanding 計畫
 
 **狀態：待執行（前置條件未滿足）**
-**前置計畫：** `PLAN_VERSION_REGISTRY_MULTILAYER.md`（已完成）
+**前置計畫：** `plans/completed/version-registry-multilayer.md`（已完成）
 
 ---
 

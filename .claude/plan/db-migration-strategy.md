@@ -501,7 +501,7 @@ vocus-web-ui 前端開始用 stable_id 引用 Q&A
 
 ... 未來某天，知識庫夠大或有並發需求 ...
 
-PLAN_SEO_INSIGHT.md Phase 1 後段
+plans/in-progress/seo-insight.md Phase 1 後段
   → PostgreSQL + pgvector 遷移（~10 小時，上面規劃的那些）
 ```
 

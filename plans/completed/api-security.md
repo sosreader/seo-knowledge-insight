@@ -1,7 +1,7 @@
-# PLAN_API_SECURITY.md
+# API Security Plan
 
 > 來源：v1.8 Architect Review（2026-02-28）
-> 前置計畫：`PLAN_SEO_INSIGHT.md` Phase 1（Auth + Rate Limit 已規劃但未實作）
+> 前置計畫：`plans/in-progress/seo-insight.md` Phase 1（Auth + Rate Limit 已規劃但未實作）
 > 狀態：**待實作**
 
 ---
@@ -131,7 +131,7 @@ SEO_API_KEY=your-secret-api-key-here
 pip install slowapi
 ```
 
-**Rate 設定**（對齊 PLAN_SEO_INSIGHT.md 第 2.4 節）：
+**Rate 設定**（對齊 plans/in-progress/seo-insight.md 第 2.4 節）：
 
 | Endpoint              | Limit         | 說明              |
 | --------------------- | ------------- | ----------------- |
@@ -251,7 +251,7 @@ Phase A + B + C 可在同一個 PR 完成（共 ~5h），Phase D 建議在前端
 
 ## 連結
 
-- 原始計畫：`PLAN_SEO_INSIGHT.md` Phase 1（Auth + Rate Limit 已規劃，未實作）
+- 原始計畫：`plans/in-progress/seo-insight.md` Phase 1（Auth + Rate Limit 已規劃，未實作）
 - 架構決策：`research/06-project-architecture.md` 第 23 節 G（OWASP API Security）
 - 部署安全範例：`research/07-deployment.md` 第 23 章（FastAPI Auth + Rate Limit 實作）
-- 相關計畫：`PLAN_CACHE_REDIS.md`（Phase B Rate Limit 後端若要改用 Redis 可對照）
+- 相關計畫：`plans/active/cache-redis.md`（Phase B Rate Limit 後端若要改用 Redis 可對照）
