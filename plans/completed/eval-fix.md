@@ -1,5 +1,7 @@
 # Plan: 評估指標異常修復
 
+> 狀態：已完成（2026-02-28）
+
 ## 背景診斷
 
 Laminar 評估發現三個問題：
@@ -12,7 +14,7 @@ Laminar 評估發現三個問題：
 
 ## 修復方案
 
-### 1. extraction_quality: Frank 會議重新萃取 ⏳
+### 1. extraction_quality: Frank 會議重新萃取 [done]
 
 **現象：** `keyword_coverage = 0.00`（需 Discover、AMP、索引、CTR、canonical）
 
@@ -53,7 +55,7 @@ print(f'Keyword hits: {hits} / {len(must_kws)}')
 
 ---
 
-### 2. retrieval_quality: 修復中文分詞器 ⏳
+### 2. retrieval_quality: 修復中文分詞器 [done, v2 2026-03-02]
 
 **現象：**
 
@@ -63,6 +65,8 @@ print(f'Keyword hits: {hits} / {len(must_kws)}')
 **根因：** `retrieval_executor()` 在 [evals/eval_retrieval.py#L62](evals/eval_retrieval.py#L62) 用 `query.lower().split()` 按**空格**切詞
 
 - 中文複合詞 `內部連結架構優化` 沒有空格 → `split()` 返回單一 token → 永遠比對不到
+
+**v2 修復（2026-03-02）：** `expand_query_tokens()` 三層展開（CJK n-gram + forward/inverted synonym），KW Hit Rate 65% → 74%
 
 **解法（優先級排序）：**
 
@@ -136,7 +140,7 @@ def retrieval_executor(data: dict) -> dict:
 
 ---
 
-### 3. chat_quality: 修復 executor crash ⏳
+### 3. chat_quality: 修復 executor crash [done]
 
 **現象：** 大量執行失敗（× 符號，Output='−'）
 
@@ -227,12 +231,12 @@ async def chat_executor(data: dict) -> dict:
 
 | 序  | 任務                                      | 時間    | 優先級 |
 | --- | ----------------------------------------- | ------- | ------ |
-| 1   | Step 2 --force 重跑 Frank                 | 5 分鐘  | 🔴 P0  |
-| 2   | 執行診斷步驟 3.1（檢查 embedding shape）  | 1 分鐘  | 🔴 P0  |
-| 3   | 如需要，重建 embeddings（Step 3 --force） | 10 分鐘 | 🔴 P0  |
-| 4   | 修復 retrieval_executor 中文分詞          | 20 分鐘 | 🟠 P1  |
-| 5   | 修復 chat_executor 錯誤處理               | 15 分鐘 | 🟠 P1  |
-| 6   | 重跑評估確認指標改善                      | 10 分鐘 | 🟠 P1  |
+| 1   | Step 2 --force 重跑 Frank                 | 5 分鐘  | P0  |
+| 2   | 執行診斷步驟 3.1（檢查 embedding shape）  | 1 分鐘  | P0  |
+| 3   | 如需要，重建 embeddings（Step 3 --force） | 10 分鐘 | P0  |
+| 4   | 修復 retrieval_executor 中文分詞          | 20 分鐘 | P1  |
+| 5   | 修復 chat_executor 錯誤處理               | 15 分鐘 | P1  |
+| 6   | 重跑評估確認指標改善                      | 10 分鐘 | P1  |
 
 ---
 

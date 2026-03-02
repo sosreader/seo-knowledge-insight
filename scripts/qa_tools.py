@@ -21,6 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 from utils.observability import init_laminar, flush_laminar, observe  # noqa: E402
 from utils.laminar_scoring import score_event  # noqa: E402
+from utils.synonym_dict import expand_query_tokens  # noqa: E402
 
 
 class CLIError(Exception):
@@ -35,6 +36,7 @@ RAW_MD_DIR = PROJECT_ROOT / "raw_data" / "markdown"
 QA_PER_MEETING_DIR = OUTPUT_DIR / "qa_per_meeting"
 QA_FINAL_PATH = OUTPUT_DIR / "qa_final.json"
 QA_RAW_PATH = OUTPUT_DIR / "qa_all_raw.json"
+QA_ENRICHED_PATH = OUTPUT_DIR / "qa_enriched.json"
 EVALS_DIR = OUTPUT_DIR / "evals"
 EVAL_BASELINE_PATH = OUTPUT_DIR / "eval_baseline.json"
 EVAL_SAMPLE_PATH = OUTPUT_DIR / "eval_sample.json"
@@ -56,8 +58,21 @@ def _load_qa_final() -> list[dict]:
     try:
         data = json.loads(QA_FINAL_PATH.read_text(encoding="utf-8"))
         return data.get("qa_database", [])
-    except (json.JSONDecodeError, KeyError) as e:
-        print(f"qa_final.json 格式錯誤：{e}", file=sys.stderr)
+    except (json.JSONDecodeError, KeyError, OSError) as e:
+        print(f"qa_final.json 讀取失敗：{e}", file=sys.stderr)
+        return []
+
+
+def _load_qa_enriched() -> list[dict]:
+    """載入 qa_enriched.json，回傳 qa_database 清單（含 synonym / freshness enrichment）。"""
+    if not QA_ENRICHED_PATH.exists():
+        print(f"qa_enriched.json 不存在：{QA_ENRICHED_PATH}", file=sys.stderr)
+        return []
+    try:
+        data = json.loads(QA_ENRICHED_PATH.read_text(encoding="utf-8"))
+        return data.get("qa_database", [])
+    except (json.JSONDecodeError, KeyError, OSError) as e:
+        print(f"qa_enriched.json 讀取失敗：{e}", file=sys.stderr)
         return []
 
 
@@ -563,8 +578,8 @@ def _kw_fuzzy_hit(exp_kw: str, retrieved_kws: set[str]) -> bool:
 
 
 def _keyword_search(query: str, qas: list[dict], top_k: int = 5) -> list[tuple[dict, float]]:
-    """關鍵字加權搜尋（與 cmd_search 相同邏輯，回傳 (qa, score) 清單）。"""
-    tokens = set(query.lower().split())
+    """關鍵字加權搜尋（CJK n-gram + synonym 展開，回傳 (qa, score) 清單）。"""
+    tokens = expand_query_tokens(query)
     scored: list[tuple[dict, float]] = []
 
     for qa in qas:
@@ -586,6 +601,7 @@ def _keyword_search(query: str, qas: list[dict], top_k: int = 5) -> list[tuple[d
 def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
     """規則式 Retrieval 評估（KW Hit Rate / MRR / Cat Hit Rate），輸出 top-1 供 LLM 判斷。"""
     top_k = getattr(args, "top_k", 5)
+    use_enriched = getattr(args, "use_enriched", False)
 
     if not GOLDEN_RETRIEVAL_PATH.exists():
         print(f"golden_retrieval.json 不存在：{GOLDEN_RETRIEVAL_PATH}", file=sys.stderr)
@@ -600,7 +616,10 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
         print("golden_retrieval.json 應為 JSON array", file=sys.stderr)
         raise CLIError(1)
 
-    qas = _load_qa_final()
+    if use_enriched:
+        qas = _load_qa_enriched()
+    else:
+        qas = _load_qa_final()
     if not qas:
         raise CLIError(1)
 
@@ -661,8 +680,9 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
     avg_cat_hit = sum(c["category_hit_rate"] for c in case_results) / len(case_results)
     avg_mrr = sum(c["mrr"] for c in case_results) / len(case_results)
 
+    engine_label = "keyword-enriched" if use_enriched else "keyword"
     output = {
-        "search_engine": "keyword",
+        "search_engine": engine_label,
         "total_cases": len(case_results),
         "avg_keyword_hit_rate": round(avg_kw_hit, 2),
         "avg_category_hit_rate": round(avg_cat_hit, 2),
@@ -935,6 +955,7 @@ def main() -> None:
 
     p_ret_local = sub.add_parser("eval-retrieval-local", help="規則式 Retrieval 評估（無 OpenAI）")
     p_ret_local.add_argument("--top-k", type=int, default=5, help="每個 case 取 top-K（預設 5）")
+    p_ret_local.add_argument("--use-enriched", action="store_true", help="使用 qa_enriched.json（含 synonym/freshness）")
 
     p_save = sub.add_parser("eval-save", help="儲存 Claude Code 評估結果")
     p_save.add_argument("--input", required=True, help="評估結果 JSON 路徑")

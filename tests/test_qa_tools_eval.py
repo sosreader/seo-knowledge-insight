@@ -23,6 +23,12 @@ from scripts.qa_tools import (
     _keyword_search,
     _validate_eval_result,
 )
+from utils.synonym_dict import (
+    _is_cjk_char,
+    _has_cjk,
+    _expand_cjk_ngrams,
+    expand_query_tokens,
+)
 
 
 # ──────────────────────────────────────────────────────
@@ -85,6 +91,107 @@ class TestKeywordSearch:
     def test_no_match_returns_empty(self, sample_qas):
         results = _keyword_search("xyz不存在", sample_qas, top_k=5)
         assert results == []
+
+
+# ──────────────────────────────────────────────────────
+# expand_query_tokens + CJK n-gram
+# ──────────────────────────────────────────────────────
+
+class TestCjkHelpers:
+    """CJK 字元偵測與 n-gram 展開。"""
+
+    def test_is_cjk_char_chinese(self):
+        assert _is_cjk_char("連") is True
+
+    def test_is_cjk_char_ascii(self):
+        assert _is_cjk_char("A") is False
+
+    def test_has_cjk_mixed(self):
+        assert _has_cjk("SEO優化") is True
+
+    def test_has_cjk_pure_ascii(self):
+        assert _has_cjk("SEO") is False
+
+    def test_expand_cjk_ngrams_compound(self):
+        """'內部連結架構優化' 應產出 '內部連結' 等 n-gram。"""
+        ngrams = _expand_cjk_ngrams("內部連結架構優化")
+        assert "內部" in ngrams
+        assert "連結" in ngrams
+        assert "內部連結" in ngrams
+        assert "連結架構" in ngrams
+        assert "架構優化" in ngrams
+
+    def test_expand_cjk_ngrams_short_token(self):
+        """2 字元 CJK token 仍產出 bigram。"""
+        ngrams = _expand_cjk_ngrams("索引")
+        assert "索引" in ngrams
+
+    def test_expand_cjk_ngrams_ascii_only(self):
+        """純 ASCII token 不產出 n-gram。"""
+        ngrams = _expand_cjk_ngrams("canonical")
+        assert len(ngrams) == 0
+
+
+class TestExpandQueryTokens:
+    """expand_query_tokens 三層展開。"""
+
+    def test_cjk_ngram_layer(self):
+        """中文複合詞應展開為 n-gram。"""
+        tokens = expand_query_tokens("內部連結架構優化")
+        assert "內部連結" in tokens
+        assert "架構優化" in tokens
+
+    def test_forward_synonym(self):
+        """CTR → 點擊率（forward synonym）。"""
+        tokens = expand_query_tokens("CTR 下降")
+        assert "點擊率" in tokens
+
+    def test_inverted_synonym(self):
+        """'點擊率' 是 CTR 的同義詞 → 應加入 'ctr'。"""
+        tokens = expand_query_tokens("點擊率")
+        assert "ctr" in tokens
+
+    def test_preserves_original_tokens(self):
+        """原始 token 不會遺失。"""
+        tokens = expand_query_tokens("AMP Discover 流量")
+        assert "amp" in tokens
+        assert "discover" in tokens
+
+    def test_returns_set(self):
+        """回傳 set 型別。"""
+        result = expand_query_tokens("canonical")
+        assert isinstance(result, set)
+
+
+class TestKeywordSearchWithNgram:
+    """_keyword_search 搭配 CJK n-gram 的覆蓋情境。"""
+
+    @pytest.fixture()
+    def cjk_qas(self):
+        return [
+            {
+                "question": "內部連結架構如何影響 SEO？",
+                "answer": "內部連結可以傳遞 PageRank，提升被連結頁面的排名",
+                "keywords": ["內部連結", "PageRank", "架構"],
+            },
+            {
+                "question": "SEO 流量下降原因",
+                "answer": "可能的原因包含演算法更新、技術問題等",
+                "keywords": ["SEO", "流量", "演算法"],
+            },
+        ]
+
+    def test_cjk_compound_query_matches(self, cjk_qas):
+        """'內部連結架構優化' 應命中含 '內部連結' keyword 的 Q&A。"""
+        results = _keyword_search("內部連結架構優化", cjk_qas, top_k=5)
+        assert len(results) >= 1
+        assert "內部連結" in results[0][0]["question"]
+
+    def test_generic_word_not_dominate(self, cjk_qas):
+        """具體查詢不應讓通用詞 SEO 搶佔 top-1（regression guard）。"""
+        results = _keyword_search("內部連結架構優化", cjk_qas, top_k=5)
+        assert len(results) >= 1
+        assert "內部連結" in results[0][0]["question"]
 
 
 # ──────────────────────────────────────────────────────
@@ -184,6 +291,20 @@ class TestEvalRetrievalLocalCLI:
             assert "top1_answer" in case
             assert "keyword_hit_rate" in case
             assert "mrr" in case
+
+    @pytest.mark.skipif(
+        not (Path(__file__).resolve().parent.parent / "output" / "qa_enriched.json").exists(),
+        reason="qa_enriched.json not available (CI or fresh clone)",
+    )
+    def test_use_enriched_flag(self):
+        result = subprocess.run(
+            [str(PYTHON), str(QA_TOOLS), "eval-retrieval-local", "--use-enriched"],
+            capture_output=True, text=True, cwd=str(PROJECT_ROOT),
+            env=_CLEAN_ENV,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["search_engine"] == "keyword-enriched"
 
 
 # ──────────────────────────────────────────────────────

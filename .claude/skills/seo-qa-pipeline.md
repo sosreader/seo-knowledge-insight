@@ -9,7 +9,7 @@
 
 SEO Q&A 知識庫建構 Pipeline — 從 Notion 會議紀錄自動萃取結構化問答資料庫，支援去重、分類、語意搜尋與週報生成。
 
-資料來源為超過兩年（2023-03 至今）的 SEO 顧問會議紀錄，目前約 87 份，產出 725 筆 Q&A。
+資料來源為超過兩年（2023-03 至今）的 SEO 顧問會議紀錄，87 份會議，產出 670 筆原始 Q&A，去重後 655 筆（v2.0，2026-03-02 防幻覺規則重跑）。
 
 ---
 
@@ -229,22 +229,21 @@ output/
 
 ---
 
-## 最近改動（2026-02-28 Dead Code Cleanup）
+## 最近改動
 
-### 移除的項目
+### v2.0 Pipeline 全量重跑 + 統一清理（2026-03-02）
+
+- 87 場會議完整重萃取（防幻覺規則），670 筆原始 → 655 筆去重後
+- Embeddings 重建：(655, 1536) + 655 筆 index 映射
+- `_persist_embeddings()` 修正：支援 `id` 欄位 fallback（原只認 `stable_id`）
+- Registry latest 指針修正至 v2.0 條目
+- v1 殘留報告歸檔至 `output/archive_v1/`（10 個檔案）
+- `qa_final.md` 重建為 655 筆版本
+
+### Dead Code Cleanup（2026-02-28）
 
 - `config.py` 中的 `BATCH_CONCURRENCY` 常數（已棄用）
 - `app/config.py` 中的 `SEARCH_TOP_K` 常數（已棄用）
 - `utils/block_to_markdown.py` 中的 `list_counter` 參數與 `blocks_to_markdown_sync()` 函式
 - `scripts/05_evaluate.py` 中的 `load_golden_set()` 函式（未使用）
 - `scripts/04_generate_report.py` 中的舊版 `find_relevant_qas()` backward-compat wrapper
-
-### 新增功能
-
-- `config.py` 增加 fail-fast 環境變數檢查（`_require_env()`, `_get_float_env()`, `_get_int_env()`）
-  - `NOTION_TOKEN` 與 `OPENAI_API_KEY` 啟動時即驗證，不存在則立即拋出例外
-- `scripts/04_generate_report.py` 新增 Google Sheets URL 安全驗證
-  - 驗證 `sheet_id` 與 `gid` 格式（防注入）
-  - 限制主機名稱為 `docs.google.com`
-  - 回應大小上限 10MB
-- `scripts/05_evaluate.py` 改善 LLM 空內容處理與錯誤診斷訊息

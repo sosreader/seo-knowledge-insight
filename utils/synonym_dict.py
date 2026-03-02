@@ -40,6 +40,15 @@ _SUPPLEMENTAL_SYNONYMS: dict[str, list[str]] = {
     "重新導向": ["Redirect", "301", "302", "轉址", "redirect chain"],
     "robots.txt": ["robots", "crawl disallow", "爬蟲封鎖", "Googlebot 封鎖"],
     "Google Search Console": ["GSC", "搜尋主控台", "Search Console", "站長工具"],
+    "TTFB": ["伺服器回應時間", "回應時間", "Time to First Byte", "首位元組時間"],
+    "WAF": ["Web Application Firewall", "網頁應用程式防火牆", "防火牆規則"],
+    "工作階段": ["Session", "sessions", "工作階段數", "Organic Search工作階段"],
+    "Organic Search": ["自然搜尋", "有機搜尋", "搜尋流量", "Organic"],
+    # Coverage <-> 索引覆蓋率 為刻意的雙向映射，expand_query_tokens 只做單層展開，不會無限遞迴
+    "Coverage": ["索引覆蓋率", "有效頁面", "收錄率", "索引率"],
+    "內容供給": ["當週文章", "文章數量", "文章頻率", "供給量"],
+    "索引覆蓋率": ["Coverage", "有效 (Coverage)", "已索引頁面"],
+    "版位": ["SERP 版位", "搜尋版位", "搜尋位置", "版位變化"],
 }
 
 
@@ -101,3 +110,109 @@ def expand_keywords(keywords: list[str]) -> list[str]:
         if kw in synonyms:
             expanded.update(synonyms[kw])
     return sorted(expanded)
+
+
+# ── CJK n-gram + query expansion ─────────────────────
+
+
+def _is_cjk_char(char: str) -> bool:
+    """判斷單一字元是否為 CJK 統一表意文字。"""
+    cp = ord(char)
+    return (
+        0x4E00 <= cp <= 0x9FFF        # CJK Unified Ideographs
+        or 0x3400 <= cp <= 0x4DBF     # CJK Unified Ideographs Extension A
+        or 0xF900 <= cp <= 0xFAFF     # CJK Compatibility Ideographs
+    )
+
+
+def _has_cjk(token: str) -> bool:
+    """token 是否含有至少一個 CJK 字元。"""
+    return any(_is_cjk_char(c) for c in token)
+
+
+def _expand_cjk_ngrams(token: str, max_n: int = 4) -> set[str]:
+    """
+    將含 CJK 字元的長 token 展開為 bigram ~ max_n-gram。
+
+    只對 CJK 連續字元子串做 n-gram（跳過 ASCII 段落）。
+    例：「內部連結架構優化」→ {內部, 連結, 架構, 優化, 內部連結, 連結架構, ...}
+
+    限制：被 ASCII 分隔的單一 CJK 字元不產出 n-gram（buf 長度 < 2 時跳過）。
+    例：「A索B引C」中「索」「引」各自獨立，不會組成「索引」bigram。
+    """
+    # 先抽出純 CJK 連續片段
+    cjk_runs: list[str] = []
+    buf: list[str] = []
+    for ch in token:
+        if _is_cjk_char(ch):
+            buf.append(ch)
+        else:
+            if len(buf) > 1:
+                cjk_runs.append("".join(buf))
+            buf = []
+    if len(buf) > 1:
+        cjk_runs.append("".join(buf))
+
+    ngrams: set[str] = set()
+    for run in cjk_runs:
+        for n in range(2, min(max_n + 1, len(run) + 1)):
+            for i in range(len(run) - n + 1):
+                ngrams.add(run[i:i + n])
+    return ngrams
+
+
+@functools.lru_cache(maxsize=1)
+def _get_supplemental_synonyms_lower() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """
+    建立 lowercase 正向索引 + 反向索引（cached）。
+
+    Returns:
+        (forward, inverted)
+        forward:  key_lower -> [syn_lower, ...]
+        inverted: syn_lower -> [key_lower, ...]
+    """
+    forward: dict[str, list[str]] = {}
+    inverted: dict[str, list[str]] = {}
+    for key, syns in _SUPPLEMENTAL_SYNONYMS.items():
+        kl = key.lower()
+        syn_lowers = [s.lower() for s in syns]
+        forward[kl] = syn_lowers
+        for sl in syn_lowers:
+            inverted.setdefault(sl, []).append(kl)
+    return forward, inverted
+
+
+def expand_query_tokens(query: str) -> set[str]:
+    """
+    將搜尋 query 展開為 token set（三層展開）。
+
+    Layer 1: whitespace split + CJK n-gram（解決中文分詞）
+    Layer 2: Forward synonym（CTR -> 點擊率）
+    Layer 3: Inverted synonym（n-gram 是某同義詞值 → 加入主鍵）
+
+    僅使用 _SUPPLEMENTAL_SYNONYMS，不使用 METRIC_QUERY_MAP
+    （後者含 "原因"/"如何" 等噪音 token，實測會造成 regression）。
+    """
+    raw_tokens = set(query.lower().split())
+    expanded: set[str] = set(raw_tokens)
+
+    # Layer 1: CJK n-gram
+    cjk_ngrams: set[str] = set()
+    for token in raw_tokens:
+        if len(token) > 2 and _has_cjk(token):
+            cjk_ngrams.update(_expand_cjk_ngrams(token))
+    expanded.update(cjk_ngrams)
+
+    forward, inverted = _get_supplemental_synonyms_lower()
+
+    # Layer 2: Forward synonym — token 是 key → 加入 synonyms
+    for token in raw_tokens | cjk_ngrams:
+        if token in forward:
+            expanded.update(forward[token])
+
+    # Layer 3: Inverted synonym — token 是某 key 的 synonym → 加入 key
+    for token in raw_tokens | cjk_ngrams:
+        if token in inverted:
+            expanded.update(inverted[token])
+
+    return expanded

@@ -29,12 +29,12 @@ A: 可能是內容品質或 AMP 問題，建議觀察 GSC...
 
 ### 本專案四個評估維度
 
-| 維度         | 問的問題                        | 目前分數      |
-| ------------ | ------------------------------- | ------------- |
-| Relevance    | 是否有價值的 SEO 知識（非閒聊） | 4.65 ✅       |
-| Accuracy     | 內容是否合理無虛構              | 3.80          |
-| Completeness | 是否包含建議 + 原因 + 案例      | 3.70 ← 待改善 |
-| Granularity  | 一個 Q 只問一個主題             | 4.65 ✅       |
+| 維度         | 問的問題                        | v1.0 分數 | v2.0 分數（2026-03-02） |
+| ------------ | ------------------------------- | --------- | ----------------------- |
+| Relevance    | 是否有價值的 SEO 知識（非閒聊） | 4.80      | **5.00** ✅              |
+| Accuracy     | 內容是否合理無虛構              | 3.95      | **4.30** ✅              |
+| Completeness | 是否包含建議 + 原因 + 案例      | 3.85      | **3.95** ✅              |
+| Granularity  | 一個 Q 只問一個主題             | 4.75      | **4.75** ✅              |
 
 ### 注意：Judge 本身也可能出錯
 
@@ -127,12 +127,12 @@ print(response.choices[0].finish_reason)
 
 ### 評估分數要求的完整行動建議
 
-| 維度             | 目標分數  | 最新數值 | 狀態         | 提升方法                              |
-| ---------------- | --------- | -------- | ------------ | ------------------------------------- |
-| Relevance        | ≥ 4.5     | 4.80     | ✅           | 無需調整                              |
-| Accuracy         | ≥ 4.0     | 3.95     | 接近目標     | 加入 faithfulness 檢查                |
-| **Completeness** | **≥ 4.0** | **3.85** | **↑ 改善中** | `[補充]` Tag 機制已實作（見第 13 節） |
-| Granularity      | ≥ 4.5     | 4.75     | ✅           | 無需調整                              |
+| 維度             | 目標分數  | 最新數值（v2.0） | 狀態         | 提升方法                              |
+| ---------------- | --------- | ---------------- | ------------ | ------------------------------------- |
+| Relevance        | ≥ 4.5     | **5.00**         | ✅           | 無需調整                              |
+| Accuracy         | ≥ 4.0     | **4.30**         | ✅           | v2.0 防幻覺規則已達標                 |
+| Completeness     | ≥ 4.0     | **3.95**         | 接近目標     | `[補充]` Tag 機制已實作（見第 13 節） |
+| Granularity      | ≥ 4.5     | **4.75**         | ✅           | 無需調整                              |
 
 ### 額外評估指標說明
 
@@ -474,6 +474,67 @@ span_id  = str(span_ctx.span_id)  if span_ctx else None
 - KW Hit Rate 79.67%，距 ≥85% 目標差 **5.33pp**
 - 方向：擴充 `utils/synonym_dict.py` 的 `_SUPPLEMENTAL_SYNONYMS`，特別是 SEO 長尾術語
 - 前置條件 E2-2（Query Understanding）需 KW Hit Rate ≥ 85% 才啟動
+
+---
+
+## CJK N-gram + Synonym Expansion（2026-03-02，Retrieval 優化）
+
+> 修復 v2.0 KW Hit Rate 回歸（65% -> 74%），對應 `utils/synonym_dict.py` + `scripts/qa_tools.py`。
+
+### 根因分析
+
+v2.0 知識庫（655 筆）KW Hit Rate 從 v1.0 的 78% 降至 65%（-13pp），四個結構性問題：
+
+| # | 根因 | 影響 | 修復方式 |
+|---|------|------|----------|
+| 1 | **中文分詞失效** — `str.split()` 不切中文複合詞 | 3 case 完全失敗 | CJK n-gram 展開 |
+| 2 | **通用詞污染** — "SEO"/"流量" 主導排名 | 不相關結果搶佔 top-1 | 只展開 query 端，不展開 keyword 端 |
+| 3 | **CLI 路徑繞過 enriched data** — eval 讀 qa_final.json | synonym_bonus 白費 | --use-enriched flag |
+| 4 | **同義詞缺失** — TTFB/WAF/工作階段/Coverage | 特定 case 0 命中 | +8 synonym entries |
+
+### 解法：`expand_query_tokens()` 三層展開
+
+```python
+# utils/synonym_dict.py
+
+def expand_query_tokens(query: str) -> set[str]:
+    """
+    Layer 1: whitespace split + CJK n-gram
+      "內部連結架構優化" -> {內部, 連結, 架構, 優化, 內部連結, ...}
+    Layer 2: Forward synonym
+      CTR -> {點擊率, click-through rate, ...}
+    Layer 3: Inverted synonym
+      點擊率 -> {ctr}（反向查找）
+    """
+```
+
+**關鍵設計決策**：只用 `_SUPPLEMENTAL_SYNONYMS`，不用 `METRIC_QUERY_MAP`。後者含 "原因"/"如何" 等噪音 token，實測讓 CTR case 從 75% 降到 25%。
+
+### 改善結果
+
+| 指標 | Before | After | Delta |
+|------|--------|-------|-------|
+| KW Hit Rate | 0.65 | **0.74** | **+9pp** |
+| Cat Hit Rate | 0.80 | 0.80 | 0 |
+| MRR | 0.88 | 0.87 | -0.01 |
+
+### 失敗 case 修復狀況
+
+| Case | Before | After |
+|------|--------|-------|
+| 內部連結架構優化 | **0%** (ZERO results) | **75%** |
+| 伺服器回應時間上升 | 低 | **100%** |
+| 當週文章數銳減 | 低 | **100%** |
+| 有效頁面數持續下滑 | 低 | **100%** |
+| 曝光上升但點擊未同步 | ~20% | **60%** |
+
+### 仍待改善 case
+
+| Case | 目前 | 瓶頸 |
+|------|------|------|
+| 檢索未索引大幅增加 | 40% | expected_keywords 需更精準 |
+| 手機 CWV 劣化 | 40% | "Core Web Vitals" 同義詞已有，但 golden case keywords 偏寬 |
+| 圖片搜尋流量下降 | 50% | 知識庫缺少 "image search" 專題 Q&A |
 
 ### eval Laminar 執行方式
 

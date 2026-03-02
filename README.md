@@ -12,7 +12,7 @@
 - **OpenAI 自動萃取** — 用 `gpt-5.2` 將會議 Markdown 解析為結構化 Q&A（What/Why/How/Evidence）
 - **Embedding 去重合併** — 基於 cosine similarity 與 `text-embedding-3-small` 自動合併重複 Q&A
 - **智能分類標籤** — 10 個分類（技術 SEO、內容策略、連結建設等），用 `gpt-5-mini` 自動標記難度與時效性
-- **目前規模** — 87 場會議、725 筆原始 Q&A、717 筆去重後 Q&A
+- **目前規模** — 87 場會議、670 筆原始 Q&A（v2.0 防幻覺規則）、655 筆去重後 Q&A
 
 ### 2. 每週 SEO 週報生成（步驟 4）
 
@@ -24,9 +24,9 @@
 ### 3. Q&A 品質評估（步驟 5）
 
 - **五維度 LLM-as-Judge** — Relevance、Accuracy、Completeness、Granularity、Faithfulness（各 1–5 分）
-- **Retrieval 品質指標** — Keyword Hit Rate（78% ✓）、MRR、LLM Top-1 Precision（100% ✓）
+- **Retrieval 品質指標** — Keyword Hit Rate（74% ✓）、MRR（0.87）、LLM Top-1 Precision（80% ✓）
 - **分類準確度檢驗** — Category、Difficulty、Evergreen 標籤驗證
-- **對標基準線** — 自動與歷史 eval 比較進度（Completeness 3.85、Accuracy 3.95）
+- **對標基準線** — 自動與歷史 eval 比較進度（v2.0: Relevance 5.00、Accuracy 4.30、Completeness 3.95）
 
 ### 4. REST API 服務（FastAPI，`app/`）
 

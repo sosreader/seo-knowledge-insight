@@ -19,12 +19,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import shutil
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 from tqdm import tqdm
@@ -399,8 +402,8 @@ def _push_laminar_kb_snapshot(qa_pairs: list[dict]) -> None:
 
 def _persist_embeddings(qa_pairs: list[dict]) -> None:
     """計算並持久化 Q&A embedding，供 Step 4 語意搜尋直接載入。
-    同時產生 qa_embeddings_index.json（{stable_id: row_index}），
-    使增量更新不再依賴位置耦合。
+    同時產生 qa_embeddings_index.json（{stable_id|id: row_index}），
+    使增量更新不再依賴位置耦合。key 優先使用 stable_id，fallback 到 id（v2.0 格式）。
     """
     print("\n💾 持久化 embedding 向量 ...")
     texts = [f"{qa['question']} {qa['answer']}" for qa in qa_pairs]
@@ -410,12 +413,19 @@ def _persist_embeddings(qa_pairs: list[dict]) -> None:
     np.save(emb_path, emb_array)
     print(f"   已儲存 {emb_array.shape} 至 {emb_path}")
 
-    # 產生 stable_id → row_index 映射，供增量更新使用
-    index = {
-        qa["stable_id"]: i
-        for i, qa in enumerate(qa_pairs)
-        if qa.get("stable_id")
-    }
+    # 產生 id → row_index 映射，供增量更新使用
+    # 優先使用 stable_id，fallback 到 id（v2.0 格式）
+    index = {}
+    for i, qa in enumerate(qa_pairs):
+        key = qa.get("stable_id") or qa.get("id")
+        if key is not None:
+            str_key = str(key)
+            if str_key in index:
+                logger.warning(
+                    "embedding index key collision: %s (row %d overwrites row %d)",
+                    str_key, i, index[str_key],
+                )
+            index[str_key] = i
     index_path = config.OUTPUT_DIR / "qa_embeddings_index.json"
     index_path.write_text(
         json.dumps(index, ensure_ascii=False),
