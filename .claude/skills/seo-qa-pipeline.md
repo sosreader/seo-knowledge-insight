@@ -174,7 +174,8 @@ Notion API → [步驟1] fetch → raw_data/notion_json/ + markdown/
 ### 架構總覽（三層）
 
 ```
-Layer 3：Slash Commands（/search / /chat / /generate-report / /evaluate-qa / /pipeline-local）
+Layer 3：Slash Commands（/search / /chat / /generate-report / /pipeline-local / /evaluate-qa-local / /evaluate-provider）
+        （OpenAI 版本：/run-pipeline / /evaluate-qa）
 Layer 2：scripts/qa_tools.py（I/O 操作，無 OpenAI 依賴）
 Layer 1：.claude/skills/seo-qa-pipeline.md（此文件，規則與 schema）
 ```

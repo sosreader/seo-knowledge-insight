@@ -140,10 +140,11 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/search <問題>` — 搜尋知識庫（關鍵字加權，回傳 top-K Q&A）
 - `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
 - `/evaluate-qa-local` — Q&A 品質評估（Claude Code 作為 Judge，不需要 OpenAI）
+- `/evaluate-provider <目錄路徑>` — 評估通用 LLM Provider 的 SEO 洞察品質（Claude Code 作為 Judge）
 
 ### 評估命令（需要 OpenAI API key）
 
-- `/evaluate-qa` — Q&A 品質評估（LLM-as-Judge）+ 與基準線比較
+- `/evaluate-qa` — Q&A 品質評估（LLM-as-Judge）+ 與基準線比較（本地替代：`/evaluate-qa-local`）
 
 ### 開發工具命令
 
@@ -163,6 +164,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 | 知識庫搜尋 | `text-embedding-3-small` + cosine | `qa_tools.py search`（關鍵字加權）|
 | 週報生成 | `gpt-5.2` API | Claude Code 直接推理 |
 | Q&A 品質評估 | `gpt-5.2` + `gpt-5-mini` | `/evaluate-qa-local`（Claude Code 作為 Judge） |
+| Provider 品質評估 | 無對應 | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
 | 需要 API key | OPENAI_API_KEY | 不需要 |
 
 ---

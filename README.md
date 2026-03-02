@@ -41,8 +41,15 @@
 - **`/chat`** — 互動式 RAG 問答（Claude 推理 + 本地知識庫）
 - **`/generate-report`** — SEO 週報生成（解析指標、知識庫搜尋、推薦行動）
 - **`/pipeline-local`** — 完整 Pipeline Steps 1–4（無需 OpenAI API）
+- **`/evaluate-provider`** — LLM Provider SEO 洞察評估（4 維度：Grounding、Actionability、Relevance、Topic Coverage）
 
-### 6. Laminar 離線評估（v1.10）
+### 6. LLM Provider 品質對標（獨立工具）
+
+- **四維度 LLM-as-Judge** — Grounding（數字可追溯性）、Actionability（建議可執行性）、Relevance（SEO 聚焦度）、Topic Coverage（主題涵蓋率）
+- **完整對比報告** — 多個 Provider 並排評分，delta 對比前次結果
+- **無需 API key** — Claude Code 本身作為 Judge，評估任何 LLM Provider 的分析品質
+
+### 7. Laminar 離線評估（v1.10）
 
 - **自動監控三環節** — Retrieval 品質、Q&A Extraction、RAG Chat 端到端表現
 - **無需額外 API** — 基於 Laminar SDK，純 Python/SQL 邏輯，不消耗 OpenAI tokens
@@ -64,7 +71,8 @@
 | Step 2 — Q&A 萃取           | `make extract-qa`                                 | `/extract-qa`（不需要 OpenAI）                      | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
 | Step 3 — 去重 + 分類        | `make dedupe-classify`                            | `/dedupe-classify`（不需要 OpenAI）                 | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
 | Step 4 — 週報生成           | `make generate-report`                            | `/generate-report <URL>`（不需要 OpenAI）           | 無對應 — 屬長時間離線作業，未實作非同步 job |
-| Step 5 — 品質評估           | `make evaluate-qa`                                | `/evaluate-qa`（需要 OpenAI — LLM-as-Judge）        | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| Step 5 — 品質評估           | `make evaluate-qa`                                | `/evaluate-qa-local`（不需要 OpenAI — Claude Code 作為 Judge）| 無對應 — 屬長時間離線作業，未實作非同步 job |
+| Step 5 — Provider 評估      | 無獨立指令 — 需準備 `source_data.md` 與 `provider_*.md`（不走 pipeline） | `/evaluate-provider <目錄>`（不需要 OpenAI — Claude Code 作為 Judge） | 無對應 — 屬長時間離線作業，未實作非同步 job |
 | Steps 1–3 — 知識庫建構      | `make pipeline`                                   | `/pipeline-local`（不需要 OpenAI，含 Step 4）       | 無對應 — 屬長時間離線作業，未實作非同步 job |
 | Steps 1–5 — 完整 Pipeline   | `python scripts/run_pipeline.py`                  | `/run-pipeline`（需要 OpenAI）                      | 無對應 — 屬長時間離線作業，未實作非同步 job |
 | 知識庫搜尋                  | `python scripts/qa_tools.py search --query "..."` | `/search <問題>`（不需要 OpenAI）                   | `POST /api/v1/search`                       |
