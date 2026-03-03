@@ -52,8 +52,9 @@ Notion 會議紀錄（87 份，2023–2026）
     POST /api/v1/search  → hybrid_search（語意 + 關鍵字）
     POST /api/v1/chat    → RAG 問答（gpt-5.2）
     GET  /api/v1/qa      → 篩選列表
-  部署：Docker image → ECR → EC2（SSM 遠端換容器）
-            ↓ http://EC2:8001
+  部署：Docker image → ECR → App Runner（無伺服器容器）
+  資料層：QAStore 抽象（Phase 1 檔案 / Phase 2 Supabase pgvector）
+            ↓ https://<service>.awsapprunner.com
 
 ══════════════ Audit Trail（2026-02-28 新增）══════════════
 
@@ -247,17 +248,20 @@ Notion 會議紀錄（87 份，2023–2026）
 
 ---
 
-### E. FastAPI + In-Memory QAStore
+### E. FastAPI + In-Memory QAStore（Supabase-ready 抽象）
 
-**決策**：啟動時載入全量 655 筆 QA + 655×1536 embedding matrix 到 module-level singleton，FastAPI lifespan 管理。
+**決策**：啟動時載入全量 655 筆 QA + 655×1536 embedding matrix 到 module-level singleton，FastAPI lifespan 管理。所有資料存取透過 `QAStore` 抽象層，為 Phase 2 Supabase 遷移預留介面。
 
 **學術 / 業界支撐**：
 
 - **FAISS**（Johnson et al., 2019, _IEEE Trans. on Big Data_）：小規模向量（<100K）in-memory brute-force search 延遲 < 1ms，不需要 ANN 索引。655 筆完全在此範圍內。
 - **12-Factor App Factor VI — Stateless processes**（Wiggins, 2011, Heroku）：唯讀查詢層用 in-memory 是合理優化，不違反無狀態原則。
 - **Offline Feature Store + Online Serving**（Feast, 2019, Google/Tecton）：離線 pipeline 產出特徵 → 物化到 online store → API 讀取。與 Pipeline → qa_final.json → API 模式完全對應。
+- **Repository Pattern**（Fowler, 2003, _PoEAA_）：`QAStore` 封裝資料存取邏輯，業務層透過 `search()` / `hybrid_search()` / `list_qa()` / `get_qa_item()` 介面操作，遷移至不同 backend 時 router 層零修改。
 
-**評估**：符合當前規模（4.3MB）。DB 遷移路徑：pgvector（`plans/in-progress/seo-insight.md`）。
+**評估**：符合當前規模（4.3MB）。
+
+**遷移路徑（Phase 2）**：`QAStore` 內部實作從檔案載入切換至 Supabase client，schema 預規劃見 `research/07-deployment.md` §21.4。資料透過 API 有即時更新需求，Supabase 為最終目標。
 
 ---
 
@@ -441,7 +445,7 @@ CLI scripts 不依賴 FastAPI lifespan，需要在 `main()` 手動呼叫 `init_l
 - 整體實作週期：1-2 週（Phase 1）+ 2-3 週（Phase 2）
 
 **不建議引入**：
-- 向量資料庫（655 筆，numpy 已足夠快）
+- ~~向量資料庫（655 筆，numpy 已足夠快）~~ → Phase 2 將遷移至 Supabase pgvector（因 API 有即時更新需求）
 - 模型 Fine-tuning（學習機制 + 人工回饋更靈活）
 - Real-time Schema Introspection（schema 穩定，無必要）
 

@@ -1,6 +1,6 @@
 # 部署架構
 
-> 屬於 [research/](./README.md)。涵蓋 FastAPI RAG API 化、ECR + EC2 SSM 部署模式。
+> 屬於 [research/](./README.md)。涵蓋 FastAPI RAG API 化、ECR + App Runner 部署、Supabase 遷移路徑。
 
 ---
 
@@ -8,17 +8,21 @@
 
 > 本 session（2026-02-27）實作。把 Step 3 產出的 JSON + npy 包成 HTTP API，不動任何 pipeline 架構。
 
-### 設計原則：無 DB、No ORM、全記憶體
+### 設計原則：無 DB、No ORM、全記憶體（Phase 1）
 
 ```
-# 過度設計（不要做）       # MVP 做法（本專案選擇）
-postgres + pgvector     →  numpy 矩陣 @ 向量 = cosine
-redis cache             →  python dict，啟動一次載入記憶體
-celery task queue       →  FastAPI lifespan 直接載入
+# Phase 1（當前）               # Phase 2（Supabase 遷移後）
+numpy 矩陣 @ 向量 = cosine  →  PostgreSQL + pgvector
+python dict，啟動載入記憶體  →  Supabase REST / PostgREST
+FastAPI lifespan 直接載入    →  store.py 切換為 DB 查詢
 ```
 
-**決策依據**：725 筆 Q&A × 1536 維 = 約 4MB，遠小於 EC2 記憶體。
-資料不變動（pipeline 跑完才更新），不需要即時寫入。
+**決策依據**：655 筆 Q&A × 1536 維 = 約 4MB，遠小於容器記憶體。
+Phase 1 使用記憶體載入，Phase 2 遷移至 Supabase 後支援 API 即時寫入。
+
+> **Supabase 遷移預備**：所有資料存取均透過 `app/core/store.py` 的 `QAStore` 抽象層。
+> 遷移時只需替換 `store.py` 內部實作（file → Supabase client），router 層零修改。
+> 詳見 §21.4「資料層遷移路徑」。
 
 ### FastAPI lifespan：啟動時載入資料
 
@@ -104,43 +108,43 @@ app/
 
 ---
 
-## 21. ECR + EC2 SSM 部署模式
+## 21. ECR + App Runner 部署模式
 
-> 本 session（2026-02-27）設計，對應 vocus 現行 infra（與 vocus-web-ui 的 EC2 段相同邏輯）。
+> 2026-03-03 從 ECR + EC2 SSM 遷移至 ECR + App Runner（無伺服器容器）。
 
-### 三種部署選項比較
+### 21.1 部署選項演進
 
-| 方案                            | 複雜度 | 適合場景                      |
-| ------------------------------- | ------ | ----------------------------- |
-| EC2 直接 `docker run`           | 低     | 一次性手動部署                |
-| **ECR + EC2 SSM（本專案選擇）** | **中** | **內部工具，CI/CD 自動化**    |
-| ECR + ECS Fargate               | 高     | Production，需要 auto-scaling |
+| 方案                              | 複雜度 | 月費估算    | 適合場景                      |
+| --------------------------------- | ------ | ----------- | ----------------------------- |
+| ~~ECR + EC2 SSM~~（v0.3–v1.20）  | 中     | ~$5-10      | 已淘汰（需管主機）            |
+| **ECR + App Runner（當前選擇）**  | **低** | **~$5-7**   | **無伺服器，push image 即部署** |
+| ECR + ECS Fargate                 | 高     | ~$20-30     | 需要 auto-scaling + ALB       |
 
-### ECR + EC2 SSM 流程
+**遷移理由**：
+- 不需要管 EC2 主機（OS 更新、Docker 安裝、SSM Agent）
+- Push image 到 ECR 後，App Runner 自動部署
+- 內建 HTTPS、health check、auto-scaling
+- 成本與最小 EC2 相當
+
+### 21.2 ECR + App Runner 流程
 
 ```
 git push main
     ↓
-GitHub Actions
+GitHub Actions (.github/workflows/deploy-seo-api.yaml)
     ↓
 docker build -t seo-insight-api:$TAG .
     ↓
 ECR push（AWS 私有 registry）
     ↓
-SSM send-command → EC2 執行：
-  aws ecr get-login-password | docker login
-  docker pull $IMAGE:$TAG
-  docker stop seo-insight-api && docker rm seo-insight-api
-  docker run -d --name seo-insight-api \
-    -p 127.0.0.1:8001:8001 \
-    -v /data/output:/app/output:ro \
-    -e OPENAI_API_KEY=$KEY \
-    $IMAGE:$TAG
+aws apprunner update-service
+    ↓
+App Runner 拉取新 image → 啟動容器 → health check → 切換流量
+    ↓
+https://<random>.awsapprunner.com（自動 HTTPS）
 ```
 
-**SSM 好處**：不需要 SSH 進 EC2，不需要開 22 port，AWS IAM 控制權限。
-
-### Dockerfile 設計要點
+### 21.3 Dockerfile 設計要點
 
 ```dockerfile
 FROM python:3.12-slim        # slim = 沒有不必要的系統套件
@@ -148,33 +152,139 @@ WORKDIR /app
 COPY requirements_api.txt .  # 先 COPY 依賴，利用 layer cache
 RUN pip install --no-cache-dir -r requirements_api.txt
 COPY app/ ./app/             # 只 COPY API 程式碼
-# output/ 用 volume mount，不進 image（data 與 code 分離）
+EXPOSE 8001
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
 ```
 
 **`.dockerignore` 必要性**：排除 `output/`、`raw_data/`、`.venv/` 等，
-把 268MB image 控制在合理範圍（否則可能超過 1GB）。
+控制 image 在合理範圍。
 
-### volume mount：data 與 code 分離
+### 21.4 資料層遷移路徑
 
-```bash
-# EC2 上放資料，container 只 COPY code
-docker run -v /home/ec2-user/seo-data/output:/app/output:ro ...
-#                 ↑ EC2 路徑                  ↑ container 內路徑  ↑ 唯讀
+> **當前（Phase 1）**：資料檔（qa_final.json、qa_embeddings.npy）需透過某種方式提供給容器。
+> App Runner 不支援 volume mount，需選擇以下方案之一。
+
+| 方案                     | 複雜度 | 資料更新方式           | 適用階段     |
+| ------------------------ | ------ | ---------------------- | ------------ |
+| 打包進 Docker image      | 最低   | 重建 image             | Phase 1 過渡 |
+| S3 啟動時下載            | 低     | 上傳 S3，重啟容器      | Phase 1      |
+| **Supabase (pgvector)**  | **中** | **API 即時寫入**       | **Phase 2（目標）** |
+
+**Phase 2 Supabase 遷移計畫**：
+
+資料透過 API 有即時更新需求，因此最終目標是遷移至 Supabase（PostgreSQL + pgvector）：
+
+```
+Phase 1（當前）                    Phase 2（Supabase）
+qa_final.json → 記憶體 QAStore  →  Supabase qa_items table
+qa_embeddings.npy → numpy       →  pgvector embedding column
+store.search() → dot product    →  SELECT ... ORDER BY embedding <=> $1
+store.load() → 檔案讀取         →  DB connection pool
 ```
 
-**好處**：更新 `qa_final.json`（pipeline 重跑後）只需要 `docker restart`，
-不需要重新 build image。
+**遷移邊界**：`app/core/store.py` 的 `QAStore` 是唯一抽象層。
+遷移時只需替換 `QAStore` 內部實作，所有 router 和業務邏輯零修改：
 
-### GitHub Actions 關鍵 Secrets
+```python
+# Phase 1: store.py（當前）
+class QAStore:
+    def load(self): ...           # 從 JSON 檔案載入
+    def search(self, vec): ...    # numpy dot product
+    def hybrid_search(self, ...): # numpy + keyword boost
 
-| Secret              | 用途                                        |
-| ------------------- | ------------------------------------------- |
-| `ECR_DOMAIN`        | `xxxx.dkr.ecr.ap-northeast-1.amazonaws.com` |
-| `EC2_TAG_KEY/VALUE` | 找目標 EC2 的 tag（e.g. `Name=seo-api`）    |
-| `OUTPUT_DATA_PATH`  | EC2 上的 data 路徑                          |
+# Phase 2: store.py（Supabase 版）
+class QAStore:
+    def load(self): ...           # 建立 Supabase client connection
+    def search(self, vec): ...    # SELECT ... ORDER BY embedding <=> $1
+    def hybrid_search(self, ...): # pgvector + ts_rank 全文搜尋
+```
 
-**EC2 所需 IAM 角色**：`ecr:GetAuthorizationToken` + `ecr:BatchGetImage` + SSM Agent 啟動。
+**Supabase schema 預規劃**：
+
+```sql
+-- qa_items table（對應 qa_final.json 每筆 Q&A）
+CREATE TABLE qa_items (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question    TEXT NOT NULL,
+    answer      TEXT NOT NULL,
+    category    TEXT,
+    difficulty  TEXT,
+    evergreen   BOOLEAN DEFAULT TRUE,
+    source_date DATE,
+    meeting_id  TEXT,
+    tags        TEXT[],
+    confidence  REAL,
+    embedding   vector(1536),     -- pgvector
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 向量搜尋索引
+CREATE INDEX ON qa_items USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10);
+
+-- 全文搜尋索引（中文需搭配 pg_jieba 或 pgroonga）
+CREATE INDEX ON qa_items USING gin (to_tsvector('simple', question || ' ' || answer));
+```
+
+### 21.5 GitHub Actions Secrets
+
+| Secret                     | 用途                                         | 階段   |
+| -------------------------- | -------------------------------------------- | ------ |
+| `AWS_ACCESS_KEY_ID`        | AWS IAM 認證                                 | 所有   |
+| `AWS_SECRET_ACCESS_KEY`    | AWS IAM 認證                                 | 所有   |
+| `AWS_REGION`               | AWS 區域（如 `ap-northeast-1`）              | 所有   |
+| `ECR_DOMAIN`               | `xxxx.dkr.ecr.<region>.amazonaws.com`        | 所有   |
+| `APP_RUNNER_SERVICE_ARN`   | App Runner 服務 ARN                          | 所有   |
+| `APP_RUNNER_ECR_ROLE_ARN`  | App Runner 拉 ECR image 的 IAM Role          | 所有   |
+| `OPENAI_API_KEY`           | OpenAI API（RAG chat 需要）                  | 所有   |
+| `SEO_API_KEY`              | API 認證金鑰                                 | 所有   |
+| `LMNR_PROJECT_API_KEY`     | Laminar 追蹤（選配）                         | 選配   |
+| ~~`EC2_TAG_KEY/VALUE`~~    | ~~EC2 tag 篩選~~                             | 已移除 |
+| ~~`OUTPUT_DATA_PATH`~~     | ~~EC2 data 路徑~~                            | 已移除 |
+
+### 21.6 AWS 服務與 IAM 設定
+
+**需要開通的 AWS 服務**：
+
+| 服務           | 用途                  | 費用         |
+| -------------- | --------------------- | ------------ |
+| **ECR**        | Docker image 倉庫     | ~$0.10/GB/月 |
+| **App Runner** | 無伺服器容器運行      | ~$5-7/月     |
+
+**App Runner 服務設定**：
+- Source: ECR private image
+- Port: 8001
+- Health check path: `/health`
+- Min instances: 1
+- Max instances: 1（低流量場景）
+
+**IAM Role — App Runner ECR Access**：
+- Trust: `build.apprunner.amazonaws.com`
+- Policy: `AmazonEC2ContainerRegistryReadOnly`
+
+**IAM User — GitHub Actions**：
+- `ecr:GetAuthorizationToken` + `ecr:BatchCheckLayerAvailability` + `ecr:PutImage` + `ecr:InitiateLayerUpload` + `ecr:UploadLayerPart` + `ecr:CompleteLayerUpload`
+- `apprunner:UpdateService` + `apprunner:DescribeService`
+
+### 21.7 歷史：ECR + EC2 SSM（已淘汰）
+
+> 以下為 v0.3–v1.20 使用的 EC2 SSM 部署模式，保留作為參考。
+
+<details>
+<summary>展開 EC2 SSM 部署流程（已淘汰）</summary>
+
+```
+git push main → GitHub Actions → docker build → ECR push
+    → SSM send-command → EC2 執行：
+      docker pull $IMAGE:$TAG
+      docker run -d -v /data/output:/app/output:ro ...
+```
+
+EC2 透過 volume mount 掛載資料檔，SSM 遠端執行部署命令。
+此模式需要管理 EC2 主機（OS 更新、Docker 安裝、SSM Agent），
+已於 2026-03-03 遷移至 App Runner。
+
+</details>
 
 ---
 

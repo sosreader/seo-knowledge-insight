@@ -199,4 +199,4 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 | Prompt Engineering 進階 / 業界最佳實踐                             | `research/04-prompting.md`            |
 | 模型選擇決策 / Embedding 模型比較                                  | `research/05-models.md`               |
 | 專案架構 / 技術決策 / Changelog / Mermaid 圖 / Observability        | `research/06-project-architecture.md` |
-| 部署 / FastAPI / ECR+EC2 / Docker                                  | `research/07-deployment.md`           |
+| 部署 / FastAPI / ECR+App Runner / Docker / Supabase 遷移           | `research/07-deployment.md`           |

@@ -744,7 +744,7 @@ curl http://localhost:8001/health
 curl 'http://localhost:8001/api/v1/qa/categories'
 ```
 
-### 部署（ECR + EC2 SSM）
+### 部署（ECR + App Runner）
 
 GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workflows/deploy-seo-api.yaml)
 
@@ -752,19 +752,24 @@ GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workfl
 
 **所需 GitHub Secrets：**
 
-| Secret                                        | 說明                                                                 |
-| --------------------------------------------- | -------------------------------------------------------------------- |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user，需 ECR push + SSM 執行權限                                 |
-| `AWS_REGION`                                  | e.g. `ap-northeast-1`                                                |
-| `ECR_DOMAIN`                                  | e.g. `123456789.dkr.ecr.ap-northeast-1.amazonaws.com`                |
-| `OPENAI_API_KEY`                              | 真實 key                                                             |
-| `EC2_TAG_KEY` / `EC2_TAG_VALUE`               | 找 EC2 用的 tag，e.g. `Name` / `seo-api`                             |
-| `OUTPUT_DATA_PATH`                            | EC2 上 output/ 的絕對路徑，e.g. `/home/ec2-user/seo-api-data/output` |
+| Secret                                        | 說明                                                         |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user，需 ECR push + App Runner 更新權限                  |
+| `AWS_REGION`                                  | e.g. `ap-northeast-1`                                        |
+| `ECR_DOMAIN`                                  | e.g. `123456789.dkr.ecr.ap-northeast-1.amazonaws.com`        |
+| `APP_RUNNER_SERVICE_ARN`                      | App Runner 服務 ARN                                          |
+| `APP_RUNNER_ECR_ROLE_ARN`                     | App Runner 拉 ECR image 的 IAM Role ARN                      |
+| `OPENAI_API_KEY`                              | OpenAI API key                                               |
+| `SEO_API_KEY`                                 | API 認證金鑰                                                 |
+| `LMNR_PROJECT_API_KEY`                        | Laminar 追蹤（選配）                                         |
 
-**EC2 也需要**：
+**App Runner 設定**：
 
-- IAM role 有 `ecr:GetAuthorizationToken` + `ecr:BatchGetImage` 權限
-- SSM Agent 啟動（Amazon Linux 2 預設已安裝）
+- Source: ECR private image，Port: 8001
+- Health check: `/health`
+- IAM Role（ECR Access）: Trust `build.apprunner.amazonaws.com` + `AmazonEC2ContainerRegistryReadOnly`
+
+**資料層遷移路徑**：當前為檔案載入（Phase 1），未來遷移至 Supabase pgvector（Phase 2）。詳見 `research/07-deployment.md` §21.4。
 
 ### 環境變數（`app/`）
 
@@ -841,11 +846,11 @@ https://laminar.sh/app/evals
   - `POST /api/v1/chat` — RAG 問答（知識庫 + GPT 對話）
 - [ ] 前端 `~/Documents/vocus-web-ui` 透過 API 讀取 Q&A 資料庫
 - [x] 加入 `pyproject.toml`，讓專案可以 `pip install -e .` 安裝
-- [x] Docker 化（`Dockerfile`），部署至 EC2 via ECR + SSM
+- [x] Docker 化（`Dockerfile`），部署至 App Runner via ECR
 
 ### Phase 3 — 進階功能（遠期）
 
-- [ ] **RAG 搜尋**：把 `qa_final.json` 匯入向量資料庫（Supabase pgvector / Pinecone），搭配 embedding 做語意搜尋
+- [ ] **Supabase 遷移**：`QAStore` 從檔案載入切換至 Supabase（PostgreSQL + pgvector），支援 API 即時讀寫
 - [ ] **匯入 Notion**：把最終 Q&A 匯回 Notion Database，用欄位篩選查詢
 - [ ] **自動更新**：Notion webhook / 定時 cron 觸發 pipeline，增量處理新紀錄
 - [ ] **版本追蹤**：Q&A 修改歷程，保留「何時更新」「因哪次會議更新」

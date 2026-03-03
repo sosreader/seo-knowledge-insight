@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v1.19，2026-03-02）
+## 架構圖（最新：v1.21，2026-03-03）
 
 ```mermaid
 flowchart TD
@@ -107,10 +107,16 @@ flowchart TD
         OS -->|attach to trace| LM
     end
 
-    subgraph Deploy["部署"]
+    subgraph Deploy["部署（ECR + App Runner）"]
         API --> Docker[Docker Image]
         Docker --> ECR[AWS ECR]
-        ECR --> EC2[EC2 SSM<br/>port 8001]
+        ECR --> AR[AWS App Runner<br/>HTTPS auto<br/>port 8001]
+    end
+
+    subgraph DataLayer["資料層（Supabase-ready）"]
+        direction LR
+        QA -.->|"Phase 1: 檔案載入"| STORE["app/core/store.py<br/>QAStore 抽象層<br/>（遷移邊界）"]
+        STORE -.->|"Phase 2: Supabase"| SB["Supabase<br/>PostgreSQL + pgvector<br/>API 即時讀寫"]
     end
 ```
 

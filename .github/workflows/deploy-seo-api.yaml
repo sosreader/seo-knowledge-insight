@@ -21,8 +21,6 @@ jobs:
 
     env:
       ECR_REPO: seo-insight-api
-      PORT: 8001
-      CONTAINER_NAME: seo-insight-api
 
     steps:
       - name: Checkout Code
@@ -60,76 +58,69 @@ jobs:
           cache-from: type=registry,ref=${{ secrets.ECR_DOMAIN }}/${{ env.ECR_REPO }}:cache
           cache-to: type=registry,ref=${{ secrets.ECR_DOMAIN }}/${{ env.ECR_REPO }}:cache,mode=max
 
-      - name: Deploy to EC2 via SSM
+      - name: Deploy to App Runner
         timeout-minutes: 10
         env:
-          ECR_DOMAIN: ${{ secrets.ECR_DOMAIN }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # EC2 上存放 qa_final.json / qa_embeddings.npy 的絕對路徑
-          OUTPUT_DATA_PATH: ${{ secrets.OUTPUT_DATA_PATH }}
-          # EC2 instance tag 篩選（e.g. Environment=seo-api）
-          EC2_TAG_KEY: ${{ secrets.EC2_TAG_KEY }}
-          EC2_TAG_VALUE: ${{ secrets.EC2_TAG_VALUE }}
+          SERVICE_ARN: ${{ secrets.APP_RUNNER_SERVICE_ARN }}
         run: |
           set -e
 
-          echo "🔍 Finding EC2 instances..."
-          INSTANCE_IDS=$(aws ec2 describe-instances \
-            --filters \
-              "Name=tag:$EC2_TAG_KEY,Values=$EC2_TAG_VALUE" \
-              "Name=instance-state-name,Values=running" \
-            --query "Reservations[].Instances[].InstanceId" \
-            --output text \
-            --region "$AWS_REGION")
+          IMAGE="${{ secrets.ECR_DOMAIN }}/${ECR_REPO}:${TAG}"
 
-          if [ -z "$INSTANCE_IDS" ]; then
-            echo "❌ No running EC2 found with tag $EC2_TAG_KEY=$EC2_TAG_VALUE"
-            exit 1
-          fi
-          echo "✅ Found: $INSTANCE_IDS"
+          # Build source config JSON safely with jq
+          SOURCE_CONFIG=$(jq -n \
+            --arg image "$IMAGE" \
+            --arg role "${{ secrets.APP_RUNNER_ECR_ROLE_ARN }}" \
+            --arg openai "${{ secrets.OPENAI_API_KEY }}" \
+            --arg seo "${{ secrets.SEO_API_KEY }}" \
+            --arg lmnr "${{ secrets.LMNR_PROJECT_API_KEY }}" \
+            '{
+              ImageRepository: {
+                ImageIdentifier: $image,
+                ImageRepositoryType: "ECR",
+                ImageConfiguration: {
+                  Port: "8001",
+                  RuntimeEnvironmentVariables: {
+                    OPENAI_API_KEY: $openai,
+                    SEO_API_KEY: $seo,
+                    LMNR_PROJECT_API_KEY: $lmnr
+                  }
+                }
+              },
+              AuthenticationConfiguration: {
+                AccessRoleArn: $role
+              }
+            }')
 
-          IMAGE="${ECR_DOMAIN}/${ECR_REPO}:${TAG}"
+          echo "Updating App Runner service..."
+          OPERATION_ID=$(aws apprunner update-service \
+            --service-arn "$SERVICE_ARN" \
+            --source-configuration "$SOURCE_CONFIG" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query "OperationId" --output text)
 
-          COMMAND_ID=$(aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --comment "Deploy seo-insight-api:$TAG" \
-            --parameters commands="[
-              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_DOMAIN\",
-              \"docker pull $IMAGE\",
-              \"docker ps -aq --filter name=$CONTAINER_NAME | grep -q . && docker stop $CONTAINER_NAME && docker rm -f $CONTAINER_NAME || echo 'no running container'\",
-              \"docker run -d --name $CONTAINER_NAME --restart always -p 127.0.0.1:$PORT:$PORT -v $OUTPUT_DATA_PATH:/app/output:ro -e OPENAI_API_KEY=$OPENAI_API_KEY $IMAGE\",
-              \"docker image prune -a -f || true\",
-              \"echo done\"
-            ]" \
-            --instance-ids $INSTANCE_IDS \
-            --region "$AWS_REGION" \
-            --query "Command.CommandId" --output text)
+          echo "Waiting for operation $OPERATION_ID ..."
+          for i in $(seq 1 60); do
+            STATUS=$(aws apprunner list-operations \
+              --service-arn "$SERVICE_ARN" \
+              --region "${{ secrets.AWS_REGION }}" \
+              --query "OperationSummaryList[?Id=='${OPERATION_ID}'].Status | [0]" \
+              --output text)
 
-          echo "⏳ Waiting for SSM command $COMMAND_ID ..."
-          for INSTANCE_ID in $INSTANCE_IDS; do
-            for i in $(seq 1 60); do
-              STATUS=$(aws ssm get-command-invocation \
-                --command-id "$COMMAND_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --region "$AWS_REGION" \
-                --query "Status" --output text 2>/dev/null || echo "Pending")
-
-              if [ "$STATUS" = "Success" ]; then
-                echo "✅ Done on $INSTANCE_ID"
-                break
-              elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
-                echo "❌ SSM $STATUS on $INSTANCE_ID"
-                aws ssm get-command-invocation \
-                  --command-id "$COMMAND_ID" \
-                  --instance-id "$INSTANCE_ID" \
-                  --region "$AWS_REGION" \
-                  --query "StandardErrorContent" --output text 2>/dev/null || true
-                exit 1
-              fi
-              echo "  🔄 Attempt $i/60: $STATUS, retrying in 10s..."
-              sleep 10
-            done
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "Deployment succeeded"
+              break
+            elif [ "$STATUS" = "FAILED" ]; then
+              echo "Deployment FAILED"
+              exit 1
+            fi
+            echo "  Attempt $i/60: $STATUS, retrying in 10s..."
+            sleep 10
           done
 
-          echo "🚀 Deployed $IMAGE to $INSTANCE_IDS"
+          SERVICE_URL=$(aws apprunner describe-service \
+            --service-arn "$SERVICE_ARN" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query "Service.ServiceUrl" --output text)
+
+          echo "Deployed $IMAGE to https://$SERVICE_URL"
