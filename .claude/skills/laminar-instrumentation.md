@@ -29,6 +29,9 @@ Non-instrumented LLM calls are treated as incomplete work.
 
 - [ ] `Laminar.initialize()` is called once at module load time
       (currently in `app/main.py` — do NOT duplicate).
+- [ ] **CRITICAL**: `_patch_openai_instrumentor()` from `utils.observability` is called
+      **BEFORE** `Laminar.initialize()` to fix lmnr 0.5.x + opentelemetry-instrumentation-openai ≥0.44.0
+      compatibility. Without this, OpenAI traces will not appear in Laminar dashboard.
 - [ ] Functions in `app/core/` that touch OpenAI are decorated with
       `@observe()` imported from `lmnr`.
 

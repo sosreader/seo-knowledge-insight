@@ -14,7 +14,8 @@ _lmnr_key = os.getenv("LMNR_PROJECT_API_KEY", "")
 try:
     from lmnr import Laminar
     if _lmnr_key:
-        Laminar.initialize(project_api_key=_lmnr_key)
+        from utils.observability import init_laminar
+        init_laminar()
 except ImportError:
     Laminar = None  # type: ignore[assignment,misc]
 

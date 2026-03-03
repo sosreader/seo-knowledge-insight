@@ -20,6 +20,7 @@ Usage in a pipeline script:
 """
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 
@@ -38,6 +39,44 @@ except ImportError:
         def decorator(fn):
             return fn
         return decorator
+
+
+def _patch_openai_instrumentor() -> None:
+    """Patch lmnr's internal OpenAI instrumentor init.
+
+    lmnr 0.5.x passes ``enrich_token_usage`` to ``OpenAIInstrumentor()``,
+    but opentelemetry-instrumentation-openai >= 0.44.0 removed that param.
+    This patch drops the unsupported kwarg so the latest instrumentor works.
+
+    Remove this patch once lmnr ships a compatible release.
+    """
+    try:
+        import lmnr.openllmetry_sdk.tracing.tracing as _tracing  # type: ignore[import]
+        from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+
+        sig = inspect.signature(OpenAIInstrumentor.__init__)
+        if "enrich_token_usage" in sig.parameters:
+            return  # native support — no patch needed
+
+        def _patched_init(should_enrich_metrics: bool) -> bool:
+            try:
+                # enrich_token_usage dropped — removed in
+                # opentelemetry-instrumentation-openai >= 0.44.0
+                instrumentor = OpenAIInstrumentor(
+                    enrich_assistant=should_enrich_metrics,
+                    upload_base64_image=None,
+                )
+                if not instrumentor.is_instrumented_by_opentelemetry:
+                    instrumentor.instrument()
+                return True
+            except Exception as exc:
+                logger.warning("Patched OpenAI instrumentor init failed: %s", exc)
+                return False
+
+        _tracing.init_openai_instrumentor = _patched_init
+        logger.debug("Patched lmnr init_openai_instrumentor (dropped enrich_token_usage)")
+    except Exception as exc:
+        logger.debug("_patch_openai_instrumentor skipped: %s", exc)
 
 
 def init_laminar() -> None:
@@ -61,6 +100,7 @@ def init_laminar() -> None:
     try:
         from lmnr import Laminar  # type: ignore[import]
 
+        _patch_openai_instrumentor()
         Laminar.initialize(project_api_key=api_key)
         _initialized = True
         logger.debug("Laminar initialized for pipeline script")

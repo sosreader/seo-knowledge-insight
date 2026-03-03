@@ -66,10 +66,14 @@ Notion 會議紀錄（87 份，2023–2026）
   查詢工具：scripts/audit_trail.py fetch|access|report
             ↓ make audit / make audit-top
 
-══════════════ Observability（2026-03-02 新增，v1.19）══════════════
+══════════════ Observability（2026-03-02 新增，v1.19；2026-03-03 patch）══════════════
 
 [Laminar Tracing] OpenTelemetry-based distributed tracing（optional）
   FastAPI lifespan：Laminar.initialize() @ startup
+    → utils/observability.py._patch_openai_instrumentor()：在 Laminar 初始化前修補 lmnr 0.5.x 與 opentelemetry-instrumentation-openai 0.44.0+ 的相容問題
+    → 根因：lmnr 0.5.x 傳遞 enrich_token_usage 參數，但 OTel OpenAI Instrumentor 0.44.0 已移除該參數
+    → 修補方式：auto-detect native support，若不支援則 monkey-patch `init_openai_instrumentor`，移除 enrich_token_usage kwarg
+    → 說明：lmnr 發佈相容版本後，此修補自動失效（no-op）
   CLI scripts：init_laminar() @ main() 開始 + flush_laminar() @ finally 區塊
   @observe 裝飾器：
     app/core/chat.py：rag_chat（自動 OpenAI 追蹤）

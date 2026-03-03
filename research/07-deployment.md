@@ -327,7 +327,7 @@ def seo_answer(question: str) -> str:
 # span input = {"question": "..."}, span output = "..."
 ```
 
-### 相依性衝突修復（Python 3.9 + lmnr 0.5.2）
+### 相依性衝突修復 1：語意慣例屬性缺失（Python 3.9 + lmnr 0.5.2）
 
 `opentelemetry-semantic-conventions-ai 0.4.14` 移除了 `LLM_SYSTEM`、`LLM_REQUEST_MODEL`、`LLM_RESPONSE_MODEL` 三個屬性，但 `lmnr 0.5.2` 的內部程式碼仍然參照它們。
 
@@ -341,9 +341,32 @@ LLM_RESPONSE_MODEL = "gen_ai.response.model"
 
 > 這是 `lmnr` 的 upstream bug，升級版本後可移除此補丁。
 
+### 相依性衝突修復 2：OpenAI Instrumentor 參數相容性（lmnr 0.5.2 + opentelemetry-instrumentation-openai ≥0.44.0）
+
+lmnr 0.5.2 傳遞 `enrich_token_usage` 參數給 `OpenAIInstrumentor()`，但 opentelemetry-instrumentation-openai ≥0.44.0 已移除該參數，導致 instrumentor 初始化失敗（silent failure），OpenAI 的 spans / tokens / cost 無法到達 laminar.sh dashboard。
+
+**修復方式**：在 `Laminar.initialize()` **之前** 呼叫 `utils/observability._patch_openai_instrumentor()`：
+
+```python
+# app/main.py
+import os
+_lmnr_key = os.getenv("LMNR_PROJECT_API_KEY", "")
+try:
+    from lmnr import Laminar
+    if _lmnr_key:
+        from utils.observability import _patch_openai_instrumentor
+        _patch_openai_instrumentor()  # patch BEFORE init
+        Laminar.initialize(project_api_key=_lmnr_key)
+except ImportError:
+    Laminar = None
+```
+
+補丁會 auto-detect 是否有 native support，若無則 monkey-patch lmnr 內部的 `init_openai_instrumentor` 移除不支援的 kwarg。一旦 lmnr 發佈相容版本，此補丁自動失效（no-op）。
+
 ### 注意事項
 
 - `Laminar.initialize()` 必須在 `load_dotenv()` 之後呼叫（本專案 `from app import config` 已隱含 `load_dotenv()`）
+- `_patch_openai_instrumentor()` 必須在 `Laminar.initialize()` **之前** 呼叫
 - 啟動本身不會建立 trace；第一個 LLM 呼叫才會送出第一個 span
 - 可至 https://laminar.sh dashboard 的 Traces 頁面驗證
 
