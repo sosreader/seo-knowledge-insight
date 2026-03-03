@@ -97,8 +97,9 @@ Notion 會議紀錄（87 份，2023–2026）
   輸入：output/qa_final.json（655 筆）
   計算：utils/synonym_dict.py（avg 11.09 個同義詞/筆，@lru_cache 執行緒安全）
         utils/freshness.py（avg freshness 0.9076，half_life=540d，min_score=0.5）
+        utils/notion_url_map.py（source_file → Notion URL 映射）
         output/access_logs（search_hit_count，需積累 14 天新格式 log）
-  輸出：output/qa_enriched.json（含 _enrichment 欄位）
+  輸出：output/qa_enriched.json（含 _enrichment 欄位 + notion_url）
   store.py load()：優先載入 qa_enriched.json，fallback qa_final.json
   SearchEngine.__init__()：預計算 synonym_boost_vec + freshness_vec（shape=(655,) numpy）
 

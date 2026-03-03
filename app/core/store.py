@@ -36,6 +36,7 @@ class QAItem:
     synonyms: list[str] = field(default_factory=list)
     freshness_score: float = 1.0
     search_hit_count: int = 0
+    notion_url: str = ""
 
 
 @dataclass
@@ -84,6 +85,7 @@ class QAStore:
                 synonyms=qa.get("_enrichment", {}).get("synonyms", []),
                 freshness_score=float(qa.get("_enrichment", {}).get("freshness_score", 1.0)),
                 search_hit_count=int(qa.get("_enrichment", {}).get("search_hit_count", 0)),
+                notion_url=qa.get("_enrichment", {}).get("notion_url", ""),
             )
             for qa in raw_items
         ]

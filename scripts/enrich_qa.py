@@ -29,6 +29,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from utils.freshness import compute_freshness_score  # noqa: E402
+from utils.notion_url_map import build_source_to_notion_url  # noqa: E402
 from utils.synonym_dict import expand_keywords  # noqa: E402
 
 OUTPUT_DIR = _ROOT / "output"
@@ -67,13 +68,18 @@ def _aggregate_hit_counts() -> dict[int, int]:
     return hit_counts
 
 
-def _enrich_qa(qa: dict, hit_counts: dict[int, int]) -> dict:
+def _enrich_qa(
+    qa: dict,
+    hit_counts: dict[int, int],
+    notion_url_map: dict[str, str],
+) -> dict:
     """
     對單筆 Q&A 計算 enrichment 欄位。
 
     Args:
-        qa:         原始 Q&A dict（qa_final.json 格式）
-        hit_counts: {qa_id: count} 聚合搜尋命中次數
+        qa:             原始 Q&A dict（qa_final.json 格式）
+        hit_counts:     {qa_id: count} 聚合搜尋命中次數
+        notion_url_map: {source_file: notion_url} 映射
 
     Returns:
         新的 dict（不修改原始 qa），加入 "_enrichment" 欄位
@@ -87,10 +93,15 @@ def _enrich_qa(qa: dict, hit_counts: dict[int, int]) -> dict:
     qa_id = qa.get("id", 0)
     search_hit_count = hit_counts.get(qa_id, 0)
 
+    # Notion URL：從 source_file 查映射
+    source_file = qa.get("source_file", "")
+    notion_url = notion_url_map.get(source_file, "")
+
     enrichment = {
         "synonyms": synonyms,
         "freshness_score": freshness_score,
         "search_hit_count": search_hit_count,
+        "notion_url": notion_url,
     }
     return {**qa, "_enrichment": enrichment}
 
@@ -112,6 +123,8 @@ def run_enrichment(
             "enriched": int,
             "avg_synonyms": float,
             "avg_freshness": float,
+            "notion_url_count": int,
+            "notion_url_pct": float,
         }
     """
     if not input_path.exists():
@@ -128,12 +141,23 @@ def run_enrichment(
     hit_counts = _aggregate_hit_counts()
     logger.info("有搜尋記錄的 Q&A：%d 筆", len(hit_counts))
 
+    logger.info("建立 Notion URL 映射...")
+    notion_url_map = build_source_to_notion_url()
+    logger.info("Notion URL 映射：%d 筆", len(notion_url_map))
+
     logger.info("Enrichment 中（%d 筆 Q&A）...", len(qa_list))
-    enriched_list = [_enrich_qa(qa, hit_counts) for qa in qa_list]
+    enriched_list = [_enrich_qa(qa, hit_counts, notion_url_map) for qa in qa_list]
 
     total_synonyms = sum(len(qa["_enrichment"]["synonyms"]) for qa in enriched_list)
     total_freshness = sum(qa["_enrichment"]["freshness_score"] for qa in enriched_list)
+    total_with_url = sum(1 for qa in enriched_list if qa["_enrichment"].get("notion_url"))
     n = len(enriched_list)
+
+    if notion_url_map and total_with_url == 0:
+        logger.warning(
+            "Notion URL 映射有 %d 筆但無 Q&A 命中，請確認 source_file 格式是否與映射 key 相符",
+            len(notion_url_map),
+        )
 
     output_data = {
         **{k: v for k, v in raw.items() if k != "qa_database"},
@@ -152,11 +176,14 @@ def run_enrichment(
         "enriched": n,
         "avg_synonyms": round(total_synonyms / n, 2) if n else 0.0,
         "avg_freshness": round(total_freshness / n, 4) if n else 0.0,
+        "notion_url_count": total_with_url,
+        "notion_url_pct": round(total_with_url / n * 100, 1) if n else 0.0,
     }
     logger.info(
-        "Enrichment 完成：avg_synonyms=%.2f, avg_freshness=%.4f",
+        "Enrichment 完成：avg_synonyms=%.2f, avg_freshness=%.4f, notion_url=%.1f%%",
         stats["avg_synonyms"],
         stats["avg_freshness"],
+        stats["notion_url_pct"],
     )
     return stats
 
@@ -174,3 +201,4 @@ if __name__ == "__main__":
     print(f"Total Q&A:       {stats['total']}")
     print(f"Avg synonyms:    {stats['avg_synonyms']:.2f}")
     print(f"Avg freshness:   {stats['avg_freshness']:.4f}")
+    print(f"Notion URL:      {stats['notion_url_count']}/{stats['total']} ({stats['notion_url_pct']:.1f}%)")

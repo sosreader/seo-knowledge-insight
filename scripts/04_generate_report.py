@@ -526,7 +526,7 @@ REPORT_SYSTEM_PROMPT = """\
 - 每個 insight 都應盡量引用【Q&A 知識庫】的具體內容作為依據，格式：（參考：「{Q&A 的關鍵句}」）
 - 如果知識庫沒有直接對應，請根據 SEO 原理推論，並標明「（推論）」。
 - 避免泛泛的 SEO 建議；結合本週資料的具體變化給出針對性意見。
-- 引用知識庫時，請同時標註原始會議來源（標題+日期），方便讀者追溯驗證。
+- 引用知識庫時，請同時標註原始會議來源（標題+日期）。若來源附有 Notion 連結，保留 Markdown 超連結格式，方便讀者一鍵回到原始頁面。
 
 報告格式（Markdown，用繁體中文，技術術語保留英文）：
 
@@ -578,10 +578,14 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
             # 溯源資訊：讓報告讀者可以追溯到原始會議
             source_title = qa.get("source_title", "")
             source_date = qa.get("source_date", "")
+            notion_url = qa.get("_enrichment", {}).get("notion_url", "")
             source_info = ""
             if source_title or source_date:
-                parts = [p for p in [source_title, source_date] if p]
-                source_info = f"來源：{'、'.join(parts)}\n"
+                source_text = "、".join(p for p in [source_title, source_date] if p)
+                if notion_url:
+                    source_info = f"來源：[{source_text}]({notion_url})\n"
+                else:
+                    source_info = f"來源：{source_text}\n"
             qa_context += (
                 f"\n[{i}] 觸發信號：{triggered}\n"
                 f"{source_info}"

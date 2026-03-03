@@ -19,6 +19,7 @@
 - **自動指標拉取** — 從 Google Sheets 讀取週度指標（無需手動複製貼上）
 - **異常值偵測** — 月趨勢 ±15% 或週趨勢 ±20% 自動標記異常
 - **知識庫 Hybrid Search** — 將異常指標對應到相關 Q&A，生成行動建議
+- **Notion 連結引用** — 知識庫引用自動附上原始會議紀錄的 Notion 連結
 - **完整報告輸出** — Markdown 格式，包含概覽、指標分析、異常原因、Todo 與相關知識補充
 
 ### 3. Q&A 品質評估（步驟 5）
@@ -125,6 +126,7 @@ seo-knowledge-insight/
     ├── qa_per_meeting/          # 每份會議的 Q&A（中間產物）
     ├── qa_all_raw.json          # 所有原始 Q&A（去重前）
     ├── qa_final.json            # 最終 Q&A 資料庫（JSON）
+    ├── qa_enriched.json         # 豐富化 Q&A（含同義詞、時效性、Notion 連結）
     ├── qa_final.md              # 人類可讀的 Markdown 版
     ├── qa_embeddings.npy        # 持久化 embedding 向量（Step 3 產出，Step 4 載入）
     ├── metrics_sample.tsv      # 範例指標資料（可替换為實際資料）
@@ -330,13 +332,14 @@ python scripts/run_pipeline.py --step generate-report
 | **本週 SEO 狀況概覽** | 2-3 句總結本週最重要變化                                              |
 | **重點指標分析**      | 核心指標（曝光/點擊/CTR/Coverage/Organic Search 等）數值與趨勢        |
 | **異常值與潛在原因**  | 月趨勢超過 ±15% 或週趨勢超過 ±20% 的指標，結合 Q&A 知識庫解釋可能原因 |
-| **本週行動建議**      | 2-3 條具體 Todo（引用對應 Q&A 知識）                                  |
-| **相關 SEO 知識補充** | 從 Q&A 知識庫節錄最相關的 1-2 個問答                                  |
+| **本週行動建議**      | 2-3 條具體 Todo（附 Notion 連結指向原始會議紀錄）                      |
+| **相關 SEO 知識補充** | 從 Q&A 知識庫節錄最相關的 1-2 個問答（含原始會議紀錄連結）             |
 
 ### 知識庫來源
 
-- 優先使用 `output/qa_final.json`（若 ≥50 筆，即步驟 3 完整跑過）
-- 自動降級使用 `output/qa_all_raw.json`（725 筆，步驟 2 產出）
+- 優先使用 `output/qa_enriched.json`（含 Notion 連結；需執行 `make enrich`）
+- 降級使用 `output/qa_final.json`（若 ≥50 筆，即步驟 3 完整跑過；無連結）
+- 自動降級使用 `output/qa_all_raw.json`（670 筆，步驟 2 產出；無連結）
 
 ---
 
@@ -592,6 +595,24 @@ $$
       ],
     },
   ],
+}
+```
+
+### `qa_enriched.json`（Enrichment 階段豐富化資料）
+
+```jsonc
+{
+  "qa_database": [
+    {
+      // 包含 qa_final.json 的所有欄位 +
+      "_enrichment": {
+        "synonyms": ["JavaScript rendering", "JS SEO", "..."],
+        "freshness_score": 0.9076, // half_life=540d, min=0.5
+        "search_hit_count": 3, // 來自 access_logs 統計
+        "notion_url": "https://www.notion.so/SEO-_2024-05-02-052d1af93b5b4de688e0ac006848ed45"
+      }
+    }
+  ]
 }
 ```
 

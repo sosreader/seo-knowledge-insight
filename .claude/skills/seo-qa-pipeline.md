@@ -151,6 +151,8 @@ Notion API → [步驟1] fetch → raw_data/notion_json/ + markdown/
 
 經步驟 3 後新增：`id`, `category`（10 分類）, `difficulty`（基礎/進階）, `evergreen`（true/false）。
 
+經 Enrichment 新增（存放於 `_enrichment` 子物件）：`synonyms`、`freshness_score`、`search_hit_count`、`notion_url`（原始會議紀錄在 Notion 的連結）。
+
 合併的筆數另有 `merged_from` 來源列表。
 
 ---
@@ -248,3 +250,13 @@ output/
 - `utils/block_to_markdown.py` 中的 `list_counter` 參數與 `blocks_to_markdown_sync()` 函式
 - `scripts/05_evaluate.py` 中的 `load_golden_set()` 函式（未使用）
 - `scripts/04_generate_report.py` 中的舊版 `find_relevant_qas()` backward-compat wrapper
+
+### v2.1 週報 Notion 連結注入 + QAItem notion_url 欄位（2026-03-03）
+
+- 新增 `utils/notion_url_map.py` — source_file → Notion URL 映射（source_file 從 fetch_notion.py 的 meetings_index.json 解析出來）
+- 新增 `utils/notion_url_map.py` 測試（14 個測試）
+- 修改 `scripts/enrich_qa.py` — enrichment 階段注入 notion_url
+- 修改 `app/core/store.py` — QAItem schema 新增 `notion_url: str = ""` 欄位，從 `_enrichment.notion_url` 讀取
+- 修改 `scripts/04_generate_report.py` — 週報知識庫引用改為 Markdown `[title](url)` 連結
+- 新增 `tests/test_report_notion_link.py` — 週報連結格式測試（11 個測試）
+- 修改 `Makefile` — `enrich` target 保持不變，需手動 `make enrich` 後 qa_enriched.json 才包含 notion_url
