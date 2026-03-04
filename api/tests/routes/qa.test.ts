@@ -10,6 +10,7 @@ vi.mock("../../src/store/qa-store.js", () => {
       loaded: true,
       count: items.length,
       getById: (id: string) => items.find((i) => i.id === id) ?? undefined,
+      getBySeq: (seq: number) => items.find((i) => i.seq === seq) ?? undefined,
       listQa: (params: Record<string, unknown>) => {
         let results = [...items];
         if (params.category) results = results.filter((i) => i.category === params.category);
@@ -68,12 +69,25 @@ describe("GET /api/v1/qa/:id", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns QA item for valid ID", async () => {
+  it("returns QA item for valid hex ID", async () => {
     const res = await app.request("/api/v1/qa/a1b2c3d4e5f67890");
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.id).toBe("a1b2c3d4e5f67890");
     expect(body.data.question).toContain("LCP");
+  });
+
+  it("returns QA item for integer seq", async () => {
+    const res = await app.request("/api/v1/qa/1");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.seq).toBe(1);
+    expect(body.data.question).toContain("LCP");
+  });
+
+  it("returns 404 for non-existent seq", async () => {
+    const res = await app.request("/api/v1/qa/999");
+    expect(res.status).toBe(404);
   });
 });
 

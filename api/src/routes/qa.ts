@@ -29,10 +29,18 @@ qaRoute.get("/categories", (c) => {
 
 qaRoute.get("/:item_id", (c) => {
   const itemId = c.req.param("item_id");
-  if (!qaIdPattern.test(itemId)) {
+
+  // Support both hex stable_id and integer seq
+  let item;
+  const seqNum = Number(itemId);
+  if (Number.isInteger(seqNum) && seqNum > 0) {
+    item = qaStore.getBySeq(seqNum);
+  } else if (qaIdPattern.test(itemId)) {
+    item = qaStore.getById(itemId);
+  } else {
     return c.json(fail("Invalid QA ID format"), 400);
   }
-  const item = qaStore.getById(itemId);
+
   if (!item) {
     return c.json(fail(`QA id=${itemId} not found`), 404);
   }

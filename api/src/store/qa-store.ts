@@ -156,6 +156,10 @@ export class QAStore {
     return this.idIndex.get(qaId);
   }
 
+  getBySeq(seq: number): QAItem | undefined {
+    return this.items.find((item) => item.seq === seq);
+  }
+
   /**
    * Pure semantic search (dot product with normalized embeddings).
    */
