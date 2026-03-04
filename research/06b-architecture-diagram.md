@@ -98,7 +98,7 @@ flowchart TD
 
     subgraph MultiLayerContext["Multi-Layer Context v2.11（離線 Enrichment + Contextual Embeddings）"]
         QA --> ENRICH["scripts/enrich_qa.py<br/>make enrich<br/>冪等 / 無 LLM / atomic write"]
-        SYN["utils/synonym_dict.py<br/>三層合併（v2.11）：METRIC_QUERY_MAP<br/>+ _SUPPLEMENTAL_SYNONYMS（v2.11 新增 32 項）<br/>+ output/synonym_custom.json<br/>@lru_cache(maxsize=1)"] --> ENRICH
+        SYN["utils/synonym_dict.py<br/>三層合併（v2.11）：METRIC_QUERY_MAP<br/>+ _SUPPLEMENTAL_SYNONYMS（v2.11 新增 31 項，共 59 項）<br/>+ output/synonym_custom.json<br/>@lru_cache(maxsize=1)"] --> ENRICH
         CTX["scripts/_generate_context.py（v2.11 新增）<br/>Claude Haiku situating context<br/>150-300 字/筆"] --> ENRICH
         SYNSTORE -->|"custom synonyms"| SYN
         FRESH["utils/freshness.py<br/>exp(-0.693×age/540d)<br/>min_score=0.5"] --> ENRICH

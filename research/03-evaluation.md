@@ -925,3 +925,96 @@ Step 6: 儲存至 output/evals/ab_<date>.json
 | Eval model 欄位 | Optional | 向下相容，舊 eval 不需遷移 |
 | A/B Judge | Claude Code（非 OpenAI） | 避免 Judge 偏向自家模型輸出 |
 
+---
+
+## Retrieval 指標擴充：Precision@K / Recall@K / F1（v2.11，2026-03-05）
+
+### 背景：原有指標的語意歧義
+
+原本的「Category Hit Rate」實際上是 **Recall@K（category level）**，語意不清。v2.11 重新定義並新增對應指標：
+
+| 指標 | 定義 | 計算方式 |
+|------|------|---------|
+| **KW Hit Rate** | 關鍵字命中率（fuzzy match） | `|matched_kw| / |expected_kw|` |
+| **MRR** | Mean Reciprocal Rank | `1 / rank_of_first_relevant` |
+| **Recall@K**（原 Category Hit Rate） | top-K 中有幾個 expected category 被覆蓋 | `|retrieved_cats ∩ expected_cats| / |expected_cats|` |
+| **Precision@K**（v2.11 新增） | top-K 中有幾個是 relevant | `|relevant_in_topk| / K` |
+| **F1 Score**（v2.11 新增） | Precision 與 Recall 的調和平均 | `2 × P × R / (P + R)` |
+
+### 實作（`scripts/qa_tools.py`）
+
+```python
+# Precision@K：top-K 中幾個 QA 的 category 在 expected_cats
+relevant_in_topk = sum(
+    1 for qa in retrieved if qa.get("category", "") in set(expected_cats)
+)
+precision_at_k = relevant_in_topk / top_k if top_k > 0 else 0.0
+
+# Recall@K：alias for cat_hit_rate（向後相容）
+recall_at_k = cat_hit_rate  # |retrieved_cats ∩ expected_cats| / |expected_cats|
+
+# F1
+f1_score = 2 * precision_at_k * recall_at_k / (precision_at_k + recall_at_k) \
+    if (precision_at_k + recall_at_k) > 0 else 0.0
+```
+
+### Laminar Online Scoring 擴充
+
+eval 執行後自動送出 5 個 score events 到 Laminar span：
+
+```python
+score_event("precision_at_k", avg_precision_at_k)
+score_event("recall_at_k", avg_recall_at_k)
+score_event("f1_score", avg_f1_score)
+score_event("kw_hit_rate", avg_kw_hit)
+score_event("mrr", avg_mrr)
+```
+
+### 評估基準線（v2.11，2026-03-05）
+
+使用 `eval/golden_retrieval.json`（20 cases），top-k=5 關鍵字搜尋：
+
+| 指標 | 數值 | 目標 |
+|------|------|------|
+| KW Hit Rate | **73%** | ≥ 85% |
+| MRR | **0.88** | ≥ 0.85 |
+| Recall@K | **80%** | ≥ 80% ✅ |
+| Precision@K | **76%** | ≥ 80% |
+| F1 Score | **0.73** | ≥ 0.78 |
+
+### Laminar 正式 Eval Run（`scripts/_eval_laminar.py`）
+
+**兩種 Laminar eval 層次**：
+
+| 層次 | 觸發時機 | 方式 |
+|------|---------|------|
+| Online scoring | 每次 eval-retrieval-local 執行後 | `score_event()` in `@observe` span |
+| Offline eval run | 明確觸發（CLI） | `lmnr.evaluate()` 推送 golden set 為 dataset |
+
+**離線 eval run 使用方式**：
+```bash
+python scripts/_eval_laminar.py                           # 全量（20 cases）
+python scripts/_eval_laminar.py --dataset-name "v2.11"   # 自訂 dataset 名稱
+python scripts/_eval_laminar.py --top-k 10               # 改變 top-K
+```
+
+執行後結果出現在 Laminar Dashboard 的 Evaluations 頁面，可追蹤 Precision/Recall/F1 的歷史趨勢。
+
+**三個 evaluator 設計**：
+```python
+def precision_evaluator(output: list[dict], target: dict) -> float:
+    expected_cats = set(target.get("expected_categories", []))
+    return sum(1 for qa in output if qa.get("category") in expected_cats) / len(output)
+
+def recall_evaluator(output: list[dict], target: dict) -> float:
+    expected_cats = set(target.get("expected_categories", []))
+    retrieved_cats = {qa.get("category") for qa in output}
+    return len(retrieved_cats & expected_cats) / len(expected_cats)
+
+def f1_evaluator(output, target) -> float:
+    p, r = precision_evaluator(output, target), recall_evaluator(output, target)
+    return 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+```
+
+---
+
