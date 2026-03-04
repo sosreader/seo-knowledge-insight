@@ -41,19 +41,31 @@ Notion 會議紀錄（87 份，2023–2026）
   Retrieval 品質：語意搜尋 + gpt-5-mini 相關性判斷
             ↓ output/eval_report.json / output/evals/eval_local_*.json
 
-══════════════ API 層（2026-02-27 新增；v1.9 加入安全層）══════════════
+══════════════ API 層（v1.9 安全層；v2.2 stable_id + reports/sessions）══════════════
 
 [SEO Insight API] app/ — FastAPI，讀 Step 3 產出進記憶體
   認證：X-API-Key header（SEO_API_KEY env）
-  速率限制：chat 20/min・search/qa 60/min（slowapi）
+  速率限制：chat 20/min・search/qa 60/min・reports/generate 5/min（slowapi）
   回應格式：ApiResponse[T] envelope（data / error / meta）
   全局例外：500 不洩漏 traceback
+  QA ID：stable_id（SHA256[:16] hex），QAItem.id: str + seq: int
   endpoints：
-    POST /api/v1/search  → hybrid_search（語意 + 關鍵字）
-    POST /api/v1/chat    → RAG 問答（gpt-5.2）
-    GET  /api/v1/qa      → 篩選列表
+    POST /api/v1/search    → hybrid_search（語意 + 關鍵字）
+    POST /api/v1/chat      → RAG 問答（gpt-5.2）
+    GET  /api/v1/qa        → 篩選列表（id=stable_id hex）
+    GET  /api/v1/qa/{id}   → 單筆查詢（^[0-9a-f]{16}$ 驗證）
+    POST /api/v1/feedback  → 使用者回饋（helpful / not_relevant）
+    GET  /api/v1/reports   → 週報列表（newest first）
+    GET  /api/v1/reports/{date} → 單篇週報 Markdown（YYYYMMDD）
+    POST /api/v1/reports/generate → 觸發週報生成（subprocess，timeout 120s）
+    GET  /api/v1/sessions  → 對話 session 列表
+    POST /api/v1/sessions  → 建立 session
+    GET  /api/v1/sessions/{id} → 取得 session 對話記錄
+    POST /api/v1/sessions/{id}/messages → 新增訊息
+    DELETE /api/v1/sessions/{id} → 刪除 session
   部署：Docker image → ECR → App Runner（無伺服器容器）
   資料層：QAStore 抽象（Phase 1 檔案 / Phase 2 Supabase pgvector）
+  Session 儲存：output/sessions/{uuid}.json（Repository Pattern）
             ↓ https://<service>.awsapprunner.com
 
 ══════════════ Audit Trail（2026-02-28 新增）══════════════

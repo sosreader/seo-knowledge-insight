@@ -15,7 +15,7 @@
 | [05-models.md](./05-models.md)                                   | 模型選擇決策 / Embedding 模型比較                                           |
 | [06-project-architecture.md](./06-project-architecture.md)       | 本專案架構 / Pipeline 全景 / 技術決策學術支撐                               |
 | [06a-architecture-changelog.md](./06a-architecture-changelog.md) | 架構變更紀錄（Changelog），每次架構調整後新增一行                           |
-| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v1.21，App Runner + Supabase-ready）        |
+| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.2，stable_id + reports + sessions）      |
 | [07-deployment.md](./07-deployment.md)                           | FastAPI RAG API 化 / ECR + App Runner 部署 / Supabase 遷移路徑              |
 | [08-fetch-optimization.md](./08-fetch-optimization.md)           | Notion 爬取優化 / ETag / 增量更新                                           |
 | [09-provider-comparison.md](./09-provider-comparison.md)         | AI Provider 輸出品質比較方法論與歷次跑分結果                                |
@@ -38,21 +38,23 @@
 
 ---
 
-## 當前指標現況（2026-03-02，v1.19 — Observability 全面整合）
+## 當前指標現況（2026-03-04，v2.2 — stable_id + reports + sessions）
 
 | 指標                   | 數值       | 說明                                                      |
 | ---------------------- | ---------- | --------------------------------------------------------- |
 | Q&A 總量               | 655 筆     | Step 2: 670 原始 → Step 3: 去除 15 組重複                |
-| KW Hit Rate            | **79.67%** | synonym expansion 後（目標 ≥ 85%，差 5.33pp）            |
+| QA ID 格式             | 16-char hex | stable_id（SHA256[:16]），取代 sequential int             |
+| KW Hit Rate            | **74%**    | CJK n-gram + synonym 展開（目標 ≥ 85%）                  |
 | freshness_rank_quality | **1.0**    | 時效衰減正常，舊文件未擠掉新文件                          |
 | synonym_coverage       | **1.0**    | 所有 Q&A 已完成 enrichment                               |
 | avg_synonyms / Q&A     | 11.09      | enrichment 後平均同義詞數                                |
 | avg_freshness          | 0.9076     | 知識庫整體新鮮度（max=1.0）                              |
-| MRR                    | 0.75       | 平均倒數排名（目標 ≥ 0.80）                              |
-| Relevance              | 4.80 / 5   | LLM-as-Judge（待 v2.0 重評）                             |
-| Accuracy               | 3.95 / 5   | LLM-as-Judge（待 v2.0 重評）                             |
-| Completeness           | 3.85 / 5   | LLM-as-Judge（待 v2.0 重評）                             |
-| **Test 通過率**        | **206/206** | ✅ 全通過（v1.19 新增 Observability 隔離測試）             |
+| MRR                    | **0.87**   | 平均倒數排名（v2.0+cjk）                                |
+| Relevance              | **5.00** / 5 | Claude Code as Judge（v2.0+cjk）                        |
+| Accuracy               | **4.30** / 5 | Claude Code as Judge（v2.0+cjk）                        |
+| Completeness           | **3.95** / 5 | Claude Code as Judge（v2.0+cjk）                        |
+| **Test 通過率**        | **247/247** | v2.2（stable_id + reports + sessions）                    |
+| **API endpoints**      | **13 個**   | search/chat/qa/feedback/reports(3)/sessions(5)/health     |
 | **Observability**      | **完備**    | Laminar traces + Audit logs + Scoring events（三柱）      |
 
 ---

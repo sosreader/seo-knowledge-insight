@@ -47,16 +47,16 @@ app = FastAPI(lifespan=lifespan)
 # app/core/store.py
 # 預先 L2 歸一化，讓點積 = cosine similarity
 norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-self.embeddings = embeddings / norms  # shape: (725, 1536)
+self.embeddings = embeddings / norms  # shape: (655, 1536)
 
 def search(self, query_vec: np.ndarray, top_k: int = 5):
-    scores = self.embeddings @ query_vec  # (725,)，dot product = cosine
+    scores = self.embeddings @ query_vec  # (655,)，dot product = cosine
     top_idx = np.argsort(scores)[::-1][:top_k]
     return [(self.items[i], float(scores[i])) for i in top_idx]
 ```
 
 **數學**：兩個 L2 歸一化向量的點積 = cosine similarity。
-矩陣乘法一次計算全部 725 筆相似度，比 for loop 快 100x+。
+矩陣乘法一次計算全部 655 筆相似度，比 for loop 快 100x+。
 
 ### RAG chat 實作模式
 
@@ -95,11 +95,18 @@ app/
 ├── config.py          # 從環境變數讀設定，不 import pipeline 的 config.py
 ├── core/
 │   ├── store.py       # QAStore singleton：load() / search() / list_qa()
-│   └── chat.py        # get_embedding() + rag_chat()
+│   ├── chat.py        # get_embedding() + rag_chat()
+│   ├── session_store.py  # FileSessionStore（Repository Pattern，JSON）
+│   ├── security.py    # verify_api_key dependency
+│   ├── limiter.py     # slowapi rate limiter
+│   └── schemas.py     # ApiResponse[T] envelope
 ├── routers/
 │   ├── search.py      # POST /api/v1/search
 │   ├── chat.py        # POST /api/v1/chat
-│   └── qa.py          # GET  /api/v1/qa, /qa/{id}, /qa/categories
+│   ├── qa.py          # GET  /api/v1/qa, /qa/{id}（stable_id hex 驗證）
+│   ├── feedback.py    # POST /api/v1/feedback
+│   ├── reports.py     # GET/POST /api/v1/reports（週報管理）
+│   └── sessions.py    # CRUD /api/v1/sessions（對話管理）
 └── main.py            # lifespan + CORS + include_router
 ```
 

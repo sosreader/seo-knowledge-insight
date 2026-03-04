@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v1.21，2026-03-03）
+## 架構圖（最新：v2.2，2026-03-04）
 
 ```mermaid
 flowchart TD
@@ -41,19 +41,24 @@ flowchart TD
         S4 --> RPT[report_YYYYMMDD.md]
     end
 
-    subgraph RAG_API["API Layer v1.11 安全層已實作"]
-        QA --> API[SEO Insight API<br/>FastAPI QAStore singleton]
+    subgraph RAG_API["API Layer v2.2（stable_id + reports + sessions）"]
+        QA --> API[SEO Insight API<br/>FastAPI QAStore singleton<br/>QAItem.id: stable_id hex]
         EMB --> API
         SE -.->|hybrid_search| API
         API --> SEC["app/core/security.py<br/>verify_api_key<br/>X-API-Key header<br/>SEO_API_KEY env"]
-        API --> LIM["app/core/limiter.py<br/>slowapi Limiter<br/>chat:20/min search:60/min qa:60/min"]
+        API --> LIM["app/core/limiter.py<br/>slowapi Limiter<br/>chat:20/min search:60/min<br/>qa:60/min reports/gen:5/min"]
         API --> EXC["@app.exception_handler<br/>500 不流展 traceback"]
-        SEC --> EP["POST /api/v1/search — 60/min<br/>POST /api/v1/chat — 20/min<br/>GET  /api/v1/qa — 60/min<br/>POST /api/v1/feedback — 60/min"]
+        SEC --> EP["POST /api/v1/search — 60/min<br/>POST /api/v1/chat — 20/min<br/>GET  /api/v1/qa — 60/min<br/>GET  /api/v1/qa/{id} — hex validated<br/>POST /api/v1/feedback — 60/min"]
         LIM --> EP
         EXC --> EP
         EP --> ENV["ApiResponse[T]<br/>data / error / meta<br/>request_id + version"]
         EP -->|not_relevant / helpful| LS
-        EP -->|staleness 警示 18個月| STALE["chat.py _is_stale()<br/>⚠️ 超過 18 個月提示"]
+        EP -->|staleness 警示 18個月| STALE["chat.py _is_stale()<br/>超過 18 個月提示"]
+        SEC --> RPT_EP["GET  /api/v1/reports — 60/min<br/>GET  /api/v1/reports/{date}<br/>POST /api/v1/reports/generate — 5/min"]
+        LIM --> RPT_EP
+        RPT_EP --> RPT_STORE["app/routers/reports.py<br/>output/report_YYYYMMDD.md<br/>subprocess + SSRF 防護"]
+        SEC --> SS_EP["GET/POST /api/v1/sessions<br/>GET/POST/DELETE .../sessions/{id}"]
+        SS_EP --> SS_STORE["app/core/session_store.py<br/>output/sessions/{uuid}.json<br/>Repository Pattern"]
     end
 
     subgraph AuditTrail["Audit Trail v1.0"]
