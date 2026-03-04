@@ -41,8 +41,9 @@ Notion 會議紀錄（87 份，2023–2026）
   Retrieval 品質：語意搜尋 + gpt-5-mini 相關性判斷
             ↓ output/eval_report.json / output/evals/eval_local_*.json
 
-══════════════ API 層（v1.9 安全層；v2.2 stable_id + reports/sessions）══════════════
+══════════════ API 層（v1.9 安全層；v2.2 stable_id + reports/sessions；v2.3 Hono TypeScript）══════════════
 
+**Python FastAPI（v2.2，port 8001）**——舊架構，逐步替換中
 [SEO Insight API] app/ — FastAPI，讀 Step 3 產出進記憶體
   認證：X-API-Key header（SEO_API_KEY env）
   速率限制：chat 20/min・search/qa 60/min・reports/generate 5/min（slowapi）
@@ -67,6 +68,36 @@ Notion 會議紀錄（87 份，2023–2026）
   資料層：QAStore 抽象（Phase 1 檔案 / Phase 2 Supabase pgvector）
   Session 儲存：output/sessions/{uuid}.json（Repository Pattern）
             ↓ https://<service>.awsapprunner.com
+
+**TypeScript Hono（v2.3，port 8002，新架構）**——直接取代 Python API
+[SEO Insight API v2] api/src — Hono + TypeScript，完全移植 Python 功能
+  框架：Hono（輕量、Cloudflare Workers / Node.js 相容）
+  驗證：Zod schema validation（TypeScript-first）
+  回應格式：ApiResponse[T] envelope（data / error / meta）
+  認證：X-API-Key middleware
+  速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min）
+  QA ID：stable_id（SHA256[:16] hex），與 Python 相同驗證規則
+  endpoint 同步（6 個 router）：
+    - routes/qa.ts        — GET /qa, /qa/{id}
+    - routes/search.ts    — POST /search
+    - routes/chat.ts      — POST /chat（需要 OpenAI API key）
+    - routes/reports.ts   — GET /reports, /reports/{id}, POST /reports/generate
+    - routes/sessions.ts  — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages, DELETE /sessions/{id}
+    - routes/feedback.ts  — POST /feedback
+  核心模組：
+    - store/qa-store.ts：QAStore（讀 qa_final.json + embedding 向量）
+    - store/session-store.ts：FileSessionStore（Repository Pattern）
+    - store/learning-store.ts：LearningStore（feedback + miss 記錄）
+    - store/search-engine.ts：SearchEngine（hybrid search + keyword boost）
+    - utils/npy-reader.ts：NumPy .npy 檔案解析（numpy 相容）
+    - utils/cosine-similarity.ts：向量運算（Float32Array）
+    - utils/keyword-boost.ts：4 層關鍵字匹配
+    - services/embedding.ts：OpenAI embedding wrapper
+    - services/rag-chat.ts：RAG 問答（需要 OpenAI API key）
+  測試：Vitest（13 個 test files，60 tests passing）
+  部署：docker-compose（port 8002），未來支援 ECR + App Runner
+  與 Python 並行運作（遷移期間）
+            ↓ http://localhost:8002 (開發) 或 https://<service-v2>.awsapprunner.com (未來)
 
 ══════════════ Audit Trail（2026-02-28 新增）══════════════
 
@@ -122,9 +153,73 @@ Notion 會議紀錄（87 份，2023–2026）
             ↓ output/learnings.jsonl
 ```
 
-## 13. QA ID 遷移與週報 API（v2.2，2026-03-04）
+## 13. API 層架構遷移 — Python FastAPI → TypeScript Hono（v2.3，2026-03-04）
 
-### QA ID 從 Sequential Int 遷移至 Stable UUID
+### 遷移背景與決策
+
+**版本演進**：
+- v2.0—v2.2：Python FastAPI（單體 8001 port），完整 API 功能
+- **v2.3**：開始 TypeScript Hono 並行架構（port 8002）
+
+**決策核心**：
+1. **分層遷移**：新功能優先在 Hono 實作，Python 保留作為穩定層
+2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料，search/chat/sessions 需要 OpenAI API key（embedding + completion）
+3. **測試優先**：Vitest 路由覆蓋（13 個 test files，60 tests），unit + integration
+4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取
+
+**實作成果**：
+- 31 個源碼檔案（routes 6、store 3、search 4、middleware 3、等）
+- 14 個測試檔案（routes 6 個完整測試套件）
+- 6 個完整路由器（qa、search、chat、reports、sessions、feedback）+ health 檢查
+- NumPy .npy 檔案解析引擎（向量相容）
+- 速率限制 middleware（同步 Python layer 配置）
+
+**技術決策**：
+
+1. **Hono 框架選擇**
+   - 輕量（<5KB runtime）vs Express（50KB）
+   - Cloudflare Workers + Node.js 雙支援（未來邊緣計算選項）
+   - TypeScript 內置，無需額外 transpiler
+   - 無狀態設計天然適合無伺服器環境
+
+2. **Zod 驗證**
+   - 比 io-ts 更簡潔（TypeScript-first）
+   - Runtime schema validation，完全型別安全
+   - 與 Hono 深度整合
+
+3. **NumPy 相容讀取**
+   - `npy-reader.ts`：實作 .npy 格式解析（IEEE 754 float32/float64）
+   - 無 numpy / pandas 依賴（純 JavaScript）
+   - 支援多維陣列 reshape（655 筆 × 1536 維）
+
+4. **測試策略**
+   - Vitest（Vite native test runner）
+   - Unit tests：純邏輯（search、store、validators）
+   - Integration tests：mocked external calls（OpenAI、Supabase）
+   - Router tests：完整 HTTP 請求/回應循環
+   - 100% endpoint 覆蓋（6 個 routes × ~2 test per endpoint）
+
+**向下相容**：
+- Python API（port 8001）保持不變，允許 2-4 週過渡期
+- 前端同時支援兩個 port（通過 .env 開關）
+- QA ID 驗證規則完全同步（16-char hex）
+- Response envelope 格式一致（data / error / meta）
+
+**遷移路徑**：
+```
+Phase 1（現在）：Hono 並行運行 (port 8002)
+  ↓ 前端測試、性能驗證 (1-2 週)
+Phase 2：逐步遷移流量（10% → 50% → 100%）
+  ↓ 監控指標、錯誤率、延遲
+Phase 3（4 週後）：下線 Python API (port 8001)
+  ↓ 專注 Hono 優化與擴展
+```
+
+---
+
+## 14. QA ID 遷移與週報 API（v2.2，2026-03-04）
+
+### QA ID 從 Sequential Int 遷移至 Stable UUID（v2.2）
 
 **決策**：QAItem.id 從 sequential int（1–655）變更為 16 字元 hex string（stable_id），保留原始 seq 欄位供顯示用。
 
@@ -169,9 +264,9 @@ Notion 會議紀錄（87 份，2023–2026）
 
 ---
 
-### 週報 REST API（新增 v2.2）
+### 週報 REST API（新增 v2.2，現已在 Hono 實作）
 
-**新增三個 endpoint** — `/app/routers/reports.py`
+**新增三個 endpoint** — Python: `/app/routers/reports.py` / TypeScript: `api/src/routes/reports.ts`
 
 1. **GET /api/v1/reports** — 列出所有週報（newest first）
    ```json

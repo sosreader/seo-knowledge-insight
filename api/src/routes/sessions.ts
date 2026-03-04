@@ -1,0 +1,150 @@
+import { Hono } from "hono";
+import {
+  createSessionSchema,
+  sendMessageSchema,
+  sessionListParamsSchema,
+  type SessionDetailOut,
+  type SessionSummaryOut,
+} from "../schemas/session.js";
+import { ok, fail } from "../schemas/api-response.js";
+import { sessionStore, type Session } from "../store/session-store.js";
+import { ragChat } from "../services/rag-chat.js";
+
+export const sessionsRoute = new Hono();
+
+function toSummary(s: Session): SessionSummaryOut {
+  return {
+    id: s.id,
+    title: s.title,
+    created_at: s.created_at,
+    updated_at: s.updated_at,
+  };
+}
+
+function toDetail(s: Session): SessionDetailOut {
+  return {
+    id: s.id,
+    title: s.title,
+    created_at: s.created_at,
+    updated_at: s.updated_at,
+    messages: s.messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+      sources: m.sources,
+      created_at: m.created_at,
+    })),
+  };
+}
+
+sessionsRoute.get("/", (c) => {
+  const parsed = sessionListParamsSchema.safeParse({
+    limit: c.req.query("limit"),
+    offset: c.req.query("offset"),
+  });
+
+  if (!parsed.success) {
+    return c.json(fail("Invalid query parameters"), 400);
+  }
+
+  const { limit, offset } = parsed.data;
+  const { sessions, total } = sessionStore.listSessions(limit, offset);
+
+  return c.json(
+    ok({
+      items: sessions.map(toSummary),
+      total,
+    }),
+  );
+});
+
+sessionsRoute.post("/", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = createSessionSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(fail("Invalid request body"), 400);
+  }
+
+  const session = sessionStore.createSession(parsed.data.title ?? "");
+  return c.json(ok(toDetail(session)));
+});
+
+sessionsRoute.get("/:session_id", (c) => {
+  const sessionId = c.req.param("session_id");
+  const session = sessionStore.getSession(sessionId);
+
+  if (!session) {
+    return c.json(fail("Session not found"), 404);
+  }
+
+  return c.json(ok(toDetail(session)));
+});
+
+sessionsRoute.post("/:session_id/messages", async (c) => {
+  const sessionId = c.req.param("session_id");
+  const body = await c.req.json();
+  const parsed = sendMessageSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(fail("Invalid request body"), 400);
+  }
+
+  let session = sessionStore.getSession(sessionId);
+  if (!session) {
+    return c.json(fail("Session not found"), 404);
+  }
+
+  // 1. Save user message
+  const userMsg = {
+    role: "user" as const,
+    content: parsed.data.message,
+    sources: [] as Record<string, unknown>[],
+    created_at: new Date().toISOString().replace(/(\.\d{3})\d*Z$/, "$1Z"),
+  };
+
+  session = sessionStore.addMessage(sessionId, userMsg);
+  if (!session) {
+    return c.json(fail("Failed to add message (session full or conflict)"), 409);
+  }
+
+  // 2. Build history from existing messages (exclude the just-added user msg)
+  const history = session.messages.slice(0, -1).map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  // 3. Call RAG chat
+  const result = await ragChat(parsed.data.message, history.length > 0 ? history : null);
+
+  // 4. Save assistant message
+  const assistantMsg = {
+    role: "assistant" as const,
+    content: result.answer,
+    sources: result.sources as unknown as Record<string, unknown>[],
+    created_at: new Date().toISOString().replace(/(\.\d{3})\d*Z$/, "$1Z"),
+  };
+
+  session = sessionStore.addMessage(sessionId, assistantMsg);
+  if (!session) {
+    return c.json(fail("Failed to save assistant response"), 500);
+  }
+
+  return c.json(
+    ok({
+      answer: result.answer,
+      sources: result.sources,
+      session: toDetail(session),
+    }),
+  );
+});
+
+sessionsRoute.delete("/:session_id", (c) => {
+  const sessionId = c.req.param("session_id");
+  const deleted = sessionStore.deleteSession(sessionId);
+
+  if (!deleted) {
+    return c.json(fail("Session not found"), 404);
+  }
+
+  return c.json(ok({ deleted: true, session_id: sessionId }));
+});

@@ -20,3 +20,7 @@ output/.versions/step*/
 
 # Local screenshots
 laminar-*.png
+
+# Node.js (api/)
+node_modules/
+api/dist/

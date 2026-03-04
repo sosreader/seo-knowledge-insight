@@ -1,0 +1,121 @@
+/**
+ * Shared test fixtures and helpers.
+ */
+
+import type { QAItem } from "../src/store/qa-store.js";
+
+export const FAKE_ITEMS: readonly QAItem[] = [
+  {
+    id: "a1b2c3d4e5f67890",
+    seq: 1,
+    question: "What is LCP and how to improve it?",
+    answer: "LCP (Largest Contentful Paint) measures loading performance. Optimize images and server response time.",
+    keywords: ["LCP", "Core Web Vitals", "performance"],
+    confidence: 0.95,
+    category: "SEO Technical",
+    difficulty: "advanced",
+    evergreen: true,
+    source_title: "Meeting 2025-01",
+    source_date: "2025-01-15",
+    is_merged: false,
+    synonyms: ["largest contentful paint"],
+    freshness_score: 1.0,
+    search_hit_count: 5,
+    notion_url: "",
+  },
+  {
+    id: "b2c3d4e5f6789012",
+    seq: 2,
+    question: "How to write title tags for SEO?",
+    answer: "Include target keyword near the beginning, keep under 60 characters, make it compelling.",
+    keywords: ["title tag", "meta", "on-page SEO"],
+    confidence: 0.9,
+    category: "On-Page SEO",
+    difficulty: "basic",
+    evergreen: true,
+    source_title: "Meeting 2025-02",
+    source_date: "2025-02-10",
+    is_merged: false,
+    synonyms: ["meta title"],
+    freshness_score: 0.95,
+    search_hit_count: 3,
+    notion_url: "",
+  },
+  {
+    id: "c3d4e5f678901234",
+    seq: 3,
+    question: "What is structured data and how to implement it?",
+    answer: "Structured data uses Schema.org vocabulary in JSON-LD format to help search engines understand content.",
+    keywords: ["structured data", "schema.org", "JSON-LD", "rich snippets"],
+    confidence: 0.88,
+    category: "SEO Technical",
+    difficulty: "advanced",
+    evergreen: true,
+    source_title: "Meeting 2025-03",
+    source_date: "2025-03-05",
+    is_merged: false,
+    synonyms: ["schema markup"],
+    freshness_score: 1.0,
+    search_hit_count: 2,
+    notion_url: "",
+  },
+  {
+    id: "d4e5f67890123456",
+    seq: 4,
+    question: "How to optimize for mobile SEO?",
+    answer: "Use responsive design, optimize page speed, ensure touch-friendly elements, and test with Google's mobile-friendly tool.",
+    keywords: ["mobile SEO", "responsive design", "page speed"],
+    confidence: 0.85,
+    category: "SEO Technical",
+    difficulty: "basic",
+    evergreen: false,
+    source_title: "Meeting 2025-04",
+    source_date: "2025-04-01",
+    is_merged: false,
+    synonyms: [],
+    freshness_score: 0.8,
+    search_hit_count: 1,
+    notion_url: "",
+  },
+];
+
+/**
+ * Generate fake embeddings as Float32Array.
+ * Each vector is random but deterministic (seeded by index).
+ */
+export function generateFakeEmbeddings(count: number, dim: number = 4): Float32Array {
+  const data = new Float32Array(count * dim);
+  for (let i = 0; i < count; i++) {
+    for (let d = 0; d < dim; d++) {
+      // Deterministic pseudo-random
+      data[i * dim + d] = Math.sin((i + 1) * (d + 1) * 0.7) * 0.5 + 0.5;
+    }
+  }
+  return data;
+}
+
+/**
+ * Create a minimal .npy buffer from a Float32Array.
+ */
+export function createNpyBuffer(data: Float32Array, rows: number, cols: number): Buffer {
+  const header = `{'descr': '<f4', 'fortran_order': False, 'shape': (${rows}, ${cols}), }`;
+  // Pad to 64-byte alignment
+  const totalHeaderLen = 10 + header.length;
+  const padding = 64 - (totalHeaderLen % 64);
+  const paddedHeader = header + " ".repeat(padding - 1) + "\n";
+  const headerLen = paddedHeader.length;
+
+  const buf = Buffer.alloc(10 + headerLen + data.byteLength);
+  // Magic
+  buf.write("\x93NUMPY", 0, "latin1");
+  buf[6] = 1; // major version
+  buf[7] = 0; // minor version
+  buf.writeUInt16LE(headerLen, 8);
+  buf.write(paddedHeader, 10, "latin1");
+
+  // Copy float32 data
+  const dataView = new Float32Array(buf.buffer, buf.byteOffset + 10 + headerLen, rows * cols);
+  dataView.set(data);
+
+  return buf;
+}

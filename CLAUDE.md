@@ -146,7 +146,9 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 
 - `/evaluate-qa` — Q&A 品質評估（LLM-as-Judge）+ 與基準線比較（本地替代：`/evaluate-qa-local`）
 
-### API 伺服器命令（FastAPI）
+### API 伺服器命令
+
+#### Python FastAPI（v2.2，port 8001）——逐步替換中
 
 - 啟動：`uvicorn app.main:app --port 8001`
 - 健康檢查：`GET /health`
@@ -154,6 +156,42 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
   - `GET /api/v1/reports` — 列出所有週報
   - `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
   - `POST /api/v1/reports/generate` — 觸發週報生成
+
+#### TypeScript Hono（v2.3，port 8002）——新架構
+
+開發環境：
+```bash
+cd api
+pnpm install           # 首次安裝依賴
+pnpm dev               # 啟動開發伺服器（tsx watch，port 8002）
+```
+
+測試：
+```bash
+cd api
+pnpm test              # 執行所有 vitest 測試
+pnpm test:watch       # 監視模式下執行測試
+pnpm test:coverage    # 生成測試覆蓋率報告
+```
+
+打包 / 部署：
+```bash
+cd api
+pnpm build             # 編譯 TypeScript 至 dist/
+pnpm start             # 執行 build 版本（node dist/index.js，port 8002）
+```
+
+Docker 執行（包含 Python API）：
+```bash
+docker-compose up      # 同時啟動 Python (8001) 和 TypeScript (8002) API
+docker-compose logs seo-api-ts  # 監看 Hono 日誌
+```
+
+API 端點（與 Python 相同）：
+- `GET /health` — 健康檢查
+- 6 個路由器：qa、search、chat、reports、sessions、feedback
+- 認證：`X-API-Key` header
+- 詳見 `api/README.md`
 
 ### 開發工具命令
 
@@ -174,6 +212,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 | 週報生成 | `gpt-5.2` API | Claude Code 直接推理 |
 | Q&A 品質評估 | `gpt-5.2` + `gpt-5-mini` | `/evaluate-qa-local`（Claude Code 作為 Judge） |
 | Provider 品質評估 | 無對應 | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
+| API 伺服器 | `uvicorn app.main:app --port 8001`（FastAPI） | `cd api && pnpm dev`（Hono, port 8002） |
 | 需要 API key | OPENAI_API_KEY | 不需要 |
 
 ---

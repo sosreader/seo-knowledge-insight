@@ -53,8 +53,8 @@
 | Relevance              | **5.00** / 5 | Claude Code as Judge（v2.0+cjk）                        |
 | Accuracy               | **4.30** / 5 | Claude Code as Judge（v2.0+cjk）                        |
 | Completeness           | **3.95** / 5 | Claude Code as Judge（v2.0+cjk）                        |
-| **Test 通過率**        | **247/247** | v2.2（stable_id + reports + sessions）                    |
-| **API endpoints**      | **13 個**   | search/chat/qa/feedback/reports(3)/sessions(5)/health     |
+| **Test 通過率**        | **277/277** | v2.2（stable_id + reports + sessions + rate limit）       |
+| **API endpoints**      | **15 個**   | qa(3)/search/chat/feedback/reports(3)/sessions(5)/health(main.py) |
 | **Observability**      | **完備**    | Laminar traces + Audit logs + Scoring events（三柱）      |
 
 ---

@@ -1,0 +1,32 @@
+import { z } from "zod";
+
+export const createSessionSchema = z.object({
+  title: z.string().max(100).optional(),
+});
+
+export const sendMessageSchema = z.object({
+  message: z.string().min(1).max(2000),
+});
+
+export const sessionListParamsSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export interface SessionMessageOut {
+  readonly role: string;
+  readonly content: string;
+  readonly sources: readonly Record<string, unknown>[];
+  readonly created_at: string;
+}
+
+export interface SessionSummaryOut {
+  readonly id: string;
+  readonly title: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface SessionDetailOut extends SessionSummaryOut {
+  readonly messages: readonly SessionMessageOut[];
+}
