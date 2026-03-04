@@ -231,14 +231,16 @@ function readFetchLogs(limit = 200): FetchLogsResponse {
   return { files, entries, total: entries.length };
 }
 
-// --- Collection → Directory mapping (whitelist) ---
+// --- Collection → Directory mapping (whitelist, lazy to avoid module-scope path issues in tests) ---
 
-const COLLECTION_DIR_MAP: Readonly<Record<string, { dir: string; sourceType: "meeting" | "article" }>> = {
-  "seo-meetings": { dir: join(paths.rawDataDir, "markdown"), sourceType: "meeting" },
-  "genehong-medium": { dir: paths.rawMediumMdDir, sourceType: "article" },
-  "ithelp-sc-kpi": { dir: paths.rawIthelpMdDir, sourceType: "article" },
-  "google-case-studies": { dir: paths.rawGoogleCasesMdDir, sourceType: "article" },
-};
+function getCollectionDirMap(): Readonly<Record<string, { dir: string; sourceType: "meeting" | "article" }>> {
+  return {
+    "seo-meetings": { dir: join(paths.rawDataDir, "markdown"), sourceType: "meeting" },
+    "genehong-medium": { dir: paths.rawMediumMdDir, sourceType: "article" },
+    "ithelp-sc-kpi": { dir: paths.rawIthelpMdDir, sourceType: "article" },
+    "google-case-studies": { dir: paths.rawGoogleCasesMdDir, sourceType: "article" },
+  };
+}
 
 const SAFE_FILENAME_RE = /^[a-zA-Z0-9._\u4e00-\u9fff-]+\.md$/;
 
@@ -264,7 +266,7 @@ function buildSourceDocs(): readonly SourceDocEntry[] {
 
   const results: SourceDocEntry[] = [];
 
-  for (const [collection, { dir, sourceType }] of Object.entries(COLLECTION_DIR_MAP)) {
+  for (const [collection, { dir, sourceType }] of Object.entries(getCollectionDirMap())) {
     if (!existsSync(dir)) continue;
 
     const processedSet = sourceType === "meeting" ? processedMeetings : processedArticles;
@@ -391,7 +393,7 @@ pipelineRoute.get("/source-docs/:collection/:file/preview", (c) => {
   const file = c.req.param("file");
 
   // Whitelist check
-  const entry = COLLECTION_DIR_MAP[collection];
+  const entry = getCollectionDirMap()[collection];
   if (!entry) {
     return c.json(fail("Unknown collection"), 400);
   }

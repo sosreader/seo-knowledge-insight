@@ -289,6 +289,126 @@ describe("GET /api/v1/pipeline/meetings/:id/preview", () => {
   });
 });
 
+// --- GET /pipeline/source-docs ---
+
+describe("GET /api/v1/pipeline/source-docs", () => {
+  it("returns all source docs from all collections", async () => {
+    const res = await app.request("/api/v1/pipeline/source-docs");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // 2 meetings + 2 medium + 1 ithelp + 2 google = 7
+    expect(body.data.total).toBe(7);
+    expect(body.data.items).toHaveLength(7);
+    expect(body.data.offset).toBe(0);
+    expect(body.data.limit).toBe(20);
+  });
+
+  it("filters by source_type", async () => {
+    const res = await app.request("/api/v1/pipeline/source-docs?source_type=article");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // 2 medium + 1 ithelp + 2 google = 5
+    expect(body.data.total).toBe(5);
+    expect(body.data.items.every((i: { source_type: string }) => i.source_type === "article")).toBe(true);
+  });
+
+  it("filters by source_collection", async () => {
+    const res = await app.request("/api/v1/pipeline/source-docs?source_collection=google-case-studies");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.total).toBe(2);
+  });
+
+  it("filters by keyword", async () => {
+    const res = await app.request("/api/v1/pipeline/source-docs?keyword=saramin");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.total).toBe(1);
+    expect(body.data.items[0].file).toBe("saramin-case-study.md");
+  });
+
+  it("filters by is_processed", async () => {
+    const res = await app.request("/api/v1/pipeline/source-docs?is_processed=true");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // test_meeting.md + ai_seo_strategy.md = 2
+    expect(body.data.total).toBe(2);
+    expect(body.data.items.every((i: { is_processed: boolean }) => i.is_processed)).toBe(true);
+  });
+
+  it("supports pagination with limit and offset", async () => {
+    const res = await app.request("/api/v1/pipeline/source-docs?limit=3&offset=2");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.total).toBe(7);
+    expect(body.data.items).toHaveLength(3);
+    expect(body.data.offset).toBe(2);
+    expect(body.data.limit).toBe(3);
+  });
+
+  it("includes correct fields on each item", async () => {
+    const res = await app.request("/api/v1/pipeline/source-docs?source_collection=seo-meetings");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const item = body.data.items[0];
+    expect(item).toHaveProperty("file");
+    expect(item).toHaveProperty("title");
+    expect(item).toHaveProperty("source_type");
+    expect(item).toHaveProperty("source_collection");
+    expect(item).toHaveProperty("source_url");
+    expect(item).toHaveProperty("created_time");
+    expect(item).toHaveProperty("size_bytes");
+    expect(item).toHaveProperty("is_processed");
+    expect(item.source_type).toBe("meeting");
+  });
+});
+
+// --- GET /pipeline/source-docs/:collection/:file/preview ---
+
+describe("GET /api/v1/pipeline/source-docs/:collection/:file/preview", () => {
+  it("returns markdown content for valid collection and file", async () => {
+    const res = await app.request(
+      "/api/v1/pipeline/source-docs/google-case-studies/saramin-case-study.md/preview"
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.file).toBe("saramin-case-study.md");
+    expect(body.data.collection).toBe("google-case-studies");
+    expect(body.data.content).toContain("# Saramin Case Study");
+    expect(body.data.size_bytes).toBeGreaterThan(0);
+  });
+
+  it("returns 400 for unknown collection", async () => {
+    const res = await app.request(
+      "/api/v1/pipeline/source-docs/unknown-collection/test.md/preview"
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for path traversal attempt", async () => {
+    const res = await app.request(
+      "/api/v1/pipeline/source-docs/seo-meetings/..%2F..%2Fetc%2Fpasswd/preview"
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 for non-existent file", async () => {
+    const res = await app.request(
+      "/api/v1/pipeline/source-docs/seo-meetings/nonexistent.md/preview"
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns meeting markdown via seo-meetings collection", async () => {
+    const res = await app.request(
+      "/api/v1/pipeline/source-docs/seo-meetings/test_meeting.md/preview"
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.content).toContain("# SEO Meeting");
+  });
+});
+
 // --- GET /pipeline/unprocessed ---
 
 describe("GET /api/v1/pipeline/unprocessed", () => {

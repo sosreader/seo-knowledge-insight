@@ -18,6 +18,11 @@ from pathlib import Path
 # 禁止 import config：避免 _require_env("OPENAI_API_KEY") 在啟動時觸發
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# 載入 .env（config.py 不被 import，需手動載入以取得 LMNR_PROJECT_API_KEY 等）
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(PROJECT_ROOT / ".env")
+
 # Laminar observability（safe no-op if lmnr not installed）
 sys.path.insert(0, str(PROJECT_ROOT))
 from utils.observability import init_laminar, flush_laminar, observe  # noqa: E402
