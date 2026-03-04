@@ -12,6 +12,7 @@ import { chatRoute } from "./routes/chat.js";
 import { reportsRoute } from "./routes/reports.js";
 import { sessionsRoute } from "./routes/sessions.js";
 import { feedbackRoute } from "./routes/feedback.js";
+import { pipelineRoute } from "./routes/pipeline.js";
 import { qaStore } from "./store/qa-store.js";
 
 const app = new Hono();
@@ -34,9 +35,12 @@ api.use("/search", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/chat", rateLimit(config.RATE_LIMIT_CHAT));
 api.use("/feedback", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/reports", rateLimit(config.RATE_LIMIT_DEFAULT));
+api.use("/reports/generate", rateLimit(config.RATE_LIMIT_GENERATE));
 api.use("/reports/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/sessions", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/sessions/*", rateLimit(config.RATE_LIMIT_CHAT));
+api.use("/pipeline", rateLimit(config.RATE_LIMIT_DEFAULT));
+api.use("/pipeline/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 
 // Mount routes
 api.route("/qa", qaRoute);
@@ -45,6 +49,7 @@ api.route("/chat", chatRoute);
 api.route("/reports", reportsRoute);
 api.route("/sessions", sessionsRoute);
 api.route("/feedback", feedbackRoute);
+api.route("/pipeline", pipelineRoute);
 
 app.route("/api/v1", api);
 

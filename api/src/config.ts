@@ -3,7 +3,11 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-dotenvConfig({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../.env") });
+// Load api/.env first (Docker/production), then root .env as fallback (local dev).
+// dotenv does NOT override existing vars, so api/.env takes precedence.
+const __configDir = dirname(fileURLToPath(import.meta.url));
+dotenvConfig({ path: resolve(__configDir, "../.env") });
+dotenvConfig({ path: resolve(__configDir, "../../.env") });
 
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8002),
@@ -48,6 +52,8 @@ const ROOT_DIR = resolve(__dirname, "../..");
 export const paths = {
   rootDir: ROOT_DIR,
   outputDir: resolve(ROOT_DIR, "output"),
+  rawDataDir: resolve(ROOT_DIR, "raw_data"),
+  fetchLogsDir: resolve(ROOT_DIR, "output/fetch_logs"),
   qaJsonPath: resolve(ROOT_DIR, "output/qa_final.json"),
   qaEnrichedJsonPath: resolve(ROOT_DIR, "output/qa_enriched.json"),
   qaEmbeddingsPath: resolve(ROOT_DIR, "output/qa_embeddings.npy"),
