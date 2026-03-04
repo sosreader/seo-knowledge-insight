@@ -102,7 +102,7 @@ Notion/Medium/iThome/Google Cases → Markdown 轉換 → OpenAI 萃取 Q&A → 
 
 ```
 seo-knowledge-insight/
-├── api/                         # Hono TypeScript API（v2.6，主架構）
+├── api/                         # Hono TypeScript API（v2.7，主架構）
 │   ├── src/
 │   │   ├── index.ts             # 入口（middleware + route mount）
 │   │   ├── config.ts            # Zod 驗證環境變數
@@ -741,7 +741,7 @@ Q&A 萃取的品質主要取決於 `utils/openai_helper.py` 中的 prompt：
 
 ## SEO Insight API
 
-> **當前主架構**：TypeScript Hono（v2.6，port 8002）。`api/` 目錄提供 Hono REST 服務，讀取 `output/qa_final.json`（或 `qa_enriched.json`）與 `output/qa_embeddings.npy` 進記憶體。
+> **當前主架構**：TypeScript Hono（v2.7，port 8002）。`api/` 目錄提供 Hono REST 服務，讀取 `output/qa_final.json`（或 `qa_enriched.json`）與 `output/qa_embeddings.npy` 進記憶體。
 >
 > **Legacy**：Python FastAPI（port 8001，`app/` 目錄）預計下線，功能完全對等。
 
@@ -860,7 +860,7 @@ docker-compose up
 curl http://localhost:8002/health
 curl 'http://localhost:8002/api/v1/qa/categories'
 
-# 執行測試（135 tests）
+# 執行測試（144 tests）
 cd api && pnpm test
 ```
 

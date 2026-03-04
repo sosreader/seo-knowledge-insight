@@ -19,6 +19,8 @@ const envSchema = z.object({
 
   SEO_API_KEY: z.string().default(""),
 
+  LMNR_PROJECT_API_KEY: z.string().default(""),
+
   CORS_ORIGINS: z
     .string()
     .default("http://localhost:3000")

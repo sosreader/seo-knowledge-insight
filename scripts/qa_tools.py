@@ -11,6 +11,7 @@ import json
 import random
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -22,6 +23,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from utils.observability import init_laminar, flush_laminar, observe  # noqa: E402
 from utils.laminar_scoring import score_event  # noqa: E402
 from utils.synonym_dict import expand_query_tokens  # noqa: E402
+from utils.execution_log import log_execution  # noqa: E402
 
 
 class CLIError(Exception):
@@ -1005,11 +1007,22 @@ def main() -> None:
 
     init_laminar()
     exit_code = 0
+    result_stats: dict = {}
+    start = time.monotonic()
     try:
         dispatch[args.cmd](args)
+        result_stats = {"status": "ok"}
     except CLIError as exc:
         exit_code = exc.code
+        result_stats = {"status": "error", "exit_code": exc.code}
     finally:
+        duration_ms = (time.monotonic() - start) * 1000
+        log_execution(
+            command=args.cmd,
+            args=vars(args),
+            result=result_stats,
+            duration_ms=duration_ms,
+        )
         flush_laminar()
     if exit_code:
         sys.exit(exit_code)

@@ -69,6 +69,7 @@ const mockRagChat = vi.fn().mockResolvedValue({
 
 vi.mock("../../src/services/rag-chat.js", () => ({
   ragChat: (...args: unknown[]) => mockRagChat(...args),
+  ragChatObserved: (...args: unknown[]) => mockRagChat(...args),
 }));
 
 // Mock session-store with in-memory store

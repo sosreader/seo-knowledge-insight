@@ -15,7 +15,7 @@ services:
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
       - SEO_API_KEY=
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - LMNR_PROJECT_API_KEY=
+      - LMNR_PROJECT_API_KEY=${LMNR_PROJECT_API_KEY:-}
     restart: unless-stopped
 
   seo-api-ts:
@@ -32,4 +32,5 @@ services:
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
       - SEO_API_KEY=
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LMNR_PROJECT_API_KEY=${LMNR_PROJECT_API_KEY:-}
     restart: unless-stopped

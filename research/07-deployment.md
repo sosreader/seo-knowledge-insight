@@ -580,25 +580,33 @@ const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
 
 ---
 
-## 25. Observability（TODO）
+## 25. Observability（v2.7 已實作）
 
-> **現況**：Hono API 尚未整合 Laminar / OpenTelemetry。此為計畫中的待辦事項。
-> Python FastAPI 層已有完整 Laminar 整合（見 Legacy 區段）。
+> **v2.7 完成**：三路 Observability 整合（CLI + API + 執行日誌），使用 Laminar JS SDK。
 
-### 規劃方向
+### 實作內容
 
-| 方案 | 說明 | 複雜度 |
-|------|------|--------|
-| OpenTelemetry SDK for Node.js | `@opentelemetry/sdk-node` + exporter | 中 |
-| Laminar TypeScript SDK | `lmnr` npm package（若有） | 低 |
-| 自訂 middleware + console.log | 最小可行方案 | 最低 |
+| 路徑 | 追蹤方式 | 模組 |
+|------|---------|------|
+| CLI 腳本（Python） | Laminar `@observe` + `init_laminar()` | `utils/observability.py` |
+| Claude Code 指令 | `log_execution()` → JSONL | `utils/execution_log.py` |
+| REST API（Hono） | `@lmnr-ai/lmnr@0.8.14` + `observe()` wrapper | `api/src/utils/observability.ts` |
 
-### 需追蹤的關鍵 span
+### 追蹤的 span
 
-- `openai.chat.completions.create`（RAG chat）
-- `openai.embeddings.create`（search + chat）
-- `qa-store.hybridSearch`（搜尋延遲）
-- Rate limit 命中事件
+| Span | 模組 | 說明 |
+|------|------|------|
+| `rag_chat` | `services/rag-chat.ts` | RAG 問答完整流程 |
+| `get_embedding` | `services/embedding.ts` | OpenAI embedding 呼叫 |
+| OpenAI API calls | auto-instrument | `instrumentModules: { OpenAI }` |
+
+### Online Scoring（4 evaluators）
+
+`api/src/utils/laminar-scoring.ts`：`answer_length` / `has_sources` / `top_source_score` / `source_count`
+
+### 環境變數
+
+`LMNR_PROJECT_API_KEY`：在 `.env` 設定，未設定則靜默跳過（不影響正常功能）。
 
 ---
 

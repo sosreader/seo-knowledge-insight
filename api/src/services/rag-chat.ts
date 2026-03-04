@@ -9,6 +9,8 @@ import { config } from "../config.js";
 import { getEmbedding } from "./embedding.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
 import type { SourceItem, ChatResponse } from "../schemas/chat.js";
+import { observe } from "../utils/observability.js";
+import { scoreRagResponse } from "../utils/laminar-scoring.js";
 
 const SYSTEM_PROMPT = `你是一位資深 SEO 顧問，根據以下 SEO 知識庫內容回答用戶的問題。
 回答時請：
@@ -114,5 +116,11 @@ export async function ragChat(
   const answer = resp.choices[0]?.message?.content ?? "";
   const sources = hits.map(({ item, score }) => itemToSource(item, score));
 
+  // Online scoring (safe no-op when Laminar not initialized)
+  await scoreRagResponse(answer, sources);
+
   return { answer, sources, mode: "full" };
 }
+
+/** Observed version — wraps ragChat as a Laminar span. */
+export const ragChatObserved = observe("rag_chat", ragChat);

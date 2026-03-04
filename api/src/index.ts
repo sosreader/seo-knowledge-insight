@@ -15,6 +15,7 @@ import { feedbackRoute } from "./routes/feedback.js";
 import { pipelineRoute } from "./routes/pipeline.js";
 import { evalRoute } from "./routes/eval.js";
 import { qaStore } from "./store/qa-store.js";
+import { initLaminar, flushLaminar } from "./utils/observability.js";
 
 const app = new Hono();
 
@@ -61,6 +62,9 @@ app.route("/api/v1", api);
 const port = config.PORT;
 
 if (process.env.NODE_ENV !== "test") {
+  // Initialize Laminar tracing before loading data
+  await initLaminar();
+
   // Load QA store before starting server
   try {
     qaStore.load();
@@ -72,6 +76,14 @@ if (process.env.NODE_ENV !== "test") {
   serve({ fetch: app.fetch, port }, (info) => {
     console.log(`Server running on http://localhost:${info.port}`);
   });
+
+  // Graceful shutdown — flush Laminar spans
+  const shutdown = async () => {
+    await flushLaminar();
+    process.exit(0);
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 export { app };

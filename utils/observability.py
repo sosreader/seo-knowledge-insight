@@ -92,7 +92,7 @@ def init_laminar() -> None:
 
     api_key = os.getenv("LMNR_PROJECT_API_KEY", "")
     if not api_key:
-        logger.debug(
+        logger.info(
             "LMNR_PROJECT_API_KEY unset — skipping Laminar init (traces won't be sent)"
         )
         return
@@ -103,7 +103,7 @@ def init_laminar() -> None:
         _patch_openai_instrumentor()
         Laminar.initialize(project_api_key=api_key)
         _initialized = True
-        logger.debug("Laminar initialized for pipeline script")
+        logger.info("Laminar initialized for pipeline script")
     except ImportError:
         logger.warning(
             "lmnr package not installed; skipping Laminar init. "

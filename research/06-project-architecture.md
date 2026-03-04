@@ -173,7 +173,7 @@ Notion 會議紀錄（87 份，2023–2026）
   Session 儲存：output/sessions/{uuid}.json（Repository Pattern）
             ↓ https://<service>.awsapprunner.com
 
-**TypeScript Hono（v2.3+，port 8002，新架構）**——直接取代 Python API
+**TypeScript Hono（v2.7，port 8002，新架構）**——直接取代 Python API
 [SEO Insight API v2] api/src — Hono + TypeScript，完全移植 Python 功能 + Local Mode 降級
   框架：Hono（輕量、Cloudflare Workers / Node.js 相容）
   驗證：Zod schema validation（TypeScript-first）
@@ -206,7 +206,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / eval / api-response
-  測試：Vitest（19 個 test files，125 tests passing）
+  測試：Vitest（21 個 test files，144 tests passing）
   部署：docker-compose（port 8002），未來支援 ECR + App Runner
   與 Python 並行運作（遷移期間）
             ↓ http://localhost:8002 (開發) 或 https://<service-v2>.awsapprunner.com (未來)
@@ -276,7 +276,7 @@ Notion 會議紀錄（87 份，2023–2026）
 **決策核心**：
 1. **分層遷移**：新功能優先在 Hono 實作，Python 保留作為穩定層
 2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid/full，無 → keyword/context-only）
-3. **測試優先**：Vitest 路由覆蓋（18 個 test files，117 tests），unit + integration
+3. **測試優先**：Vitest 路由覆蓋（21 個 test files，144 tests），unit + integration
 4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取（optional，無 .npy 時 keyword-only mode）
 
 **實作成果**：
@@ -312,7 +312,7 @@ Notion 會議紀錄（87 份，2023–2026）
    - Unit tests：純邏輯（search、store、validators、cjk-tokenizer）
    - Integration tests：mocked external calls（OpenAI、Python CLI subprocess）
    - Router tests：完整 HTTP 請求/回應循環（含 Local Mode 降級測試）
-   - 100% endpoint 覆蓋（9 個 routes × ~2-6 tests per endpoint，共 117 tests）
+   - 100% endpoint 覆蓋（9 個 routes × ~2-6 tests per endpoint，共 144 tests）
 
 **向下相容**：
 - Python API（port 8001）保持不變，允許 2-4 週過渡期
@@ -516,7 +516,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 
 ### 本專案架構圖（Mermaid）
 
-> 架構圖（最新 v2.3，Hono API 主架構）維護於 [06b-architecture-diagram.md](./06b-architecture-diagram.md)
+> 架構圖（最新 v2.7，Hono API 主架構）維護於 [06b-architecture-diagram.md](./06b-architecture-diagram.md)
 
 ### 架構變更紀錄（Architecture Changelog）
 

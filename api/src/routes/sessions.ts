@@ -8,7 +8,7 @@ import {
 } from "../schemas/session.js";
 import { ok, fail } from "../schemas/api-response.js";
 import { sessionStore, type Session } from "../store/session-store.js";
-import { ragChat } from "../services/rag-chat.js";
+import { ragChatObserved as ragChat } from "../services/rag-chat.js";
 import { hasOpenAI } from "../utils/mode-detect.js";
 import { qaStore } from "../store/qa-store.js";
 import { config } from "../config.js";

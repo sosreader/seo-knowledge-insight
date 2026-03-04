@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v2.6，2026-03-05）
+## 架構圖（最新：v2.7，2026-03-05）
 
 ```mermaid
 flowchart TD
@@ -59,7 +59,7 @@ flowchart TD
 
     FE -->|"seoInsight.api.ts<br/>seoFetch（port 8002）"| HAPI
 
-    subgraph Hono_API["API Layer v2.6（Hono + TypeScript，port 8002，Local Mode 支援）"]
+    subgraph Hono_API["API Layer v2.7（Hono + TypeScript，port 8002，Local Mode + Laminar）"]
         QA --> HAPI["SEO Insight API<br/>Hono + TypeScript<br/>QAStore（npy-reader 向量解析，embedding optional）"]
         EMB -.->|"optional（Local Mode 不需要）"| HAPI
         SE -.->|hybrid_search / keywordOnlySearch| HAPI
@@ -105,13 +105,15 @@ flowchart TD
         LS["utils/learning_store.py<br/>output/learnings.jsonl<br/>record_miss / record_feedback<br/>get_relevant_learnings"] -.->|query learnings| SE
     end
 
-    subgraph Observability["可觀測性（Python CLI+Evals；Hono TODO）"]
-        S2 -->|"@observe + init_laminar"| LM["Laminar SDK v0.5<br/>OpenTelemetry-based<br/>lmnr observe"]
+    subgraph Observability["可觀測性（三路整合：Python CLI + Hono API + 執行日誌）"]
+        S2 -->|"@observe + init_laminar"| LM["Laminar SDK<br/>Python v0.5 + JS v0.8<br/>OpenTelemetry-based"]
         S3 -->|"@observe + init_laminar"| LM
         S4 -->|"@observe + init_laminar"| LM
         S5 -->|"@observe + init_laminar"| LM
-        QT["qa_tools.py 6 subcommands<br/>@observe + flush_laminar"] -->|"search/merge_qa/etc"| LM
-        HAPI -.->|"TODO: Laminar 整合"| LM
+        QT["qa_tools.py 6 subcommands<br/>@observe + flush_laminar<br/>+ execution_log.jsonl"] -->|"search/merge_qa/etc"| LM
+        QT -->|"log_execution()"| ELOG["output/execution_log.jsonl<br/>command/args/duration/result"]
+        HAPI -->|"initLaminar + observe"| LM
+        HSVC -->|"observe(rag_chat)<br/>observe(get_embedding)"| LM
         EC["evals/eval_chat.py<br/>Laminar.initialize()"] -->|"lmnr eval"| LM
         LM --> LD["Laminar Dashboard<br/>Traces + Spans + Events"]
         OS -.->|"score_event"| LM

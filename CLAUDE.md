@@ -162,7 +162,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
   - `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
   - `POST /api/v1/reports/generate` — 觸發週報生成
 
-#### TypeScript Hono（v2.6，port 8002）——當前主架構
+#### TypeScript Hono（v2.7，port 8002）——當前主架構
 
 開發環境（後端 API）：
 ```bash
@@ -229,6 +229,16 @@ Eval API 端點：
 - `POST /api/v1/eval/retrieval` — 計算 Retrieval 評估指標（hit rate、MRR）
 - `GET /api/v1/eval/compare` — 跨 LLM Provider 品質對比（Delta 報告）
 - `POST /api/v1/eval/save` — 儲存評估結果至 evals/ 目錄（含 path traversal 防護）
+
+### Observability（v2.7 三路整合）
+
+| 路徑 | 追蹤方式 | 輸出 |
+|------|---------|------|
+| CLI 腳本（Python） | Laminar `@observe` + `init_laminar()` | Laminar Dashboard |
+| Claude Code 指令 | `utils/execution_log.py` → `output/execution_log.jsonl` | JSONL 本地日誌 |
+| REST API（Hono） | `@lmnr-ai/lmnr` JS SDK + `observe()` wrapper | Laminar Dashboard |
+
+環境變數：`LMNR_PROJECT_API_KEY`（`.env`），未設定則靜默跳過。
 
 ### 開發工具命令
 

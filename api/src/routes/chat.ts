@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { chatRequestSchema } from "../schemas/chat.js";
 import type { SourceItem } from "../schemas/chat.js";
 import { ok, fail } from "../schemas/api-response.js";
-import { ragChat } from "../services/rag-chat.js";
+import { ragChatObserved as ragChat } from "../services/rag-chat.js";
 import { qaStore } from "../store/qa-store.js";
 import { hasOpenAI } from "../utils/mode-detect.js";
 import { config } from "../config.js";

@@ -1,4 +1,4 @@
-# Hono TypeScript API (v2.6)
+# Hono TypeScript API (v2.7)
 
 REST API 伺服器，主要架構採用 Hono 框架。
 
@@ -192,6 +192,8 @@ api/
 │       ├── cosine-similarity.ts
 │       ├── cjk-tokenizer.ts  # v2.3 新增：CJK 分詞
 │       ├── mode-detect.ts    # v2.3 新增：hasOpenAI() 檢測
+│       ├── observability.ts  # v2.7 新增：Laminar tracing
+│       ├── laminar-scoring.ts # v2.7 新增：Online scoring
 │       └── ...
 ├── tests/
 │   ├── routes/
@@ -223,6 +225,7 @@ PORT=8002
 # Optional
 OPENAI_API_KEY=sk-...          # 若無，則 search/chat 自動降級
 OPENAI_MODEL=gpt-5.2
+LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 
 # 資料路徑
 QA_STORE_PATH=../output/qa_final.json
@@ -257,6 +260,47 @@ export function hasOpenAI(): boolean {
 
 ---
 
+## Observability（Laminar 整合）
+
+API 伺服器透過 `@lmnr-ai/lmnr` JS SDK 整合 Laminar tracing。
+
+### 設定
+
+在 `.env` 加入 `LMNR_PROJECT_API_KEY`。若未設定則靜默跳過（不影響正常功能）。
+
+### 追蹤範圍
+
+| Span | 模組 | 說明 |
+|------|------|------|
+| `rag_chat` | `services/rag-chat.ts` | RAG 問答完整流程 |
+| `get_embedding` | `services/embedding.ts` | OpenAI embedding 呼叫 |
+
+### Online Scoring
+
+`utils/laminar-scoring.ts` 在每次 RAG 回應後自動附加 4 個評分：
+
+- `answer_length` — 回答是否超過 50 字元
+- `has_sources` — 是否有引用來源
+- `top_source_score` — 最佳來源的相似度分數
+- `source_count` — 來源數量 / 5（上限 1.0）
+
+### 架構
+
+```
+initLaminar()          # index.ts 啟動時呼叫
+  |
+  +-- instrumentModules: { OpenAI }  # 自動追蹤 OpenAI API 呼叫
+  |
+  +-- observe("rag_chat", ...)       # 手動 span
+  +-- observe("get_embedding", ...)  # 手動 span
+  |
+  +-- scoreRagResponse(...)          # span 內附加評分
+  |
+flushLaminar()         # SIGTERM/SIGINT 時 flush
+```
+
+---
+
 ## 測試
 
 所有路由都有完整的單元 + 整合測試：
@@ -271,9 +315,9 @@ pnpm test api/tests/routes/eval.test.ts
 pnpm test api/tests/utils/cjk-tokenizer.test.ts
 ```
 
-**測試套件統計（v2.6）：**
-- 總測試數：135 個
-- 通過：135/135 (100%)
+**測試套件統計（v2.7）：**
+- 總測試數：144 個
+- 通過：144/144 (100%)
 - 覆蓋率：80%+
 
 ---
