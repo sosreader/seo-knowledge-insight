@@ -970,17 +970,21 @@ score_event("kw_hit_rate", avg_kw_hit)
 score_event("mrr", avg_mrr)
 ```
 
-### 評估基準線（v2.11，2026-03-05）
+### 評估基準線（v2.12，2026-03-05）
 
 使用 `eval/golden_retrieval.json`（20 cases），top-k=5 關鍵字搜尋：
 
-| 指標 | 數值 | 目標 |
-|------|------|------|
-| KW Hit Rate | **73%** | ≥ 85% |
-| MRR | **0.88** | ≥ 0.85 |
-| Recall@K | **80%** | ≥ 80% ✅ |
-| Precision@K | **76%** | ≥ 80% |
-| F1 Score | **0.73** | ≥ 0.78 |
+| 指標 | 數值 | 目標 | 類型 |
+|------|------|------|------|
+| KW Hit Rate | **73%** | ≥ 85% | keyword binary |
+| MRR | **0.88** | ≥ 0.85 ✅ | ranking |
+| Recall@K | **80%** | ≥ 80% ✅ | binary |
+| Precision@K | **76%** | ≥ 80% | binary |
+| F1 Score | **0.73** | ≥ 0.78 | binary |
+| **Context Relevance** | **TBD**（v2.12 新增） | > KW Hit Rate | **LLM semantic** |
+
+Context Relevance 為語意連續評分（0–1），需線上執行 `POST /eval/context-relevance` 取得實測值。
+預期應高於 KW Hit Rate（語意評估涵蓋 keyword 無法捕捉的相關性）。
 
 ### Laminar 正式 Eval Run（`scripts/_eval_laminar.py`）
 
@@ -1015,6 +1019,177 @@ def f1_evaluator(output, target) -> float:
     p, r = precision_evaluator(output, target), recall_evaluator(output, target)
     return 2 * p * r / (p + r) if (p + r) > 0 else 0.0
 ```
+
+---
+
+## 評估指標成長總覽（2026-02-28 → 2026-03-05）
+
+### QA 品質四維度（LLM-as-Judge）
+
+```
+分數 /5
+ 5.0 ┤ ░░░░ Relevance 4.80  →  ████ 5.00 (+0.20) ✅
+ 4.5 ┤                          ████ Granularity 4.75 = 4.75（持平）
+ 4.3 ┤                          ████ Accuracy 3.95 → 4.30 (+0.35) ✅
+ 4.0 ┤ ░░░░ Accuracy 3.95       ████ Completeness 3.95（目標 4.0）
+ 3.9 ┤ ░░░░ Completeness 3.85 ─────────────────────────────── 目標 4.0 ┄┄
+     └─────────────────────────────────────────────────────────────────
+       v1（2026-02-28）          v2（2026-03-02）
+       Judge: gpt-5-mini         Judge: claude-opus-4-6
+```
+
+| 維度 | v1（2026-02-28）| v2（2026-03-02）| 增量 | 目標 | 狀態 |
+|------|----------------|----------------|------|------|------|
+| Relevance | 4.80 | **5.00** | +0.20 | ≥ 4.5 | ✅ |
+| Accuracy | 3.95 | **4.30** | +0.35 | ≥ 4.0 | ✅ |
+| Completeness | 3.85 | **3.95** | +0.10 | ≥ 4.0 | 接近（-0.05）|
+| Granularity | 4.75 | **4.75** | 持平 | ≥ 4.5 | ✅ |
+
+Accuracy 改善最大（+0.35）：防幻覺規則全量重跑的直接效果。
+Completeness 仍未達標：`[補充]` Tag 機制已就緒，需更多含 How+Evidence 的 Q&A。
+
+### Retrieval 指標（跨版本）
+
+| 指標 | v1（2026-02-28）| v2（2026-03-02）| 增量 |
+|------|----------------|----------------|------|
+| KW Hit Rate | 78%（修復後）| **74%**（回歸後修復）| -4pp（v2.0 重跑副作用）|
+| MRR | 0.79 | **0.87** | +0.08 ✅ |
+| Category Hit Rate | 75% | **80%** | +5pp ✅ |
+| Precision@K | — | **76%** | — |
+| F1 Score | — | **0.73** | — |
+
+### Provider 品質跨版本對比
+
+```
+平均分 /5
+ 5.0 ┤ ██ system_seoinsight_20260302（兩次均 5.0）
+ 4.5 ┤    ░░ system_seoinsight_20260228（KB 20260228，4.5）
+ 4.3 ┤       ██ chatgpt_gpt52  ██ gemini_thinking（第二次均 4.3）
+ 4.0 ┤       ░░ chatgpt        ░░ gemini_thinking（第一次均 4.0）
+ 3.7 ┤                            ██ claude_sonnet46（第二次）
+ 3.0 ┤                            ░░ claude_sonnet46（第一次）
+ 2.3 ┤                                               ██ gemini_research
+     └──────────────────────────────────────────────────────────────
+        ░ = 2026-02-28（gpt-5-mini judge，僅 5 項指標基準）
+        █ = 2026-03-02（claude-opus-4-6 judge，完整 TSV 逐筆核對）
+```
+
+| Provider | 2026-02-28 均分<br>（gpt-5-mini judge）| 2026-03-02 均分<br>（claude-opus-4-6 judge）| 主要變動原因 |
+|----------|----------------------------------------|---------------------------------------------|-------------|
+| system_seoinsight_20260302 | — | **5.0** | Topic Coverage 80%→100%（補回應時間）|
+| system_seoinsight_20260228 | 5.0 | **4.5** | Grounding 定性分析，缺回應時間分析 |
+| chatgpt_gpt52 | 4.0 | **4.3** | Grounding 3→4（完整 TSV 逐筆驗證）|
+| gemini_thinking | 4.0 | **4.3** | Grounding 3→4（/salon/ 數字確認）|
+| claude_sonnet46 | 3.0 | **3.7** | Grounding 1→3（原 Judge 誤判，基準只有 5 項）|
+| gemini_research | 2.33 | **2.0** | Topic Coverage 80%→20%（嚴格要求引用原始數據）|
+
+**Judge 更換影響**：gpt-5-mini 基於摘要快照（5 項指標）評分，系統性低估 Grounding；claude-opus-4-6 逐筆核對完整 TSV（~120 列），更準確但標準也更嚴格。
+
+### 待補缺口
+
+```
+指標缺口（目前值 vs 目標）
+ KW Hit Rate  ████████████████████░░░░░░░  74% / 目標 85%（-11pp）
+ Completeness ████████████████████████████ 3.95 / 目標 4.00（-0.05）
+ Precision@K  ██████████████████████░░░░░  76% / 目標 80%（-4pp）
+ F1 Score     ████████████████████░░░░░░░  0.73 / 目標 0.78（-0.05）
+ Accuracy     ████████████████████████░░░  4.30 / 理想 5.00（-0.70）
+
+ KW Hit Rate 是最大缺口：主要靠擴充 /api/v1/synonyms 詞條達成
+```
+
+### Enrichment 效果（2026-03-02）
+
+| 評估器 | Before（qa_final）| After（qa_enriched）| Delta |
+|--------|------------------|---------------------|-------|
+| kw_hit_rate_with_synonyms | 70.4% | **79.67%** | +9.27pp |
+| freshness_rank_quality | 1.0 | 1.0 | 持平 |
+| synonym_coverage | 0% | **100%** | +100pp |
+
+---
+
+## 22. Context Relevance：檢索片段與查詢的語意相關性
+
+> NVIDIA 提出的評估指標，v2.12 新增。無需 ground truth，只需 query + retrieved contexts。
+
+### 概念
+
+傳統 RAG 評估指標（MRR、Hit Rate）依賴二元判斷（relevant / not relevant）。
+Context Relevance 進一步評估**連續相關性**（0–1 分），表示檢索到的片段對回答使用者查詢的實用程度。
+
+```
+原始指標（Hit Rate）：
+Query: "內部連結建設最佳實踐"
+Top-5: [1=相關 ✓, 2=相關 ✓, 3=無關 ✗, 4=無關 ✗, 5=無關 ✗]
+結果: 2/5 = 40%
+
+Context Relevance：
+同一批結果，細分評分：
+1 = 1.0（完全相關，直接回答）
+2 = 0.9（很相關，有補充價值）
+3 = 0.3（部分相關，邊界情況）
+4 = 0.1（略有關聯，實際用處小）
+5 = 0.0（完全不相關）
+加權平均 = (1.0 + 0.9 + 0.3 + 0.1 + 0.0) / 5 = 0.46
+```
+
+### 實作方式（v2.12）
+
+**模型**：Claude haiku-4-5（輕量 LLM judge）
+**無需 Ground Truth**：只需 query + retrieved QA items（questions + categories）
+
+**Prompt 設計**：
+- 輸入：使用者查詢 + 檢索到的 5–10 個 Q&A 片段
+- 輸出：JSON，包含 `overall_score`（0–1）+ `per_context`（每個片段的 score）+ `reason`（30 字評估說明）
+
+**評分標準**（Prompt 中定義）：
+- 1.0 = 完全相關（直接回答查詢）
+- 0.5 = 部分相關（有關聯但不直接）
+- 0.0 = 完全不相關
+
+**安全機制**：
+- `escapeXml()`：防止 XML prompt injection（`<`、`>`、`&`、`"`、`'` 轉義）
+- `top_k` 上限 30：API 層保護
+- Dynamic import fallback：ANTHROPIC_API_KEY 缺失時，退化為 freshness_score heuristic
+
+**API 端點**：
+```typescript
+POST /api/v1/eval/context-relevance
+{
+  "query": "內部連結建設如何改善 SEO？",
+  "top_k": 5
+}
+
+Response (200 OK):
+{
+  "data": {
+    "score": 0.82,
+    "reason": "大多數片段相關，但缺乏實踐範例",
+    "per_context": [
+      { "id": "abc123...", "score": 0.95 },
+      { "id": "def456...", "score": 0.85 },
+      { "id": "ghi789...", "score": 0.60 }
+    ],
+    "query": "內部連結建設如何改善 SEO？",
+    "total_contexts": 3
+  }
+}
+```
+
+### 何時使用 Context Relevance？
+
+1. **RAG 迭代最佳化**：Synonym 擴充後，評估檢索品質是否有顯著改善
+2. **Reranker 驗證**：Over-retrieve + rerank 後的 Context Relevance 應提升
+3. **跨模型 Benchmark**：評估不同 embedding model 的檢索質量
+4. **實時監控**：線上系統的 query → context relevance 比例，發現檢索退化
+
+### 與其他指標的互補性
+
+| 指標 | 衡量 | 優點 | 缺點 |
+|------|------|------|------|
+| **Hit Rate（傳統）** | Top-K 是否包含 relevant items | 簡單、無需額外模型 | 二元判斷，不分程度 |
+| **MRR** | 第一個 relevant item 的排名倒數 | 考慮排序 | 同樣二元 |
+| **Context Relevance（v2.12）** | 檢索片段與查詢的連續相關性 | 細分等級，更精細 | 需要 LLM 評估，有成本 |
 
 ---
 

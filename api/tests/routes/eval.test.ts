@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const mockKeywordSearch = vi.fn().mockReturnValue([]);
+
 vi.mock("../../src/store/qa-store.js", () => ({
-  qaStore: { loaded: false, count: 0 },
+  qaStore: {
+    loaded: false,
+    count: 0,
+    keywordSearch: (...args: unknown[]) => mockKeywordSearch(...args),
+  },
 }));
 
 vi.mock("../../src/config.js", () => ({
@@ -230,5 +236,102 @@ describe("POST /api/v1/eval/save", () => {
       "--extraction-engine", "gpt-5",
       "--update-baseline",
     ]);
+  });
+});
+
+const mockContextRelevance = vi.fn().mockResolvedValue({
+  score: 0.82,
+  reason: "大部分結果與查詢語意相符",
+  per_context: [{ id: "abc123", score: 0.9 }],
+});
+
+vi.mock("../../src/services/context-relevance.js", () => ({
+  contextRelevance: (...args: unknown[]) => mockContextRelevance(...args),
+}));
+
+describe("POST /api/v1/eval/context-relevance", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockKeywordSearch.mockReturnValue([
+      {
+        item: {
+          id: "abc123",
+          question: "Discover 流量下降的原因為何？",
+          answer: "可能原因包括...",
+          category: "SEO",
+          keywords: ["Discover", "流量"],
+          confidence: 0.9,
+          difficulty: "intermediate",
+          evergreen: true,
+          source_title: "Test",
+          source_date: "2024-01-01",
+          is_merged: false,
+          synonyms: [],
+          freshness_score: 1.0,
+          search_hit_count: 0,
+          notion_url: "",
+          source_type: "meeting",
+          source_collection: "seo-meetings",
+          source_url: "",
+          seq: 1,
+        },
+        score: 0.85,
+      },
+    ]);
+    mockContextRelevance.mockResolvedValue({
+      score: 0.82,
+      reason: "大部分結果與查詢語意相符",
+      per_context: [{ id: "abc123", score: 0.9 }],
+    });
+  });
+
+  it("returns context relevance score for valid query", async () => {
+    const app = buildApp();
+    const res = await app.request("/api/v1/eval/context-relevance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "Discover 流量下降", top_k: 5 }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.score).toBe(0.82);
+    expect(body.data.query).toBe("Discover 流量下降");
+    expect(body.data.total_contexts).toBe(1);
+    expect(mockKeywordSearch).toHaveBeenCalledWith("Discover 流量下降", 5, null);
+  });
+
+  it("returns score=0 when no contexts found", async () => {
+    mockKeywordSearch.mockReturnValueOnce([]);
+    const app = buildApp();
+    const res = await app.request("/api/v1/eval/context-relevance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "完全無關的查詢" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.score).toBe(0);
+    expect(body.data.total_contexts).toBe(0);
+    expect(body.data.per_context).toEqual([]);
+  });
+
+  it("returns 400 for missing query", async () => {
+    const app = buildApp();
+    const res = await app.request("/api/v1/eval/context-relevance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ top_k: 5 }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("uses default top_k=5 when not specified", async () => {
+    const app = buildApp();
+    await app.request("/api/v1/eval/context-relevance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "SEO 優化" }),
+    });
+    expect(mockKeywordSearch).toHaveBeenCalledWith("SEO 優化", 5, null);
   });
 });

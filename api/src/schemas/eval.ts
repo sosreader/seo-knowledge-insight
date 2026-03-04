@@ -53,7 +53,13 @@ export const evalRerankingRequestSchema = z.object({
     .max(30),
 });
 
+export const evalContextRelevanceRequestSchema = z.object({
+  query: z.string().min(1).max(500),
+  top_k: z.number().int().positive().max(30).default(5),
+});
+
 export type EvalSampleRequest = z.infer<typeof evalSampleRequestSchema>;
 export type EvalRetrievalRequest = z.infer<typeof evalRetrievalRequestSchema>;
 export type EvalSaveRequest = z.infer<typeof evalSaveRequestSchema>;
 export type EvalRerankingRequest = z.infer<typeof evalRerankingRequestSchema>;
+export type EvalContextRelevanceRequest = z.infer<typeof evalContextRelevanceRequestSchema>;

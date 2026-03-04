@@ -6,9 +6,11 @@ import {
   evalRetrievalRequestSchema,
   evalSaveRequestSchema,
   evalRerankingRequestSchema,
+  evalContextRelevanceRequestSchema,
 } from "../schemas/eval.js";
 import { execQaTools } from "../services/pipeline-runner.js";
 import { paths, config } from "../config.js";
+import { qaStore } from "../store/qa-store.js";
 
 export const evalRoute = new Hono();
 
@@ -119,6 +121,43 @@ evalRoute.post("/save", async (c) => {
       classify_model: classify_model ?? null,
     },
   }));
+});
+
+// POST /context-relevance — NVIDIA Context Relevance metric (no ground truth needed)
+evalRoute.post("/context-relevance", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = evalContextRelevanceRequestSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(fail("Invalid request body"), 400);
+  }
+
+  const { query, top_k } = parsed.data;
+
+  const hits = qaStore.keywordSearch(query, top_k, null);
+
+  if (hits.length === 0) {
+    return c.json(ok({
+      score: 0,
+      reason: "No contexts retrieved for query",
+      per_context: [],
+      query,
+      total_contexts: 0,
+    }));
+  }
+
+  try {
+    const { contextRelevance } = await import("../services/context-relevance.js");
+    const result = await contextRelevance(query, hits.map((h) => h.item));
+    return c.json(ok({
+      ...result,
+      query,
+      total_contexts: hits.length,
+    }));
+  } catch (err) {
+    console.error("context-relevance failed:", err);
+    return c.json(fail("context-relevance evaluation failed"), 500);
+  }
 });
 
 // POST /reranking — evaluate reranker performance

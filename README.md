@@ -38,7 +38,7 @@
 - **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）
 - **對話管理** — `GET/POST/DELETE /api/v1/sessions/*`（CRUD、訊息歷史）
 - **Pipeline 管理** — `/api/v1/pipeline/*`（10 endpoints：狀態、會議、預覽、日誌、觸發 fetch/fetch-articles/extract/dedupe/metrics）
-- **Eval 評估** — `/api/v1/eval/*`（4 endpoints：抽樣、Retrieval 評估、跨 provider 比較、儲存結果）
+- **Eval 評估** — `/api/v1/eval/*`（6 endpoints：抽樣、Retrieval 評估、Reranking 評估、Context Relevance、跨 provider 比較、儲存結果）
 - **同義詞管理** — `/api/v1/synonyms/*`（4 endpoints：列表、新增、更新、刪除；雙層設計：靜態+自訂）
 - **API 安全** — API Key 認證（`X-API-Key` header）、Rate Limit（chat 20/min、search/qa 60/min）、Zod schema validation
 
@@ -57,6 +57,14 @@
   - 錯誤時自動 fallback 至原始排序
 - `POST /api/v1/eval/reranking` — 評估 reranker 品質提升
 - **預期效果**：Precision@K 提升 76% → 85%+、Top-1 Hit 達 90%+
+
+**Phase 4：Context Relevance 評估（v2.12 新增）**
+- `api/src/services/context-relevance.ts` — Claude Haiku LLM judge
+  - 評估 query 與 retrieved contexts 的語意相關性
+  - 輸出 0–1 分（0 = 完全不相關，1 = 完全相關）+ per-context 細分評分
+  - Dynamic import fallback：ANTHROPIC_API_KEY 缺失時，使用 freshness_score 啟發式評分
+  - `escapeXml()` 防 XML prompt injection
+- `POST /api/v1/eval/context-relevance` — 評估檢索片段相關性
 
 **環境變數（v2.11）**：
 ```env
@@ -155,6 +163,8 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
 | 抽樣 Q&A                    | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/eval/sample`                  |
 | Retrieval 指標               | `make evaluate-qa`（含 `--eval-retrieval`）        | `/evaluate-qa-local`（含 Retrieval）                 | `POST /api/v1/eval/retrieval`               |
+| Reranking 評估              | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/eval/reranking`               |
+| Context Relevance 評估      | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/eval/context-relevance`       |
 | 跨 Provider 比較             | 無獨立指令                                        | `/evaluate-provider`                                 | `GET /api/v1/eval/compare`                  |
 | 儲存評估結果                | 無獨立指令 — 直接寫 `output/eval_report.json`      | 無獨立指令                                          | `POST /api/v1/eval/save`                    |
 
@@ -909,10 +919,12 @@ api/src/
 
 | Method | Path                     | 說明                                              | Rate Limit |
 | ------ | ------------------------ | ------------------------------------------------- | ---------- |
-| `POST` | `/api/v1/eval/sample`    | 抽樣 Q&A 供評估，body: `{size?, seed?, with_golden?}` | 60/min |
-| `POST` | `/api/v1/eval/retrieval` | 本地 Retrieval 指標，body: `{top_k?, use_enriched?}`   | 60/min |
-| `GET`  | `/api/v1/eval/compare`   | 跨 provider 比較                                       | 60/min |
-| `POST` | `/api/v1/eval/save`      | 儲存 eval 結果，body: `{input, extraction_engine?, update_baseline?}` | 60/min |
+| `POST` | `/api/v1/eval/sample`              | 抽樣 Q&A 供評估，body: `{size?, seed?, with_golden?}` | 60/min |
+| `POST` | `/api/v1/eval/retrieval`           | 本地 Retrieval 指標，body: `{top_k?, use_enriched?}`   | 60/min |
+| `POST` | `/api/v1/eval/reranking`           | Reranker 品質評估，body: `{query, candidates, top_k?}` | 60/min |
+| `POST` | `/api/v1/eval/context-relevance`   | NVIDIA Context Relevance，body: `{query, top_k?}`（max 30）| 60/min |
+| `GET`  | `/api/v1/eval/compare`             | 跨 provider 比較                                       | 60/min |
+| `POST` | `/api/v1/eval/save`                | 儲存 eval 結果，body: `{input, extraction_engine?, update_baseline?, extraction_model?, embedding_model?, classify_model?}` | 60/min |
 
 #### 安全機制
 

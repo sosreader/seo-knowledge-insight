@@ -7,7 +7,7 @@ _eval_laminar.py — Laminar 正式 Eval Run
 使用：
     python scripts/_eval_laminar.py
     python scripts/_eval_laminar.py --top-k 5
-    python scripts/_eval_laminar.py --dataset-name "retrieval-eval-v1"
+    python scripts/_eval_laminar.py --dataset-name "retrieval-eval-20260302"
 """
 from __future__ import annotations
 
@@ -81,7 +81,8 @@ def f1_evaluator(output: list[dict], target: dict) -> float:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Laminar 正式 Eval Run")
     parser.add_argument("--top-k", type=int, default=5, help="Retrieval top-K")
-    parser.add_argument("--dataset-name", default="retrieval-eval-v1", help="Laminar dataset name")
+    today = datetime.now(tz=timezone.utc).strftime("%Y%m%d")
+    parser.add_argument("--dataset-name", default=f"retrieval-eval-{today}", help="Laminar dataset name")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")

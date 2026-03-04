@@ -173,7 +173,7 @@ Notion 會議紀錄（87 份，2023–2026）
   Session 儲存：output/sessions/{uuid}.json（Repository Pattern）
             ↓ https://<service>.awsapprunner.com
 
-**TypeScript Hono（v2.10，port 8002，新架構）**——直接取代 Python API
+**TypeScript Hono（v2.11，port 8002，新架構）**——直接取代 Python API
 [SEO Insight API v2] api/src — Hono + TypeScript，完全移植 Python 功能 + Local Mode 降級
   框架：Hono（輕量、Cloudflare Workers / Node.js 相容）
   驗證：Zod schema validation（TypeScript-first）
@@ -190,7 +190,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - routes/sessions.ts  — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages（context-only fallback）, DELETE /sessions/{id}
     - routes/feedback.ts  — POST /feedback
     - routes/pipeline.ts  — GET /status, /source-docs, /source-docs/:collection/:file/preview, /unprocessed, /logs, POST /fetch, /fetch-articles, /extract-qa, /dedupe-classify, /metrics
-    - routes/eval.ts      — POST /eval/sample, /eval/retrieval, /eval/reranking（v2.11 新增）, /eval/save, GET /eval/compare
+    - routes/eval.ts      — POST /eval/sample, /eval/retrieval, /eval/reranking（v2.11 新增）, /eval/context-relevance（v2.12 新增）, /eval/save, GET /eval/compare
     - routes/synonyms.ts  — GET /synonyms, POST /synonyms, PUT /synonyms/{term}, DELETE /synonyms/{term}（雙層設計：28 靜態術語 + 32 新增（v2.11）+ custom JSON）
   核心模組：
     - store/qa-store.ts：QAStore（讀 qa_final.json + embedding 向量，embedding optional）
@@ -206,10 +206,11 @@ Notion 會議紀錄（87 份，2023–2026）
     - services/embedding.ts：OpenAI embedding wrapper
     - services/rag-chat.ts：RAG 問答（需要 OpenAI API key；v2.11 支援 reranker）
     - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
+    - services/context-relevance.ts：Context Relevance 評估（v2.12 新增，Claude haiku judge；per-context 細分；escapeXml() 防 prompt injection）
     - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / eval / synonyms / api-response
-  測試：Vitest（22 個 test files，175 tests passing）
+  測試：Vitest（24 個 test files，189 tests passing）
   部署：docker-compose（port 8002），未來支援 ECR + App Runner
   與 Python 並行運作（遷移期間）
             ↓ http://localhost:8002 (開發) 或 https://<service-v2>.awsapprunner.com (未來)
@@ -229,13 +230,13 @@ Notion 會議紀錄（87 份，2023–2026）
   - 三層合併：METRIC_QUERY_MAP（基礎） < _SUPPLEMENTAL_SYNONYMS（v2.11 新增 32 項） < custom JSON（使用者自訂層，v2.10）
   - KW Hit Rate baseline 提升預期：73% → 78%+
 
-**Phase 2 — Contextual Embeddings**
-- `scripts/_generate_context.py`（新建）：用 Claude Haiku 生成 QA 情境 context → `output/qa_context.json`
-  - 每筆 Q&A 生成 150–300 字的 situating context（相關應用場景、常見誤解）
-  - 離線預生成，無運行時成本
+**Phase 2 — Contextual Embeddings** ✅ 已完成（2026-03-06）
+- `scripts/_generate_context.py`（新建）：用 Claude Haiku 生成 QA 情境 context → `output/qa_context.json`（**1317 筆**）
+  - 每筆 Q&A 生成 2-3 句繁體中文 situating context（來源集合 + 分類 + 核心概念）
+  - 離線預生成，無運行時成本；key 為 str(id)（"1"~"1317"）
 - `api/src/config.ts`：新增環境變數
   - `ANTHROPIC_API_KEY`：Anthropic API key（用於 reranker）
-  - `CONTEXT_EMBEDDING_WEIGHT`：context 加權因子（0–1，預設 0.3）
+  - `CONTEXT_EMBEDDING_WEIGHT`：context 加權因子（0–1，**預設 0.6**）
   - `RERANKER_ENABLED`：是否啟用 reranker（預設 true）
 
 **Phase 3 — Re-ranking**
@@ -352,14 +353,14 @@ Notion 會議紀錄（87 份，2023–2026）
 **決策核心**：
 1. **分層遷移**：新功能優先在 Hono 實作，Python 保留作為穩定層
 2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid/full，無 → keyword/context-only）
-3. **測試優先**：Vitest 路由覆蓋（22 個 test files，175 tests），unit + integration
+3. **測試優先**：Vitest 路由覆蓋（24 個 test files，189 tests），unit + integration
 4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取（optional，無 .npy 時 keyword-only mode）
 
-**實作成果（v2.10 更新）**：
-- ~43 個源碼檔案（routes 10、store 5、utils 5、middleware 4、schemas 10、services 3）
-- 22 個測試檔案（routes 10 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 1 + observability/laminar-scoring 2 + others 1）
+**實作成果（v2.12 更新）**：
+- ~44 個源碼檔案（routes 10、store 5、utils 5、middleware 4、schemas 10、services 4）
+- 24 個測試檔案（routes 10 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 2 + observability/laminar-scoring 2 + others 2）
 - 10 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、eval、synonyms）+ health 檢查
-- 175 tests passing
+- 189 tests passing
 - NumPy .npy 檔案解析引擎（向量相容）
 - 速率限制 middleware（同步 Python layer 配置）
 - Local Mode 降級（無 OpenAI 時 keyword-only search + context-only chat）
