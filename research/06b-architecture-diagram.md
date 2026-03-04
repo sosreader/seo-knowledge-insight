@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v2.8，2026-03-05）
+## 架構圖（最新：v2.11，2026-03-05）
 
 ```mermaid
 flowchart TD
@@ -51,7 +51,7 @@ flowchart TD
     end
 
     subgraph Frontend["Frontend（vocus-admin-dev，Next.js，port 3000）"]
-        FE["6 頁 SPA<br/>SEO 知識庫 / QA 詳情 / RAG 問答<br/>SEO 週報 / Pipeline / Q&A 評估"]
+        FE["7 頁 SPA<br/>Q&A Chunk（改名）/ QA 詳情 / RAG 問答<br/>SEO 週報 / Pipeline / Q&A 評估 / 同義詞管理（v2.10 新增）"]
         FE --> FEHOOK["Custom Hooks<br/>useQAFilters / useEvalDashboard"]
         FE --> FECOMP["Components<br/>ChatMessage（null content 支援）<br/>EvalMetricsCards / EvalProviderComparison<br/>EvalSampleTable / EvalSaveForm<br/>PipelineMetrics / QAFilterToolbar"]
         FECOMP -->|context-only 模式| FEFB["Context-Only Badge<br/>+ SourcesList auto-expand"]
@@ -64,14 +64,15 @@ flowchart TD
         EMB -.->|"optional（Local Mode 不需要）"| HAPI
         SE -.->|hybrid_search / keywordOnlySearch| HAPI
         HAPI --> HMID["middleware/<br/>auth.ts（X-API-Key）<br/>rate-limit.ts（chat:20 search/qa:60 reports/gen:5 eval:60/min）<br/>cors.ts + error-handler.ts"]
-        HMID --> HEP["9 個 Router + health<br/>qa.ts — GET /qa, /qa/categories, /qa/{id}（hex+int）<br/>search.ts — POST /search（mode: hybrid|keyword）<br/>chat.ts — POST /chat（mode: full|context-only）<br/>reports.ts — GET/POST /reports<br/>sessions.ts — CRUD /sessions + messages（context-only fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — GET status/meetings/unprocessed/logs, POST fetch/fetch-articles/extract-qa/dedupe-classify/metrics<br/>eval.ts — POST sample/retrieval/save, GET compare"]
+        HMID --> HEP["10 個 Router + health（v2.11）<br/>qa.ts — GET /qa, /qa/categories, /qa/{id}（hex+int）<br/>search.ts — POST /search（mode: hybrid|keyword；v2.11 over-retrieve+rerank）<br/>chat.ts — POST /chat（mode: full|context-only；v2.11 rerank 支援）<br/>reports.ts — GET/POST /reports<br/>sessions.ts — CRUD /sessions + messages（context-only fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — GET status/source-docs/unprocessed/logs, POST fetch/fetch-articles/extract-qa/dedupe-classify/metrics<br/>eval.ts — POST sample/retrieval/reranking（v2.11 新增）/save, GET compare<br/>synonyms.ts — GET/POST /synonyms, PUT/DELETE /synonyms/{term}（v2.10 新增）"]
         HEP --> HENV["ApiResponse[T]<br/>Zod schema validation<br/>data / error / meta"]
         HEP -->|not_relevant / helpful| LS
         HEP -->|"pipeline/eval proxy"| QT
-        HAPI --> HSTORE["store/<br/>qa-store.ts（QAStore singleton，embedding optional）<br/>search-engine.ts（hybrid + keyword boost + keywordOnlySearch）<br/>session-store.ts（FileSessionStore）<br/>learning-store.ts"]
+        HEP -->|"read/write"| SYNSTORE["synonyms-store.ts<br/>output/synonym_custom.json"]
+        HAPI --> HSTORE["store/<br/>qa-store.ts（QAStore singleton，embedding optional）<br/>search-engine.ts（hybrid + keyword boost + keywordOnlySearch）<br/>session-store.ts（FileSessionStore）<br/>learning-store.ts<br/>synonyms-store.ts（雙層：28 靜態 + custom JSON，v2.10）"]
         HAPI --> HUTIL["utils/<br/>npy-reader.ts（NumPy .npy 解析）<br/>cosine-similarity.ts（Float32Array）<br/>keyword-boost.ts（4 層匹配）<br/>sanitize.ts（HTML escape 防 XSS）<br/>cjk-tokenizer.ts（CJK 分詞 2-gram）<br/>mode-detect.ts（hasOpenAI 偵測）"]
-        HAPI --> HSVC["services/<br/>embedding.ts（OpenAI wrapper）<br/>rag-chat.ts（RAG 問答）<br/>pipeline-runner.ts（Python CLI 代理）"]
-        HAPI --> HSCHEMA["schemas/ 9 個<br/>Zod runtime validation<br/>qa / search / chat / feedback<br/>report / session / pipeline / eval<br/>api-response"]
+        HAPI --> HSVC["services/<br/>embedding.ts（OpenAI wrapper）<br/>rag-chat.ts（RAG 問答 + v2.11 rerank 支援）<br/>reranker.ts（v2.11 新增，Haiku）<br/>pipeline-runner.ts（Python CLI 代理）"]
+        HAPI --> HSCHEMA["schemas/ 10 個<br/>Zod runtime validation<br/>qa / search / chat / feedback<br/>report / session / pipeline / eval<br/>synonyms / api-response"]
     end
 
     subgraph Legacy_API["Python API Layer（FastAPI，port 8001，legacy — 預計下線）"]
@@ -95,12 +96,16 @@ flowchart TD
         S4 -->|record_artifact| PV
     end
 
-    subgraph MultiLayerContext["Multi-Layer Context v1.19（離線 Enrichment）"]
+    subgraph MultiLayerContext["Multi-Layer Context v2.11（離線 Enrichment + Contextual Embeddings）"]
         QA --> ENRICH["scripts/enrich_qa.py<br/>make enrich<br/>冪等 / 無 LLM / atomic write"]
-        SYN["utils/synonym_dict.py<br/>METRIC_QUERY_MAP 衍生<br/>@lru_cache(maxsize=1)"] --> ENRICH
+        SYN["utils/synonym_dict.py<br/>三層合併（v2.11）：METRIC_QUERY_MAP<br/>+ _SUPPLEMENTAL_SYNONYMS（v2.11 新增 32 項）<br/>+ output/synonym_custom.json<br/>@lru_cache(maxsize=1)"] --> ENRICH
+        CTX["scripts/_generate_context.py（v2.11 新增）<br/>Claude Haiku situating context<br/>150-300 字/筆"] --> ENRICH
+        SYNSTORE -->|"custom synonyms"| SYN
         FRESH["utils/freshness.py<br/>exp(-0.693×age/540d)<br/>min_score=0.5"] --> ENRICH
         ENRICH --> QAE["output/qa_enriched.json<br/>655 筆 + _enrichment<br/>avg_synonyms=11.09<br/>avg_freshness=0.9076"]
+        ENRICH --> CTXOUT["output/qa_context.json（v2.11 新增）<br/>situating context 150-300 字<br/>離線預生成"]
         QAE -->|優先載入 fallback qa_final| SE
+        CTXOUT -->|context embedding| HAPI
         QAE -->|synonym_boost_vec<br/>freshness_vec 預計算| SE
         LS["utils/learning_store.py<br/>output/learnings.jsonl<br/>record_miss / record_feedback<br/>get_relevant_learnings"] -.->|query learnings| SE
     end

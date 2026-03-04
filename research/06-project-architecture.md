@@ -10,7 +10,7 @@
 
 **核心理念**：前端採用 custom hook + toolbar/dashboard 組件模式，提升 SPA 應用的可維護性與可測試性。
 
-**SEO 知識庫頁面（/admin/seoInsight）- UI 層次**：
+**SEO 知識庫頁面（/admin/seoInsight/chunk，v2.10 改名）- UI 層次**：
 ```
                   QAFilterToolbar
                  /      |      \      \
@@ -173,7 +173,7 @@ Notion 會議紀錄（87 份，2023–2026）
   Session 儲存：output/sessions/{uuid}.json（Repository Pattern）
             ↓ https://<service>.awsapprunner.com
 
-**TypeScript Hono（v2.7，port 8002，新架構）**——直接取代 Python API
+**TypeScript Hono（v2.10，port 8002，新架構）**——直接取代 Python API
 [SEO Insight API v2] api/src — Hono + TypeScript，完全移植 Python 功能 + Local Mode 降級
   框架：Hono（輕量、Cloudflare Workers / Node.js 相容）
   驗證：Zod schema validation（TypeScript-first）
@@ -182,19 +182,21 @@ Notion 會議紀錄（87 份，2023–2026）
   速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min・eval 60/min）
   QA ID：stable_id（SHA256[:16] hex），與 Python 相同驗證規則
   Local Mode：無 OpenAI API key 時自動降級（search→keyword-only，chat→context-only）
-  endpoint（9 個 router）：
+  endpoint（10 個 router，v2.11）：
     - routes/qa.ts        — GET /qa, /qa/categories, /qa/{id}（hex+int）
-    - routes/search.ts    — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換）
-    - routes/chat.ts      — POST /chat（mode: full|context-only，無 OpenAI 時回傳 sources + answer:null）
+    - routes/search.ts    — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；v2.11 over-retrieve + rerank）
+    - routes/chat.ts      — POST /chat（mode: full|context-only，無 OpenAI 時回傳 sources + answer:null；v2.11 rerank 可啟用）
     - routes/reports.ts   — GET /reports, /reports/{id}, POST /reports/generate
     - routes/sessions.ts  — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages（context-only fallback）, DELETE /sessions/{id}
     - routes/feedback.ts  — POST /feedback
-    - routes/pipeline.ts  — GET /status, /meetings, /meetings/:id/preview, /unprocessed, /logs, POST /fetch, /extract-qa, /dedupe-classify, /metrics
-    - routes/eval.ts      — POST /eval/sample, /eval/retrieval, /eval/save, GET /eval/compare
+    - routes/pipeline.ts  — GET /status, /source-docs, /source-docs/:collection/:file/preview, /unprocessed, /logs, POST /fetch, /fetch-articles, /extract-qa, /dedupe-classify, /metrics
+    - routes/eval.ts      — POST /eval/sample, /eval/retrieval, /eval/reranking（v2.11 新增）, /eval/save, GET /eval/compare
+    - routes/synonyms.ts  — GET /synonyms, POST /synonyms, PUT /synonyms/{term}, DELETE /synonyms/{term}（雙層設計：28 靜態術語 + 32 新增（v2.11）+ custom JSON）
   核心模組：
     - store/qa-store.ts：QAStore（讀 qa_final.json + embedding 向量，embedding optional）
     - store/session-store.ts：FileSessionStore（Repository Pattern）
     - store/learning-store.ts：LearningStore（feedback + miss 記錄）
+    - store/synonyms-store.ts：SynonymsStore（雙層設計：28 個靜態術語 + output/synonym_custom.json 自訂覆蓋，v2.10 新增）
     - store/search-engine.ts：SearchEngine（hybrid search + keyword boost + keywordOnlySearch）
     - utils/npy-reader.ts：NumPy .npy 檔案解析（numpy 相容）
     - utils/cosine-similarity.ts：向量運算（Float32Array）
@@ -202,14 +204,88 @@ Notion 會議紀錄（87 份，2023–2026）
     - utils/cjk-tokenizer.ts：CJK 分詞（2-gram + 單字，中文 keyword search 支援）
     - utils/mode-detect.ts：hasOpenAI() helper（Local Mode 偵測）
     - services/embedding.ts：OpenAI embedding wrapper
-    - services/rag-chat.ts：RAG 問答（需要 OpenAI API key）
+    - services/rag-chat.ts：RAG 問答（需要 OpenAI API key；v2.11 支援 reranker）
+    - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
     - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools）
   schemas：
-    - qa / search / chat / feedback / report / session / pipeline / eval / api-response
-  測試：Vitest（21 個 test files，144 tests passing）
+    - qa / search / chat / feedback / report / session / pipeline / eval / synonyms / api-response
+  測試：Vitest（22 個 test files，175 tests passing）
   部署：docker-compose（port 8002），未來支援 ECR + App Runner
   與 Python 並行運作（遷移期間）
             ↓ http://localhost:8002 (開發) 或 https://<service-v2>.awsapprunner.com (未來)
+
+## v2.11 — RAG 迭代改進計畫：Synonym 擴充 + Contextual Embeddings + Reranker（2026-03-05）
+
+### 核心新增
+
+**Phase 0 — 評估指標擴充**
+- `scripts/qa_tools.py`：`cmd_eval_retrieval_local()` 新增 precision_at_k、recall_at_k（cat_hit_rate alias）、f1_score
+  - 計算：precision = hits / k，recall = hits / total_relevant，f1 = 2×(p×r)/(p+r)
+  - 5 個 Laminar score events 直接記錄
+- `scripts/_eval_laminar.py`（新建）：Laminar 離線 eval run，將 precision/recall/f1 送出 Dashboard
+
+**Phase 1 — Synonym Dict 擴充**
+- `utils/synonym_dict.py`：新增 32 個術語（214 個詞條），覆蓋技術 SEO、關鍵字、UX、GSC 指標
+  - 三層合併：METRIC_QUERY_MAP（基礎） < _SUPPLEMENTAL_SYNONYMS（v2.11 新增 32 項） < custom JSON（使用者自訂層，v2.10）
+  - KW Hit Rate baseline 提升預期：73% → 78%+
+
+**Phase 2 — Contextual Embeddings**
+- `scripts/_generate_context.py`（新建）：用 Claude Haiku 生成 QA 情境 context → `output/qa_context.json`
+  - 每筆 Q&A 生成 150–300 字的 situating context（相關應用場景、常見誤解）
+  - 離線預生成，無運行時成本
+- `api/src/config.ts`：新增環境變數
+  - `ANTHROPIC_API_KEY`：Anthropic API key（用於 reranker）
+  - `CONTEXT_EMBEDDING_WEIGHT`：context 加權因子（0–1，預設 0.3）
+  - `RERANKER_ENABLED`：是否啟用 reranker（預設 true）
+
+**Phase 3 — Re-ranking**
+- `api/src/services/reranker.ts`（新建）：Claude Haiku reranker service
+  - `rerank(candidates, query, topK)` → 重排序、評分、篩選 top-K
+  - XML prompt：結構化輸入/輸出
+  - 錯誤時自動 fallback 至原始排序
+- `api/src/store/search-engine.ts`：新增 over-retrieve 機制
+  - `overRetrieveFactor`（預設 3）：初期檢索 K×3 候選，再 rerank
+  - `searchOverRetrieve(query, k)`：K×3 檢索 → rerank → top-K
+- `api/src/services/rag-chat.ts`：有 ANTHROPIC_API_KEY 時啟用 reranker
+  - `const overRetrieve = ANTHROPIC_API_KEY ? (k * overRetrieveFactor) : k`
+- `api/src/routes/eval.ts`：新增 POST `/eval/reranking` endpoint
+  - 評估 reranker 對搜尋品質的提升幅度
+- `api/src/schemas/eval.ts`：新增 `evalRerankingRequestSchema`
+- `api/src/tests/services/reranker.test.ts`（新建）：4 個測試
+  - 正常 rerank / 空結果 fallback / 錯誤恢復 / score 排序
+
+**前端更新**（vocus-admin-dev，branch: feat/admin-seo-insight）
+- `apis/seoInsight.api.ts`：EvalRetrievalResponse 擴展
+  - 新增欄位：`avg_precision_at_k`、`avg_recall_at_k`、`f1_score`
+- `components/admin/seoInsight/EvalMetricsCards.tsx`：從 3 欄擴展至 5 欄
+  - 原 3 欄：Hit Rate / MRR / Category Hit Rate
+  - 新增 2 欄：Precision@K / F1 Score
+  - 色彩編碼：達標（black）/ 接近（gray）/ 未達（light gray）
+- `components/admin/seoInsight/useEvalDashboard.ts`：metrics state 新增 3 個欄位
+  - `avg_precision_at_k`、`avg_recall_at_k`、`f1_score`
+
+**測試結果**：23 個 test files，179 tests passing
+
+**評估基準線（v2.11，20 cases，top-k=5）**：
+| 指標 | 數值 | 說明 |
+|------|------|------|
+| KW Hit Rate | 73% | 同義詞擴充中（目標 78%+） |
+| Precision@K | 76% | Reranker 未啟用時的基礎精準度 |
+| Recall@K | 80% | 涵蓋率良好 |
+| F1 Score | 0.73 | 精確度與涵蓋率平衡指標 |
+| MRR | 0.88 | 排名靠後提升空間 |
+
+**預期效益**：
+- Precision@K：reranker 啟用後預期 76% → 85%+（Haiku 輕量級重排序）
+- Top-1 Hit 提升：通過 over-retrieve + rerank，命中率 → 90%+
+- 搜尋延遲：reranker 額外成本 ~200ms（可接受，總 <1s）
+
+**後續優化方向**：
+- Phase 4：Fine-tune reranker prompt（基於 A/B 評估結果）
+- Phase 5：Cache reranked results（避免重複重排）
+- Phase 6：User feedback loop（不相關點擊 → reranker 學習信號）
+
+---
 
 ══════════════ Audit Trail（2026-02-28 新增）══════════════
 
@@ -276,13 +352,14 @@ Notion 會議紀錄（87 份，2023–2026）
 **決策核心**：
 1. **分層遷移**：新功能優先在 Hono 實作，Python 保留作為穩定層
 2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid/full，無 → keyword/context-only）
-3. **測試優先**：Vitest 路由覆蓋（21 個 test files，144 tests），unit + integration
+3. **測試優先**：Vitest 路由覆蓋（22 個 test files，175 tests），unit + integration
 4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取（optional，無 .npy 時 keyword-only mode）
 
-**實作成果**：
-- ~40 個源碼檔案（routes 9、store 4、utils 5、middleware 4、schemas 9、services 3）
-- 18 個測試檔案（routes 9 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 1）
-- 9 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、eval）+ health 檢查
+**實作成果（v2.10 更新）**：
+- ~43 個源碼檔案（routes 10、store 5、utils 5、middleware 4、schemas 10、services 3）
+- 22 個測試檔案（routes 10 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 1 + observability/laminar-scoring 2 + others 1）
+- 10 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、eval、synonyms）+ health 檢查
+- 175 tests passing
 - NumPy .npy 檔案解析引擎（向量相容）
 - 速率限制 middleware（同步 Python layer 配置）
 - Local Mode 降級（無 OpenAI 時 keyword-only search + context-only chat）
@@ -312,7 +389,7 @@ Notion 會議紀錄（87 份，2023–2026）
    - Unit tests：純邏輯（search、store、validators、cjk-tokenizer）
    - Integration tests：mocked external calls（OpenAI、Python CLI subprocess）
    - Router tests：完整 HTTP 請求/回應循環（含 Local Mode 降級測試）
-   - 100% endpoint 覆蓋（9 個 routes × ~2-6 tests per endpoint，共 144 tests）
+   - 100% endpoint 覆蓋（10 個 routers × ~2-6 tests per endpoint，共 175 tests）
 
 **向下相容**：
 - Python API（port 8001）保持不變，允許 2-4 週過渡期

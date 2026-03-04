@@ -45,11 +45,32 @@ Learnings Layer（動態）：output/learnings.jsonl（record_miss + record_feed
 
 ## 21. 同義詞擴展（Synonym Expansion）
 
-### 設計原則
+### 設計原則（三層合併，v2.10）
 
 1. **`METRIC_QUERY_MAP` 衍生優先**（`utils/metrics_parser.py`）：從現有 metric key 和 query values 自動萃取，確保覆蓋核心 SEO 指標
 2. **`_SUPPLEMENTAL_SYNONYMS` 補充詞典**：手工維護 AMP/CTR/canonical/hreflang 等 SEO 技術術語
-3. **`@functools.lru_cache(maxsize=1)` 執行緒安全**：字典只建一次，後續讀取免鎖
+3. **Custom JSON 層**（v2.10 新增）：`output/synonym_custom.json` — 透過 Synonyms REST API 寫入，用戶自訂術語，優先級最高
+4. **`@functools.lru_cache(maxsize=1)` 執行緒安全**：字典只建一次，後續讀取免鎖
+
+### 三層合併優先序
+
+```
+METRIC_QUERY_MAP（最低優先）
+    ↓ _SUPPLEMENTAL_SYNONYMS 覆蓋
+        ↓ custom JSON 覆蓋（最高優先）
+```
+
+```python
+# utils/synonym_dict.py — _load_custom_synonyms()
+def _load_custom_synonyms() -> dict[str, list[str]]:
+    """載入 output/synonym_custom.json（API 寫入），無檔案時回傳空 dict"""
+    path = Path(config.OUTPUT_DIR) / "synonym_custom.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text())
+```
+
+**Python 與 TypeScript 同步保證**：TypeScript Synonyms API 寫入同一份 `output/synonym_custom.json`，Python Pipeline 的 `synonym_dict.py` 在 `make enrich` 時讀取同一份 JSON，確保兩側一致。
 
 ### `@functools.lru_cache` vs `global + None check`
 
