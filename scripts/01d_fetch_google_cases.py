@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import sys
 import time
@@ -25,6 +26,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 try:
     import config
@@ -78,7 +81,7 @@ def _fetch_case_study_urls(series_url: str) -> list[dict]:
 
     Returns list of dicts with: slug, url
     """
-    print(f"  Fetching listing page: {series_url}")
+    logger.info("Fetching listing page: %s", series_url)
 
     resp = httpx.get(series_url, follow_redirects=True, timeout=30)
     resp.raise_for_status()
@@ -95,7 +98,7 @@ def _fetch_case_study_urls(series_url: str) -> list[dict]:
                 "url": full_url,
             })
 
-    print(f"  Found {len(cases)} case studies")
+    logger.info("Found %d case studies", len(cases))
     return cases
 
 
@@ -176,12 +179,15 @@ def fetch_google_cases(
 
         try:
             case = _fetch_case_study(meta["url"])
+        except httpx.HTTPError as e:
+            logger.warning("%s fetch failed: %s", slug, e)
+            continue
         except Exception as e:
-            print(f"  Warning: {slug} fetch failed: {e}")
+            logger.error("%s unexpected error", slug, exc_info=True)
             continue
 
         if not case["html_content"]:
-            print(f"  Warning: {slug} has no content, skipping")
+            logger.warning("%s has no content, skipping", slug)
             continue
 
         # Convert HTML to Markdown
@@ -217,7 +223,7 @@ def fetch_google_cases(
         index.append(index_entry)
         existing_slugs.add(slug)
 
-        print(f"  Done: {case['title'][:60]}")
+        logger.info("Done: %s", case["title"][:60])
         fetched += 1
 
         # Rate limiting
@@ -239,20 +245,15 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    print("=" * 60)
-    print("Step 1d: Fetch Google Search Central Case Studies")
-    print(f"   URL: {SERIES_URL}")
-    print("=" * 60)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logger.info("Step 1d: Fetch Google Search Central Case Studies")
 
     result = fetch_google_cases(force=args.force)
 
-    print(f"\n{'=' * 60}")
-    print("Done!")
-    print(f"   Fetched: {result['fetched']}")
-    print(f"   Skipped (existing): {result['skipped']}")
-    print(f"   Index total: {result['total']}")
-    print(f"   Output dir: {config.RAW_GOOGLE_CASES_MD_DIR}")
-    print(f"{'=' * 60}")
+    logger.info(
+        "Done — fetched: %d, skipped: %d, total: %d",
+        result["fetched"], result["skipped"], result["total"],
+    )
 
 
 if __name__ == "__main__":

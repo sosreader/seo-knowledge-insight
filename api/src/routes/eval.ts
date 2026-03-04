@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
 import {
   evalSampleRequestSchema,
@@ -87,16 +87,21 @@ evalRoute.post("/save", async (c) => {
     return c.json(fail("input must be a .json filename (no path separators)"), 400);
   }
 
-  const { input, extraction_engine, update_baseline } = parsed.data;
+  const {
+    input, extraction_engine, update_baseline,
+    extraction_model, embedding_model, classify_model,
+  } = parsed.data;
 
-  // Double-check: reject any path traversal attempts
-  if (/[/\\]|\.\./.test(input)) {
+  // Defense-in-depth: resolve and confirm within evalsDir
+  const inputPath = resolve(join(paths.evalsDir, input));
+  if (!inputPath.startsWith(resolve(paths.evalsDir))) {
     return c.json(fail("input must be a filename, not a path"), 400);
   }
-
-  const inputPath = join(paths.evalsDir, input);
   const args: string[] = ["--input", inputPath, "--extraction-engine", extraction_engine];
   if (update_baseline) args.push("--update-baseline");
+  if (extraction_model) args.push("--extraction-model", extraction_model);
+  if (embedding_model) args.push("--embedding-model", embedding_model);
+  if (classify_model) args.push("--classify-model", classify_model);
 
   const result = await execQaTools("eval-save", args);
   if (!result.success) {
@@ -104,5 +109,13 @@ evalRoute.post("/save", async (c) => {
     return c.json(fail("eval-save failed"), 500);
   }
 
-  return c.json(ok({ saved: true, filename: input }));
+  return c.json(ok({
+    saved: true,
+    filename: input,
+    models: {
+      extraction_model: extraction_model ?? null,
+      embedding_model: embedding_model ?? null,
+      classify_model: classify_model ?? null,
+    },
+  }));
 });

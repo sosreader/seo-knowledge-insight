@@ -16,6 +16,7 @@ Usage::
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 from datetime import datetime, timezone
@@ -48,8 +49,17 @@ def log_execution(
     }
     try:
         _LOG_DIR.mkdir(parents=True, exist_ok=True)
-        with open(_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        # Validate resolved path stays within log directory (symlink guard)
+        resolved = _LOG_PATH.resolve()
+        if not str(resolved).startswith(str(_LOG_DIR.resolve())):
+            logger.warning("Log path escapes log directory: %s", resolved)
+            return
+        with open(resolved, "a", encoding="utf-8") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
     except Exception as exc:
         logger.debug("log_execution failed: %s", exc)
 

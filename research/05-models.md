@@ -138,3 +138,45 @@ is_reasoning = getattr(details, "reasoning_tokens", 0) > 0
 詳見：`~/.claude/skills/learned/openai-reasoning-model-no-response-format.md`
 
 ---
+
+## Model Provenance Tracking（v2.8，2026-03-05）
+
+### 為什麼需要追蹤模型版本
+
+模型升級（如 gpt-5 → gpt-5.2）時，pipeline 產出品質可能改變。若不記錄「哪個模型版本產出了什麼」，無法：
+
+1. 判斷品質變化是模型升級還是資料變動造成
+2. 回滾到「上次品質穩定」的模型版本
+3. 量化模型升級的 ROI
+
+### 本專案追蹤機制
+
+| 層級 | 欄位 | 範例值 | 記錄位置 |
+|------|------|--------|---------|
+| QA 萃取 | `extraction_model` | `"gpt-5.2"` | qa_all_raw.json |
+| QA 萃取 | `extraction_timestamp` | `"2026-03-05T..."` | qa_all_raw.json |
+| Embedding | `embedding_model` | `"text-embedding-3-small"` | eval results |
+| 分類 | `classify_model` | `"gpt-5-mini"` | eval results |
+
+### Model-Aware Cache
+
+切換模型時，快取 key 自動隔離：
+
+```
+gpt-5.2 + 同一篇文章 → SHA256("gpt-5.2::文章內容") → cache A
+gpt-5   + 同一篇文章 → SHA256("gpt-5::文章內容")   → cache B
+```
+
+不傳 model 參數時退化為 `SHA256(content)`，向下相容。
+
+### 模型升級評估清單
+
+切換 extraction/embedding/classify 模型前：
+
+- [ ] 用 `/evaluate-model-ab` 抽樣 10 篇做 A/B 對比
+- [ ] 確認 4 維度平均分 >= 現有基準線
+- [ ] 確認 Retrieval MRR 不下降（若換 embedding model）
+- [ ] 清除對應 namespace 的舊 cache（`make cache-clear ns=extraction`）
+- [ ] 全量重跑後更新基準線（`eval-save --update-baseline`）
+
+---

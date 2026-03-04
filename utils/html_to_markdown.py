@@ -23,10 +23,19 @@ def html_to_markdown(html: str, strip_tags: tuple[str, ...] = ("script", "style"
     import markdownify
 
     # Pre-process: remove unwanted tags entirely (including content)
+    extra_dangerous = ("iframe", "object", "embed", "form", "input", "button")
     soup = BeautifulSoup(html, "html.parser")
-    for tag_name in strip_tags:
+    for tag_name in (*strip_tags, *extra_dangerous):
         for tag in soup.find_all(tag_name):
             tag.decompose()
+
+    # Strip event handler attributes and javascript: URLs
+    for tag in soup.find_all(True):
+        for attr in list(tag.attrs):
+            if attr.startswith("on"):
+                del tag[attr]
+            elif attr in ("href", "src", "action") and str(tag.get(attr, "")).strip().lower().startswith("javascript:"):
+                del tag[attr]
 
     md = markdownify.markdownify(
         str(soup),

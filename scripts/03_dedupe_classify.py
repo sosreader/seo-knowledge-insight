@@ -24,7 +24,7 @@ import os
 import shutil
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -126,11 +126,9 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
 
         result: list[dict] = []
 
-        # 獨立的直接保留
+        # 獨立的直接保留（immutable — dict unpacking）
         for idx in unique_indices:
-            qa = items[idx].copy()
-            qa["is_merged"] = False
-            result.append(qa)
+            result.append({**items[idx], "is_merged": False})
 
         # 重複的合併
         if groups:
@@ -146,23 +144,25 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
                 )
 
                 try:
-                    merged = merge_similar_qas(group_qas)
-                    merged["is_merged"] = True
-                    merged["merge_count"] = len(group_qas)
-                    # 保留 source metadata
-                    merged["source_type"] = group_qas[0].get("source_type", "meeting")
-                    merged["source_collection"] = collection
-                    merged["source_url"] = group_qas[0].get("source_url", "")
-                    # stable_id 由所有來源 stable_id 排序後取 hash
+                    merged_raw = merge_similar_qas(group_qas)
                     source_ids = [qa.get("stable_id", "") for qa in group_qas]
-                    merged["stable_id"] = compute_stable_id_from_sources(source_ids)
-                    result.append(merged)
+                    result.append({
+                        **merged_raw,
+                        "is_merged": True,
+                        "merge_count": len(group_qas),
+                        "source_type": group_qas[0].get("source_type", "meeting"),
+                        "source_collection": collection,
+                        "source_url": group_qas[0].get("source_url", ""),
+                        "stable_id": compute_stable_id_from_sources(source_ids),
+                    })
                 except Exception as e:
-                    tqdm.write(f"  ⚠️  合併失敗: {e}，保留第一筆")
-                    qa = group_qas[0].copy()
-                    qa["is_merged"] = False
-                    qa["merge_note"] = f"合併失敗，共 {len(group_qas)} 筆相似"
-                    result.append(qa)
+                    logger.warning("merge_similar_qas failed for group %d: %s", group_i + 1, e, exc_info=True)
+                    tqdm.write(f"  合併失敗（保留第一筆）：{e}")
+                    result.append({
+                        **group_qas[0],
+                        "is_merged": False,
+                        "merge_note": f"合併失敗，共 {len(group_qas)} 筆相似",
+                    })
 
                 time.sleep(0.5)
 
@@ -287,13 +287,13 @@ def main(args: argparse.Namespace) -> None:
         qa_pairs = qa_pairs[: args.limit]
         print(f"⚠️  測試模式：僅處理前 {args.limit} 個 Q&A")
 
-    # 預計算 stable_id（跨次執行不變，基於 source_file + question 內容）
-    for qa in qa_pairs:
-        if not qa.get("stable_id"):
-            qa["stable_id"] = compute_stable_id(
-                qa.get("source_file", ""),
-                qa["question"],
-            )
+    # 預計算 stable_id（immutable — 建立新 list）
+    qa_pairs = [
+        {**qa, "stable_id": qa.get("stable_id") or compute_stable_id(
+            qa.get("source_file", ""), qa["question"],
+        )}
+        for qa in qa_pairs
+    ]
 
     # 去重
     if not args.skip_dedup:
@@ -339,14 +339,18 @@ def main(args: argparse.Namespace) -> None:
     version_entry = record_artifact(
         step=3,
         data=final_output,
-        metadata={"qa_count": len(final_qa_pairs)},
+        metadata={
+            "qa_count": len(final_qa_pairs),
+            "embedding_model": config.OPENAI_EMBEDDING_MODEL,
+            "classify_model": config.CLASSIFY_MODEL,
+        },
     )
-    print(f"\n🔖 版本記録: {version_entry['version_id']}")
+    print(f"\n版本記録: {version_entry['version_id']}")
 
     # QA DB 快照：複製到 output/snapshots/ 供版本比較
     snapshot_dir = config.OUTPUT_DIR / "snapshots"
     snapshot_dir.mkdir(exist_ok=True)
-    snap_ts = datetime.now().strftime("%Y%m%d")
+    snap_ts = datetime.now(timezone.utc).strftime("%Y%m%d")
     snap_path = snapshot_dir / f"qa_final_{snap_ts}.json"
     shutil.copy2(final_path, snap_path)
 

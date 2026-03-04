@@ -267,7 +267,7 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     miss_texts: list[str] = []
 
     for idx, text in zip(valid_indices, valid_texts):
-        hit = cache_get("embedding", text)
+        hit = cache_get("embedding", text, model=config.OPENAI_EMBEDDING_MODEL)
         if hit is not None:
             cached_map[idx] = hit
         else:
@@ -293,7 +293,7 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
 
         # 寫入 cache
         for text, emb in zip(miss_texts, all_miss_embeddings):
-            cache_set("embedding", text, emb)
+            cache_set("embedding", text, emb, model=config.OPENAI_EMBEDDING_MODEL)
 
     # ── 重建完整結果陣列 ───────────────────────────────
     miss_map = dict(zip(miss_indices, all_miss_embeddings))
@@ -358,7 +358,7 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
         ensure_ascii=False,
         sort_keys=True,
     )
-    cached = cache_get("merge", group_key)
+    cached = cache_get("merge", group_key, model=config.OPENAI_MODEL)
     if cached is not None:
         # Re-attach merged_from（包含 source 資訊，不放入 cache）
         cached["merged_from"] = [
@@ -443,7 +443,7 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
         "keywords": result["keywords"],
         "source_dates": result["source_dates"],
     }
-    cache_set("merge", group_key, cache_payload)
+    cache_set("merge", group_key, cache_payload, model=config.OPENAI_MODEL)
 
     return result
 
@@ -563,7 +563,7 @@ def classify_qa(question: str, answer: str) -> dict:
 
     # ── cache check ───────────────────────────────────────
     cache_key = f"{question}\n\n{answer}"
-    cached = cache_get("classify", cache_key)
+    cached = cache_get("classify", cache_key, model=config.CLASSIFY_MODEL)
     if cached is not None:
         return cached
 
@@ -612,5 +612,5 @@ def classify_qa(question: str, answer: str) -> dict:
         result = {"category": "其他", "difficulty": "基礎", "evergreen": True}
 
     # ── 寫入 cache ───────────────────────────────────────
-    cache_set("classify", cache_key, result)
+    cache_set("classify", cache_key, result, model=config.CLASSIFY_MODEL)
     return result

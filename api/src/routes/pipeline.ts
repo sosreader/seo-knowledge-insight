@@ -2,11 +2,13 @@ import { Hono } from "hono";
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
+import { z } from "zod";
 import {
   fetchRequestSchema,
   extractQARequestSchema,
   dedupeClassifyRequestSchema,
   metricsRequestSchema,
+  sourceDocsQuerySchema,
   type MeetingEntry,
   type MeetingsResponse,
   type MeetingPreviewResponse,
@@ -16,7 +18,21 @@ import {
   type FetchLogsResponse,
   type PipelineStepStatus,
   type PipelineStatusResponse,
+  type SourceDocEntry,
+  type SourceDocsResponse,
+  type SourceDocPreviewResponse,
 } from "../schemas/pipeline.js";
+
+const meetingEntrySchema = z.object({
+  title: z.string(),
+  id: z.string(),
+  created_time: z.string(),
+  last_edited_time: z.string(),
+  url: z.string(),
+  json_file: z.string(),
+  md_file: z.string(),
+  status: z.string().optional(),
+});
 import { execPython, execQaTools } from "../services/pipeline-runner.js";
 import { paths } from "../config.js";
 
@@ -31,8 +47,9 @@ function readMeetingsIndex(): readonly MeetingEntry[] {
 
   try {
     const raw = readFileSync(indexPath, "utf-8");
-    const entries = JSON.parse(raw) as MeetingEntry[];
-    return entries.map((e) => ({
+    const parsed = z.array(meetingEntrySchema).safeParse(JSON.parse(raw));
+    if (!parsed.success) return [];
+    return parsed.data.map((e) => ({
       ...e,
       status: e.status ?? "fetched",
     }));
@@ -214,6 +231,75 @@ function readFetchLogs(limit = 200): FetchLogsResponse {
   return { files, entries, total: entries.length };
 }
 
+// --- Collection → Directory mapping (whitelist) ---
+
+const COLLECTION_DIR_MAP: Readonly<Record<string, { dir: string; sourceType: "meeting" | "article" }>> = {
+  "seo-meetings": { dir: join(paths.rawDataDir, "markdown"), sourceType: "meeting" },
+  "genehong-medium": { dir: paths.rawMediumMdDir, sourceType: "article" },
+  "ithelp-sc-kpi": { dir: paths.rawIthelpMdDir, sourceType: "article" },
+  "google-case-studies": { dir: paths.rawGoogleCasesMdDir, sourceType: "article" },
+};
+
+const SAFE_FILENAME_RE = /^[a-zA-Z0-9._\u4e00-\u9fff-]+\.md$/;
+
+function buildSourceDocs(): readonly SourceDocEntry[] {
+  const meetings = readMeetingsIndex();
+  const meetingsByMd = new Map(meetings.map((m) => [m.md_file.replace(/^markdown\//, ""), m]));
+
+  const qaPerMeetingDir = join(paths.outputDir, "qa_per_meeting");
+  const processedMeetings = new Set(
+    existsSync(qaPerMeetingDir)
+      ? readdirSync(qaPerMeetingDir)
+          .filter((f) => f.endsWith("_qa.json"))
+          .map((f) => f.replace(/_qa\.json$/, ".md"))
+      : []
+  );
+  const processedArticles = new Set(
+    existsSync(paths.qaPerArticleDir)
+      ? readdirSync(paths.qaPerArticleDir)
+          .filter((f) => f.endsWith("_qa.json"))
+          .map((f) => f.replace(/_qa\.json$/, ".md"))
+      : []
+  );
+
+  const results: SourceDocEntry[] = [];
+
+  for (const [collection, { dir, sourceType }] of Object.entries(COLLECTION_DIR_MAP)) {
+    if (!existsSync(dir)) continue;
+
+    const processedSet = sourceType === "meeting" ? processedMeetings : processedArticles;
+    const mdFiles = readdirSync(dir).filter((f) => f.endsWith(".md"));
+
+    for (const file of mdFiles) {
+      const filePath = join(dir, file);
+      let stat;
+      try {
+        stat = statSync(filePath);
+      } catch {
+        continue;
+      }
+
+      const meeting = sourceType === "meeting" ? meetingsByMd.get(file) : undefined;
+      const title = meeting
+        ? meeting.title
+        : file.replace(/\.md$/, "").replace(/[-_]/g, " ");
+
+      results.push({
+        file,
+        title,
+        source_type: sourceType,
+        source_collection: collection,
+        source_url: meeting?.url ?? "",
+        created_time: meeting?.created_time ?? stat.birthtime.toISOString(),
+        size_bytes: stat.size,
+        is_processed: processedSet.has(file),
+      });
+    }
+  }
+
+  return results;
+}
+
 // --- Route ---
 
 export const pipelineRoute = new Hono();
@@ -261,6 +347,79 @@ pipelineRoute.get("/meetings/:id/preview", (c) => {
   const response: MeetingPreviewResponse = {
     id: meeting.id,
     title: meeting.title,
+    content,
+    size_bytes,
+  };
+  return c.json(ok(response));
+});
+
+// GET /source-docs
+pipelineRoute.get("/source-docs", (c) => {
+  const parsed = sourceDocsQuerySchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
+  if (!parsed.success) {
+    return c.json(fail("Invalid query parameters"), 400);
+  }
+
+  const { source_type, source_collection, keyword, is_processed, limit, offset } = parsed.data;
+
+  let docs = buildSourceDocs();
+
+  if (source_type) {
+    docs = docs.filter((d) => d.source_type === source_type);
+  }
+  if (source_collection) {
+    docs = docs.filter((d) => d.source_collection === source_collection);
+  }
+  if (keyword) {
+    const kw = keyword.toLowerCase();
+    docs = docs.filter((d) => d.title.toLowerCase().includes(kw) || d.file.toLowerCase().includes(kw));
+  }
+  if (is_processed !== undefined) {
+    docs = docs.filter((d) => d.is_processed === is_processed);
+  }
+
+  const total = docs.length;
+  const items = docs.slice(offset, offset + limit);
+
+  const response: SourceDocsResponse = { items, total, offset, limit };
+  return c.json(ok(response));
+});
+
+// GET /source-docs/:collection/:file/preview
+pipelineRoute.get("/source-docs/:collection/:file/preview", (c) => {
+  const collection = c.req.param("collection");
+  const file = c.req.param("file");
+
+  // Whitelist check
+  const entry = COLLECTION_DIR_MAP[collection];
+  if (!entry) {
+    return c.json(fail("Unknown collection"), 400);
+  }
+
+  // Filename safety check
+  if (!SAFE_FILENAME_RE.test(file)) {
+    return c.json(fail("Invalid filename"), 400);
+  }
+
+  const filePath = resolve(entry.dir, file);
+
+  // Path traversal guard
+  if (!filePath.startsWith(entry.dir)) {
+    return c.json(fail("Invalid file path"), 400);
+  }
+
+  if (!existsSync(filePath)) {
+    return c.json(fail("File not found"), 404);
+  }
+
+  const content = readFileSync(filePath, "utf-8");
+  const size_bytes = statSync(filePath).size;
+  const title = file.replace(/\.md$/, "").replace(/[-_]/g, " ");
+
+  const response: SourceDocPreviewResponse = {
+    file,
+    title,
+    collection,
     content,
     size_bytes,
   };
@@ -324,10 +483,7 @@ pipelineRoute.post("/extract-qa", async (c) => {
     args.push("--limit", String(parsed.data.limit));
   }
   if (parsed.data.file) {
-    // Validate filename to prevent injection
-    if (parsed.data.file.includes("..") || parsed.data.file.includes("/")) {
-      return c.json(fail("Invalid file parameter"), 400);
-    }
+    // Schema-level SAFE_MD_FILENAME regex already prevents path traversal / injection
     args.push("--file", parsed.data.file);
   }
 
@@ -371,11 +527,13 @@ pipelineRoute.post("/dedupe-classify", async (c) => {
   return c.json(ok(result));
 });
 
-// POST /fetch-articles — fetch Medium + iThome + Google Cases articles
+// POST /fetch-articles — fetch Medium + iThome + Google Cases articles (parallel)
 pipelineRoute.post("/fetch-articles", async (c) => {
-  const mediumResult = await execPython("01b_fetch_medium.py", []);
-  const ithelpResult = await execPython("01c_fetch_ithelp.py", []);
-  const googleResult = await execPython("01d_fetch_google_cases.py", []);
+  const [mediumResult, ithelpResult, googleResult] = await Promise.all([
+    execPython("01b_fetch_medium.py", []),
+    execPython("01c_fetch_ithelp.py", []),
+    execPython("01d_fetch_google_cases.py", []),
+  ]);
 
   const allSuccess =
     mediumResult.success && ithelpResult.success && googleResult.success;

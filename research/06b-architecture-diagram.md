@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v2.7，2026-03-05）
+## 架構圖（最新：v2.8，2026-03-05）
 
 ```mermaid
 flowchart TD
@@ -24,7 +24,7 @@ flowchart TD
         S1M[Step 1b: fetch_medium.py<br/>RSS → Markdown] --> MD_MED[raw_data/medium_markdown/*.md]
         S1I[Step 1c: fetch_ithelp.py<br/>HTML → Markdown] --> MD_ITH[raw_data/ithelp_markdown/*.md]
         S1G[Step 1d: fetch_google_cases.py<br/>HTML → Markdown] --> MD_GC[raw_data/google_cases_markdown/*.md]
-        MD --> S2[Step 2: extract_qa.py<br/>gpt-5.2 萃取 Q&A<br/>+ Attribution Tag 補充<br/>DIR_COLLECTION_MAP 自動偵測來源]
+        MD --> S2[Step 2: extract_qa.py<br/>gpt-5.2 萃取 Q&A<br/>+ Attribution Tag 補充<br/>DIR_COLLECTION_MAP 自動偵測來源<br/>+ extraction_model / extraction_timestamp]
         MD_MED --> S2
         MD_ITH --> S2
         MD_GC --> S2
@@ -87,11 +87,11 @@ flowchart TD
         AL2 --> ATQ
     end
 
-    subgraph CacheLayer["Layer 1 Content-Addressed Cache v1.6"]
-        S2 <-->|extraction cache| PC["pipeline_cache.py<br/>output/.cache/{ns}/{h[:2]}/{h}.json<br/>namespace: extraction/embedding/classify/merge/report"]
-        S3 <-->|embed/classify/merge cache| PC
+    subgraph CacheLayer["Layer 1 Content-Addressed Cache v2.8（Model-Aware）"]
+        S2 <-->|"extraction cache<br/>key=SHA256(model::content)"| PC["pipeline_cache.py<br/>output/.cache/{ns}/{h[:2]}/{h}.json<br/>namespace: extraction/embedding/classify/merge/report<br/>model-aware: key=SHA256(model::content)"]
+        S3 <-->|"embed/classify/merge cache<br/>key=SHA256(model::content)"| PC
         S4 <-->|report cache| PC
-        S3 -->|record_artifact| PV["pipeline_version.py v1.19<br/>STEP_NAMES + resolve_step()<br/>label_version() + register_existing_file()<br/>output/.versions/registry.json"]
+        S3 -->|"record_artifact<br/>metadata.extraction_model"| PV["pipeline_version.py v1.19<br/>STEP_NAMES + resolve_step()<br/>label_version() + register_existing_file()<br/>output/.versions/registry.json"]
         S4 -->|record_artifact| PV
     end
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import sys
 import time
@@ -25,6 +26,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 try:
     import config
@@ -70,18 +73,18 @@ def _fetch_series_article_urls(series_url: str) -> list[dict]:
 
     Returns list of dicts with: article_id, url, day
     """
-    articles = []
+    articles: list[dict[str, str | int]] = []
     seen_ids: set[str] = set()
 
     for page in range(1, 5):  # up to 4 pages (30 articles / ~10 per page)
         url = f"{series_url}?page={page}"
-        print(f"  擷取系列頁面: {url}")
+        logger.info("擷取系列頁面: %s", url)
 
         try:
             resp = httpx.get(url, follow_redirects=True, timeout=30)
             resp.raise_for_status()
         except httpx.HTTPError as e:
-            print(f"  ⚠️  頁面 {page} 擷取失敗: {e}")
+            logger.warning("頁面 %d 擷取失敗: %s", page, e)
             break
 
         matches = ARTICLE_URL_PATTERN.findall(resp.text)
@@ -101,7 +104,7 @@ def _fetch_series_article_urls(series_url: str) -> list[dict]:
 
         time.sleep(1)  # rate limiting between pages
 
-    print(f"  找到 {len(articles)} 篇文章")
+    logger.info("找到 %d 篇文章", len(articles))
     return articles
 
 
@@ -168,8 +171,11 @@ def fetch_ithelp_articles(
 
         try:
             article = _fetch_article_content(meta["url"])
+        except httpx.HTTPError as e:
+            logger.warning("Day %d 擷取失敗: %s", meta["day"], e)
+            continue
         except Exception as e:
-            print(f"  ⚠️  Day {meta['day']} 擷取失敗: {e}")
+            logger.error("Day %d 意外錯誤", meta["day"], exc_info=True)
             continue
 
         # Convert HTML to Markdown
@@ -211,7 +217,7 @@ def fetch_ithelp_articles(
         index.append(index_entry)
         existing_ids.add(article_id)
 
-        print(f"  ✅ Day {meta['day']:02d}: {article['title'][:50]}")
+        logger.info("Day %02d: %s", meta["day"], article["title"][:50])
         fetched += 1
 
         # Rate limiting: 1-2 second delay
@@ -229,20 +235,15 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="強制重新擷取所有文章")
     args = parser.parse_args()
 
-    print("=" * 60)
-    print("📰 步驟 1c：擷取 iThome 鐵人賽文章")
-    print(f"   系列 URL: {config.ITHELP_SERIES_URL}")
-    print("=" * 60)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logger.info("步驟 1c：擷取 iThome 鐵人賽文章")
 
     result = fetch_ithelp_articles(force=args.force)
 
-    print(f"\n{'=' * 60}")
-    print(f"✅ 完成！")
-    print(f"   新擷取: {result['fetched']} 篇")
-    print(f"   跳過（已存在）: {result['skipped']} 篇")
-    print(f"   索引總計: {result['total']} 篇")
-    print(f"   輸出目錄: {config.RAW_ITHELP_MD_DIR}")
-    print(f"{'=' * 60}")
+    logger.info(
+        "完成 — 新擷取: %d, 跳過: %d, 索引總計: %d",
+        result["fetched"], result["skipped"], result["total"],
+    )
 
 
 if __name__ == "__main__":

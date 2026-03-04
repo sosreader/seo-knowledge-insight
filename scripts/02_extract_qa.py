@@ -20,6 +20,7 @@ import json
 import re
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 try:
@@ -64,8 +65,6 @@ def _detect_source_metadata(md_path: Path) -> dict:
 @observe(name="process_single_meeting")
 def process_single_meeting(md_path: Path) -> dict:
     """處理單份會議紀錄或文章（LLM 呼叫有 content-addressed cache 保護）"""
-    import copy
-
     content = md_path.read_text(encoding="utf-8")
     filename = md_path.stem
 
@@ -91,20 +90,26 @@ def process_single_meeting(md_path: Path) -> dict:
     # ── Layer 1 cache check ──────────────────────────────────
     # Key = markdown content（title/date 均由 content 衍生，deterministic）
     # Value = extract_qa_from_text() 的 LLM 輸出（不含 source 欄位）
-    cached = cache_get("extraction", content)
+    cached = cache_get("extraction", content, model=config.OPENAI_MODEL)
     if cached is not None:
         qa_count = len(cached.get("qa_pairs", []))
         print(f"     [cache hit] {qa_count} Q&A")
-        # Deep-copy 避免 cache 被後續 mutation 污染
-        meeting_result = copy.deepcopy(cached)
-        for qa in meeting_result.get("qa_pairs", []):
-            qa["source_file"] = md_path.name
-            qa["source_title"] = title
-            qa["source_date"] = date
-            qa["source_type"] = source_meta["source_type"]
-            qa["source_collection"] = source_meta["source_collection"]
-            qa["source_url"] = source_meta["source_url"]
-        return meeting_result
+        # Immutable enrichment — no mutation of cached data
+        cache_enriched = [
+            {
+                **qa,
+                "source_file": md_path.name,
+                "source_title": title,
+                "source_date": date,
+                "source_type": source_meta["source_type"],
+                "source_collection": source_meta["source_collection"],
+                "source_url": source_meta["source_url"],
+                "extraction_model": config.OPENAI_MODEL,
+                "extraction_timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            for qa in cached.get("qa_pairs", [])
+        ]
+        return {**cached, "qa_pairs": cache_enriched}
 
     # ── Cache miss：呼叫 OpenAI ──────────────────────────────
     # 如果內容太長，分段處理
@@ -127,18 +132,27 @@ def process_single_meeting(md_path: Path) -> dict:
         meeting_result = extract_qa_from_text(content, title, date)
 
     # ── 寫入 cache（source 欄位不在 cache 中，以保持 content-addressable）
-    cache_set("extraction", content, meeting_result)
+    cache_set("extraction", content, meeting_result, model=config.OPENAI_MODEL)
 
-    # ── 為每個 Q&A 加上來源資訊 ──────────────────────────────
-    for qa in meeting_result.get("qa_pairs", []):
-        qa["source_file"] = md_path.name
-        qa["source_title"] = title
-        qa["source_date"] = date
-        qa["source_type"] = source_meta["source_type"]
-        qa["source_collection"] = source_meta["source_collection"]
-        qa["source_url"] = source_meta["source_url"]
+    # ── 為每個 Q&A 加上來源資訊 + model provenance（immutable）────
+    extraction_ts = datetime.now(timezone.utc).isoformat()
+    enriched_pairs = [
+        {
+            **qa,
+            "source_file": md_path.name,
+            "source_title": title,
+            "source_date": date,
+            "source_type": source_meta["source_type"],
+            "source_collection": source_meta["source_collection"],
+            "source_url": source_meta["source_url"],
+            "extraction_model": config.OPENAI_MODEL,
+            "extraction_timestamp": extraction_ts,
+        }
+        for qa in meeting_result.get("qa_pairs", [])
+    ]
+    meeting_result = {**meeting_result, "qa_pairs": enriched_pairs}
 
-    qa_count = len(meeting_result.get("qa_pairs", []))
+    qa_count = len(enriched_pairs)
     print(f"     ✅ 萃取 {qa_count} 個 Q&A")
 
     return meeting_result
@@ -286,9 +300,10 @@ def main(args: argparse.Namespace) -> None:
             metadata={
                 "qa_count": merged["total_qa_count"],
                 "meetings_processed": merged["meetings_processed"],
+                "extraction_model": config.OPENAI_MODEL,
             },
         )
-        print(f"   🔖 版本記録: {version_entry['version_id']}")
+        print(f"   版本記録: {version_entry['version_id']}")
         return
 
     total_files = len(md_files)
@@ -340,9 +355,10 @@ def main(args: argparse.Namespace) -> None:
         metadata={
             "qa_count": merged_output["total_qa_count"],
             "meetings_processed": merged_output["meetings_processed"],
+            "extraction_model": config.OPENAI_MODEL,
         },
     )
-    print(f"\n🔖 版本記録: {version_entry['version_id']}")
+    print(f"\n版本記録: {version_entry['version_id']}")
 
     print("\n" + "=" * 60)
     print("✅ 步驟 2 完成！")

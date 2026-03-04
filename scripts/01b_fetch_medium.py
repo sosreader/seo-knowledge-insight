@@ -18,13 +18,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
+
+logger = logging.getLogger(__name__)
+
+# URL allowlist for SSRF prevention
+_ALLOWED_MEDIUM_HOSTS = frozenset({"medium.com", "genehong.medium.com"})
+
+
+def _validate_medium_url(url: str) -> None:
+    """Validate URL against the Medium domain allowlist."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
+    host = (parsed.hostname or "").lower()
+    if not any(host == h or host.endswith("." + h) for h in _ALLOWED_MEDIUM_HOSTS):
+        raise ValueError(f"URL domain not in allowlist: {host!r}")
 
 try:
     import config
@@ -64,11 +81,12 @@ def _parse_rss_feed(feed_url: str) -> list[dict]:
     """
     import feedparser
 
-    print(f"  擷取 RSS feed: {feed_url}")
+    logger.info("擷取 RSS feed: %s", feed_url)
     feed = feedparser.parse(feed_url)
 
     if feed.bozo and not feed.entries:
-        raise ValueError(f"RSS 解析失敗: {feed.bozo_exception}")
+        exc = getattr(feed, "bozo_exception", None)
+        raise ValueError(f"RSS 解析失敗: {exc or 'unknown error'}")
 
     articles = []
     for entry in feed.entries:
@@ -93,7 +111,7 @@ def _parse_rss_feed(feed_url: str) -> list[dict]:
             "html_content": html_content,
         })
 
-    print(f"  RSS 回傳 {len(articles)} 篇文章")
+    logger.info("RSS 回傳 %d 篇文章", len(articles))
     return articles
 
 
@@ -102,7 +120,8 @@ def _fetch_single_url(url: str) -> dict:
 
     Returns dict with: guid, title, url, published, html_content
     """
-    print(f"  擷取單篇文章: {url}")
+    _validate_medium_url(url)
+    logger.info("擷取單篇文章: %s", url)
     resp = httpx.get(url, follow_redirects=True, timeout=30)
     resp.raise_for_status()
     html = resp.text
@@ -166,8 +185,10 @@ def fetch_medium_articles(
                     article = _fetch_single_url(url)
                     articles.append(article)
                     time.sleep(1)  # rate limiting
+                except (httpx.HTTPError, ValueError) as e:
+                    logger.warning("擷取失敗: %s — %s", url, e)
                 except Exception as e:
-                    print(f"  ⚠️  擷取失敗: {url} — {e}")
+                    logger.error("擷取意外錯誤: %s", url, exc_info=True)
 
     fetched = 0
     skipped = 0
@@ -218,7 +239,7 @@ def fetch_medium_articles(
         index.append(index_entry)
         existing_guids.add(guid)
 
-        print(f"  ✅ {article['title']}")
+        logger.info("已擷取: %s", article["title"])
         fetched += 1
 
     _save_index(index)
@@ -231,19 +252,15 @@ def main() -> None:
     parser.add_argument("--url", nargs="*", default=[], help="手動加入的文章 URL")
     args = parser.parse_args()
 
-    print("=" * 60)
-    print("📰 步驟 1b：擷取 Medium 文章")
-    print("=" * 60)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logger.info("步驟 1b：擷取 Medium 文章")
 
     result = fetch_medium_articles(extra_urls=args.url or None)
 
-    print(f"\n{'=' * 60}")
-    print(f"✅ 完成！")
-    print(f"   新擷取: {result['fetched']} 篇")
-    print(f"   跳過（已存在）: {result['skipped']} 篇")
-    print(f"   索引總計: {result['total']} 篇")
-    print(f"   輸出目錄: {config.RAW_MEDIUM_MD_DIR}")
-    print(f"{'=' * 60}")
+    logger.info(
+        "完成 — 新擷取: %d, 跳過: %d, 索引總計: %d",
+        result["fetched"], result["skipped"], result["total"],
+    )
 
 
 if __name__ == "__main__":

@@ -852,3 +852,76 @@ Agent 步驟：
 
 詳見完整計畫：`plans/in-progress/multi-layer-context.md`。
 
+---
+
+## Model Provenance 與跨模型 A/B 評估（v2.8，2026-03-05）
+
+### 問題：Eval 無法追蹤「哪個模型萃取的」
+
+v2.7 以前，QA Item 不記錄是由哪個 LLM 萃取。當切換模型（如 gpt-5 → gpt-5.2）後：
+
+1. **Cache 污染**：舊模型的快取結果被新模型命中，eval 分數失真
+2. **無法對比**：同一份文件用不同模型萃取的品質無法量化比較
+3. **回溯困難**：發現品質問題時，無法確定是哪個模型版本造成的
+
+### 解決方案：三層 Model Provenance
+
+**Layer 1: QA Item Metadata**
+
+每筆 QA 記錄萃取模型與時間戳：
+
+```python
+qa_item = {
+    "question": "...",
+    "answer": "...",
+    "extraction_model": "gpt-5.2",          # 萃取模型
+    "extraction_timestamp": "2026-03-05T...", # UTC 時間戳
+}
+```
+
+**Layer 2: Model-Aware Cache**
+
+快取 key 加入模型維度，防止跨模型污染：
+
+```
+cache_key = SHA256(f"{model}::{content}")
+```
+
+同一篇文章用 gpt-5 和 gpt-5.2 萃取會產生不同快取項。
+
+**Layer 3: Eval Schema 擴展**
+
+Eval 結果記錄完整模型資訊：
+
+```json
+{
+    "extraction_model": "gpt-5.2",
+    "embedding_model": "text-embedding-3-small",
+    "classify_model": "gpt-5-mini"
+}
+```
+
+### Cross-Model A/B 評估工作流
+
+新增 `/evaluate-model-ab` 命令（`.claude/commands/evaluate-model-ab.md`）：
+
+```
+Step 1: 抽樣 N 篇 Markdown（qa_tools.py eval-sample）
+Step 2: Model A（OpenAI）萃取 Q&A
+Step 3: Model B（Claude Code）萃取 Q&A
+Step 4: Claude Code 作為 Judge，4 維度評分
+Step 5: 對比報告（per-file + aggregate）
+Step 6: 儲存至 output/evals/ab_<date>.json
+```
+
+評分維度同標準 LLM-as-Judge：Relevance / Accuracy / Completeness / Granularity（1-5 分）。
+
+### 設計決策
+
+| 決策 | 選擇 | 理由 |
+|------|------|------|
+| Model 欄位位置 | QA item level | 每筆可獨立追蹤，非檔案級 |
+| Cache key 格式 | `SHA256(model::content)` | `::` 分隔符不常出現在模型名或內容中 |
+| Eval model 欄位 | Optional | 向下相容，舊 eval 不需遷移 |
+| A/B Judge | Claude Code（非 OpenAI） | 避免 Judge 偏向自家模型輸出 |
+

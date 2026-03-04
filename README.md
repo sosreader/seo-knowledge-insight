@@ -71,24 +71,65 @@
 
 依功能對照三種使用方式：CLI 腳本、Claude Code 指令、REST API。
 
+### Pipeline 建構
+
 | 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
 | --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| Step 1 — Notion 擷取        | `make fetch-notion`                               | 無獨立指令 — 屬 Notion API 呼叫，非 LLM 任務，由 `/pipeline-local` 整合執行 | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
-| Step 2 — Q&A 萃取           | `make extract-qa`                                 | `/extract-qa`（不需要 OpenAI）                      | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
-| Step 3 — 去重 + 分類        | `make dedupe-classify`                            | `/dedupe-classify`（不需要 OpenAI）                 | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
-| Step 4 — 週報生成           | `make generate-report`                            | `/generate-report <URL>`（不需要 OpenAI）           | `POST /api/v1/reports/generate`（sync，120s timeout） |
-| Step 5 — 品質評估           | `make evaluate-qa`                                | `/evaluate-qa-local`（不需要 OpenAI — Claude Code 作為 Judge）| 無對應 — 屬長時間離線作業，未實作非同步 job |
-| Step 5 — Provider 評估      | 無獨立指令 — 需準備 `source_data.md` 與 `provider_*.md`（不走 pipeline） | `/evaluate-provider <目錄>`（不需要 OpenAI — Claude Code 作為 Judge） | 無對應 — 屬長時間離線作業，未實作非同步 job |
-| Steps 1–3 — 知識庫建構      | `make pipeline`                                   | `/pipeline-local`（不需要 OpenAI，含 Step 4）       | 無對應 — 屬長時間離線作業，未實作非同步 job |
-| Steps 1–5 — 完整 Pipeline   | `python scripts/run_pipeline.py`                  | `/run-pipeline`（需要 OpenAI）                      | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| Step 1a — Notion 擷取       | `make fetch-notion`                               | 由 `/pipeline-local` 整合執行                       | `POST /api/v1/pipeline/fetch`               |
+| Step 1b-d — 文章擷取        | `make fetch-articles`                             | 由 `/pipeline-local` 整合執行                       | `POST /api/v1/pipeline/fetch-articles`      |
+| Step 2 — Q&A 萃取           | `make extract-qa`                                 | `/extract-qa`（不需要 OpenAI）                      | `POST /api/v1/pipeline/extract-qa`          |
+| Step 3 — 去重 + 分類        | `make dedupe-classify`                            | `/dedupe-classify`（不需要 OpenAI）                 | `POST /api/v1/pipeline/dedupe-classify`     |
+| Step 4 — 週報生成           | `make generate-report`                            | `/generate-report <URL>`（不需要 OpenAI）           | `POST /api/v1/reports/generate`             |
+| Step 5 — 品質評估           | `make evaluate-qa`                                | `/evaluate-qa-local`（不需要 OpenAI）               | 無對應 — 屬長時間離線作業                    |
+| Step 5 — Provider 評估      | 無獨立指令                                        | `/evaluate-provider <目錄>`（不需要 OpenAI）        | 無對應 — 屬長時間離線作業                    |
+| Steps 1–4 — 知識庫建構      | `make pipeline`                                   | `/pipeline-local`（不需要 OpenAI）                  | 無對應 — 請依序呼叫上方個別端點               |
+| Steps 1–5 — 完整 Pipeline   | `python scripts/run_pipeline.py`                  | `/run-pipeline`（需要 OpenAI）                      | 無對應 — 請依序呼叫上方個別端點               |
+
+### Pipeline 監控
+
+| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
+| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
+| Pipeline 狀態               | `make status`                                     | 無獨立指令                                          | `GET /api/v1/pipeline/status`               |
+| 待處理列表                  | `make list-unprocessed`                           | 無獨立指令                                          | `GET /api/v1/pipeline/unprocessed`          |
+| 會議列表                    | 無獨立指令                                        | 無獨立指令                                          | `GET /api/v1/pipeline/meetings`             |
+| 會議預覽                    | 無獨立指令 — 直接讀 `raw_data/markdown/*.md`      | 無獨立指令 — 直接讀檔案                              | `GET /api/v1/pipeline/meetings/{id}/preview`|
+| Fetch 日誌                  | 無獨立指令 — 讀 `output/fetch_logs/`              | 無獨立指令 — 直接讀檔案                              | `GET /api/v1/pipeline/logs`                 |
+| 指標解析                    | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/pipeline/metrics`             |
+
+### 搜尋與問答
+
+| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
+| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
 | 知識庫搜尋                  | `python scripts/qa_tools.py search --query "..."` | `/search <問題>`（不需要 OpenAI）                   | `POST /api/v1/search`                       |
-| RAG 問答                    | 無對應 — 對話需維護多輪歷史狀態，CLI 單次呼叫不適合 | `/chat`（不需要 OpenAI）                           | `POST /api/v1/chat`                         |
-| Q&A 列表查詢                | 無獨立指令 — 可直接讀 `output/qa_final.json`      | 無對應 — 屬結構化欄位過濾，REST 更適合              | `GET /api/v1/qa`                            |
-| 單筆 Q&A 詳情               | 無獨立指令 — 可直接讀 `output/qa_final.json`      | 無對應 — 屬結構化 ID 查詢，REST 更適合              | `GET /api/v1/qa/{id}`（id: 16-char hex）    |
-| 所有分類                    | 無獨立指令 — 可直接讀 `output/qa_final.json`      | 無對應 — 屬結構化聚合查詢，REST 更適合              | `GET /api/v1/qa/categories`                 |
-| 週報列表                    | 無獨立指令 — 掃描 `output/report_*.md`           | 無對應 — 屬長時間離線作業，REST 更適合              | `GET /api/v1/reports`                       |
-| 單篇週報詳情                | 無獨立指令 — 讀取特定 `output/report_YYYYMMDD.md` | 無對應 — 屬結構化查詢，REST 更適合                 | `GET /api/v1/reports/{date}`（date: YYYYMMDD） |
-| 健康檢查                    | 無對應 — 服務監控端點，本地 pipeline 不適用       | 無對應 — 服務監控端點，本地 pipeline 不適用         | `GET /health`                               |
+| RAG 問答                    | 無對應 — 需維護多輪歷史狀態                       | `/chat`（不需要 OpenAI）                            | `POST /api/v1/chat`                         |
+| 對話管理（CRUD）            | 無對應                                            | 無對應                                              | `GET/POST/DELETE /api/v1/sessions/*`        |
+| 使用者回饋                  | 無對應                                            | 無對應                                              | `POST /api/v1/feedback`                     |
+
+### 資料查詢
+
+| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
+| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
+| Q&A 列表查詢                | 無獨立指令 — 讀 `output/qa_final.json`            | 無對應 — 屬結構化過濾，REST 更適合                   | `GET /api/v1/qa`                            |
+| 單筆 Q&A 詳情               | 無獨立指令 — 讀 `output/qa_final.json`            | 無對應 — 屬 ID 查詢，REST 更適合                     | `GET /api/v1/qa/{id}`（hex 或 seq）         |
+| 所有分類                    | 無獨立指令 — 讀 `output/qa_final.json`            | 無對應 — 屬聚合查詢，REST 更適合                     | `GET /api/v1/qa/categories`                 |
+| 資料集列表                  | 無獨立指令                                        | 無對應                                              | `GET /api/v1/qa/collections`                |
+| 週報列表                    | 無獨立指令 — 掃描 `output/report_*.md`            | 無對應                                              | `GET /api/v1/reports`                       |
+| 單篇週報詳情                | 無獨立指令 — 讀 `output/report_YYYYMMDD.md`       | 無對應                                              | `GET /api/v1/reports/{date}`                |
+
+### 評估 API
+
+| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
+| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
+| 抽樣 Q&A                    | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/eval/sample`                  |
+| Retrieval 指標               | `make evaluate-qa`（含 `--eval-retrieval`）        | `/evaluate-qa-local`（含 Retrieval）                 | `POST /api/v1/eval/retrieval`               |
+| 跨 Provider 比較             | 無獨立指令                                        | `/evaluate-provider`                                 | `GET /api/v1/eval/compare`                  |
+| 儲存評估結果                | 無獨立指令 — 直接寫 `output/eval_report.json`      | 無獨立指令                                          | `POST /api/v1/eval/save`                    |
+
+### 系統
+
+| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
+| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
+| 健康檢查                    | 無對應                                            | 無對應                                              | `GET /health`                               |
 
 **REST API** — 需要先啟動 `cd api && pnpm dev`（port 8002），並在 header 帶 `X-API-Key`（生產環境）。
 

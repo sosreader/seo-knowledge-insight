@@ -29,8 +29,12 @@ export const evalSaveRequestSchema = z.object({
     .refine((v) => !v.includes(".."), {
       message: "input must not contain path traversal",
     }),
-  extraction_engine: z.enum(["claude-code", "gpt-5", "gpt-5-mini"]).default("claude-code"),
+  extraction_engine: z.enum(["claude-code", "gpt-5", "gpt-5-mini", "gpt-5.2"]).default("claude-code"),
   update_baseline: z.boolean().default(false),
+  // Model provenance — optional fields for cross-model eval tracking
+  extraction_model: z.string().max(100).optional(),
+  embedding_model: z.string().max(100).optional(),
+  classify_model: z.string().max(100).optional(),
 });
 
 export type EvalSampleRequest = z.infer<typeof evalSampleRequestSchema>;

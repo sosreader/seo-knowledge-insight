@@ -12,7 +12,7 @@ import random
 import re
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # 禁止 import config：避免 _require_env("OPENAI_API_KEY") 在啟動時觸發
@@ -760,6 +760,9 @@ def cmd_eval_save(args: argparse.Namespace) -> None:
     raw_engine = getattr(args, "extraction_engine", "claude-code")
     engine = _SAFE_ENGINE_RE.sub("_", raw_engine)
     update_baseline = getattr(args, "update_baseline", False)
+    extraction_model = getattr(args, "extraction_model", None)
+    embedding_model = getattr(args, "embedding_model", None)
+    classify_model = getattr(args, "classify_model", None)
 
     if not input_path.exists():
         print(f"輸入檔案不存在：{input_path}", file=sys.stderr)
@@ -778,13 +781,21 @@ def cmd_eval_save(args: argparse.Namespace) -> None:
             print(f"  - {err}", file=sys.stderr)
         raise CLIError(1)
 
-    # 補充 metadata（immutable）
-    today = datetime.now().strftime("%Y-%m-%d")
+    # 補充 metadata（immutable — model provenance）
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    model_meta: dict[str, str] = {}
+    if extraction_model:
+        model_meta["extraction_model"] = extraction_model
+    if embedding_model:
+        model_meta["embedding_model"] = embedding_model
+    if classify_model:
+        model_meta["classify_model"] = classify_model
     data = {
         **data,
         "provider": "claude-code",
         "extraction_engine": engine,
         "date": today,
+        **model_meta,
     }
 
     # 寫入版本化 JSON（路徑驗證防 traversal）
@@ -882,7 +893,7 @@ def cmd_eval_compare(_args: argparse.Namespace) -> None:
         return sum(vals) / len(vals) if vals else 0.0
 
     # 表頭
-    header = f"{'版本':<30s} {'provider':<10s} {'引擎':<14s} {'avg':>5s} {'rel':>5s} {'acc':>5s} {'comp':>5s} {'gran':>5s} {'KW%':>6s}"
+    header = f"{'版本':<30s} {'provider':<10s} {'ext_model':<18s} {'avg':>5s} {'rel':>5s} {'acc':>5s} {'comp':>5s} {'gran':>5s} {'KW%':>6s}"
     print("Eval 比較報告\n")
     print(header)
     print("─" * len(header))
@@ -892,12 +903,12 @@ def cmd_eval_compare(_args: argparse.Namespace) -> None:
         bs = baseline.get("generation", baseline.get("scores", {}))
         br = baseline.get("retrieval", {})
         provider = baseline.get("provider", baseline.get("extraction_engine", "openai"))
-        model = baseline.get("model", "")
+        ext_model = baseline.get("extraction_model", baseline.get("model", ""))
         avg = _avg(bs)
         kw = br.get("kw_hit_rate", float("nan"))
         kw_str = f"{kw:.0%}" if isinstance(kw, float) else "N/A"
         print(
-            f"{'* BASELINE (' + baseline.get('date', '') + ')':<30s} {provider:<10s} {model:<14s}"
+            f"{'* BASELINE (' + baseline.get('date', '') + ')':<30s} {provider:<10s} {ext_model:<18s}"
             f" {avg:>5.2f} {bs.get('relevance', 0):>5.2f} {bs.get('accuracy', 0):>5.2f}"
             f" {bs.get('completeness', 0):>5.2f} {bs.get('granularity', 0):>5.2f} {kw_str:>6s}"
         )
@@ -909,10 +920,10 @@ def cmd_eval_compare(_args: argparse.Namespace) -> None:
         kw = retrieval.get("kw_hit_rate", float("nan"))
         kw_str = f"{kw:.0%}" if isinstance(kw, float) else "N/A"
         provider = run.get("provider", run.get("extraction_engine", "openai"))
-        model = run.get("model", "")
+        ext_model = run.get("extraction_model", run.get("model", ""))
         label = run.get("_filename", "?")[:30]
         print(
-            f"  {label:<28s} {provider:<10s} {model:<14s}"
+            f"  {label:<28s} {provider:<10s} {ext_model:<18s}"
             f" {avg:>5.2f} {scores.get('relevance', 0):>5.2f} {scores.get('accuracy', 0):>5.2f}"
             f" {scores.get('completeness', 0):>5.2f} {scores.get('granularity', 0):>5.2f} {kw_str:>6s}"
         )
@@ -983,6 +994,9 @@ def main() -> None:
     p_save.add_argument("--input", required=True, help="評估結果 JSON 路徑")
     p_save.add_argument("--extraction-engine", default="claude-code", help="萃取引擎（預設 claude-code）")
     p_save.add_argument("--update-baseline", action="store_true", help="若超過基準線 +0.05 則更新")
+    p_save.add_argument("--extraction-model", default=None, help="Model used for QA extraction")
+    p_save.add_argument("--embedding-model", default=None, help="Model used for embeddings")
+    p_save.add_argument("--classify-model", default=None, help="Model used for classification")
 
     args = parser.parse_args()
 

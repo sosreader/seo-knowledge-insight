@@ -879,6 +879,84 @@ qa_final.json → enrich_qa.py → qa_enriched.json
 
 ---
 
+## v2.8 — ECC 全面安全審查修復與 Model Provenance Pipeline（2026-03-05）
+
+### 核心新增
+
+**Part A: 安全性與代碼品質加固**
+
+所有層級執行 ECC（everything-claude-code）全面審查與修復：
+
+1. **SSRF 防護加強** — `01b_fetch_medium.py`
+   - 新增 `_validate_medium_url()` 函數
+   - Domain allowlist：medium.com / genehong.medium.com
+   - 所有抓取均通過此驗證，防止開放重定向與 SSRF 攻擊
+
+2. **Logging 統一化** — 3 個 Fetcher
+   - `01b_fetch_medium.py`、`01c_fetch_ithelp.py`、`01d_fetch_google_cases.py` 從 `print()` 改為 `logging` module
+   - 支援審計追蹤與調試等級控制
+
+3. **Exception 分級** — 所有 Fetcher
+   - HTTPError（網路問題）/ ValueError（資料驗證） → logger.warning
+   - Exception（未預期） → logger.exception
+   - 提升錯誤診斷品質與故障復原
+
+4. **不可變性強化** — Pipeline 核心腳本
+   - `02_extract_qa.py`：dict unpacking 取代 in-place mutation
+   - `03_dedupe_classify.py`：dict 複製而非直接修改
+
+5. **Schema 驗證強化** — TypeScript API
+   - `pipeline.ts` 新增 SAFE_MD_FILENAME regex：`^[a-zA-Z0-9._\u4e00-\u9fff-]+\.md$`（含中文字元）
+   - `metricsRequestSchema` 新增 URL format + regex validation
+   - `readMeetingsIndex()` 改用 Zod schema 驗證取代 bare type assertion
+
+6. **Path Traversal 防護** — Eval 路由
+   - `eval.ts` POST /save handler 用 `resolve() + startsWith()` 替代正則表達式
+   - 防止「..」轉義攻擊（e.g., `..%2F..` 超出 output/evals/ 目錄）
+
+7. **XSS 防護** — HTML 轉換器
+   - `html_to_markdown.py` strip dangerous HTML tags（script/style/iframe）與 attributes（onclick/onerror）
+   - 確保擷取文章時無惡意程式碼注入
+
+8. **文件鎖定機制** — Execution Log
+   - `execution_log.py` 新增 `fcntl.flock()`（UNIX） + symlink guard
+   - 防止 Claude Code 並行執行時 log 檔損毀
+
+9. **並行化優化** — Pipeline API
+   - `pipeline.ts` POST /fetch-articles 改為 `Promise.all([fetch_medium, fetch_ithelp, fetch_google])`
+   - 3 個 fetcher 並行執行，預期總時間減半
+
+10. **Observability 修復** — 防止前向引用錯誤
+    - `observability.py` contextlib import 改為全局，防止動態載入時 NameError
+
+**Part B: Model Provenance Pipeline（模型追蹤層）**
+
+新增跨模型品質對比的基礎架構：
+
+1. **QA Item 元數據擴展**
+   - `extraction_model`：萃取使用的模型名稱（e.g., "gpt-5.2"）
+   - `extraction_timestamp`：萃取時間戳，便於時序追蹤
+
+2. **Cache Key 模型感知**
+   - `pipeline_cache.py` cache key = `SHA256(model::content)`
+   - 同一內容用不同模型處理會產生不同快取項，避免迴避
+
+3. **Eval Schema 擴展**
+   - Python + TypeScript eval 結構化定義新增 optional `model` 欄位
+   - 支援評估特定模型的輸出品質
+
+4. **Cross-Model A/B 評估命令**
+   - 新增 `.claude/commands/evaluate-model-ab.md`
+   - 提供標準化工作流：抽樣 → 評估 → 對比 → 報告
+
+**預期效益**：
+- 安全性：覆蓋 OWASP Top 10（SSRF/Path Traversal/XSS）中的 3 項關鍵風險
+- 代碼品質：logging 統一、exception 分級、不可變性強化
+- Model Traceability：未來可溯源任一答案由哪個模型生成、何時生成
+- A/B 測試：支援模型升級前後的品質量化對比
+
+---
+
 ## v1.19 — Observability 全面整合與 CLI Laminar 追蹤（2026-03-02）
 
 ### 核心新增

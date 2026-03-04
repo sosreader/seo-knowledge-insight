@@ -20,6 +20,7 @@ Usage in a pipeline script:
 """
 from __future__ import annotations
 
+import contextlib
 import inspect
 import logging
 import os
@@ -115,13 +116,11 @@ def init_laminar() -> None:
 
 def start_cli_span(
     name: str, input_data: str = ""
-) -> "contextlib.AbstractContextManager[object]":
+) -> contextlib.AbstractContextManager[object]:
     """Context manager for CLI command spans (TOOL type).
 
     Returns Laminar.start_as_current_span if available, else a no-op context manager.
     """
-    import contextlib
-
     if not _initialized:
         return contextlib.nullcontext()
     try:

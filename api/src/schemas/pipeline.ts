@@ -9,9 +9,14 @@ export const fetchRequestSchema = z.object({
     .optional(),
 });
 
+const SAFE_MD_FILENAME = /^[a-zA-Z0-9._\u4e00-\u9fff-]+\.md$/;
+
 export const extractQARequestSchema = z.object({
   limit: z.number().int().positive().optional(),
-  file: z.string().optional(),
+  file: z
+    .string()
+    .regex(SAFE_MD_FILENAME, "file must be a .md filename (no path separators)")
+    .optional(),
 });
 
 export const dedupeClassifyRequestSchema = z.object({
@@ -21,8 +26,8 @@ export const dedupeClassifyRequestSchema = z.object({
 });
 
 export const metricsRequestSchema = z.object({
-  source: z.string().min(1).max(500),
-  tab: z.string().min(1).max(100).default("vocus"),
+  source: z.string().url("source must be a valid URL").max(500),
+  tab: z.string().min(1).max(50).regex(/^[a-zA-Z0-9_-]+$/, "tab must be alphanumeric").default("vocus"),
 });
 
 // --- Response types ---
@@ -91,4 +96,44 @@ export interface PipelineRunResult {
   readonly success: boolean;
   readonly output: string;
   readonly duration_ms: number;
+}
+
+// --- Source Docs ---
+
+export interface SourceDocEntry {
+  readonly file: string;
+  readonly title: string;
+  readonly source_type: "meeting" | "article";
+  readonly source_collection: string;
+  readonly source_url: string;
+  readonly created_time: string;
+  readonly size_bytes: number;
+  readonly is_processed: boolean;
+}
+
+export const sourceDocsQuerySchema = z.object({
+  source_type: z.enum(["meeting", "article"]).optional(),
+  source_collection: z.string().max(100).optional(),
+  keyword: z.string().max(200).optional(),
+  is_processed: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional(),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export interface SourceDocsResponse {
+  readonly items: readonly SourceDocEntry[];
+  readonly total: number;
+  readonly offset: number;
+  readonly limit: number;
+}
+
+export interface SourceDocPreviewResponse {
+  readonly file: string;
+  readonly title: string;
+  readonly collection: string;
+  readonly content: string;
+  readonly size_bytes: number;
 }
