@@ -2,6 +2,10 @@
 raw_data/notion_json/
 raw_data/markdown/
 raw_data/images/
+raw_data/medium_markdown/
+raw_data/medium_articles_index.json
+raw_data/ithelp_markdown/
+raw_data/ithelp_articles_index.json
 output/
 __pycache__/
 *.pyc

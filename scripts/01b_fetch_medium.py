@@ -115,17 +115,46 @@ def _parse_rss_feed(feed_url: str) -> list[dict]:
     return articles
 
 
-def _fetch_single_url(url: str) -> dict:
+def _fetch_single_url(url: str, use_playwright: bool = False) -> dict:
     """Fetch a single Medium article by URL.
 
     Returns dict with: guid, title, url, published, html_content
     """
     _validate_medium_url(url)
     logger.info("擷取單篇文章: %s", url)
-    resp = httpx.get(url, follow_redirects=True, timeout=30)
-    resp.raise_for_status()
-    html = resp.text
 
+    if use_playwright:
+        return _fetch_single_url_playwright(url)
+
+    resp = httpx.get(url, follow_redirects=True, timeout=30)
+    if resp.status_code == 403:
+        logger.info("  httpx 403，改用 Playwright: %s", url)
+        return _fetch_single_url_playwright(url)
+    resp.raise_for_status()
+    return _parse_article_html(url, resp.text)
+
+
+def _fetch_single_url_playwright(url: str) -> dict:
+    """Fetch a single Medium article using Playwright headless browser."""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        page = browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        ).new_page()
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        # Wait for article content to load
+        try:
+            page.wait_for_selector("article", timeout=8000)
+        except Exception:
+            pass
+        html = page.content()
+        browser.close()
+    return _parse_article_html(url, html)
+
+
+def _parse_article_html(url: str, html: str) -> dict:
+    """Parse article HTML into a metadata dict."""
     # Extract title from HTML
     title_match = re.search(r'<title[^>]*>(.+?)</title>', html, re.DOTALL)
     title = title_match.group(1).strip() if title_match else "Untitled"
@@ -159,9 +188,128 @@ def _fetch_single_url(url: str) -> dict:
     }
 
 
+def _scrape_article_urls_sitemap(
+    sitemap_url: str = "https://genehong.medium.com/sitemap/sitemap.xml",
+) -> list[str]:
+    """Fetch all article URLs from Medium's sitemap.xml (fast, no JS needed)."""
+    _validate_medium_url(sitemap_url)
+    logger.info("[Sitemap] 從 sitemap 取得完整文章清單: %s", sitemap_url)
+
+    resp = httpx.get(sitemap_url, follow_redirects=True, timeout=30)
+    resp.raise_for_status()
+
+    # Extract <loc> URLs that look like articles (have a slug path)
+    _SKIP_PATHS = frozenset({"", "about", "followers", "following", "lists", "membership", "newsletter", "sitemap"})
+    urls = []
+    for loc in re.findall(r'<loc>(https://genehong\.medium\.com[^<]*)</loc>', resp.text):
+        from urllib.parse import urlparse, unquote
+        path = urlparse(loc).path.strip("/")
+        if path and path.split("/")[0] not in _SKIP_PATHS:
+            urls.append(unquote(loc))
+
+    logger.info("[Sitemap] 共找到 %d 篇文章 URL", len(urls))
+    return urls
+
+
+def _scrape_article_urls_playwright(profile_url: str = "https://genehong.medium.com/") -> list[str]:
+    """Use Playwright headless browser to scrape all article URLs from a Medium profile.
+
+    Scrolls the infinite-scroll page until no new articles load, then
+    returns a deduplicated list of article URLs.
+    """
+    try:
+        from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
+    except ImportError:
+        raise RuntimeError("playwright not installed. Run: pip install playwright && playwright install chromium")
+
+    logger.info("[Playwright] 開啟 headless browser 抓取完整文章清單: %s", profile_url)
+
+    # Non-article paths to skip
+    _SKIP_PATHS = frozenset({
+        "", "about", "followers", "following", "lists",
+        "membership", "newsletter", "sitemap",
+    })
+
+    def _is_article_url(href: str) -> bool:
+        """Return True if href looks like a genehong Medium article."""
+        try:
+            from urllib.parse import urlparse
+            p = urlparse(href)
+            if p.netloc != "genehong.medium.com":
+                return False
+            path = p.path.strip("/")
+            if not path:
+                return False
+            first_segment = path.split("/")[0]
+            if first_segment in _SKIP_PATHS:
+                return False
+            # Skip Medium-internal UI paths
+            if first_segment.startswith(("m", "_", "@")):
+                return False
+            return True
+        except Exception:
+            return False
+
+    seen_urls: set[str] = set()
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            locale="zh-TW",
+        )
+        page = context.new_page()
+        page.goto(profile_url, wait_until="domcontentloaded", timeout=30000)
+
+        # Dismiss any cookie / membership popups
+        try:
+            page.click("text=Sign in", timeout=2000)
+        except Exception:
+            pass
+
+        prev_count = -1
+        stale_rounds = 0
+
+        while stale_rounds < 3:
+            # Collect all article links currently on page
+            hrefs = page.eval_on_selector_all(
+                "a[href]",
+                "els => els.map(e => e.href)",
+            )
+            for href in hrefs:
+                # Strip query string for dedup, keep clean URL
+                clean = href.split("?")[0].rstrip("/")
+                if _is_article_url(clean):
+                    seen_urls.add(clean)
+
+            current_count = len(seen_urls)
+            logger.info("[Playwright] 目前找到 %d 篇（捲動中...）", current_count)
+
+            if current_count == prev_count:
+                stale_rounds += 1
+            else:
+                stale_rounds = 0
+            prev_count = current_count
+
+            # Scroll to bottom
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            try:
+                page.wait_for_load_state("networkidle", timeout=5000)
+            except PWTimeoutError:
+                pass
+            time.sleep(1.5)
+
+        browser.close()
+
+    results = sorted(seen_urls)
+    logger.info("[Playwright] 共找到 %d 篇文章 URL", len(results))
+    return results
+
+
 def fetch_medium_articles(
     feed_url: str = config.MEDIUM_RSS_URL,
     extra_urls: list[str] | None = None,
+    use_playwright: bool = False,
 ) -> dict:
     """Fetch Medium articles and save as Markdown.
 
@@ -174,15 +322,30 @@ def fetch_medium_articles(
     index = _load_index()
     existing_guids = {entry["guid"] for entry in index}
 
-    # Collect articles from RSS
-    articles = _parse_rss_feed(feed_url)
+    # Collect articles from RSS or full-scrape mode (sitemap → playwright fallback)
+    if use_playwright:
+        # 1. Try sitemap first (fast, no JS)
+        try:
+            all_urls = _scrape_article_urls_sitemap()
+        except Exception as e:
+            logger.warning("[Sitemap] 失敗 (%s)，改用 Playwright headless…", e)
+            all_urls = _scrape_article_urls_playwright()
+
+        # RSS still used to get pre-rendered content for recent articles
+        articles = _parse_rss_feed(feed_url)
+        rss_urls = {a["url"].split("?")[0].rstrip("/") for a in articles}
+        # Only add URLs not already covered by RSS
+        extra_only = [u for u in all_urls if u.split("?")[0].rstrip("/") not in rss_urls]
+        extra_urls = [*(extra_urls or []), *extra_only]
+    else:
+        articles = _parse_rss_feed(feed_url)
 
     # Add extra URLs (manual additions)
     if extra_urls:
         for url in extra_urls:
             if url not in existing_guids:
                 try:
-                    article = _fetch_single_url(url)
+                    article = _fetch_single_url(url, use_playwright=use_playwright)
                     articles.append(article)
                     time.sleep(1)  # rate limiting
                 except (httpx.HTTPError, ValueError) as e:
@@ -250,12 +413,13 @@ def fetch_medium_articles(
 def main() -> None:
     parser = argparse.ArgumentParser(description="從 Medium RSS 擷取 SEO 文章")
     parser.add_argument("--url", nargs="*", default=[], help="手動加入的文章 URL")
+    parser.add_argument("--playwright", action="store_true", help="用 headless browser 抓完整文章清單（突破 RSS 10 篇限制）")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     logger.info("步驟 1b：擷取 Medium 文章")
 
-    result = fetch_medium_articles(extra_urls=args.url or None)
+    result = fetch_medium_articles(extra_urls=args.url or None, use_playwright=args.playwright)
 
     logger.info(
         "完成 — 新擷取: %d, 跳過: %d, 索引總計: %d",

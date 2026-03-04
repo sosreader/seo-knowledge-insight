@@ -347,7 +347,7 @@ def find_relevant_qas_multi(
     # 嘗試載入持久化 embedding（避免重算）
     persisted_embs = _load_persisted_embeddings(len(qa_pairs))
     if persisted_embs is not None:
-        print("   ✨ 使用持久化 embedding（免重算）")
+        logger.info("   ✨ 使用持久化 embedding（免重算）")
         # 只需 embed queries
         query_embeddings = get_embeddings(queries)
         query_embs = np.array(query_embeddings)
@@ -445,10 +445,10 @@ def _rerank_qas(
             if i not in seen:
                 valid.append(i)
         reranked = [candidates[i] for i in valid[:top_k]]
-        print(f"   🎯 Reranker 完成：{len(candidates)} → {len(reranked)} 筆")
+        logger.info(f"   🎯 Reranker 完成：{len(candidates)} → {len(reranked)} 筆")
         return reranked
     except Exception as e:
-        print(f"   ⚠️  Reranker 失敗（{e}），使用原始排序")
+        logger.warning(f"   ⚠️  Reranker 失敗（{e}），使用原始排序")
         return candidates[:top_k]
 
 
@@ -616,12 +616,12 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
     if not content:
         reasoning = getattr(msg, "reasoning_content", None)
         if reasoning:
-            print(f"   ⚠️  content 為空，嘗試使用 reasoning_content（{len(reasoning)} chars）")
+            logger.warning(f"   ⚠️  content 為空，嘗試使用 reasoning_content（{len(reasoning)} chars）")
             content = reasoning
         else:
-            print(f"   ❌ finish_reason={response.choices[0].finish_reason}")
-            print(f"   ❌ refusal={getattr(msg, 'refusal', None)}")
-            print(f"   ❌ msg fields: {getattr(msg, 'model_fields_set', None)}")
+            logger.error(f"   ❌ finish_reason={response.choices[0].finish_reason}")
+            logger.error(f"   ❌ refusal={getattr(msg, 'refusal', None)}")
+            logger.error(f"   ❌ msg fields: {getattr(msg, 'model_fields_set', None)}")
 
     # 將 meta_block 加入報告開頭
     full_report = meta_block + (content or "（報告產生失敗）")
@@ -714,55 +714,55 @@ def main() -> None:
     if args.check:
         return
 
-    print("=" * 60)
-    print("📊 SEO 週報產生器")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("📊 SEO 週報產生器")
+    logger.info("=" * 60)
 
     # 決定資料來源（優先順序：--input > .env SHEETS_URL > 預設 URL）
     source = args.input or getattr(config, "SHEETS_URL", "") or DEFAULT_SHEETS_URL
 
     if source.startswith("http"):
-        print(f"\n📥 從 Google Sheets 擷取（tab: {args.tab}）...")
+        logger.info(f"\n📥 從 Google Sheets 擷取（tab: {args.tab}）...")
         try:
             tsv_text = fetch_from_sheets(source, tab=args.tab)
         except Exception as e:
-            print(f"❌ 下載失敗：{e}")
-            print("💡 請確認該試算表權限為「任何知道連結者可檢視」")
+            logger.error(f"❌ 下載失敗：{e}")
+            logger.info("💡 請確認該試算表權限為「任何知道連結者可檢視」")
             sys.exit(1)
     elif source:
         tsv_text = Path(source).read_text(encoding="utf-8")
     else:
-        print("📋 請貼上試算表資料（完成後按 Ctrl+D）：")
+        logger.info("📋 請貼上試算表資料（完成後按 Ctrl+D）：")
         tsv_text = sys.stdin.read()
 
     if not tsv_text.strip():
-        print("❌ 沒有收到資料")
+        logger.error("❌ 沒有收到資料")
         sys.exit(1)
 
     # 解析
-    print("\n🔍 解析指標資料 ...")
+    logger.info("\n🔍 解析指標資料 ...")
     metrics = parse_metrics_tsv(tsv_text)
     if not metrics:
-        print("❌ 無法解析指標，請確認格式是從 Google 試算表直接複製的 TSV")
+        logger.error("❌ 無法解析指標，請確認格式是從 Google 試算表直接複製的 TSV")
         sys.exit(1)
-    print(f"   解析到 {len(metrics)} 個指標")
+    logger.info(f"   解析到 {len(metrics)} 個指標")
 
     # 異常偵測
     alerts = detect_anomalies(metrics)
     alert_down = [a for a in alerts if a["flag"] == "ALERT_DOWN"]
     alert_up = [a for a in alerts if a["flag"] == "ALERT_UP"]
-    print(f"   核心指標: {len([a for a in alerts if a['flag']=='CORE'])} 個")
-    print(f"   顯著下滑: {len(alert_down)} 個 | 顯著上升: {len(alert_up)} 個")
+    logger.info(f"   核心指標: {len([a for a in alerts if a['flag']=='CORE'])} 個")
+    logger.info(f"   顯著下滑: {len(alert_down)} 個 | 顯著上升: {len(alert_up)} 個")
 
     metrics_summary = _build_metrics_summary(alerts)
 
     # 語意搜尋相關 Q&A（多查詢策略：每個異常指標獨立查詢）
     relevant_qas = []
     if not args.no_qa:
-        print("\n🔎 搜尋相關 Q&A 知識庫 ...")
+        logger.info("\n🔎 搜尋相關 Q&A 知識庫 ...")
         qa_pairs = _load_qa_database()
         if qa_pairs:
-            print(f"   知識庫共 {len(qa_pairs)} 個 Q&A")
+            logger.info(f"   知識庫共 {len(qa_pairs)} 個 Q&A")
             # 為每個需要解釋的指標建立語意查詢
             queries: list[str] = []
             seen: set[str] = set()
@@ -808,11 +808,11 @@ def main() -> None:
                 top_k_per_query=3,
                 total_max=candidate_pool,
             )
-            print(f"   使用 {len(queries)} 個查詢，候選 {len(candidates)} 個 Q&A")
+            logger.info(f"   使用 {len(queries)} 個查詢，候選 {len(candidates)} 個 Q&A")
             relevant_qas = _rerank_qas(candidates, metrics_summary, args.top_k)
-            print(f"   使用 {len(queries)} 個查詢，找到 {len(relevant_qas)} 個相關 Q&A（已 Rerank）")
+            logger.info(f"   使用 {len(queries)} 個查詢，找到 {len(relevant_qas)} 個相關 Q&A（已 Rerank）")
         else:
-            print("   ⚠️  找不到 Q&A 知識庫，跳過（先執行步驟 2-3 建立知識庫）")
+            logger.warning("   ⚠️  找不到 Q&A 知識庫，跳過（先執行步驟 2-3 建立知識庫）")
 
     # 取得日期，標準化為 YYYYMMDD
     sample_metric = next((m for m in metrics.values() if m.get("latest_date")), {})
@@ -827,7 +827,7 @@ def main() -> None:
         report_date = raw_date or datetime.today().strftime("%Y/%m/%d")
 
     # 產生報告
-    print(f"\n✍️  產生報告（日期：{report_date}）...")
+    logger.info(f"\n✍️  產生報告（日期：{report_date}）...")
 
     # ── Layer 1: Report cache ───────────────────────────────
     # Key = metrics_summary + qa 版本 ID
@@ -837,7 +837,7 @@ def main() -> None:
     cached_report = cache_get("report", report_cache_key)
     if cached_report is not None:
         report_md = cached_report["report_text"]
-        print("   [cache hit] 直接使用緩存報告")
+        logger.info("   [cache hit] 直接使用緩存報告")
     else:
         report_md = generate_report(metrics_summary, relevant_qas, report_date)
         cache_set("report", report_cache_key, {"report_text": report_md})
@@ -857,16 +857,16 @@ def main() -> None:
         data={"report_text": report_md, "date": date_str},
         metadata={"report_date": report_date, "output_path": str(out_path)},
     )
-    print(f"   🔖 版本記録: {version_entry['version_id']}")
+    logger.info(f"   🔖 版本記録: {version_entry['version_id']}")
 
-    print("\n" + "=" * 60)
-    print("✅ 報告完成！")
-    print(f"   📄 {out_path}")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("✅ 報告完成！")
+    logger.info(f"   📄 {out_path}")
+    logger.info("=" * 60)
 
     # 直接印到 console
-    print("\n" + "─" * 60)
-    print(report_md)
+    logger.info("\n" + "─" * 60)
+    logger.info(report_md)
 
     flush_laminar()
 

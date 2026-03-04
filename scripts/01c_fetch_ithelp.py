@@ -43,13 +43,20 @@ SOURCE_COLLECTION = "ithelp-sc-kpi"
 INDEX_PATH = config.ROOT_DIR / "raw_data" / "ithelp_articles_index.json"
 
 # iThome article page pattern
-ARTICLE_URL_PATTERN = re.compile(r'href="(https://ithelp\.ithome\.com\.tw/articles/(\d+))"')
-# Article content selector pattern
-ARTICLE_CONTENT_PATTERN = re.compile(
-    r'<div\s+class="qa-markdown"[^>]*>(.*?)</div>\s*(?=<div\s+class="(?:qa-footer|bottomBox|tags-group))',
+# href value may contain leading/trailing whitespace in newer iThome HTML
+ARTICLE_URL_PATTERN = re.compile(r'href="\s*(https://ithelp\.ithome\.com\.tw/articles/(\d+))\s*"')
+# Listing page pattern: captures URL + title from series index page
+ARTICLE_LISTING_PATTERN = re.compile(
+    r'href="\s*(https://ithelp\.ithome\.com\.tw/articles/(\d+))\s*"[^>]*>\s*([^\n<]{5,200})',
     re.DOTALL,
 )
-ARTICLE_TITLE_PATTERN = re.compile(r'<h3[^>]*class="qa-header[^"]*"[^>]*>\s*(.*?)\s*</h3>', re.DOTALL)
+# Article content selector pattern
+# Content is in <div class="markdown__style"> and ends before article-series-catalog
+ARTICLE_CONTENT_PATTERN = re.compile(
+    r'<div\s+class="markdown__style"[^>]*>(.*?)</div>\s*\n\s*</div>\s*\n\s*</div>\s*\n\s*(?=.*?article-series-catalog)',
+    re.DOTALL,
+)
+ARTICLE_TITLE_PATTERN = re.compile(r'<h2[^>]*class="[^"]*ir-article__title[^"]*"[^>]*>\s*(.*?)\s*</h2>', re.DOTALL)
 
 
 def _load_index() -> list[dict]:
@@ -87,15 +94,19 @@ def _fetch_series_article_urls(series_url: str) -> list[dict]:
             logger.warning("頁面 %d 擷取失敗: %s", page, e)
             break
 
-        matches = ARTICLE_URL_PATTERN.findall(resp.text)
+        matches = ARTICLE_LISTING_PATTERN.findall(resp.text)
         new_count = 0
-        for article_url, article_id in matches:
+        for article_url, article_id, raw_title in matches:
             if article_id not in seen_ids:
                 seen_ids.add(article_id)
+                # Clean title: strip unicode whitespace and inline tags
+                title = re.sub(r'<[^>]+>', '', raw_title)
+                title = re.sub(r'[\u00a0\u200a\u200b\u3000]', ' ', title).strip()
                 articles.append({
                     "article_id": article_id,
                     "url": article_url,
                     "day": len(articles) + 1,
+                    "title": title,
                 })
                 new_count += 1
 
@@ -141,6 +152,69 @@ def _fetch_article_content(url: str) -> dict:
     }
 
 
+def update_ithelp_titles(
+    series_url: str = config.ITHELP_SERIES_URL,
+) -> dict:
+    """Update titles in existing Markdown files and index from the series listing page.
+
+    Does NOT re-fetch article content — reads titles directly from the series index page.
+    Returns: {"updated": int, "skipped": int}
+    """
+    output_dir = config.RAW_ITHELP_MD_DIR
+    index = _load_index()
+    article_metas = _fetch_series_article_urls(series_url)
+
+    title_map = {m["article_id"]: m["title"] for m in article_metas if m.get("title")}
+    updated = 0
+    skipped = 0
+
+    for entry in index:
+        article_id = entry["article_id"]
+        new_title = title_map.get(article_id)
+        if not new_title:
+            skipped += 1
+            continue
+
+        # Update .md file if its H1 heading differs from new_title
+        md_file = output_dir / entry["md_file"]
+        if md_file.exists():
+            content = md_file.read_text(encoding="utf-8")
+            # Check current H1 title in file
+            h1_match = re.match(r'^# (.+)', content)
+            current_file_title = h1_match.group(1).strip() if h1_match else ""
+
+            if current_file_title == new_title and entry.get("title") == new_title:
+                skipped += 1
+                continue
+
+            # Update H1 heading
+            content = re.sub(
+                r'^# .+',
+                f'# {new_title}',
+                content,
+                count=1,
+                flags=re.MULTILINE,
+            )
+            # Rename file if needed
+            safe_title = re.sub(r'[^\w\u4e00-\u9fff-]', '_', new_title)[:60]
+            new_filename = f"day{entry['day']:02d}_{safe_title}.md"
+            new_path = output_dir / new_filename
+            md_file.write_text(content, encoding="utf-8")
+            if new_filename != entry["md_file"] and not new_path.exists():
+                md_file.rename(new_path)
+                entry["md_file"] = new_filename
+        elif entry.get("title") == new_title:
+            skipped += 1
+            continue
+
+        entry["title"] = new_title
+        logger.info("Day %02d 標題更新: %s", entry["day"], new_title[:60])
+        updated += 1
+
+    _save_index(index)
+    return {"updated": updated, "skipped": skipped}
+
+
 def fetch_ithelp_articles(
     series_url: str = config.ITHELP_SERIES_URL,
     force: bool = False,
@@ -171,6 +245,9 @@ def fetch_ithelp_articles(
 
         try:
             article = _fetch_article_content(meta["url"])
+            # Prefer title from listing page (already clean) over article-page extraction
+            if meta.get("title") and meta["title"] != "Untitled":
+                article["title"] = meta["title"]
         except httpx.HTTPError as e:
             logger.warning("Day %d 擷取失敗: %s", meta["day"], e)
             continue
@@ -233,17 +310,21 @@ def fetch_ithelp_articles(
 def main() -> None:
     parser = argparse.ArgumentParser(description="從 iThome 鐵人賽擷取文章")
     parser.add_argument("--force", action="store_true", help="強制重新擷取所有文章")
+    parser.add_argument("--update-titles", action="store_true", help="從集合頁更新現有檔案標題，不重抓內容")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     logger.info("步驟 1c：擷取 iThome 鐵人賽文章")
 
-    result = fetch_ithelp_articles(force=args.force)
-
-    logger.info(
-        "完成 — 新擷取: %d, 跳過: %d, 索引總計: %d",
-        result["fetched"], result["skipped"], result["total"],
-    )
+    if args.update_titles:
+        result = update_ithelp_titles()
+        logger.info("標題更新完成 — 已更新: %d, 跳過: %d", result["updated"], result["skipped"])
+    else:
+        result = fetch_ithelp_articles(force=args.force)
+        logger.info(
+            "完成 — 新擷取: %d, 跳過: %d, 索引總計: %d",
+            result["fetched"], result["skipped"], result["total"],
+        )
 
 
 if __name__ == "__main__":

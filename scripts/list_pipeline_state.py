@@ -29,11 +29,23 @@ except ModuleNotFoundError:
 def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
     """
     回傳 (already_done, unprocessed) 兩份清單（精確定義：_qa.json 存在且非空非失敗才算完成）。
+    掃描所有 4 個來源目錄：Notion、Medium、iThome、Google Cases。
     不輸出任何內容，供 show_full_status 與 list_unprocessed_extract_qa 共用。
     """
-    if not config.RAW_MD_DIR.exists():
+    source_dirs = [
+        config.RAW_MD_DIR,
+        config.RAW_MEDIUM_MD_DIR,
+        config.RAW_ITHELP_MD_DIR,
+        config.RAW_GOOGLE_CASES_MD_DIR,
+    ]
+    md_files: list[Path] = []
+    for d in source_dirs:
+        if d.exists():
+            md_files.extend(sorted(d.glob("*.md")))
+
+    if not md_files:
         return [], []
-    md_files = sorted(config.RAW_MD_DIR.glob("*.md"))
+
     already_done: list[Path] = []
     unprocessed: list[Path] = []
     for md_path in md_files:
@@ -52,19 +64,15 @@ def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
 
 def list_unprocessed_extract_qa() -> list[Path]:
     """
-    回傳尚未萃取 Q&A 的 Markdown 檔案清單。
+    回傳尚未萃取 Q&A 的 Markdown 檔案清單（涵蓋所有來源）。
     （沒有對應的 _qa.json，或 _qa.json 為空的檔案）
     """
-    if not config.RAW_MD_DIR.exists():
-        print("raw_data/markdown/ 目錄不存在，請先執行 fetch-notion（make fetch-notion）")
-        return []
-
     already_done, unprocessed = _classify_extract_qa()
     if not already_done and not unprocessed:
-        print("raw_data/markdown/ 目錄下沒有 .md 檔案，請先執行 fetch-notion（make fetch-notion）")
+        print("所有來源目錄下沒有 .md 檔案，請先執行 fetch 步驟")
         return []
 
-    print("extract-qa 狀態")
+    print("extract-qa 狀態（所有來源）")
     print(f"  已完成: {len(already_done)} 份")
     print(f"  待處理: {len(unprocessed)} 份")
     print()

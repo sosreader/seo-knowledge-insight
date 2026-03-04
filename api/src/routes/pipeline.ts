@@ -140,7 +140,7 @@ function buildPipelineStatus(): PipelineStatusResponse {
       name: "dedupe-classify",
       label: "去重 + 分類",
       count: finalCount,
-      detail: `${finalCount} 筆 Q&A（去重後）`,
+      detail: `${finalCount} 筆 Q&A（去重 + 分類後）`,
     },
   ];
 

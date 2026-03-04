@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import re
 import sys
 import time
@@ -36,6 +37,8 @@ from utils.notion_client import fetch_all_meetings
 from utils.block_to_markdown import blocks_to_markdown
 from utils import audit_logger
 from utils.pipeline_deps import preflight_check
+
+logger = logging.getLogger(__name__)
 
 
 def _load_existing_index() -> dict[str, dict]:
@@ -91,7 +94,7 @@ async def main(args: argparse.Namespace) -> None:
 
     parent_id = args.parent_id or config.NOTION_PARENT_PAGE_ID
     if not parent_id:
-        print("❌ 請設定 NOTION_PARENT_PAGE_ID（在 .env 或 --parent-id 參數）")
+        logger.error("請設定 NOTION_PARENT_PAGE_ID（在 .env 或 --parent-id 參數）")
         sys.exit(1)
 
     force = args.force
@@ -103,21 +106,19 @@ async def main(args: argparse.Namespace) -> None:
     fetch_mode = "force" if force else ("since" if since_time else "incremental")
     start_time = time.monotonic()
 
-    print("=" * 60)
-    print("📥 步驟 1：從 Notion 擷取 SEO 會議紀錄")
+    logger.info("步驟 1：從 Notion 擷取 SEO 會議紀錄")
     if force:
-        print("   ⚡ 強制模式：重新抓取所有頁面")
+        logger.info("強制模式：重新抓取所有頁面")
     elif since_time:
-        print(f"   📅 增量模式：只抓 {args.since} 後更新的頁面")
+        logger.info("增量模式：只抓 %s 後更新的頁面", args.since)
     else:
-        print("   📦 增量模式：只抓新增或有更新的頁面")
-    print(f"   🔄 Block 深度：{block_depth}")
-    print("=" * 60)
+        logger.info("增量模式：只抓新增或有更新的頁面")
+    logger.info("Block 深度：%d", block_depth)
 
     # 載入現有索引（用於增量比對）
     existing_index = _load_existing_index()
     if existing_index and not force:
-        print(f"   📋 現有索引: {len(existing_index)} 份")
+        logger.info("現有索引: %d 份", len(existing_index))
 
     # 擷取所有會議
     meetings = await fetch_all_meetings(
@@ -128,7 +129,7 @@ async def main(args: argparse.Namespace) -> None:
         session_id=session_id,
     )
 
-    print(f"\n📋 Notion 上共取得 {len(meetings)} 份會議紀錄")
+    logger.info("Notion 上共取得 %d 份會議紀錄", len(meetings))
 
     # 稽核日誌：記錄 fetch 開始（要在锻錄數確定後才發送，包含實際要處理數）
     audit_logger.log_fetch_start(
@@ -162,24 +163,24 @@ async def main(args: argparse.Namespace) -> None:
                 filtered.append(m)
 
         if skipped:
-            print(f"   ⏭️  跳過 {skipped} 份（無變化）")
+            logger.info("跳過 %d 份（無變化）", skipped)
         meetings = filtered
 
     if not meetings:
-        print("\n✅ 沒有新的或更新的會議紀錄，無需處理。")
+        logger.info("沒有新的或更新的會議紀錄，無需處理。")
         return
 
-    print(f"   🔄 需處理: {len(meetings)} 份\n")
+    logger.info("需處理: %d 份", len(meetings))
 
     # 轉 Markdown
-    print("📝 正在轉換為 Markdown ...")
+    logger.info("正在轉換為 Markdown ...")
     for i, meeting in enumerate(meetings, 1):
         meta = meeting["meta"]
         blocks = meeting["blocks"]
         title = meta.get("title", "Untitled")
         safe_title = re.sub(r'[^\w\u4e00-\u9fff\-]', '_', title)[:80]
 
-        print(f"  [{i}/{len(meetings)}] {title}")
+        logger.info("[%d/%d] %s", i, len(meetings), title)
 
         md_content = await blocks_to_markdown(meta, blocks)
 
@@ -210,10 +211,10 @@ async def main(args: argparse.Namespace) -> None:
         encoding="utf-8",
     )
 
-    print(f"\n📋 索引已儲存: {index_path}（共 {len(index)} 份）")
-    print(f"📁 Raw JSON: {config.RAW_JSON_DIR}")
-    print(f"📁 Markdown:  {config.RAW_MD_DIR}")
-    print(f"📁 圖片:      {config.IMAGES_DIR}")
+    logger.info("索引已儲存: %s（共 %d 份）", index_path, len(index))
+    logger.info("Raw JSON: %s", config.RAW_JSON_DIR)
+    logger.info("Markdown: %s", config.RAW_MD_DIR)
+    logger.info("圖片: %s", config.IMAGES_DIR)
 
     # 稽核日誌：記錄 fetch 完成
     duration = time.monotonic() - start_time
@@ -223,8 +224,8 @@ async def main(args: argparse.Namespace) -> None:
         skipped_count=len(existing_index) - len(meetings) if not force else 0,
         duration_sec=duration,
     )
-    print(f"📃 Fetch 日誌: {audit_logger.FETCH_LOGS_DIR}")
-    print("\n✅ 步驟 1 完成！")
+    logger.info("Fetch 日誌: %s", audit_logger.FETCH_LOGS_DIR)
+    logger.info("步驟 1 完成！")
 
 
 if __name__ == "__main__":
@@ -261,4 +262,5 @@ if __name__ == "__main__":
         help="只執行依賴檢查，不實際執行",
     )
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     asyncio.run(main(args))

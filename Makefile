@@ -62,9 +62,17 @@ extract-qa-test: ## Q&A 萃取（只處理前 3 份，快速測試用）
 fetch-medium: ## Medium 文章擷取（RSS → Markdown）
 	$(PYTHON) scripts/01b_fetch_medium.py
 
+.PHONY: fetch-medium-full
+fetch-medium-full: ## Medium 完整文章擷取（Sitemap → Playwright fallback，突破 RSS 10 篇限制）
+	$(PYTHON) scripts/01b_fetch_medium.py --playwright
+
 .PHONY: fetch-ithelp
 fetch-ithelp: ## iThome 鐵人賽擷取（HTML → Markdown）
 	$(PYTHON) scripts/01c_fetch_ithelp.py
+
+.PHONY: update-ithelp-titles
+update-ithelp-titles: ## 從集合頁更新 iThome 文章標題（不重抓內容）
+	$(PYTHON) scripts/01c_fetch_ithelp.py --update-titles
 
 .PHONY: fetch-google-cases
 fetch-google-cases: ## Google Search Central Case Studies 擷取（HTML → Markdown）

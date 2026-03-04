@@ -286,13 +286,13 @@ def evaluate_retrieval(
                         best_correct_q = qa_pairs[int(idx)]["question"][:70]
                         break
 
-                print(f"\n[DEBUG] {query}")
+                logger.debug(f"\n[DEBUG] {query}")
                 if best_correct_rank is not None and best_correct_rank <= 20:
-                    print(f"  ⚠️  失敗類型: TypeB（正確答案存在但排在第 {best_correct_rank} 名）")
-                    print(f"  排名第 {best_correct_rank}（score={best_correct_score:.4f}）: {best_correct_q}")
+                    logger.warning(f"  ⚠️  失敗類型: TypeB（正確答案存在但排在第 {best_correct_rank} 名）")
+                    logger.info(f"  排名第 {best_correct_rank}（score={best_correct_score:.4f}）: {best_correct_q}")
                 else:
-                    print("  ❌ 失敗類型: TypeA（資料庫無覆蓋此 keywords）")
-                print(f"  未命中 keywords: {missing_kws}")
+                    logger.error("  ❌ 失敗類型: TypeA（資料庫無覆蓋此 keywords）")
+                logger.info(f"  未命中 keywords: {missing_kws}")
 
         # Keyword Hit Rate: 檢查 retrieved Q&A 的 keywords 是否覆蓋 expected_keywords
         # 使用子字串雙向匹配（"流量" 可命中 "探索流量"；"影片" 可命中 "影片縮圖"）
@@ -389,7 +389,7 @@ def _llm_rerank_retrieval(query: str, candidates: list[dict], top_k: int = 5) ->
         )
         content = resp.choices[0].message.content
         if not content:
-            print("⚠️ _llm_rerank_retrieval：LLM 回傳空內容，使用原始排序")
+            logger.warning("⚠️ _llm_rerank_retrieval：LLM 回傳空內容，使用原始排序")
             return candidates[:top_k]
         ranked = json.loads(content).get("ranked_indices", [])
         valid = [i for i in ranked if isinstance(i, int) and 0 <= i < len(candidates)]
@@ -400,7 +400,7 @@ def _llm_rerank_retrieval(query: str, candidates: list[dict], top_k: int = 5) ->
                 valid.append(i)
         return [candidates[i] for i in valid[:top_k]]
     except Exception as e:
-        print(f"⚠️ _llm_rerank_retrieval 失敗（{e}），使用原始排序")
+        logger.warning(f"⚠️ _llm_rerank_retrieval 失敗（{e}），使用原始排序")
         return candidates[:top_k]
 
 
@@ -1076,7 +1076,7 @@ def evaluate_dedup(
     if precomputed_similarities is not None:
         sims = precomputed_similarities
     else:
-        print(f"   計算 {len(golden_pairs)} 對 Q&A 的 embedding similarity...")
+        logger.info(f"   計算 {len(golden_pairs)} 對 Q&A 的 embedding similarity...")
         sims = _compute_pair_similarities(golden_pairs)
 
     metrics = _dedup_metrics_at_threshold(sims, labels, threshold)
@@ -1097,7 +1097,7 @@ def evaluate_dedup_threshold_sweep(golden_pairs: list[dict]) -> dict:
     if not golden_pairs:
         return {"error": "缺少 golden pair 資料"}
 
-    print(f"   計算 {len(golden_pairs)} 對 Q&A 的 embedding similarity（一次性）...")
+    logger.info(f"   計算 {len(golden_pairs)} 對 Q&A 的 embedding similarity（一次性）...")
     sims = _compute_pair_similarities(golden_pairs)
     labels = [bool(p.get("should_merge", False)) for p in golden_pairs]
 
@@ -1341,7 +1341,7 @@ def _save_versioned_eval(
 
     versioned_path = evals_dir / f"{run_id}.json"
     versioned_path.write_text(json.dumps(versioned, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"   版本化 eval 儲存至: {versioned_path}")
+    logger.info(f"   版本化 eval 儲存至: {versioned_path}")
 
     # ── 基準線比較 ──────────────────────────────────────────
     if not baseline_path.exists():
@@ -1360,20 +1360,20 @@ def _save_versioned_eval(
     base_avg = sum(bs.get(d, 0) for d in dims) / len(dims)
     delta = new_avg - base_avg
     arrow = "↑" if delta > 0.02 else ("↓" if delta < -0.02 else "→")
-    print(f"\n   基準線比較（avg）：新分數 {new_avg:.2f} vs 基準 {base_avg:.2f}  Δ{delta:+.2f} {arrow}")
+    logger.info(f"\n   基準線比較（avg）：新分數 {new_avg:.2f} vs 基準 {base_avg:.2f}  Δ{delta:+.2f} {arrow}")
     for dim in dims:
         nv = generation_scores.get(dim, 0)
         bv = bs.get(dim, 0)
-        print(f"     {dim:<15s}: {nv:.2f} vs {bv:.2f}  Δ{nv-bv:+.2f}")
+        logger.info(f"     {dim:<15s}: {nv:.2f} vs {bv:.2f}  Δ{nv-bv:+.2f}")
 
     if getattr(args, "update_baseline", False):
         threshold = 0.05
         if delta >= threshold:
             versioned["note"] = "自動更新基準線"
             baseline_path.write_text(json.dumps(versioned, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(f"\n   基準線已更新（Δ{delta:+.2f} >= {threshold}）")
+            logger.info(f"\n   基準線已更新（Δ{delta:+.2f} >= {threshold}）")
         else:
-            print(f"\n   基準線未更新（Δ{delta:+.2f} < {threshold}），保留原有基準線")
+            logger.info(f"\n   基準線未更新（Δ{delta:+.2f} < {threshold}），保留原有基準線")
 
 
 def main(args: argparse.Namespace) -> None:
@@ -1397,38 +1397,38 @@ def main(args: argparse.Namespace) -> None:
     if getattr(args, "check", False):
         return
 
-    print("=" * 60)
-    print("📊 步驟 5：Q&A 品質評估（Evaluation）")
-    print(f"   Judge 模型: {config.OPENAI_MODEL}")
-    print(f"   抽樣數量: {args.sample}")
-    print(f"   帶原始來源: {'是' if args.with_source else '否'}")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("📊 步驟 5：Q&A 品質評估（Evaluation）")
+    logger.info(f"   Judge 模型: {config.OPENAI_MODEL}")
+    logger.info(f"   抽樣數量: {args.sample}")
+    logger.info(f"   帶原始來源: {'是' if args.with_source else '否'}")
+    logger.info("=" * 60)
 
     # 載入資料
     qa_pairs = load_qa_data()
     if not qa_pairs:
-        print("❌ 找不到 Q&A 資料，請先執行步驟 2-3")
+        logger.error("❌ 找不到 Q&A 資料，請先執行步驟 2-3")
         sys.exit(1)
 
-    print(f"\n📥 載入 {len(qa_pairs)} 個 Q&A")
+    logger.info(f"\n📥 載入 {len(qa_pairs)} 個 Q&A")
 
     # 抽樣
     sample_size = min(args.sample, len(qa_pairs))
     if args.seed is not None:
         random.seed(args.seed)
     sampled = random.sample(qa_pairs, sample_size)
-    print(f"   抽樣 {sample_size} 個（seed: {args.seed}）")
+    logger.info(f"   抽樣 {sample_size} 個（seed: {args.seed}）")
 
     # ── Q&A 品質評估 ──
     eval_results: list[dict] = []
     if not args.classify_only:
-        print(f"\n🔍 評估 Q&A 品質（{sample_size} 筆）...")
+        logger.info(f"\n🔍 評估 Q&A 品質（{sample_size} 筆）...")
         for i, qa in enumerate(sampled, 1):
             source_text = ""
             if args.with_source and qa.get("source_file"):
                 source_text = load_source_markdown(qa["source_file"])
 
-            print(f"  [{i}/{sample_size}] {qa['question'][:50]}...")
+            logger.info(f"  [{i}/{sample_size}] {qa['question'][:50]}...")
 
             try:
                 result = evaluate_qa_quality(qa, source_text)
@@ -1437,7 +1437,7 @@ def main(args: argparse.Namespace) -> None:
                 result["_confidence"] = qa.get("confidence", None)
                 eval_results.append(result)
             except Exception as e:
-                print(f"    ⚠️  評估失敗: {e}")
+                logger.warning(f"    ⚠️  評估失敗: {e}")
                 eval_results.append({"error": str(e), "_qa_id": qa.get("stable_id", str(qa.get("id", i)))})
 
             time.sleep(0.5)
@@ -1449,19 +1449,19 @@ def main(args: argparse.Namespace) -> None:
         classified = [qa for qa in sampled if qa.get("category")]
         if classified:
             eval_count = min(len(classified), args.sample)
-            print(f"\n🏷️  評估分類品質（{eval_count} 筆）...")
+            logger.info(f"\n🏷️  評估分類品質（{eval_count} 筆）...")
             for i, qa in enumerate(classified[:eval_count], 1):
-                print(f"  [{i}/{eval_count}] {qa.get('category', '?')} ← {qa['question'][:40]}...")
+                logger.info(f"  [{i}/{eval_count}] {qa.get('category', '?')} ← {qa['question'][:40]}...")
                 try:
                     result = evaluate_classification(qa)
                     if "category_judgment" not in result:
-                        print(f"    ⚠️  空回應（推理模型 content=None），跳過 QA {qa.get('id', i)}")
+                        logger.warning(f"    ⚠️  空回應（推理模型 content=None），跳過 QA {qa.get('id', i)}")
                         continue
                     result["_qa_id"] = qa.get("stable_id", str(qa.get("id", i)))
                     result["_original_category"] = qa.get("category", "")
                     classify_results.append(result)
                 except Exception as e:
-                    print(f"    ⚠️  評估失敗: {e}")
+                    logger.warning(f"    ⚠️  評估失敗: {e}")
 
                 time.sleep(0.3)
 
@@ -1472,14 +1472,14 @@ def main(args: argparse.Namespace) -> None:
     if args.eval_retrieval:
         golden_ret = load_golden_retrieval(args.retrieval_golden)
         if golden_ret:
-            print(f"\n🔎 評估 Retrieval 品質（{len(golden_ret)} 個場景）...")
+            logger.info(f"\n🔎 評估 Retrieval 品質（{len(golden_ret)} 個場景）...")
             retrieval_stats = evaluate_retrieval(
                 golden_ret, qa_pairs,
                 debug=getattr(args, "debug_retrieval", False),
                 use_reranking=getattr(args, "eval_reranking", False),
             )
         else:
-            print("   ⚠️  找不到 retrieval golden set，跳過")
+            logger.warning("   ⚠️  找不到 retrieval golden set，跳過")
 
     # ── 萃取品質評估 ──
     extraction_stats = None
@@ -1490,10 +1490,10 @@ def main(args: argparse.Namespace) -> None:
             ext_path = config.ROOT_DIR / ext_path
         if ext_path.exists():
             golden_ext = json.loads(ext_path.read_text(encoding="utf-8"))
-            print(f"\n📝 評估萃取品質（{len(golden_ext)} 個場景）...")
+            logger.info(f"\n📝 評估萃取品質（{len(golden_ext)} 個場景）...")
             extraction_stats = evaluate_extraction(golden_ext)
         else:
-            print(f"   ⚠️  找不到 extraction golden set（{ext_path}），跳過")
+            logger.warning(f"   ⚠️  找不到 extraction golden set（{ext_path}），跳過")
 
     # ── 去重品質評估 ──
     dedup_stats = None
@@ -1506,16 +1506,16 @@ def main(args: argparse.Namespace) -> None:
         if dedup_path.exists():
             golden_dedup = json.loads(dedup_path.read_text(encoding="utf-8"))
             if getattr(args, "dedup_threshold_sweep", False):
-                print(f"\n🔬 掃描去重閾值（{len(golden_dedup)} 對 × 16 個閾值）...")
+                logger.info(f"\n🔬 掃描去重閾值（{len(golden_dedup)} 對 × 16 個閾值）...")
                 dedup_sweep_stats = evaluate_dedup_threshold_sweep(golden_dedup)
-                print(f"   {dedup_sweep_stats.get('recommendation', '')}")
+                logger.info(f"   {dedup_sweep_stats.get('recommendation', '')}")
                 # 順便在目前閾值下計算精確指標
                 dedup_stats = evaluate_dedup(golden_dedup)
             elif getattr(args, "eval_dedup", False):
-                print(f"\n⚖️  評估去重品質（{len(golden_dedup)} 對，閾值={config.SIMILARITY_THRESHOLD}）...")
+                logger.info(f"\n⚖️  評估去重品質（{len(golden_dedup)} 對，閾值={config.SIMILARITY_THRESHOLD}）...")
                 dedup_stats = evaluate_dedup(golden_dedup)
         else:
-            print(f"   ⚠️  找不到 dedup golden set（{dedup_path}），跳過")
+            logger.warning(f"   ⚠️  找不到 dedup golden set（{dedup_path}），跳過")
 
     # ── 週報品質評估 ──
     report_eval_stats = None
@@ -1526,10 +1526,10 @@ def main(args: argparse.Namespace) -> None:
             rep_path = config.ROOT_DIR / rep_path
         if rep_path.exists():
             golden_rep = json.loads(rep_path.read_text(encoding="utf-8"))
-            print(f"\n📰 評估週報品質（{len(golden_rep)} 個場景）...")
+            logger.info(f"\n📰 評估週報品質（{len(golden_rep)} 個場景）...")
             report_eval_stats = evaluate_report_quality(golden_rep)
         else:
-            print(f"   ⚠️  找不到 report golden set（{rep_path}），跳過")
+            logger.warning(f"   ⚠️  找不到 report golden set（{rep_path}），跳過")
 
     # ── 統計彙整 ──
     valid_evals = [r for r in eval_results if "error" not in r]
@@ -1614,66 +1614,66 @@ def main(args: argparse.Namespace) -> None:
     _record_laminar_eval_metadata(stats, sample_size, retrieval_stats=retrieval_stats)
 
     # 印出摘要
-    print("\n" + "=" * 60)
-    print("📊 評估結果摘要")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("📊 評估結果摘要")
+    logger.info("=" * 60)
 
     if stats:
         for dim in ["relevance", "accuracy", "completeness", "granularity"]:
             if dim in stats:
-                print(f"   {dim:15s}: {stats[dim]['mean']:.2f} / 5.0")
+                logger.info(f"   {dim:15s}: {stats[dim]['mean']:.2f} / 5.0")
 
     if classify_stats:
         ca = classify_stats["category_accuracy"]
-        print(f"\n   分類正確率: {ca['accuracy_rate']:.0%}")
-        print(f"   Difficulty 合理率: {classify_stats['difficulty_accuracy']:.0%}")
-        print(f"   Evergreen 合理率: {classify_stats['evergreen_accuracy']:.0%}")
+        logger.info(f"\n   分類正確率: {ca['accuracy_rate']:.0%}")
+        logger.info(f"   Difficulty 合理率: {classify_stats['difficulty_accuracy']:.0%}")
+        logger.info(f"   Evergreen 合理率: {classify_stats['evergreen_accuracy']:.0%}")
 
     if retrieval_stats and "error" not in retrieval_stats:
-        print("\n   Retrieval 品質：")
-        print(f"   KW 命中率: {retrieval_stats['avg_keyword_hit_rate']:.0%}")
-        print(f"   分類命中率: {retrieval_stats['avg_category_hit_rate']:.0%}")
-        print(f"   MRR: {retrieval_stats['avg_mrr']:.2f}")
-        print(f"   Top-1 Precision: {retrieval_stats['llm_top1_precision']:.0%}")
+        logger.info("\n   Retrieval 品質：")
+        logger.info(f"   KW 命中率: {retrieval_stats['avg_keyword_hit_rate']:.0%}")
+        logger.info(f"   分類命中率: {retrieval_stats['avg_category_hit_rate']:.0%}")
+        logger.info(f"   MRR: {retrieval_stats['avg_mrr']:.2f}")
+        logger.info(f"   Top-1 Precision: {retrieval_stats['llm_top1_precision']:.0%}")
 
     if extraction_stats and "error" not in extraction_stats:
-        print("\n   萃取品質：")
-        print(f"   Count Accuracy: {extraction_stats['count_accuracy']:.0%}")
-        print(f"   Keyword Coverage: {extraction_stats['avg_keyword_coverage_rate']:.0%}")
-        print(f"   Hallucination Rate: {extraction_stats['avg_hallucination_rate']:.0%}")
+        logger.info("\n   萃取品質：")
+        logger.info(f"   Count Accuracy: {extraction_stats['count_accuracy']:.0%}")
+        logger.info(f"   Keyword Coverage: {extraction_stats['avg_keyword_coverage_rate']:.0%}")
+        logger.info(f"   Hallucination Rate: {extraction_stats['avg_hallucination_rate']:.0%}")
 
     if dedup_stats and "error" not in dedup_stats:
-        print(f"\n   去重品質（threshold={dedup_stats['threshold']:.2f}）：")
-        print(f"   Precision: {dedup_stats['precision']:.0%}")
-        print(f"   Recall:    {dedup_stats['recall']:.0%}")
-        print(f"   F1:        {dedup_stats['f1']:.0%}")
+        logger.info(f"\n   去重品質（threshold={dedup_stats['threshold']:.2f}）：")
+        logger.info(f"   Precision: {dedup_stats['precision']:.0%}")
+        logger.info(f"   Recall:    {dedup_stats['recall']:.0%}")
+        logger.info(f"   F1:        {dedup_stats['f1']:.0%}")
 
     if dedup_sweep_stats and "error" not in dedup_sweep_stats:
-        print(f"\n   閾值掃描：{dedup_sweep_stats.get('recommendation', '')}")
+        logger.info(f"\n   閾值掃描：{dedup_sweep_stats.get('recommendation', '')}")
 
     if report_eval_stats and "error" not in report_eval_stats:
-        print("\n   週報品質：")
+        logger.info("\n   週報品質：")
         if report_eval_stats.get("avg_llm_grounding") is not None:
-            print(f"   Grounding:     {report_eval_stats['avg_llm_grounding']:.1f}/5")
+            logger.info(f"   Grounding:     {report_eval_stats['avg_llm_grounding']:.1f}/5")
         if report_eval_stats.get("avg_llm_actionability") is not None:
-            print(f"   Actionability: {report_eval_stats['avg_llm_actionability']:.1f}/5")
+            logger.info(f"   Actionability: {report_eval_stats['avg_llm_actionability']:.1f}/5")
         if report_eval_stats.get("avg_llm_relevance") is not None:
-            print(f"   Relevance:     {report_eval_stats['avg_llm_relevance']:.1f}/5")
+            logger.info(f"   Relevance:     {report_eval_stats['avg_llm_relevance']:.1f}/5")
 
     if low_quality:
-        print(f"\n   ⚠️  低品質 Q&A: {len(low_quality)} 筆（平均分 < 3.0）")
+        logger.warning(f"\n   ⚠️  低品質 Q&A: {len(low_quality)} 筆（平均分 < 3.0）")
 
-    print(f"\n   📄 詳細報告: {json_path}")
-    print(f"   📄 Markdown: {md_path}")
-    print(f"   💾 歷史紀錄: {history_path}")
-    print(f"   💾 快照: {snapshot_dir / f'eval_{snap_ts}.json'}")
-    print("=" * 60)
+    logger.info(f"\n   📄 詳細報告: {json_path}")
+    logger.info(f"   📄 Markdown: {md_path}")
+    logger.info(f"   💾 歷史紀錄: {history_path}")
+    logger.info(f"   💾 快照: {snapshot_dir / f'eval_{snap_ts}.json'}")
+    logger.info("=" * 60)
 
     # ── 版本化 eval 輸出（output/evals/） ──────────────────
     _save_versioned_eval(args, stats, classify_stats, retrieval_stats, sample_size)
 
     # Console 輸出 Markdown 報告
-    print("\n" + md_report)
+    logger.info("\n" + md_report)
 
     flush_laminar()
 
@@ -1684,30 +1684,30 @@ def compare_eval_reports(path1: str, path2: str) -> None:
     r2 = json.loads(Path(path2).read_text(encoding="utf-8"))
     p1, p2 = Path(path1).name, Path(path2).name
 
-    print(f"\n{'='*60}")
-    print("📊 評估結果比較")
-    print(f"   A: {p1}")
-    print(f"   B: {p2}")
-    print(f"{'='*60}\n")
+    logger.info(f"\n{'='*60}")
+    logger.info("📊 評估結果比較")
+    logger.info(f"   A: {p1}")
+    logger.info(f"   B: {p2}")
+    logger.info(f"{'='*60}\n")
 
     q1 = r1.get("quality_stats", {})
     q2 = r2.get("quality_stats", {})
 
     dims = ["relevance", "accuracy", "completeness", "granularity"]
-    print(f"  {'指標':<20} {'A':>7} {'B':>7} {'Δ':>8}")
-    print("  " + "-" * 46)
+    logger.info(f"  {'指標':<20} {'A':>7} {'B':>7} {'Δ':>8}")
+    logger.info("  " + "-" * 46)
     for dim in dims:
         v1 = q1.get(dim, {}).get("mean")
         v2 = q2.get(dim, {}).get("mean")
         if v1 is not None and v2 is not None:
             delta = v2 - v1
             arrow = "↑" if delta > 0.05 else ("↓" if delta < -0.05 else "→")
-            print(f"  {dim:<20} {v1:>7.2f} {v2:>7.2f} {delta:>+7.2f} {arrow}")
+            logger.info(f"  {dim:<20} {v1:>7.2f} {v2:>7.2f} {delta:>+7.2f} {arrow}")
 
     ret1 = r1.get("retrieval_stats") or {}
     ret2 = r2.get("retrieval_stats") or {}
     if ret1 and ret2 and "error" not in ret1 and "error" not in ret2:
-        print()
+        logger.info()
         for key, label in [
             ("avg_mrr", "MRR"),
             ("llm_top1_precision", "Top-1 Precision"),
@@ -1719,18 +1719,18 @@ def compare_eval_reports(path1: str, path2: str) -> None:
             if v1 is not None and v2 is not None:
                 delta = v2 - v1
                 arrow = "↑" if delta > 0.02 else ("↓" if delta < -0.02 else "→")
-                print(f"  {label:<20} {v1:>7.2%} {v2:>7.2%} {delta:>+7.2%} {arrow}")
+                logger.info(f"  {label:<20} {v1:>7.2%} {v2:>7.2%} {delta:>+7.2%} {arrow}")
 
     cc1 = (r1.get("classify_stats") or {}).get("category_accuracy", {})
     cc2 = (r2.get("classify_stats") or {}).get("category_accuracy", {})
     if cc1 and cc2:
-        print()
+        logger.info()
         v1, v2 = cc1.get("accuracy_rate", 0), cc2.get("accuracy_rate", 0)
         delta = v2 - v1
         arrow = "↑" if delta > 0.02 else ("↓" if delta < -0.02 else "→")
-        print(f"  {'分類正確率':<20} {v1:>7.0%} {v2:>7.0%} {delta:>+7.0%} {arrow}")
+        logger.info(f"  {'分類正確率':<20} {v1:>7.0%} {v2:>7.0%} {delta:>+7.0%} {arrow}")
 
-    print(f"\n{'='*60}\n")
+    logger.info(f"\n{'='*60}\n")
 
 
 if __name__ == "__main__":
