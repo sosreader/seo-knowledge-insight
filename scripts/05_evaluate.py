@@ -1432,13 +1432,13 @@ def main(args: argparse.Namespace) -> None:
 
             try:
                 result = evaluate_qa_quality(qa, source_text)
-                result["_qa_id"] = qa.get("id", i)
+                result["_qa_id"] = qa.get("stable_id", str(qa.get("id", i)))
                 result["_question"] = qa["question"]
                 result["_confidence"] = qa.get("confidence", None)
                 eval_results.append(result)
             except Exception as e:
                 print(f"    ⚠️  評估失敗: {e}")
-                eval_results.append({"error": str(e), "_qa_id": qa.get("id", i)})
+                eval_results.append({"error": str(e), "_qa_id": qa.get("stable_id", str(qa.get("id", i)))})
 
             time.sleep(0.5)
 
@@ -1457,7 +1457,7 @@ def main(args: argparse.Namespace) -> None:
                     if "category_judgment" not in result:
                         print(f"    ⚠️  空回應（推理模型 content=None），跳過 QA {qa.get('id', i)}")
                         continue
-                    result["_qa_id"] = qa.get("id", i)
+                    result["_qa_id"] = qa.get("stable_id", str(qa.get("id", i)))
                     result["_original_category"] = qa.get("category", "")
                     classify_results.append(result)
                 except Exception as e:

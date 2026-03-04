@@ -112,22 +112,27 @@ class TestCategories:
 
 class TestGetQAItem:
     def test_existing_id_returns_item(self, client):
-        resp = client.get("/api/v1/qa/1")
+        resp = client.get("/api/v1/qa/a1b2c3d4e5f60001")
         assert resp.status_code == 200
         item = resp.json()["data"]
-        assert item["id"] == 1
+        assert item["id"] == "a1b2c3d4e5f60001"
+        assert item["seq"] == 1
         assert "Discover" in item["question"]
 
     def test_response_includes_all_fields(self, client):
-        item = client.get("/api/v1/qa/2").json()["data"]
+        item = client.get("/api/v1/qa/b2c3d4e5f6789012").json()["data"]
         assert item["category"] == "索引與檢索"
         assert item["difficulty"] == "基礎"
         assert item["evergreen"] is True
 
     def test_nonexistent_id_returns_404(self, client):
-        resp = client.get("/api/v1/qa/9999")
+        resp = client.get("/api/v1/qa/aaaaaaaaaaaaaaaa")
         assert resp.status_code == 404
 
-    def test_invalid_id_type_returns_422(self, client):
+    def test_invalid_id_format_returns_400(self, client):
         resp = client.get("/api/v1/qa/abc")
-        assert resp.status_code == 422
+        assert resp.status_code == 400
+
+    def test_valid_hex_but_not_found_returns_404(self, client):
+        resp = client.get("/api/v1/qa/0000000000000000")
+        assert resp.status_code == 404

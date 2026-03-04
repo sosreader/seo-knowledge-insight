@@ -178,7 +178,7 @@ def log_search(
     query: str,
     top_k: int,
     category: str | None,
-    returned_ids: list[int],
+    returned_ids: list[str],
     source_titles: list[str],
     client_ip: str | None = None,
     top_score: float | None = None,
@@ -201,7 +201,7 @@ def log_search(
 
 def log_chat(
     message: str,
-    returned_ids: list[int],
+    returned_ids: list[str],
     source_titles: list[str],
     client_ip: str | None = None,
     top_score: float | None = None,
@@ -222,7 +222,7 @@ def log_chat(
 
 def log_list_qa(
     filters: dict[str, Any],
-    returned_ids: list[int],
+    returned_ids: list[str],
     total: int,
     client_ip: str | None = None,
 ) -> None:

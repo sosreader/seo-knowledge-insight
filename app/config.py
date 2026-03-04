@@ -20,6 +20,7 @@ OUTPUT_DIR = ROOT_DIR / "output"
 QA_JSON_PATH = OUTPUT_DIR / "qa_final.json"
 QA_ENRICHED_JSON_PATH = OUTPUT_DIR / "qa_enriched.json"
 QA_EMBEDDINGS_PATH = OUTPUT_DIR / "qa_embeddings.npy"
+SESSIONS_DIR = OUTPUT_DIR / "sessions"
 
 # ── API ─────────────────────────────────────────────────
 CORS_ORIGINS: list[str] = [

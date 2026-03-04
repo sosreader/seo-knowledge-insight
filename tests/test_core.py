@@ -356,18 +356,18 @@ class TestEnrichedSearch:
         store = QAStore()
         store.items = [
             QAItem(
-                id=1, stable_id="s1", question="Q", answer="A", keywords=[],
+                id="a1b2c3d4e5f60001", seq=1, question="Q", answer="A", keywords=[],
                 confidence=1.0, category="c", difficulty="medium", evergreen=True,
                 source_title="T", source_date="2026-01-01", is_merged=False,
             )
         ]
-        store._id_index = {1: store.items[0]}
+        store._id_index = {"a1b2c3d4e5f60001": store.items[0]}
         store.embeddings = np.zeros((1, 1536), dtype=np.float32)
         mock_engine = MagicMock()
         mock_engine.search.return_value = [
-            ({"id": 1, "question": "Q", "answer": "A", "keywords": [], "category": "c"}, 0.9)
+            ({"id": "a1b2c3d4e5f60001", "question": "Q", "answer": "A", "keywords": [], "category": "c"}, 0.9)
         ]
         store._engine = mock_engine
         results = store.hybrid_search("Q", np.zeros(1536), top_k=1)
         assert len(results) == 1
-        assert results[0][0].id == 1
+        assert results[0][0].id == "a1b2c3d4e5f60001"

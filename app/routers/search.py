@@ -25,7 +25,7 @@ class SearchRequest(BaseModel):
 
 
 class SearchResult(BaseModel):
-    id: int
+    id: str
     question: str
     answer: str
     keywords: list[str]

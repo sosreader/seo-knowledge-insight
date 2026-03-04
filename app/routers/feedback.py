@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/v1/feedback", tags=["feedback"])
 
 class FeedbackRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500, description="原始查詢字串")
-    qa_id: int = Field(..., ge=1, description="被評分的 Q&A ID")
+    qa_id: str = Field(..., pattern=r"^[0-9a-f]{16}$", description="被評分的 Q&A stable_id（16-char hex）")
     feedback: Literal["helpful", "not_relevant"] = Field(
         ..., description="回饋類型：helpful（有幫助）或 not_relevant（不相關）"
     )

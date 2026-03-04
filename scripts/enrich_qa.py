@@ -38,14 +38,15 @@ QA_ENRICHED_PATH = OUTPUT_DIR / "qa_enriched.json"
 ACCESS_LOGS_DIR = OUTPUT_DIR / "access_logs"
 
 
-def _aggregate_hit_counts() -> dict[int, int]:
+def _aggregate_hit_counts() -> dict[str, int]:
     """
     從 access_logs/*.jsonl 聚合每筆 Q&A 的搜尋命中次數。
 
     只計算含 top_score 欄位的新格式記錄（MEDIUM-5 修復後才有）。
     若 access_logs 不存在，回傳空 dict。
+    新舊記錄相容：int ID 自動轉 str。
     """
-    hit_counts: dict[int, int] = {}
+    hit_counts: dict[str, int] = {}
     if not ACCESS_LOGS_DIR.exists():
         return hit_counts
 
@@ -61,7 +62,8 @@ def _aggregate_hit_counts() -> dict[int, int]:
                 if "top_score" not in record:
                     continue
                 for qa_id in record.get("returned_ids", []):
-                    hit_counts[qa_id] = hit_counts.get(qa_id, 0) + 1
+                    key = str(qa_id)
+                    hit_counts[key] = hit_counts.get(key, 0) + 1
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning("access_log 讀取失敗：%s — %s", log_file, exc)
 
@@ -70,7 +72,7 @@ def _aggregate_hit_counts() -> dict[int, int]:
 
 def _enrich_qa(
     qa: dict,
-    hit_counts: dict[int, int],
+    hit_counts: dict[str, int],
     notion_url_map: dict[str, str],
 ) -> dict:
     """
@@ -90,7 +92,7 @@ def _enrich_qa(
 
     synonyms = expand_keywords(keywords)
     freshness_score = compute_freshness_score(source_date, is_evergreen)
-    qa_id = qa.get("id", 0)
+    qa_id = qa.get("stable_id", str(qa.get("id", 0)))
     search_hit_count = hit_counts.get(qa_id, 0)
 
     # Notion URL：從 source_file 查映射

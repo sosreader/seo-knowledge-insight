@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class QAItem:
-    id: int
-    stable_id: str
+    id: str          # stable_id (16-char hex), primary key
+    seq: int         # 原始 sequential number，僅供顯示
     question: str
     answer: str
     keywords: list[str]
@@ -70,8 +70,8 @@ class QAStore:
 
         self.items = [
             QAItem(
-                id=qa["id"],
-                stable_id=qa.get("stable_id", ""),
+                id=qa.get("stable_id", str(qa["id"])),
+                seq=qa["id"],
                 question=qa["question"],
                 answer=qa["answer"],
                 keywords=qa.get("keywords", []),
@@ -124,8 +124,8 @@ class QAStore:
             )
             self._engine = None
 
-    def get_item_by_id(self, qa_id: int) -> Optional[QAItem]:
-        """O(1) id 查詢，load() 後可用；若不存在回傳 None。"""
+    def get_item_by_id(self, qa_id: str) -> Optional[QAItem]:
+        """O(1) id 查詢（stable_id），load() 後可用；若不存在回傳 None。"""
         return self._id_index.get(qa_id)
 
     def search(

@@ -148,7 +148,7 @@ Notion 會議紀錄（87 份，2023–2026）
 **向下相容**：
 - Q&A 搜尋/列表 endpoint 變更最小（只需調整驗證規則）
 - 沒有 breaking change（seq 欄位始終存在）
-- 測試套件已全數更新（256 passing）
+- 測試套件已全數更新（247 passing）
 
 **優勢**：
 - stable_id 保證長期穩定性，不受 pipeline 重跑影響

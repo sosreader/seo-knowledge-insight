@@ -66,7 +66,7 @@ class LearningStore:
     def record_feedback(
         self,
         query: str,
-        qa_id: int,
+        qa_id: str,
         feedback: str,
         top_score: Optional[float] = None,
     ) -> None:
@@ -89,7 +89,7 @@ class LearningStore:
         if top_score is not None:
             record["top_score"] = round(top_score, 4)
         self._append(record)
-        logger.debug("learning_store: feedback qa_id=%d feedback=%r", qa_id, feedback)
+        logger.debug("learning_store: feedback qa_id=%s feedback=%r", qa_id, feedback)
 
     def get_relevant_learnings(self, query: str) -> list[dict]:
         """

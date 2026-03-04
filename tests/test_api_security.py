@@ -95,7 +95,7 @@ class TestApiKeyAuth:
         assert resp.status_code == 401
 
     def test_qa_single_requires_auth(self, no_auth_client):
-        resp = no_auth_client.get("/api/v1/qa/1")
+        resp = no_auth_client.get("/api/v1/qa/a1b2c3d4e5f60001")
         assert resp.status_code == 401
 
     def test_qa_categories_requires_auth(self, no_auth_client):
@@ -161,7 +161,7 @@ class TestFeedbackEndpoint:
         monkeypatch.setattr(ls_mod, "_LEARNINGS_PATH", tmp_path / "learnings.jsonl")
         resp = auth_client.post(
             "/api/v1/feedback",
-            json={"query": "canonical 問題", "qa_id": 2, "feedback": "helpful"},
+            json={"query": "canonical 問題", "qa_id": "b2c3d4e5f6789012", "feedback": "helpful"},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -174,7 +174,7 @@ class TestFeedbackEndpoint:
         monkeypatch.setattr(ls_mod, "_LEARNINGS_PATH", log_path)
         auth_client.post(
             "/api/v1/feedback",
-            json={"query": "不相關的測試查詢", "qa_id": 1, "feedback": "not_relevant"},
+            json={"query": "不相關的測試查詢", "qa_id": "a1b2c3d4e5f60001", "feedback": "not_relevant"},
         )
         assert log_path.exists()
         import json
@@ -186,7 +186,7 @@ class TestFeedbackEndpoint:
         """缺少必填欄位 query 應回 422。"""
         resp = auth_client.post(
             "/api/v1/feedback",
-            json={"qa_id": 1, "feedback": "helpful"},
+            json={"qa_id": "a1b2c3d4e5f60001", "feedback": "helpful"},
         )
         assert resp.status_code == 422
 
@@ -194,7 +194,7 @@ class TestFeedbackEndpoint:
         """feedback 欄位只接受 helpful / not_relevant。"""
         resp = auth_client.post(
             "/api/v1/feedback",
-            json={"query": "q", "qa_id": 1, "feedback": "invalid_type"},
+            json={"query": "q", "qa_id": "a1b2c3d4e5f60001", "feedback": "invalid_type"},
         )
         assert resp.status_code == 422
 

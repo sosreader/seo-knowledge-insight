@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+import re
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
@@ -20,8 +22,12 @@ router = APIRouter(prefix="/api/v1/qa", tags=["qa"])
 
 # ──────────── schema ────────────
 
+_STABLE_ID_RE = re.compile(r"^[0-9a-f]{16}$")
+
+
 class QAResponse(BaseModel):
-    id: int
+    id: str
+    seq: int
     question: str
     answer: str
     keywords: list[str]
@@ -32,6 +38,7 @@ class QAResponse(BaseModel):
     source_title: str
     source_date: str
     is_merged: bool
+    notion_url: str = ""
 
 
 class QAListResponse(BaseModel):
@@ -48,6 +55,7 @@ class CategoriesResponse(BaseModel):
 def _to_schema(item: QAItem) -> QAResponse:
     return QAResponse(
         id=item.id,
+        seq=item.seq,
         question=item.question,
         answer=item.answer,
         keywords=item.keywords,
@@ -58,6 +66,7 @@ def _to_schema(item: QAItem) -> QAResponse:
         source_title=item.source_title,
         source_date=item.source_date,
         is_merged=item.is_merged,
+        notion_url=item.notion_url,
     )
 
 
@@ -71,7 +80,9 @@ def get_categories(request: Request) -> ApiResponse[CategoriesResponse]:
 
 @router.get("/{item_id}", response_model=ApiResponse[QAResponse])
 @limiter.limit("60/minute")
-def get_qa_item(request: Request, item_id: int) -> ApiResponse[QAResponse]:
+def get_qa_item(request: Request, item_id: str) -> ApiResponse[QAResponse]:
+    if not _STABLE_ID_RE.match(item_id):
+        raise HTTPException(status_code=400, detail="Invalid QA ID format")
     item = store.get_item_by_id(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail=f"QA id={item_id} not found")

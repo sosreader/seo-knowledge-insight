@@ -59,11 +59,11 @@ def _load_jsonl(path: Path) -> list[dict]:
     return records
 
 
-def _load_qa_index() -> dict[int, dict]:
-    """載入 qa_final.json 用於顯示 QA 標題"""
+def _load_qa_index() -> dict[str, dict]:
+    """載入 qa_final.json 用於顯示 QA 標題，以 stable_id 為 key"""
     try:
         data = json.loads((config.OUTPUT_DIR / "qa_final.json").read_text(encoding="utf-8"))
-        return {q["id"]: q for q in data.get("qa_database", [])}
+        return {q.get("stable_id", str(q["id"])): q for q in data.get("qa_database", [])}
     except Exception:
         return {}
 
@@ -228,17 +228,18 @@ def _print_top_accessed(records: list[dict], top_n: int, date: str) -> None:
         for qa_id in r.get("returned_ids", []):
             counter[qa_id] += 1
 
-    print(f"\n{'=' * 65}")
+    print(f"\n{'=' * 75}")
     print(f"Top {top_n} 最常被存取的 QA — {date}")
-    print(f"{'=' * 65}")
-    print(f"{'ID':>5}  {'次數':>4}  {'分類':<12}  問題（前 60 字）")
-    print(f"{'─' * 65}")
+    print(f"{'=' * 75}")
+    print(f"{'ID':<18}  {'次數':>4}  {'分類':<12}  問題（前 60 字）")
+    print(f"{'─' * 75}")
 
     for qa_id, count in counter.most_common(top_n):
-        qa = qa_index.get(qa_id, {})
+        key = str(qa_id)
+        qa = qa_index.get(key, {})
         category = qa.get("category", "?")
         question = qa.get("question", "?")[:60]
-        print(f"{qa_id:>5}  {count:>4}x  {category:<12}  {question}")
+        print(f"{key:<18}  {count:>4}x  {category:<12}  {question}")
 
     print(f"\n合計：{len(counter)} 個不同 QA 被存取，{sum(counter.values())} 次")
 
@@ -256,9 +257,9 @@ def _print_by_ip(records: list[dict], date: str) -> None:
 
     for ip, recs in sorted(by_ip.items(), key=lambda x: -len(x[1])):
         event_counts = Counter(r.get("event") for r in recs)
-        ids_all: list[int] = []
+        ids_all: list[str] = []
         for r in recs:
-            ids_all.extend(r.get("returned_ids", []))
+            ids_all.extend(str(x) for x in r.get("returned_ids", []))
         print(f"\n  {ip:<20} {len(recs)} 次請求")
         for ev, cnt in event_counts.items():
             print(f"    {ev:<12} {cnt}x")
@@ -312,9 +313,10 @@ def cmd_report(args: argparse.Namespace) -> None:
         print(f"\n  Top 10 最常被存取 QA:")
         qa_index = _load_qa_index()
         for qa_id, cnt in counter.most_common(10):
-            qa = qa_index.get(qa_id, {})
+            key = str(qa_id)
+            qa = qa_index.get(key, {})
             q = qa.get("question", "?")[:55]
-            print(f"    [{qa_id:>3}] {cnt}x  {q}")
+            print(f"    [{key}] {cnt}x  {q}")
 
     # IP 活動
     ips = Counter(r.get("client_ip") or "unknown" for r in access_records)

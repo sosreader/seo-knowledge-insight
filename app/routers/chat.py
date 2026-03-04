@@ -34,7 +34,7 @@ class ChatRequest(BaseModel):
 
 
 class SourceItem(BaseModel):
-    id: int
+    id: str
     question: str
     category: str
     source_title: str
