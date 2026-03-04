@@ -36,6 +36,17 @@ const envSchema = z.object({
   RATE_LIMIT_DEFAULT: z.coerce.number().int().positive().default(60),
   RATE_LIMIT_CHAT: z.coerce.number().int().positive().default(20),
   RATE_LIMIT_GENERATE: z.coerce.number().int().positive().default(5),
+
+  ANTHROPIC_API_KEY: z.string().default(""),
+  CONTEXT_EMBEDDING_WEIGHT: z.coerce.number().min(0).max(1).default(0.6),
+  RERANKER_ENABLED: z
+    .string()
+    .default("auto")
+    .transform((v) => {
+      if (v === "true") return true;
+      if (v === "false") return false;
+      return "auto" as const;
+    }),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -67,4 +78,5 @@ export const paths = {
   scriptsDir: resolve(ROOT_DIR, "scripts"),
   accessLogsDir: resolve(ROOT_DIR, "output/access_logs"),
   evalsDir: resolve(ROOT_DIR, "output/evals"),
+  synonymCustomJsonPath: resolve(ROOT_DIR, "output/synonym_custom.json"),
 } as const;

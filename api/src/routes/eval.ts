@@ -5,9 +5,10 @@ import {
   evalSampleRequestSchema,
   evalRetrievalRequestSchema,
   evalSaveRequestSchema,
+  evalRerankingRequestSchema,
 } from "../schemas/eval.js";
 import { execQaTools } from "../services/pipeline-runner.js";
-import { paths } from "../config.js";
+import { paths, config } from "../config.js";
 
 export const evalRoute = new Hono();
 
@@ -118,4 +119,61 @@ evalRoute.post("/save", async (c) => {
       classify_model: classify_model ?? null,
     },
   }));
+});
+
+// POST /reranking — evaluate reranker performance
+evalRoute.post("/reranking", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = evalRerankingRequestSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(fail("Invalid request body"), 400);
+  }
+
+  const { query, candidates, top_k } = parsed.data;
+
+  // Convert candidates to QAItem-like format for reranker
+  const mockHits = candidates.map((cand) => ({
+    item: {
+      id: cand.id,
+      question: cand.question,
+      answer: "",
+      category: cand.category,
+      keywords: [],
+      confidence: 0,
+      difficulty: "",
+      evergreen: false,
+      source_title: "",
+      source_date: "",
+      is_merged: false,
+      synonyms: [],
+      freshness_score: 1.0,
+      search_hit_count: 0,
+      notion_url: "",
+      source_type: "meeting",
+      source_collection: "seo-meetings",
+      source_url: "",
+      seq: 0,
+    },
+    score: cand.score,
+  }));
+
+  try {
+    const { rerank } = await import("../services/reranker.js");
+    const reranked = await rerank(query, mockHits, top_k);
+    return c.json(ok({
+      reranked: reranked.map((r, i) => ({
+        rank: i + 1,
+        id: r.item.id,
+        question: r.item.question,
+        category: r.item.category,
+        original_score: r.score,
+      })),
+      total_candidates: candidates.length,
+      top_k,
+    }));
+  } catch (err) {
+    console.error("reranking failed:", err);
+    return c.json(fail("reranking failed"), 500);
+  }
 });

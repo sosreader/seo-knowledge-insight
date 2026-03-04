@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
-import { config } from "./config.js";
+import { config, paths } from "./config.js";
 import { corsMiddleware } from "./middleware/cors.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -14,7 +14,9 @@ import { sessionsRoute } from "./routes/sessions.js";
 import { feedbackRoute } from "./routes/feedback.js";
 import { pipelineRoute } from "./routes/pipeline.js";
 import { evalRoute } from "./routes/eval.js";
+import { synonymsRoute } from "./routes/synonyms.js";
 import { qaStore } from "./store/qa-store.js";
+import { synonymsStore } from "./store/synonyms-store.js";
 import { initLaminar, flushLaminar } from "./utils/observability.js";
 
 const app = new Hono();
@@ -45,6 +47,8 @@ api.use("/pipeline", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/pipeline/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/eval", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/eval/*", rateLimit(config.RATE_LIMIT_DEFAULT));
+api.use("/synonyms", rateLimit(config.RATE_LIMIT_DEFAULT));
+api.use("/synonyms/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 
 // Mount routes
 api.route("/qa", qaRoute);
@@ -55,6 +59,7 @@ api.route("/sessions", sessionsRoute);
 api.route("/feedback", feedbackRoute);
 api.route("/pipeline", pipelineRoute);
 api.route("/eval", evalRoute);
+api.route("/synonyms", synonymsRoute);
 
 app.route("/api/v1", api);
 
@@ -72,6 +77,9 @@ if (process.env.NODE_ENV !== "test") {
   } catch (err) {
     console.warn("QAStore load failed (API will run without search):", err);
   }
+
+  // Load custom synonyms
+  synonymsStore.init(paths.synonymCustomJsonPath);
 
   serve({ fetch: app.fetch, port }, (info) => {
     console.log(`Server running on http://localhost:${info.port}`);

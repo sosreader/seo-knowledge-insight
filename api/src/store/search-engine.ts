@@ -36,12 +36,14 @@ export interface SearchEngineConfig {
   readonly semanticWeight: number;
   readonly synonymBoost: number;
   readonly kwBoost: KeywordBoostConfig;
+  readonly overRetrieveFactor: number; // Phase 3: over-retrieve multiplier (default 3)
 }
 
 const DEFAULT_CONFIG: SearchEngineConfig = {
   semanticWeight: 0.7,
   synonymBoost: 0.05,
   kwBoost: { boost: 0.1, maxHits: 3, partial: 0.05 },
+  overRetrieveFactor: 3,
 };
 
 export class SearchEngine {
@@ -163,6 +165,20 @@ export class SearchEngine {
       }
     }
     return 0;
+  }
+
+  /**
+   * Over-retrieve for re-ranking: returns topK * overRetrieveFactor candidates.
+   * Used by Phase 3 reranker.
+   */
+  searchOverRetrieve(
+    query: string,
+    queryEmbedding: Float32Array,
+    topK: number = 5,
+    category: string | null = null,
+    minScore: number = 0.1,
+  ): readonly SearchResult[] {
+    return this.search(query, queryEmbedding, topK * this.config.overRetrieveFactor, category, minScore);
   }
 
   /**

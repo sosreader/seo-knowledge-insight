@@ -77,11 +77,18 @@ export async function ragChat(
   // 1. Embed user question
   const queryVec = await getEmbedding(message);
 
-  // 2. Hybrid search
-  const hits = qaStore.hybridSearch(message, queryVec, config.CHAT_CONTEXT_K);
+  // 2. Hybrid search (over-retrieve for reranker)
+  const retrieveK = config.ANTHROPIC_API_KEY ? config.CHAT_CONTEXT_K * 3 : config.CHAT_CONTEXT_K;
+  const hits = qaStore.hybridSearch(message, queryVec, retrieveK);
+
+  // 2b. Re-ranking (Phase 3)
+  const { rerank } = await import("./reranker.js");
+  const finalHits = config.ANTHROPIC_API_KEY
+    ? await rerank(message, hits as Array<{ item: QAItem; score: number }>, config.CHAT_CONTEXT_K)
+    : hits.slice(0, config.CHAT_CONTEXT_K);
 
   // 3. Build context
-  const context = formatContext(hits);
+  const context = formatContext(finalHits);
 
   // 4. Assemble messages
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -114,7 +121,7 @@ export async function ragChat(
   });
 
   const answer = resp.choices[0]?.message?.content ?? "";
-  const sources = hits.map(({ item, score }) => itemToSource(item, score));
+  const sources = finalHits.map(({ item, score }) => itemToSource(item, score));
 
   // Online scoring (safe no-op when Laminar not initialized)
   await scoreRagResponse(answer, sources);

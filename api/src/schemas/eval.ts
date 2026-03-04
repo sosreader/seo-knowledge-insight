@@ -37,6 +37,23 @@ export const evalSaveRequestSchema = z.object({
   classify_model: z.string().max(100).optional(),
 });
 
+export const evalRerankingRequestSchema = z.object({
+  query: z.string().min(1).max(500),
+  top_k: z.number().int().positive().default(5),
+  candidates: z
+    .array(
+      z.object({
+        id: z.string(),
+        question: z.string(),
+        category: z.string(),
+        score: z.number(),
+      }),
+    )
+    .min(1)
+    .max(30),
+});
+
 export type EvalSampleRequest = z.infer<typeof evalSampleRequestSchema>;
 export type EvalRetrievalRequest = z.infer<typeof evalRetrievalRequestSchema>;
 export type EvalSaveRequest = z.infer<typeof evalSaveRequestSchema>;
+export type EvalRerankingRequest = z.infer<typeof evalRerankingRequestSchema>;

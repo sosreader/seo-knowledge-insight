@@ -16,6 +16,8 @@ synonym_dict — SEO 術語同義詞詞典
 from __future__ import annotations
 
 import functools
+import json
+from pathlib import Path
 
 
 # ── 補充詞典（不依賴 METRIC_QUERY_MAP 的技術術語）──────────────────
@@ -49,6 +51,38 @@ _SUPPLEMENTAL_SYNONYMS: dict[str, list[str]] = {
     "內容供給": ["當週文章", "文章數量", "文章頻率", "供給量"],
     "索引覆蓋率": ["Coverage", "有效 (Coverage)", "已索引頁面"],
     "版位": ["SERP 版位", "搜尋版位", "搜尋位置", "版位變化"],
+    # ── 新增擴充（Phase 1 Quick Win）──
+    "技術 SEO": ["Technical SEO", "技術優化", "網站技術", "crawl optimization"],
+    "關鍵字": ["keyword", "查詢詞", "搜尋字", "search term", "搜尋關鍵字", "長尾關鍵字"],
+    "長尾關鍵字": ["long-tail keyword", "長尾詞", "長尾查詢", "niche keyword"],
+    "標題標籤": ["title tag", "頁面標題", "meta title", "title element"],
+    "描述標籤": ["meta description", "meta 描述", "description tag", "搜尋結果摘要"],
+    "頁面速度": ["page speed", "載入速度", "loading speed", "LCP", "首次顯示"],
+    "行動裝置": ["mobile", "mobile-first", "行動優先", "手機版", "RWD", "響應式設計"],
+    "使用者體驗": ["UX", "user experience", "使用體驗", "用戶體驗"],
+    "內部連結": ["internal link", "內部連結結構", "網站內部連結"],
+    "錨點文字": ["anchor text", "連結文字", "錨文字"],
+    "頁面權重": ["PageRank", "page authority", "DA", "頁面權威"],
+    "品牌字": ["brand keyword", "品牌關鍵字", "品牌搜尋", "branded query"],
+    "非品牌字": ["non-branded keyword", "非品牌搜尋", "generic keyword"],
+    "語意搜尋": ["semantic search", "語意理解", "自然語言搜尋", "NLU"],
+    "知識圖譜": ["Knowledge Graph", "知識面板", "knowledge panel", "entity"],
+    "排名": ["rank", "排名位置", "搜尋排名", "position", "keyword ranking"],
+    "流量": ["traffic", "搜尋流量", "網站流量", "visits", "訪問量"],
+    "轉換率": ["conversion rate", "CVR", "轉換", "conversion"],
+    "跳出率": ["bounce rate", "跳離率", "單頁瀏覽"],
+    "停留時間": ["dwell time", "頁面停留時間", "time on page", "session duration"],
+    "搜尋意圖": ["search intent", "用戶意圖", "查詢意圖", "informational", "transactional"],
+    "內容品質": ["content quality", "內容優化", "高品質內容", "content strategy"],
+    "更新頻率": ["publish frequency", "更新策略", "發布頻率", "content freshness"],
+    "重複內容": ["duplicate content", "重複頁面", "內容重複", "thin content"],
+    "404": ["404 error", "Not Found", "斷連", "broken link", "失效連結"],
+    "log 分析": ["log file analysis", "server log", "crawl log", "伺服器日誌"],
+    "Search Console": ["搜尋主控台", "GSC", "Google Search Console", "站長工具"],
+    "Impressions": ["曝光", "曝光數", "曝光量", "impression count"],
+    "Position": ["排名", "平均排名", "搜尋位置", "average position"],
+    "Clicks": ["點擊", "點擊數", "點擊量", "click count"],
+    "分頁": ["pagination", "分頁器", "頁碼", "rel prev next"],
 }
 
 
@@ -77,14 +111,39 @@ def _build_metric_query_synonyms() -> dict[str, list[str]]:
     return synonyms
 
 
+def _load_custom_synonyms() -> dict[str, list[str]]:
+    """
+    從 output/synonym_custom.json 載入使用者自訂同義詞。
+
+    若檔案不存在或解析失敗則回傳空 dict。
+    """
+    path = Path(__file__).parents[1] / "output" / "synonym_custom.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if isinstance(v, list)}
+    except (json.JSONDecodeError, OSError):
+        pass
+    return {}
+
+
 def _build_synonyms() -> dict[str, list[str]]:
-    """合併 METRIC_QUERY_MAP 衍生 + 補充詞典（補充詞典優先）。"""
+    """合併 METRIC_QUERY_MAP 衍生 + 補充詞典 + 自訂詞典（自訂優先）。
+
+    優先序：custom > _SUPPLEMENTAL_SYNONYMS > METRIC_QUERY_MAP
+    """
     result = _build_metric_query_synonyms()
     # 補充詞典覆蓋：若 key 已存在則合併去重
     for term, syns in _SUPPLEMENTAL_SYNONYMS.items():
         existing = set(result.get(term, []))
         existing.update(syns)
         result[term] = sorted(existing)
+    # 自訂詞典完全覆蓋（不合併，以使用者設定為準）
+    custom = _load_custom_synonyms()
+    for term, syns in custom.items():
+        result[term] = syns
     return result
 
 
