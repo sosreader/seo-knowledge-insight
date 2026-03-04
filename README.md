@@ -99,7 +99,22 @@ Notion API 擷取 → Markdown 轉換（含圖片下載）→ OpenAI 萃取 Q&A 
 
 ```
 seo-knowledge-insight/
-├── config.py                    # 設定檔
+├── api/                         # Hono TypeScript API（v2.3，主架構）
+│   ├── src/
+│   │   ├── index.ts             # 入口（middleware + route mount）
+│   │   ├── config.ts            # Zod 驗證環境變數
+│   │   ├── routes/              # 7 個路由（qa/search/chat/reports/sessions/feedback/health）
+│   │   ├── middleware/           # auth / rate-limit / cors / error-handler
+│   │   ├── store/               # QAStore singleton + SearchEngine + SessionStore
+│   │   ├── services/            # embedding + rag-chat
+│   │   ├── schemas/             # Zod schema（7 個）
+│   │   └── utils/               # npy-reader / cosine-similarity / keyword-boost / sanitize
+│   ├── Dockerfile               # Multi-stage Node.js build（node:22-slim）
+│   ├── package.json             # pnpm + tsup + vitest
+│   └── tsconfig.json
+├── app/                         # Python FastAPI（Legacy，port 8001，預計下線）
+│   └── ...
+├── config.py                    # Pipeline 設定檔
 ├── pyproject.toml               # Package 定義（pip install -e . 用）
 ├── .env                         # 你的 API keys（從 .env.example 複製）
 ├── scripts/
@@ -132,11 +147,12 @@ seo-knowledge-insight/
     ├── qa_final.json            # 最終 Q&A 資料庫（JSON）
     ├── qa_enriched.json         # 豐富化 Q&A（含同義詞、時效性、Notion 連結）
     ├── qa_final.md              # 人類可讀的 Markdown 版
-    ├── qa_embeddings.npy        # 持久化 embedding 向量（Step 3 產出，Step 4 載入）
-    ├── metrics_sample.tsv      # 範例指標資料（可替换為實際資料）
+    ├── qa_embeddings.npy        # 持久化 embedding 向量（Step 3 產出，API 載入）
+    ├── metrics_sample.tsv       # 範例指標資料（可替换為實際資料）
     ├── report_YYYYMMDD.md       # 產生的每週 SEO 週報
     ├── eval_report.json         # 品質評估報告（JSON）
     ├── eval_report.md           # 品質評估報告（Markdown）
+    ├── sessions/                # 對話歷史（JSON，API 產生）
     ├── fetch_logs/              # Step 1 fetch 事件 JSONL（Audit Trail）
     └── access_logs/             # API 存取事件 JSONL（Audit Trail）
 ```
