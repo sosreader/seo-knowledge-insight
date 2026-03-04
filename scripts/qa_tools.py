@@ -674,6 +674,17 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
                 break
         mrr = 1 / first_relevant_rank if first_relevant_rank > 0 else 0
 
+        # Precision@K: top_k 中有幾個 QA 的 category 在 expected_cats
+        relevant_in_topk = sum(
+            1 for qa in retrieved if qa.get("category", "") in set(expected_cats)
+        )
+        precision_at_k = relevant_in_topk / top_k if top_k > 0 else 0.0
+
+        # F1 Score
+        p = precision_at_k
+        r = cat_hit_rate
+        f1_score = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+
         top1 = retrieved[0] if retrieved else {}
         case_results.append({
             "scenario": case.get("scenario", ""),
@@ -681,6 +692,9 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
             "keyword_hit_rate": round(kw_hit_rate, 2),
             "category_hit_rate": round(cat_hit_rate, 2),
             "mrr": round(mrr, 2),
+            "precision_at_k": round(precision_at_k, 2),
+            "recall_at_k": round(cat_hit_rate, 2),
+            "f1_score": round(f1_score, 2),
             "top1_question": top1.get("question", ""),
             "top1_answer": top1.get("answer", "")[:500],
             "top1_category": top1.get("category", ""),
@@ -696,6 +710,9 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
     avg_kw_hit = sum(c["keyword_hit_rate"] for c in case_results) / len(case_results)
     avg_cat_hit = sum(c["category_hit_rate"] for c in case_results) / len(case_results)
     avg_mrr = sum(c["mrr"] for c in case_results) / len(case_results)
+    avg_precision_at_k = sum(c["precision_at_k"] for c in case_results) / len(case_results)
+    avg_recall_at_k = sum(c["recall_at_k"] for c in case_results) / len(case_results)
+    avg_f1_score = sum(c["f1_score"] for c in case_results) / len(case_results)
 
     engine_label = "keyword-enriched" if use_enriched else "keyword"
     output = {
@@ -704,9 +721,18 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
         "avg_keyword_hit_rate": round(avg_kw_hit, 2),
         "avg_category_hit_rate": round(avg_cat_hit, 2),
         "avg_mrr": round(avg_mrr, 2),
+        "avg_precision_at_k": round(avg_precision_at_k, 2),
+        "avg_recall_at_k": round(avg_recall_at_k, 2),
+        "avg_f1_score": round(avg_f1_score, 2),
         "note": "llm_top1_relevant 需由 Claude Code 逐一判斷",
         "case_details": case_results,
     }
+
+    score_event("precision_at_k", avg_precision_at_k)
+    score_event("recall_at_k", avg_recall_at_k)
+    score_event("f1_score", avg_f1_score)
+    score_event("kw_hit_rate", avg_kw_hit)
+    score_event("mrr", avg_mrr)
 
     print(json.dumps(output, ensure_ascii=False, indent=2))
 

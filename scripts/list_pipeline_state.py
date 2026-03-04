@@ -54,7 +54,9 @@ def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
         if qa_path.exists():
             try:
                 data = json.loads(qa_path.read_text(encoding="utf-8"))
-                if data.get("qa_pairs") and "處理失敗" not in data.get("meeting_summary", ""):
+                # qa_pairs 是 list 即算完成（空列表 = 非 SEO 文章，也算處理完畢）
+                # 只有明確標記「處理失敗」才視為未完成
+                if isinstance(data.get("qa_pairs"), list) and "處理失敗" not in data.get("meeting_summary", ""):
                     done = True
             except (json.JSONDecodeError, KeyError):
                 pass
