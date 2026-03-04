@@ -97,7 +97,9 @@ def _to_detail(s: Session) -> SessionDetailOut:
 
 
 @router.get("", response_model=ApiResponse[SessionListOut])
+@limiter.limit("60/minute")
 async def list_sessions(
+    request: Request,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> ApiResponse[SessionListOut]:
@@ -111,7 +113,9 @@ async def list_sessions(
 
 
 @router.post("", response_model=ApiResponse[SessionDetailOut])
+@limiter.limit("20/minute")
 async def create_session(
+    request: Request,
     req: Optional[CreateSessionRequest] = None,
 ) -> ApiResponse[SessionDetailOut]:
     title = req.title if req and req.title else ""
@@ -120,7 +124,8 @@ async def create_session(
 
 
 @router.get("/{session_id}", response_model=ApiResponse[SessionDetailOut])
-async def get_session(session_id: str) -> ApiResponse[SessionDetailOut]:
+@limiter.limit("60/minute")
+async def get_session(request: Request, session_id: str) -> ApiResponse[SessionDetailOut]:
     session = session_store.get_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -179,7 +184,8 @@ async def send_message(
 
 
 @router.delete("/{session_id}", response_model=ApiResponse[dict])
-async def delete_session(session_id: str) -> ApiResponse[dict]:
+@limiter.limit("20/minute")
+async def delete_session(request: Request, session_id: str) -> ApiResponse[dict]:
     deleted = session_store.delete_session(session_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
