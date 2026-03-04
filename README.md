@@ -33,7 +33,8 @@
 
 - **語意搜尋** — `POST /api/v1/search`（Embedding cosine similarity + 關鍵字加權）
 - **RAG 問答** — `POST /api/v1/chat`（知識庫檢索 + OpenAI 生成回答）
-- **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢）
+- **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢，使用穩定的 16-char hex ID）
+- **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）— v2.2 新增
 - **API 安全** — v1.11 新增 API Key 認證（`X-API-Key` header）與 Rate Limit（chat 20/min、search/qa 60/min）
 
 ### 5. Claude Code 模式（不需要 OpenAI API Key）
@@ -71,7 +72,7 @@
 | Step 1 — Notion 擷取        | `make fetch-notion`                               | 無獨立指令 — 屬 Notion API 呼叫，非 LLM 任務，由 `/pipeline-local` 整合執行 | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
 | Step 2 — Q&A 萃取           | `make extract-qa`                                 | `/extract-qa`（不需要 OpenAI）                      | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
 | Step 3 — 去重 + 分類        | `make dedupe-classify`                            | `/dedupe-classify`（不需要 OpenAI）                 | 無對應 — 屬離線批次寫入，API 層僅提供讀取   |
-| Step 4 — 週報生成           | `make generate-report`                            | `/generate-report <URL>`（不需要 OpenAI）           | 無對應 — 屬長時間離線作業，未實作非同步 job |
+| Step 4 — 週報生成           | `make generate-report`                            | `/generate-report <URL>`（不需要 OpenAI）           | `POST /api/v1/reports/generate`（sync，120s timeout） |
 | Step 5 — 品質評估           | `make evaluate-qa`                                | `/evaluate-qa-local`（不需要 OpenAI — Claude Code 作為 Judge）| 無對應 — 屬長時間離線作業，未實作非同步 job |
 | Step 5 — Provider 評估      | 無獨立指令 — 需準備 `source_data.md` 與 `provider_*.md`（不走 pipeline） | `/evaluate-provider <目錄>`（不需要 OpenAI — Claude Code 作為 Judge） | 無對應 — 屬長時間離線作業，未實作非同步 job |
 | Steps 1–3 — 知識庫建構      | `make pipeline`                                   | `/pipeline-local`（不需要 OpenAI，含 Step 4）       | 無對應 — 屬長時間離線作業，未實作非同步 job |
@@ -79,8 +80,10 @@
 | 知識庫搜尋                  | `python scripts/qa_tools.py search --query "..."` | `/search <問題>`（不需要 OpenAI）                   | `POST /api/v1/search`                       |
 | RAG 問答                    | 無對應 — 對話需維護多輪歷史狀態，CLI 單次呼叫不適合 | `/chat`（不需要 OpenAI）                           | `POST /api/v1/chat`                         |
 | Q&A 列表查詢                | 無獨立指令 — 可直接讀 `output/qa_final.json`      | 無對應 — 屬結構化欄位過濾，REST 更適合              | `GET /api/v1/qa`                            |
-| 單筆 Q&A 詳情               | 無獨立指令 — 可直接讀 `output/qa_final.json`      | 無對應 — 屬結構化 ID 查詢，REST 更適合              | `GET /api/v1/qa/{id}`                       |
+| 單筆 Q&A 詳情               | 無獨立指令 — 可直接讀 `output/qa_final.json`      | 無對應 — 屬結構化 ID 查詢，REST 更適合              | `GET /api/v1/qa/{id}`（id: 16-char hex）    |
 | 所有分類                    | 無獨立指令 — 可直接讀 `output/qa_final.json`      | 無對應 — 屬結構化聚合查詢，REST 更適合              | `GET /api/v1/qa/categories`                 |
+| 週報列表                    | 無獨立指令 — 掃描 `output/report_*.md`           | 無對應 — 屬長時間離線作業，REST 更適合              | `GET /api/v1/reports`                       |
+| 單篇週報詳情                | 無獨立指令 — 讀取特定 `output/report_YYYYMMDD.md` | 無對應 — 屬結構化查詢，REST 更適合                 | `GET /api/v1/reports/{date}`（date: YYYYMMDD） |
 | 健康檢查                    | 無對應 — 服務監控端點，本地 pipeline 不適用       | 無對應 — 服務監控端點，本地 pipeline 不適用         | `GET /health`                               |
 
 **REST API** — 需要先啟動 `uvicorn app.main:app --port 8001`，並在 header 帶 `X-API-Key`（生產環境）。

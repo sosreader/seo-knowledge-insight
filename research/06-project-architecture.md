@@ -110,6 +110,119 @@ Notion 會議紀錄（87 份，2023–2026）
             ↓ output/learnings.jsonl
 ```
 
+## 13. QA ID 遷移與週報 API（v2.2，2026-03-04）
+
+### QA ID 從 Sequential Int 遷移至 Stable UUID
+
+**決策**：QAItem.id 從 sequential int（1–655）變更為 16 字元 hex string（stable_id），保留原始 seq 欄位供顯示用。
+
+**背景**：
+- Sequential int 在 append-only 知識庫中容易引發歧義（重新排序、去重時改變）
+- stable_id 是 qa_final.json 產生時的 SHA256(question+answer) 截短 16 字元，保證不可變性與唯一性
+- 影響範圍：API endpoint path、URL validation、audit log 記錄
+
+**實作細節**：
+
+1. **數據層（QAItem 定義）** — `/app/core/store.py`
+   ```python
+   @dataclass
+   class QAItem:
+       id: str           # stable_id，16-char hex，primary key
+       seq: int          # 原始 sequential number，僅供顯示
+       ...               # 其他欄位不變
+   ```
+
+2. **API Schema 更新** — `/app/routers/qa.py`
+   - QAResponse.id: str（16-char hex）
+   - GET `/api/v1/qa/{id}` 改用 regex validation：`^[0-9a-f]{16}$`
+   - QAListResponse 仍支援分頁 & 篩選
+
+3. **Audit Trail 更新** — `/utils/audit_logger.py`
+   - `log_access()` 的 returned_ids 參數改為 `list[str]`（16-char hex）
+   - `/scripts/audit_trail.py` 查詢語句不變，自動適配
+
+4. **API 回應格式** — 保持向下相容
+   - QAResponse 同時包含 id（stable_id）和 seq（sequential number）
+   - 客戶端可用任一欄位判讀，建議優先使用 id
+
+**向下相容**：
+- Q&A 搜尋/列表 endpoint 變更最小（只需調整驗證規則）
+- 沒有 breaking change（seq 欄位始終存在）
+- 測試套件已全數更新（256 passing）
+
+**優勢**：
+- stable_id 保證長期穩定性，不受 pipeline 重跑影響
+- 便於外部系統建置永久參考（如知識庫外部連結、行銷素材引用）
+- 提升 API 安全性（id 無法通過順序猜測下一個）
+
+---
+
+### 週報 REST API（新增 v2.2）
+
+**新增三個 endpoint** — `/app/routers/reports.py`
+
+1. **GET /api/v1/reports** — 列出所有週報（newest first）
+   ```json
+   {
+     "data": {
+       "items": [
+         {"date": "20260304", "filename": "report_20260304.md", "size_bytes": 12345},
+         ...
+       ],
+       "total": 42
+     }
+   }
+   ```
+   - 速率限制：60/minute
+   - 用途：前端「週報列表」頁面展示
+
+2. **GET /api/v1/reports/{date}** — 取得單篇週報（Markdown 原文）
+   ```json
+   {
+     "data": {
+       "date": "20260304",
+       "filename": "report_20260304.md",
+       "content": "# SEO 週報 2026-03-04\n...",
+       "size_bytes": 12345
+     }
+   }
+   ```
+   - date 格式：YYYYMMDD（regex validated）
+   - 404 if not found
+   - 用途：前端「週報詳情」頁面展示 Markdown 內容
+
+3. **POST /api/v1/reports/generate** — 觸發週報生成
+   ```json
+   {
+     "metrics_url": "https://sheets.google.com/...SHEET_ID..."  # optional
+   }
+   ```
+   回應：
+   ```json
+   {
+     "data": {
+       "date": "20260304",
+       "filename": "report_20260304.md",
+       "size_bytes": 12345
+     }
+   }
+   ```
+   - 速率限制：5/minute（計算密集）
+   - Timeout：120 秒
+   - 流程：執行 `scripts/04_generate_report.py` 並回傳最新生成的報告檔案
+
+**架構決策**：
+- 週報儲存位置：`config.OUTPUT_DIR`（預設 `./output/`）
+- 檔案格式：`report_YYYYMMDD.md`（immutable）
+- API 層零邏輯：只提供讀取 + 觸發，實際生成邏輯在 CLI script
+- 無狀態性：多次 POST 同一 metrics_url 會覆寫，符合冪等性原則
+
+**測試覆蓋**：
+- 目錄掃描、日期驗證、超時處理、錯誤回應
+- 已整合 conftest.py fixture `mock_output_dir`
+
+---
+
 ### 模型選擇邏輯
 
 ```

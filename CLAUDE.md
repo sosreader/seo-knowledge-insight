@@ -146,6 +146,15 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 
 - `/evaluate-qa` — Q&A 品質評估（LLM-as-Judge）+ 與基準線比較（本地替代：`/evaluate-qa-local`）
 
+### API 伺服器命令（FastAPI）
+
+- 啟動：`uvicorn app.main:app --port 8001`
+- 健康檢查：`GET /health`
+- 週報管理：
+  - `GET /api/v1/reports` — 列出所有週報
+  - `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
+  - `POST /api/v1/reports/generate` — 觸發週報生成
+
 ### 開發工具命令
 
 - `/tdd` — 測試驅動開發工作流（先寫測試）
