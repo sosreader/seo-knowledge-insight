@@ -10,6 +10,7 @@
  */
 
 import { readFileSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { paths } from "../config.js";
 import { parseNpy } from "../utils/npy-reader.js";
 import { normalizeRows, normalizeL2, matrixDotVector } from "../utils/cosine-similarity.js";
@@ -57,6 +58,15 @@ interface RawQAData {
   }>;
 }
 
+/**
+ * Deterministic ID from content — matches Python's compute_stable_id().
+ * Formula: sha256(f"{source_title}::{question[:120]}")[:16]
+ */
+function computeStableId(sourceTitle: string, question: string): string {
+  const content = `${sourceTitle}::${question.slice(0, 120)}`;
+  return createHash("sha256").update(content).digest("hex").slice(0, 16);
+}
+
 export class QAStore {
   private items: readonly QAItem[] = [];
   private embNorm: Float32Array = new Float32Array(0); // flat [N x dim], L2-normalized
@@ -95,7 +105,7 @@ export class QAStore {
     const rawItems = data.qa_database;
 
     this.items = rawItems.map((qa) => ({
-      id: qa.stable_id ?? String(qa.id),
+      id: qa.stable_id ?? computeStableId(qa.source_title ?? "", qa.question),
       seq: qa.id,
       question: qa.question,
       answer: qa.answer,
@@ -131,7 +141,7 @@ export class QAStore {
     // Initialize hybrid search engine
     if (this.items.length === npy.shape[0]) {
       const qaDicts: QADict[] = rawItems.map((qa) => ({
-        id: qa.stable_id ?? String(qa.id),
+        id: qa.stable_id ?? computeStableId(qa.source_title ?? "", qa.question),
         question: qa.question,
         answer: qa.answer,
         keywords: qa.keywords ?? [],
