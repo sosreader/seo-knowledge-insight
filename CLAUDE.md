@@ -148,7 +148,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 
 ### API 伺服器命令
 
-#### Python FastAPI（v2.2，port 8001）——逐步替換中
+#### Python FastAPI（port 8001）——Legacy，預計下線
 
 - 啟動：`uvicorn app.main:app --port 8001`
 - 健康檢查：`GET /health`
@@ -157,7 +157,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
   - `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
   - `POST /api/v1/reports/generate` — 觸發週報生成
 
-#### TypeScript Hono（v2.3，port 8002）——新架構
+#### TypeScript Hono（v2.3，port 8002）——當前主架構
 
 開發環境：
 ```bash
@@ -212,7 +212,7 @@ API 端點（與 Python 相同）：
 | 週報生成 | `gpt-5.2` API | Claude Code 直接推理 |
 | Q&A 品質評估 | `gpt-5.2` + `gpt-5-mini` | `/evaluate-qa-local`（Claude Code 作為 Judge） |
 | Provider 品質評估 | 無對應 | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
-| API 伺服器 | `uvicorn app.main:app --port 8001`（FastAPI） | `cd api && pnpm dev`（Hono, port 8002） |
+| API 伺服器 | `cd api && pnpm dev`（Hono, port 8002，需要 OPENAI_API_KEY） | `cd api && pnpm dev`（Hono, port 8002） |
 | 需要 API key | OPENAI_API_KEY | 不需要 |
 
 ---

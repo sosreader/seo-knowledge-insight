@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v2.2，2026-03-04）
+## 架構圖（最新：v2.3，2026-03-04）
 
 ```mermaid
 flowchart TD
@@ -25,12 +25,12 @@ flowchart TD
         S3 --> EMB[output/qa_embeddings.npy<br/>655 x 1536 維向量]
     end
 
-    subgraph Eval["評估層 v1.4 v1.5 v1.17（Claude Code 本地評估）"]
-        GoldenSets["eval/ Golden Sets<br/>extraction(5) dedup(40) qa(50) report(5)"]
+    subgraph Eval["評估層（Claude Code 本地評估 + LLM Judge）"]
+        GoldenSets["eval/ Golden Sets<br/>extraction(5) dedup(40) qa(50)<br/>report(5) retrieval(307) seo_analysis"]
         QA --> S5[Step 5: evaluate.py<br/>LLM-as-Judge<br/>4 維度評估 + 本地選項]
         EMB --> S5
         GoldenSets --> S5
-        S5 --> ER["eval_report.json<br/>Completeness 3.85<br/>+ eval_local_*.json<br/>(Claude Code 評分)"]
+        S5 --> ER["eval_report.json<br/>Completeness 3.95<br/>+ eval_local_*.json<br/>(Claude Code 評分)"]
     end
 
     subgraph RAG_Search["RAG和Hybrid Search v1.5"]
@@ -41,29 +41,29 @@ flowchart TD
         S4 --> RPT[report_YYYYMMDD.md]
     end
 
-    subgraph RAG_API["API Layer v2.2（stable_id + reports + sessions）"]
-        QA --> API[SEO Insight API<br/>FastAPI QAStore singleton<br/>QAItem.id: stable_id hex]
-        EMB --> API
-        SE -.->|hybrid_search| API
-        API --> SEC["app/core/security.py<br/>verify_api_key<br/>X-API-Key header<br/>SEO_API_KEY env"]
-        API --> LIM["app/core/limiter.py<br/>slowapi Limiter<br/>chat:20/min search:60/min<br/>qa:60/min reports/gen:5/min"]
-        API --> EXC["@app.exception_handler<br/>500 不流展 traceback"]
-        SEC --> EP["POST /api/v1/search — 60/min<br/>POST /api/v1/chat — 20/min<br/>GET  /api/v1/qa — 60/min<br/>GET  /api/v1/qa/{id} — hex validated<br/>POST /api/v1/feedback — 60/min"]
-        LIM --> EP
-        EXC --> EP
-        EP --> ENV["ApiResponse[T]<br/>data / error / meta<br/>request_id + version"]
-        EP -->|not_relevant / helpful| LS
-        EP -->|staleness 警示 18個月| STALE["chat.py _is_stale()<br/>超過 18 個月提示"]
-        SEC --> RPT_EP["GET  /api/v1/reports — 60/min<br/>GET  /api/v1/reports/{date}<br/>POST /api/v1/reports/generate — 5/min"]
-        LIM --> RPT_EP
-        RPT_EP --> RPT_STORE["app/routers/reports.py<br/>output/report_YYYYMMDD.md<br/>subprocess + SSRF 防護"]
-        SEC --> SS_EP["GET/POST /api/v1/sessions<br/>GET/POST/DELETE .../sessions/{id}"]
-        SS_EP --> SS_STORE["app/core/session_store.py<br/>output/sessions/{uuid}.json<br/>Repository Pattern"]
+    subgraph Hono_API["API Layer v2.3（Hono + TypeScript，port 8002）"]
+        QA --> HAPI["SEO Insight API<br/>Hono + TypeScript<br/>QAStore（npy-reader 向量解析）"]
+        EMB --> HAPI
+        SE -.->|hybrid_search| HAPI
+        HAPI --> HMID["middleware/<br/>auth.ts（X-API-Key）<br/>rate-limit.ts（chat:20/min search/qa:60/min reports/gen:5/min）<br/>cors.ts + error-handler.ts"]
+        HMID --> HEP["6 個 Router + health<br/>qa.ts — GET /qa, /qa/{id}（hex+int）<br/>search.ts — POST /search<br/>chat.ts — POST /chat<br/>reports.ts — GET/POST /reports<br/>sessions.ts — CRUD /sessions（60/min, msg:20/min）<br/>feedback.ts — POST /feedback"]
+        HEP --> HENV["ApiResponse[T]<br/>Zod schema validation<br/>data / error / meta"]
+        HEP -->|not_relevant / helpful| LS
+        HAPI --> HSTORE["store/<br/>qa-store.ts（QAStore singleton）<br/>search-engine.ts（hybrid search + keyword boost）<br/>session-store.ts（FileSessionStore）<br/>learning-store.ts"]
+        HAPI --> HUTIL["utils/<br/>npy-reader.ts（NumPy .npy 解析）<br/>cosine-similarity.ts（Float32Array）<br/>keyword-boost.ts（4 層匹配）<br/>sanitize.ts（HTML escape 防 XSS）"]
+        HAPI --> HSVC["services/<br/>embedding.ts（OpenAI wrapper）<br/>rag-chat.ts（RAG 問答）"]
+        HAPI --> HSCHEMA["schemas/<br/>Zod runtime validation<br/>qa / search / chat / feedback<br/>report / session"]
     end
 
-    subgraph AuditTrail["Audit Trail v1.0"]
+    subgraph Legacy_API["Python API Layer（FastAPI，port 8001，legacy — 預計下線）"]
+        QA -.-> API["FastAPI QAStore singleton<br/>app/ 目錄<br/>277 tests passing"]
+        EMB -.-> API
+        API -.-> EP["15 endpoints<br/>同 Hono 功能對等"]
+    end
+
+    subgraph AuditTrail["Audit Trail"]
         S1 -->|fetch events| AL["audit_logger.py<br/>output/fetch_logs/"]
-        EP -->|access events| AL2["audit_logger.py<br/>output/access_logs/"]
+        HEP -->|access events| AL2["output/access_logs/<br/>JSONL per day"]
         AL --> ATQ["audit_trail.py<br/>query tool"]
         AL2 --> ATQ
     end
@@ -86,20 +86,20 @@ flowchart TD
         LS["utils/learning_store.py<br/>output/learnings.jsonl<br/>record_miss / record_feedback<br/>get_relevant_learnings"] -.->|query learnings| SE
     end
 
-    subgraph Observability["可觀測性 v1.19 完整整合（FastAPI+CLI+Evals）"]
+    subgraph Observability["可觀測性（Python CLI+Evals；Hono TODO）"]
         S2 -->|"@observe + init_laminar"| LM["Laminar SDK v0.5<br/>OpenTelemetry-based<br/>lmnr observe"]
         S3 -->|"@observe + init_laminar"| LM
         S4 -->|"@observe + init_laminar"| LM
         S5 -->|"@observe + init_laminar"| LM
         QT["qa_tools.py 6 subcommands<br/>@observe + flush_laminar"] -->|"search/merge_qa/etc"| LM
-        API -->|"auto OpenAI trace"| LM
+        HAPI -.->|"TODO: Laminar 整合"| LM
         EC["evals/eval_chat.py<br/>Laminar.initialize()"] -->|"lmnr eval"| LM
         LM --> LD["Laminar Dashboard<br/>Traces + Spans + Events"]
         OS -.->|"score_event"| LM
     end
 
-    subgraph OfflineEvals["離線評估 v1.10"]
-        GoldenSets2["eval/ Golden Sets<br/>retrieval(307) extraction chat(10)"]
+    subgraph OfflineEvals["離線評估"]
+        GoldenSets2["eval/ Golden Sets<br/>retrieval(307) extraction(5)<br/>chat(10) seo_analysis"]
         GoldenSets2 --> EvalR["evals/eval_retrieval.py<br/>keyword_hit_rate<br/>category_match"]
         GoldenSets2 --> EvalE["evals/eval_extraction.py<br/>qa_count<br/>keyword_coverage"]
         GoldenSets2 --> EvalC["evals/eval_chat.py<br/>answer_length<br/>has_sources"]
@@ -108,19 +108,20 @@ flowchart TD
         EvalE -->|lmnr eval| LM
         EvalC -->|lmnr eval| LM
         EvalEnrich -->|lmnr eval group=enrichment_quality| LM
-        EP -->|score_rag_response| OS["laminar_scoring.py v1.19<br/>score_enrichment_boost<br/>score_search_miss"]
+        HEP -->|score_rag_response| OS["laminar_scoring<br/>score_enrichment_boost<br/>score_search_miss"]
         OS -->|attach to trace| LM
     end
 
-    subgraph Deploy["部署（ECR + App Runner）"]
-        API --> Docker[Docker Image]
-        Docker --> ECR[AWS ECR]
-        ECR --> AR[AWS App Runner<br/>HTTPS auto<br/>port 8001]
+    subgraph Deploy["部署"]
+        HAPI --> HDK["Docker Image<br/>TypeScript Hono"]
+        HDK --> ECR[AWS ECR]
+        ECR --> AR["AWS App Runner<br/>HTTPS auto<br/>port 8002"]
+        API -.->|"legacy port 8001"| ECR
     end
 
     subgraph DataLayer["資料層（Supabase-ready）"]
         direction LR
-        QA -.->|"Phase 1: 檔案載入"| STORE["app/core/store.py<br/>QAStore 抽象層<br/>（遷移邊界）"]
+        QA -.->|"Phase 1: 檔案載入"| STORE["store/qa-store.ts<br/>QAStore 抽象層<br/>（遷移邊界）"]
         STORE -.->|"Phase 2: Supabase"| SB["Supabase<br/>PostgreSQL + pgvector<br/>API 即時讀寫"]
     end
 ```

@@ -15,8 +15,8 @@
 | [05-models.md](./05-models.md)                                   | 模型選擇決策 / Embedding 模型比較                                           |
 | [06-project-architecture.md](./06-project-architecture.md)       | 本專案架構 / Pipeline 全景 / 技術決策學術支撐                               |
 | [06a-architecture-changelog.md](./06a-architecture-changelog.md) | 架構變更紀錄（Changelog），每次架構調整後新增一行                           |
-| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.2，stable_id + reports + sessions）      |
-| [07-deployment.md](./07-deployment.md)                           | FastAPI RAG API 化 / ECR + App Runner 部署 / Supabase 遷移路徑              |
+| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.3，Hono API 主架構 + stable_id）         |
+| [07-deployment.md](./07-deployment.md)                           | Hono API 部署 / ECR + App Runner / Supabase 遷移路徑                        |
 | [08-fetch-optimization.md](./08-fetch-optimization.md)           | Notion 爬取優化 / ETag / 增量更新                                           |
 | [09-provider-comparison.md](./09-provider-comparison.md)         | AI Provider 輸出品質比較方法論與歷次跑分結果                                |
 | [10-multi-layer-context.md](./10-multi-layer-context.md)         | Multi-Layer Context / enrichment / 同義詞擴展 / 時效性衰減 / Learning Store |
@@ -38,7 +38,7 @@
 
 ---
 
-## 當前指標現況（2026-03-04，v2.2 — stable_id + reports + sessions）
+## 當前指標現況（2026-03-04，v2.3 — Hono API + stable_id + reports + sessions）
 
 | 指標                   | 數值       | 說明                                                      |
 | ---------------------- | ---------- | --------------------------------------------------------- |

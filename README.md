@@ -29,13 +29,14 @@
 - **分類準確度檢驗** — Category、Difficulty、Evergreen 標籤驗證
 - **對標基準線** — 自動與歷史 eval 比較進度（v2.0: Relevance 5.00、Accuracy 4.30、Completeness 3.95）
 
-### 4. REST API 服務（FastAPI，`app/`）
+### 4. REST API 服務（Hono + TypeScript，`api/`）
 
-- **語意搜尋** — `POST /api/v1/search`（Embedding cosine similarity + 關鍵字加權）
+- **語意搜尋** — `POST /api/v1/search`（Embedding cosine similarity + 關鍵字加權 + 同義詞 + 時效性）
 - **RAG 問答** — `POST /api/v1/chat`（知識庫檢索 + OpenAI 生成回答）
-- **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢，使用穩定的 16-char hex ID）
-- **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）— v2.2 新增
-- **API 安全** — v1.11 新增 API Key 認證（`X-API-Key` header）與 Rate Limit（chat 20/min、search/qa 60/min）
+- **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢，使用穩定的 16-char hex ID 或 seq number）
+- **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）
+- **對話管理** — `GET/POST/DELETE /api/v1/sessions/*`（CRUD、訊息歷史）
+- **API 安全** — API Key 認證（`X-API-Key` header）、Rate Limit（chat 20/min、search/qa 60/min）、Zod schema validation
 
 ### 5. Claude Code 模式（不需要 OpenAI API Key）
 
@@ -86,7 +87,7 @@
 | 單篇週報詳情                | 無獨立指令 — 讀取特定 `output/report_YYYYMMDD.md` | 無對應 — 屬結構化查詢，REST 更適合                 | `GET /api/v1/reports/{date}`（date: YYYYMMDD） |
 | 健康檢查                    | 無對應 — 服務監控端點，本地 pipeline 不適用       | 無對應 — 服務監控端點，本地 pipeline 不適用         | `GET /health`                               |
 
-**REST API** — 需要先啟動 `uvicorn app.main:app --port 8001`，並在 header 帶 `X-API-Key`（生產環境）。
+**REST API** — 需要先啟動 `cd api && pnpm dev`（port 8002），並在 header 帶 `X-API-Key`（生產環境）。
 
 ---
 
@@ -714,65 +715,97 @@ Q&A 萃取的品質主要取決於 `utils/openai_helper.py` 中的 prompt：
 
 ## SEO Insight API
 
-> **狀態**：Phase 2 已完成。`app/` 目錄提供獨立的 FastAPI 服務，讀取 `output/qa_final.json` 與 `output/qa_embeddings.npy` 進記憶體，不依賴任何資料庫。
+> **當前主架構**：TypeScript Hono（v2.3，port 8002）。`api/` 目錄提供 Hono REST 服務，讀取 `output/qa_final.json`（或 `qa_enriched.json`）與 `output/qa_embeddings.npy` 進記憶體。
+>
+> **Legacy**：Python FastAPI（port 8001，`app/` 目錄）預計下線，功能完全對等。
 
-### 架構
+### 架構（Hono TypeScript）
 
 ```
-app/
-├── main.py              # FastAPI 應用入口、lifespan（啟動載入資料）、CORS
-├── config.py            # API 專用設定（不依賴 pipeline config.py）
-├── core/
-│   ├── store.py         # QAStore singleton：載入 JSON+npy，search()/list_qa()
-│   └── chat.py          # get_embedding() + rag_chat()（AsyncOpenAI）
-└── routers/
-    ├── search.py        # POST /api/v1/search
-    ├── chat.py          # POST /api/v1/chat
-    └── qa.py            # GET  /api/v1/qa, /qa/{id}, /qa/categories
+api/src/
+├── index.ts             # Hono 應用入口（middleware stack + route mount）
+├── config.ts            # Zod validated 環境設定
+├── middleware/
+│   ├── auth.ts          # X-API-Key timing-safe 驗證
+│   ├── rate-limit.ts    # IP-based 速率限制（記憶體 store）
+│   ├── cors.ts          # CORS 白名單
+│   └── error-handler.ts # 全域錯誤捕捉（隱藏 stack trace）
+├── routes/
+│   ├── qa.ts            # GET /qa, /qa/categories, /qa/{id}（hex+int）
+│   ├── search.ts        # POST /search（hybrid search）
+│   ├── chat.ts          # POST /chat（RAG 問答）
+│   ├── reports.ts       # GET/POST /reports
+│   ├── sessions.ts      # CRUD /sessions
+│   ├── feedback.ts      # POST /feedback
+│   └── health.ts        # GET /health
+├── store/
+│   ├── qa-store.ts      # QAStore singleton（JSON + npy 載入）
+│   ├── search-engine.ts # Hybrid search（語意 + keyword + synonym + freshness）
+│   ├── session-store.ts # FileSessionStore（Repository Pattern）
+│   └── learning-store.ts # 失敗記憶（JSONL）
+├── schemas/             # Zod runtime validation（7 個 schema）
+├── services/
+│   ├── embedding.ts     # OpenAI embedding wrapper
+│   └── rag-chat.ts      # RAG 問答邏輯
+└── utils/
+    ├── npy-reader.ts    # NumPy .npy 格式解析
+    ├── cosine-similarity.ts # Float32Array 向量運算
+    ├── keyword-boost.ts # 4 層關鍵字匹配
+    └── sanitize.ts      # HTML escape（防 XSS）
 ```
 
 ### Endpoints
 
-| Method | Path                    | 說明                                                                                 |
-| ------ | ----------------------- | ------------------------------------------------------------------------------------ |
-| `GET`  | `/health`               | 健康檢查，回傳 `{status, qa_count}`                                                  |
-| `POST` | `/api/v1/search`        | 語意搜尋（純語意），body: `{query, top_k?, category?}`                               |
-| `POST` | `/api/v1/chat`          | RAG 問答（純語意），body: `{message, history?}`                                      |
-| `GET`  | `/api/v1/qa`            | 列表查詢，query: `category`, `keyword`, `difficulty`, `evergreen`, `limit`, `offset` |
-| `GET`  | `/api/v1/qa/categories` | 所有分類（依數量降序）                                                               |
-| `GET`  | `/api/v1/qa/{id}`       | 單筆 Q&A                                                                             |
+| Method   | Path                           | 說明                                                                                 | Rate Limit |
+| -------- | ------------------------------ | ------------------------------------------------------------------------------------ | ---------- |
+| `GET`    | `/health`                      | 健康檢查，回傳 `{status, timestamp, version}`                                        | 無限制     |
+| `POST`   | `/api/v1/search`               | 混合搜尋（語意 + 關鍵字 + 同義詞 + 時效性），body: `{query, top_k?, category?}`       | 60/min     |
+| `POST`   | `/api/v1/chat`                 | RAG 問答，body: `{message, history?}`                                                | 20/min     |
+| `GET`    | `/api/v1/qa`                   | 列表查詢，query: `category`, `keyword`, `difficulty`, `evergreen`, `limit`, `offset` | 60/min     |
+| `GET`    | `/api/v1/qa/categories`        | 所有分類（依數量降序）                                                               | 60/min     |
+| `GET`    | `/api/v1/qa/{id}`              | 單筆 Q&A（支援 16-char hex stable_id 或 integer seq）                                 | 60/min     |
+| `GET`    | `/api/v1/reports`              | 週報列表（newest first）                                                             | 60/min     |
+| `GET`    | `/api/v1/reports/{date}`       | 單篇週報 Markdown（YYYYMMDD）                                                        | 60/min     |
+| `POST`   | `/api/v1/reports/generate`     | 觸發週報生成                                                                         | 5/min      |
+| `GET`    | `/api/v1/sessions`             | 對話列表（分頁）                                                                     | 60/min     |
+| `POST`   | `/api/v1/sessions`             | 建立對話                                                                             | 60/min     |
+| `GET`    | `/api/v1/sessions/{id}`        | 對話詳情（含訊息歷史）                                                               | 60/min     |
+| `POST`   | `/api/v1/sessions/{id}/messages` | 新增訊息並取得 RAG 回覆                                                             | 20/min     |
+| `DELETE` | `/api/v1/sessions/{id}`        | 刪除對話                                                                             | 60/min     |
+| `POST`   | `/api/v1/feedback`             | 使用者回饋（helpful / not_relevant）                                                  | 60/min     |
 
-互動式文件：`http://localhost:8001/docs`
+#### 安全機制
 
-#### 重要安全警告
-
-- **API Auth 已實作**（v1.11）—「`SEO_API_KEY` env 管制，`X-API-Key` header；未設則開發模式放行 + warn」。**生產環境必須設定 `SEO_API_KEY`。**
-- **Rate Limit 已實作**（v1.11）— slowapi：chat 20/min、search/qa 60/min，超限回 429 RFC 6585。
+- **API Key 認證** — `SEO_API_KEY` env，`X-API-Key` header，timing-safe 比較；未設則開發模式放行 + warn
+- **Rate Limit** — IP-based 記憶體 store，支援 `x-forwarded-for` proxy
+- **Zod Schema Validation** — 所有輸入 runtime 驗證
+- **HTML Escape** — 防 XSS（sanitize.ts）
+- **Error Handler** — 全域捕捉，不洩漏 stack trace
 
 ### 本機測試
 
 ```bash
-# 方式 1：直接啟動
-OPENAI_API_KEY=sk-... uvicorn app.main:app --reload --port 8001
+# 方式 1：直接啟動（開發模式）
+cd api
+pnpm install
+pnpm dev   # tsx watch，port 8002
 
-# 方式 2：Docker
-docker build -t seo-insight-api:local .
-docker run -d \
-  -p 127.0.0.1:8001:8001 \
-  -v $(pwd)/output:/app/output:ro \
-  -e OPENAI_API_KEY=sk-... \
-  seo-insight-api:local
+# 方式 2：Docker Compose（含 legacy Python API）
+docker-compose up
 
 # 測試
-curl http://localhost:8001/health
-curl 'http://localhost:8001/api/v1/qa/categories'
+curl http://localhost:8002/health
+curl 'http://localhost:8002/api/v1/qa/categories'
+
+# 執行測試（62 tests）
+cd api && pnpm test
 ```
 
 ### 部署（ECR + App Runner）
 
 GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workflows/deploy-seo-api.yaml)
 
-**觸發條件**：push to `main`，且 `app/**`、`requirements_api.txt` 或 `Dockerfile` 有變更。
+**觸發條件**：push to `main`，且 `api/**` 或 `Dockerfile` 有變更。
 
 **所需 GitHub Secrets：**
 
@@ -789,21 +822,26 @@ GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workfl
 
 **App Runner 設定**：
 
-- Source: ECR private image，Port: 8001
+- Source: ECR private image，Port: 8002
 - Health check: `/health`
 - IAM Role（ECR Access）: Trust `build.apprunner.amazonaws.com` + `AmazonEC2ContainerRegistryReadOnly`
 
 **資料層遷移路徑**：當前為檔案載入（Phase 1），未來遷移至 Supabase pgvector（Phase 2）。詳見 `research/07-deployment.md` §21.4。
 
-### 環境變數（`app/`）
+### 環境變數（`api/`）
 
 | 變數                     | 預設值                   | 說明                         |
 | ------------------------ | ------------------------ | ---------------------------- |
-| `OPENAI_API_KEY`         | —                        | 必填                         |
+| `PORT`                   | `8002`                   | 伺服器埠號                   |
+| `OPENAI_API_KEY`         | —                        | 必填（chat/search 需要）     |
 | `OPENAI_MODEL`           | `gpt-5.2`                | RAG chat 模型                |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding 模型               |
+| `SEO_API_KEY`            | —                        | API 認證金鑰（生產必填）     |
 | `CORS_ORIGINS`           | `http://localhost:3000`  | 逗號分隔多個 origin          |
 | `CHAT_CONTEXT_K`         | `5`                      | RAG chat 帶入的 context 筆數 |
+| `RATE_LIMIT_DEFAULT`     | `60`                     | 預設速率限制（/min）         |
+| `RATE_LIMIT_CHAT`        | `20`                     | 聊天速率限制（/min）         |
+| `RATE_LIMIT_GENERATE`    | `5`                      | 週報生成速率限制（/min）     |
 
 ---
 

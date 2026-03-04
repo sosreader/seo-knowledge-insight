@@ -401,7 +401,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 
 ### 本專案架構圖（Mermaid）
 
-> 架構圖（最新 v1.19，含 Multi-Layer Context）維護於 [06b-architecture-diagram.md](./06b-architecture-diagram.md)
+> 架構圖（最新 v2.3，Hono API 主架構）維護於 [06b-architecture-diagram.md](./06b-architecture-diagram.md)
 
 ### 架構變更紀錄（Architecture Changelog）
 
