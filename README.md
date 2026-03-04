@@ -39,7 +39,40 @@
 - **對話管理** — `GET/POST/DELETE /api/v1/sessions/*`（CRUD、訊息歷史）
 - **Pipeline 管理** — `/api/v1/pipeline/*`（10 endpoints：狀態、會議、預覽、日誌、觸發 fetch/fetch-articles/extract/dedupe/metrics）
 - **Eval 評估** — `/api/v1/eval/*`（4 endpoints：抽樣、Retrieval 評估、跨 provider 比較、儲存結果）
+- **同義詞管理** — `/api/v1/synonyms/*`（4 endpoints：列表、新增、更新、刪除；雙層設計：靜態+自訂）
 - **API 安全** — API Key 認證（`X-API-Key` header）、Rate Limit（chat 20/min、search/qa 60/min）、Zod schema validation
+
+#### RAG 迭代改進（v2.11 新增）
+
+**Phase 2：Contextual Embeddings**
+- `scripts/_generate_context.py` — 用 Claude Haiku 離線生成 QA 情境 context（150–300 字/筆）
+- `output/qa_context.json` — 預生成的 situating context（無運行時成本）
+- 搜尋和 chat 時可利用 context 豐富檢索結果
+
+**Phase 3：Re-ranking 服務**（可選，需要 `ANTHROPIC_API_KEY`）
+- `api/src/services/reranker.ts` — Claude Haiku reranker service
+  - 初期 over-retrieve K×3 候選
+  - 用 XML 結構化 prompt 重排序、評分
+  - 篩選 top-K 結果
+  - 錯誤時自動 fallback 至原始排序
+- `POST /api/v1/eval/reranking` — 評估 reranker 品質提升
+- **預期效果**：Precision@K 提升 76% → 85%+、Top-1 Hit 達 90%+
+
+**環境變數（v2.11）**：
+```env
+ANTHROPIC_API_KEY=sk-ant-...     # 用於 Reranker（可選）
+CONTEXT_EMBEDDING_WEIGHT=0.6     # Context 加權（預設 0.6）
+RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"，預設 auto）
+```
+
+評估基準線（v2.11，20 cases，top-k=5）：
+| 指標 | 數值 |
+|------|------|
+| KW Hit Rate | 73% |
+| Precision@K | 76% |
+| Recall@K | 80% |
+| F1 Score | 0.73 |
+| MRR | 0.88 |
 
 ### 5. Claude Code 模式（不需要 OpenAI API Key）
 
@@ -147,11 +180,11 @@ seo-knowledge-insight/
 │   ├── src/
 │   │   ├── index.ts             # 入口（middleware + route mount）
 │   │   ├── config.ts            # Zod 驗證環境變數
-│   │   ├── routes/              # 9 個路由（qa/search/chat/reports/sessions/feedback/pipeline/eval/health）
+│   │   ├── routes/              # 10 個路由（qa/search/chat/reports/sessions/feedback/pipeline/eval/health/synonyms）
 │   │   ├── middleware/           # auth / rate-limit / cors / error-handler
 │   │   ├── store/               # QAStore singleton + SearchEngine + SessionStore
 │   │   ├── services/            # embedding + rag-chat + pipeline-runner
-│   │   ├── schemas/             # Zod schema（9 個）
+│   │   ├── schemas/             # Zod schema（10 個）
 │   │   └── utils/               # npy-reader / cosine-similarity / keyword-boost / cjk-tokenizer / mode-detect / sanitize
 │   ├── Dockerfile               # Multi-stage Node.js build（node:22-slim）
 │   ├── package.json             # pnpm + tsup + vitest
@@ -248,6 +281,8 @@ NOTION_TOKEN=ntn_你的token
 NOTION_PARENT_PAGE_ID=你的母頁面ID
 OPENAI_API_KEY=sk-你的key
 OPENAI_MODEL=gpt-5.2
+ANTHROPIC_API_KEY=sk-ant-你的key  # v2.11 新增：用於 Reranker（可選）
+LMNR_PROJECT_API_KEY=your-laminar-key  # 可選：用於 Observability traces
 ```
 
 ---
@@ -806,6 +841,7 @@ api/src/
 │   ├── feedback.ts      # POST /feedback
 │   ├── pipeline.ts      # Pipeline 管理（10 endpoints，含 Google Cases）
 │   ├── eval.ts          # Eval 評估（4 endpoints）
+│   ├── synonyms.ts      # 同義詞管理（4 endpoints）
 │   └── health.ts        # GET /health
 ├── store/
 │   ├── qa-store.ts      # QAStore singleton（JSON + optional npy）
