@@ -30,7 +30,7 @@ flowchart TD
         MD_GC --> S2
         S2 --> RAW[output/qa_all_raw.json<br/>source_type + source_collection 標記]
         RAW --> S3[Step 3: dedupe_classify.py<br/>Collection-Scoped Dedup<br/>各 collection 內部獨立去重]
-        S3 --> QA[output/qa_final.json<br/>655+ 筆 + 10 分類]
+        S3 --> QA[output/qa_final.json<br/>1,317 筆 + 10 分類]
         S3 --> EMB[output/qa_embeddings.npy<br/>跨 collection 統一向量]
     end
 
@@ -102,9 +102,9 @@ flowchart TD
         CTX["scripts/_generate_context.py（v2.11 新增）<br/>Claude Haiku situating context<br/>150-300 字/筆"] --> ENRICH
         SYNSTORE -->|"custom synonyms"| SYN
         FRESH["utils/freshness.py<br/>exp(-0.693×age/540d)<br/>min_score=0.5"] --> ENRICH
-        ENRICH --> QAE["output/qa_enriched.json<br/>655 筆 + _enrichment<br/>avg_synonyms=11.09<br/>avg_freshness=0.9076"]
+        ENRICH --> QAE["output/qa_enriched.json<br/>（已歸檔 → archive_v1/）<br/>qa_final.json 為 API 主要資料源"]
         ENRICH --> CTXOUT["output/qa_context.json（v2.11 新增）<br/>situating context 150-300 字<br/>離線預生成"]
-        QAE -->|優先載入 fallback qa_final| SE
+        QAE -.->|已歸檔，API 直接讀 qa_final.json| SE
         CTXOUT -->|context embedding| HAPI
         QAE -->|synonym_boost_vec<br/>freshness_vec 預計算| SE
         LS["utils/learning_store.py<br/>output/learnings.jsonl<br/>record_miss / record_feedback<br/>get_relevant_learnings"] -.->|query learnings| SE

@@ -131,7 +131,7 @@ Notion 會議紀錄（87 份，2023–2026）
         或 Claude Code 本地語意去重（不需要 OpenAI）
   分類：gpt-5-mini 貼 10 種標籤 + difficulty + evergreen
         或 Claude Code 本地評分式關鍵字分類（不需要 OpenAI）
-  產出：655 筆去重後 Q&A（去除 15 組重複）+ 1536 維 embedding 向量
+  產出：1,317 筆去重後 Q&A（去除 96 組重複）+ 1536 維 embedding 向量
             ↓ output/qa_final.json + qa_embeddings.npy
 
 [Step 4] generate_report.py — RAG 週報生成
@@ -325,14 +325,14 @@ Notion 會議紀錄（87 份，2023–2026）
 ══════════════ Multi-Layer Context（2026-03-02 新增，v1.19）══════════════
 
 [Enrichment] scripts/enrich_qa.py — 離線 Q&A 豐富化（make enrich）
-  輸入：output/qa_final.json（655 筆）
+  輸入：output/qa_final.json（1,317 筆，v2.12+，多來源）
   計算：utils/synonym_dict.py（avg 11.09 個同義詞/筆，@lru_cache 執行緒安全）
         utils/freshness.py（avg freshness 0.9076，half_life=540d，min_score=0.5）
         utils/notion_url_map.py（source_file → Notion URL 映射）
         output/access_logs（search_hit_count，需積累 14 天新格式 log）
-  輸出：output/qa_enriched.json（含 _enrichment 欄位 + notion_url）
-  store.py load()：優先載入 qa_enriched.json，fallback qa_final.json
-  SearchEngine.__init__()：預計算 synonym_boost_vec + freshness_vec（shape=(655,) numpy）
+  輸出：output/qa_enriched.json（含 _enrichment 欄位 + notion_url；已歸檔至 archive_v1/，API 直接讀 qa_final.json）
+  store.py load()：直接載入 qa_final.json（qa_enriched.json 已歸檔至 archive_v1/）
+  SearchEngine.__init__()：預計算 synonym_boost_vec + freshness_vec（shape=(1317,) numpy）
 
 [LearningStore] utils/learning_store.py — 失敗記憶 JSONL
   record_miss()：rag_chat() top_score < 0.35 時自動記錄
@@ -382,7 +382,7 @@ Notion 會議紀錄（87 份，2023–2026）
 3. **NumPy 相容讀取**
    - `npy-reader.ts`：實作 .npy 格式解析（IEEE 754 float32/float64）
    - 無 numpy / pandas 依賴（純 JavaScript）
-   - 支援多維陣列 reshape（655 筆 × 1536 維）
+   - 支援多維陣列 reshape（1,317 筆 × 1536 維）
 
 4. **測試策略**
    - Vitest（Vite native test runner）
@@ -551,11 +551,11 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 | LLM Top-1 Precision | 100%      | 80%            | ✅ 符合預期（20 案例評估） |
 | **KW Hit Rate（eval）** | 54%   | **74%** ✅     | +20pp（含 9pp enrichment delta）、目標 85% 差 11pp |
 | freshness_rank_quality | —      | **1.0**        | ✅ 完全保留排名序序           |
-| synonym_coverage    | —         | **1.0**        | ✅ 655 筆全覆蓋           |
+| synonym_coverage    | —         | **1.0**        | ✅ 1,317 筆全覆蓋          |
 
 > **v2.0+cjk 評估完成（2026-03-02）**：
-> - 知識庫規模：717 筆（v1.0）→ 655 筆（v2.0，去重+防幻覺）
-> - Embeddings 重建：(655, 1536) numpy array
+> - 知識庫規模：717 筆（v1.0）→ 655 筆（v2.0，去重+防幻覺）→ 1,317 筆（v2.12，多來源知識庫）
+> - Embeddings 重建：(1317, 1536) numpy array（v2.12 重建）
 > - 生成維度（4 項）基於 20 案例 golden set，Claude Code 本地評估
 > - Retrieval 維度基於 307 案例 golden retrieval set
 > - CJK n-gram 修復後 KW Hit Rate 回升：65% → 74%（+9pp vs baseline）
@@ -667,11 +667,11 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 
 ### E. FastAPI + In-Memory QAStore（Supabase-ready 抽象）
 
-**決策**：啟動時載入全量 655 筆 QA + 655×1536 embedding matrix 到 module-level singleton，FastAPI lifespan 管理。所有資料存取透過 `QAStore` 抽象層，為 Phase 2 Supabase 遷移預留介面。
+**決策**：啟動時載入全量 1,317 筆 QA + 1317×1536 embedding matrix 到 module-level singleton，FastAPI lifespan 管理。所有資料存取透過 `QAStore` 抽象層，為 Phase 2 Supabase 遷移預留介面。
 
 **學術 / 業界支撐**：
 
-- **FAISS**（Johnson et al., 2019, _IEEE Trans. on Big Data_）：小規模向量（<100K）in-memory brute-force search 延遲 < 1ms，不需要 ANN 索引。655 筆完全在此範圍內。
+- **FAISS**（Johnson et al., 2019, _IEEE Trans. on Big Data_）：小規模向量（<100K）in-memory brute-force search 延遲 < 1ms，不需要 ANN 索引。1,317 筆完全在此範圍內。
 - **12-Factor App Factor VI — Stateless processes**（Wiggins, 2011, Heroku）：唯讀查詢層用 in-memory 是合理優化，不違反無狀態原則。
 - **Offline Feature Store + Online Serving**（Feast, 2019, Google/Tecton）：離線 pipeline 產出特徵 → 物化到 online store → API 讀取。與 Pipeline → qa_final.json → API 模式完全對應。
 - **Repository Pattern**（Fowler, 2003, _PoEAA_）：`QAStore` 封裝資料存取邏輯，業務層透過 `search()` / `hybrid_search()` / `list_qa()` / `get_qa_item()` 介面操作，遷移至不同 backend 時 router 層零修改。
@@ -870,7 +870,7 @@ CLI scripts 不依賴 FastAPI lifespan，需要在 `main()` 手動呼叫 `init_l
 
 **現狀（v2.0）**：
 ```
-qa_final.json（655 筆）
+qa_final.json（1,317 筆）
        ↓
 搜尋引擎（cosine + keyword boost）
        ↓ 無時效衰減、無同義詞、無失敗記憶
