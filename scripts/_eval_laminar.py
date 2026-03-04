@@ -15,11 +15,16 @@ import argparse
 import json
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 # 確保 project root 在 import path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# 載入 .env 環境變數
+from dotenv import load_dotenv
+load_dotenv(ROOT / ".env")
 
 from utils.observability import init_laminar  # type: ignore
 
