@@ -162,7 +162,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
   - `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
   - `POST /api/v1/reports/generate` — 觸發週報生成
 
-#### TypeScript Hono（v2.7，port 8002）——當前主架構
+#### TypeScript Hono（v2.11，port 8002）——當前主架構
 
 開發環境（後端 API）：
 ```bash
@@ -202,7 +202,7 @@ docker-compose logs seo-api-ts  # 監看 Hono 日誌
 
 API 端點（與 Python 相同）：
 - `GET /health` — 健康檢查
-- 9 個路由器：qa、search、chat、reports、sessions、feedback、pipeline、eval、health
+- 10 個路由器：qa、search、chat、reports、sessions、feedback、pipeline、eval、synonyms、health
 - 認證：`X-API-Key` header
 - 詳見 `api/README.md`
 
@@ -229,6 +229,19 @@ Eval API 端點：
 - `POST /api/v1/eval/retrieval` — 計算 Retrieval 評估指標（hit rate、MRR）
 - `GET /api/v1/eval/compare` — 跨 LLM Provider 品質對比（Delta 報告）
 - `POST /api/v1/eval/save` — 儲存評估結果至 evals/ 目錄（含 path traversal 防護）
+
+Synonyms API 端點（v2.11 新增）：
+- `GET /api/v1/synonyms` — 列出所有同義詞（靜態 + 自訂，含 source 標記）
+- `POST /api/v1/synonyms` — 新增自訂同義詞
+- `PUT /api/v1/synonyms/:term` — 更新自訂同義詞
+- `DELETE /api/v1/synonyms/:term` — 刪除自訂同義詞
+
+環境變數（v2.11 新增，均可選）：
+```env
+ANTHROPIC_API_KEY=sk-ant-...     # Reranker（實驗性，auto 模式下自動偵測）
+CONTEXT_EMBEDDING_WEIGHT=0.6     # Contextual embedding 加權（預設 0.6）
+RERANKER_ENABLED=auto            # "auto"/"true"/"false"，預設 auto
+```
 
 ### Observability（v2.7 三路整合）
 
