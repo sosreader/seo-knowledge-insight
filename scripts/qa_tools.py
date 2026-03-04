@@ -485,6 +485,16 @@ def cmd_load_metrics(args: argparse.Namespace) -> None:
     metrics = parse_metrics_tsv(raw_tsv)
     anomalies = detect_anomalies(metrics)
 
+    if getattr(args, "json", False):
+        output = {
+            "metrics": metrics,
+            "anomalies": anomalies,
+            "total_metrics": len(metrics),
+            "total_anomalies": len(anomalies),
+        }
+        print(json.dumps(output, ensure_ascii=False, indent=2))
+        return
+
     print(f"解析完成：{len(metrics)} 個指標，{len(anomalies)} 個關注指標\n")
     for a in anomalies:
         flag = a.get("flag", "")
@@ -836,7 +846,10 @@ def cmd_eval_save(args: argparse.Namespace) -> None:
 def cmd_eval_compare(_args: argparse.Namespace) -> None:
     """掃描 output/evals/*.json，輸出跨 provider eval 比較表。"""
     if not EVALS_DIR.exists():
-        print("output/evals/ 目錄不存在，尚未有 eval 結果。")
+        if getattr(_args, "json", False):
+            print(json.dumps({"runs": [], "baseline": {}}, ensure_ascii=False))
+        else:
+            print("output/evals/ 目錄不存在，尚未有 eval 結果。")
         return
 
     runs: list[dict] = []
@@ -854,6 +867,11 @@ def cmd_eval_compare(_args: argparse.Namespace) -> None:
             baseline = json.loads(EVAL_BASELINE_PATH.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             pass
+
+    if getattr(_args, "json", False):
+        output = {"runs": runs, "baseline": baseline}
+        print(json.dumps(output, ensure_ascii=False, indent=2))
+        return
 
     dims = ["relevance", "accuracy", "completeness", "granularity"]
 
@@ -933,6 +951,7 @@ def main() -> None:
     p_metrics = sub.add_parser("load-metrics", help="從 Sheets / TSV 解析 SEO 指標")
     p_metrics.add_argument("--source", required=True, help="Google Sheets URL 或 TSV 路徑")
     p_metrics.add_argument("--tab", default="vocus", help="Sheets 分頁名稱（預設 vocus）")
+    p_metrics.add_argument("--json", action="store_true", help="輸出 JSON 格式（供 API 使用）")
 
     p_reg = sub.add_parser("register-version", help="將既有檔案補登入 version registry")
     p_reg.add_argument("--step", required=True, help="步驟名稱或編號（如 extract-qa 或 2）")
@@ -946,7 +965,8 @@ def main() -> None:
     p_lbl.add_argument("--version-id", required=True, help="版本 ID")
     p_lbl.add_argument("--label", required=True, help="語意標籤")
 
-    sub.add_parser("eval-compare", help="跨 provider eval 比較表")
+    p_compare = sub.add_parser("eval-compare", help="跨 provider eval 比較表")
+    p_compare.add_argument("--json", action="store_true", help="輸出 JSON 格式（供 API 使用）")
 
     p_sample = sub.add_parser("eval-sample", help="從 qa_final.json 抽樣 N 筆 Q&A")
     p_sample.add_argument("--size", type=int, default=20, help="抽樣筆數（預設 20）")

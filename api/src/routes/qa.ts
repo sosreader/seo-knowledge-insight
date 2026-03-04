@@ -20,11 +20,18 @@ function toSchema(item: QAItem) {
     source_date: item.source_date,
     is_merged: item.is_merged,
     notion_url: item.notion_url,
+    source_type: item.source_type,
+    source_collection: item.source_collection,
+    source_url: item.source_url,
   };
 }
 
 qaRoute.get("/categories", (c) => {
   return c.json(ok({ categories: qaStore.categories() }));
+});
+
+qaRoute.get("/collections", (c) => {
+  return c.json(ok({ collections: qaStore.collections() }));
 });
 
 qaRoute.get("/:item_id", (c) => {
@@ -53,6 +60,10 @@ qaRoute.get("/", (c) => {
     keyword: c.req.query("keyword"),
     difficulty: c.req.query("difficulty"),
     evergreen: c.req.query("evergreen"),
+    source_type: c.req.query("source_type"),
+    source_collection: c.req.query("source_collection"),
+    sort_by: c.req.query("sort_by"),
+    sort_order: c.req.query("sort_order"),
     limit: c.req.query("limit"),
     offset: c.req.query("offset"),
   });

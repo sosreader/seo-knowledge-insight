@@ -8,11 +8,12 @@
 
 ### 1. 知識庫建構 Pipeline（步驟 1–3）
 
-- **Notion 增量擷取** — 自動對比 `last_edited_time`，只抓新增或有更新的會議紀錄（無需手動篩選）
-- **OpenAI 自動萃取** — 用 `gpt-5.2` 將會議 Markdown 解析為結構化 Q&A（What/Why/How/Evidence）
-- **Embedding 去重合併** — 基於 cosine similarity 與 `text-embedding-3-small` 自動合併重複 Q&A
+- **多來源擷取** — Notion 增量擷取（87 場會議）+ Medium RSS + iThome HTML scraping + Google Case Studies HTML scraping
+- **OpenAI 自動萃取** — 用 `gpt-5.2` 將 Markdown 解析為結構化 Q&A（What/Why/How/Evidence）
+- **Collection-Scoped 去重合併** — 各 collection 內部獨立去重，跨 collection 保留（支援多來源知識不互相覆蓋）
 - **智能分類標籤** — 10 個分類（技術 SEO、內容策略、連結建設等），用 `gpt-5-mini` 自動標記難度與時效性
-- **目前規模** — 87 場會議、670 筆原始 Q&A（v2.0 防幻覺規則）、655 筆去重後 Q&A
+- **雙層 metadata** — `source_type`（meeting/article）+ `source_collection`（seo-meetings/genehong-medium/ithelp-sc-kpi/google-case-studies）
+- **目前規模** — 87 場會議、655 筆 Q&A（預計新增 ~120-200 筆文章 Q&A）
 
 ### 2. 每週 SEO 週報生成（步驟 4）
 
@@ -31,11 +32,13 @@
 
 ### 4. REST API 服務（Hono + TypeScript，`api/`）
 
-- **語意搜尋** — `POST /api/v1/search`（Embedding cosine similarity + 關鍵字加權 + 同義詞 + 時效性）
-- **RAG 問答** — `POST /api/v1/chat`（知識庫檢索 + OpenAI 生成回答）
+- **語意搜尋** — `POST /api/v1/search`（有 OpenAI: hybrid search，無 OpenAI: 原生 keyword search 自動降級）
+- **RAG 問答** — `POST /api/v1/chat`（有 OpenAI: RAG + GPT，無 OpenAI: context-only 自動降級）
 - **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢，使用穩定的 16-char hex ID 或 seq number）
 - **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）
 - **對話管理** — `GET/POST/DELETE /api/v1/sessions/*`（CRUD、訊息歷史）
+- **Pipeline 管理** — `/api/v1/pipeline/*`（10 endpoints：狀態、會議、預覽、日誌、觸發 fetch/fetch-articles/extract/dedupe/metrics）
+- **Eval 評估** — `/api/v1/eval/*`（4 endpoints：抽樣、Retrieval 評估、跨 provider 比較、儲存結果）
 - **API 安全** — API Key 認證（`X-API-Key` header）、Rate Limit（chat 20/min、search/qa 60/min）、Zod schema validation
 
 ### 5. Claude Code 模式（不需要 OpenAI API Key）
@@ -94,21 +97,21 @@
 ## 架構流程
 
 ```
-Notion API 擷取 → Markdown 轉換（含圖片下載）→ OpenAI 萃取 Q&A → 去重合併 → 分類標籤 → 最終資料庫
+Notion/Medium/iThome/Google Cases → Markdown 轉換 → OpenAI 萃取 Q&A → Collection-Scoped 去重合併 → 分類標籤 → 最終資料庫
 ```
 
 ```
 seo-knowledge-insight/
-├── api/                         # Hono TypeScript API（v2.3，主架構）
+├── api/                         # Hono TypeScript API（v2.6，主架構）
 │   ├── src/
 │   │   ├── index.ts             # 入口（middleware + route mount）
 │   │   ├── config.ts            # Zod 驗證環境變數
-│   │   ├── routes/              # 7 個路由（qa/search/chat/reports/sessions/feedback/health）
+│   │   ├── routes/              # 9 個路由（qa/search/chat/reports/sessions/feedback/pipeline/eval/health）
 │   │   ├── middleware/           # auth / rate-limit / cors / error-handler
 │   │   ├── store/               # QAStore singleton + SearchEngine + SessionStore
-│   │   ├── services/            # embedding + rag-chat
-│   │   ├── schemas/             # Zod schema（7 個）
-│   │   └── utils/               # npy-reader / cosine-similarity / keyword-boost / sanitize
+│   │   ├── services/            # embedding + rag-chat + pipeline-runner
+│   │   ├── schemas/             # Zod schema（9 個）
+│   │   └── utils/               # npy-reader / cosine-similarity / keyword-boost / cjk-tokenizer / mode-detect / sanitize
 │   ├── Dockerfile               # Multi-stage Node.js build（node:22-slim）
 │   ├── package.json             # pnpm + tsup + vitest
 │   └── tsconfig.json
@@ -118,9 +121,12 @@ seo-knowledge-insight/
 ├── pyproject.toml               # Package 定義（pip install -e . 用）
 ├── .env                         # 你的 API keys（從 .env.example 複製）
 ├── scripts/
-│   ├── 01_fetch_notion.py       # 步驟 1：從 Notion 擷取
-│   ├── 02_extract_qa.py         # 步驟 2：OpenAI 萃取 Q&A
-│   ├── 03_dedupe_classify.py    # 步驟 3：去重 + 分類
+│   ├── 01_fetch_notion.py       # 步驟 1a：從 Notion 擷取
+│   ├── 01b_fetch_medium.py      # 步驟 1b：Medium RSS → Markdown
+│   ├── 01c_fetch_ithelp.py      # 步驟 1c：iThome 鐵人賽 HTML → Markdown
+│   ├── 01d_fetch_google_cases.py # 步驟 1d：Google Case Studies HTML → Markdown
+│   ├── 02_extract_qa.py         # 步驟 2：Q&A 萃取（多來源目錄掃描）
+│   ├── 03_dedupe_classify.py    # 步驟 3：Collection-Scoped 去重 + 分類
 │   ├── 04_generate_report.py    # 步驟 4：產生每週 SEO 週報
 │   ├── 05_evaluate.py           # 步驟 5：Q&A 品質評估（LLM-as-Judge）
 │   ├── run_pipeline.py          # 一鍵執行全部
@@ -139,11 +145,15 @@ seo-knowledge-insight/
 │   └── eval_chat.py             # RAG chat 端到端品質評估
 ├── raw_data/                    # 原始資料（source of truth）
 │   ├── notion_json/             # Notion API 回傳的原始 JSON
-│   ├── markdown/                # 轉換後的 Markdown（含圖片引用）
+│   ├── markdown/                # Notion 會議 Markdown（87 份）
+│   ├── medium_markdown/         # Medium 文章 Markdown（RSS 擷取）
+│   ├── ithelp_markdown/         # iThome 鐵人賽 Markdown（HTML scraping）
+│   ├── google_cases_markdown/   # Google Case Studies Markdown（HTML scraping，12 篇）
 │   └── images/                  # 下載的圖片
 └── output/                      # 產出
     ├── qa_per_meeting/          # 每份會議的 Q&A（中間產物）
-    ├── qa_all_raw.json          # 所有原始 Q&A（去重前）
+    ├── qa_per_article/          # 每篇文章的 Q&A（中間產物）
+    ├── qa_all_raw.json          # 所有原始 Q&A（去重前，含 source_type/collection）
     ├── qa_final.json            # 最終 Q&A 資料庫（JSON）
     ├── qa_enriched.json         # 豐富化 Q&A（含同義詞、時效性、Notion 連結）
     ├── qa_final.md              # 人類可讀的 Markdown 版
@@ -731,7 +741,7 @@ Q&A 萃取的品質主要取決於 `utils/openai_helper.py` 中的 prompt：
 
 ## SEO Insight API
 
-> **當前主架構**：TypeScript Hono（v2.3，port 8002）。`api/` 目錄提供 Hono REST 服務，讀取 `output/qa_final.json`（或 `qa_enriched.json`）與 `output/qa_embeddings.npy` 進記憶體。
+> **當前主架構**：TypeScript Hono（v2.6，port 8002）。`api/` 目錄提供 Hono REST 服務，讀取 `output/qa_final.json`（或 `qa_enriched.json`）與 `output/qa_embeddings.npy` 進記憶體。
 >
 > **Legacy**：Python FastAPI（port 8001，`app/` 目錄）預計下線，功能完全對等。
 
@@ -747,48 +757,85 @@ api/src/
 │   ├── cors.ts          # CORS 白名單
 │   └── error-handler.ts # 全域錯誤捕捉（隱藏 stack trace）
 ├── routes/
-│   ├── qa.ts            # GET /qa, /qa/categories, /qa/{id}（hex+int）
-│   ├── search.ts        # POST /search（hybrid search）
-│   ├── chat.ts          # POST /chat（RAG 問答）
+│   ├── qa.ts            # GET /qa, /qa/categories, /qa/collections, /qa/{id}（hex+int）
+│   ├── search.ts        # POST /search（hybrid / keyword 自動降級）
+│   ├── chat.ts          # POST /chat（RAG 問答 / context-only 自動降級）
 │   ├── reports.ts       # GET/POST /reports
 │   ├── sessions.ts      # CRUD /sessions
 │   ├── feedback.ts      # POST /feedback
+│   ├── pipeline.ts      # Pipeline 管理（10 endpoints，含 Google Cases）
+│   ├── eval.ts          # Eval 評估（4 endpoints）
 │   └── health.ts        # GET /health
 ├── store/
-│   ├── qa-store.ts      # QAStore singleton（JSON + npy 載入）
-│   ├── search-engine.ts # Hybrid search（語意 + keyword + synonym + freshness）
+│   ├── qa-store.ts      # QAStore singleton（JSON + optional npy）
+│   ├── search-engine.ts # Hybrid + keyword-only search
 │   ├── session-store.ts # FileSessionStore（Repository Pattern）
 │   └── learning-store.ts # 失敗記憶（JSONL）
-├── schemas/             # Zod runtime validation（7 個 schema）
+├── schemas/             # Zod runtime validation（9 個 schema）
 ├── services/
 │   ├── embedding.ts     # OpenAI embedding wrapper
-│   └── rag-chat.ts      # RAG 問答邏輯
+│   ├── rag-chat.ts      # RAG 問答邏輯
+│   └── pipeline-runner.ts # Python CLI proxy（execPython / execQaTools）
 └── utils/
     ├── npy-reader.ts    # NumPy .npy 格式解析
     ├── cosine-similarity.ts # Float32Array 向量運算
     ├── keyword-boost.ts # 4 層關鍵字匹配
+    ├── cjk-tokenizer.ts # CJK 分詞（2-gram + 單字）
+    ├── mode-detect.ts   # hasOpenAI() + SearchMode/ChatMode
     └── sanitize.ts      # HTML escape（防 XSS）
 ```
 
 ### Endpoints
 
+#### Core（QA / Search / Chat）
+
 | Method   | Path                           | 說明                                                                                 | Rate Limit |
 | -------- | ------------------------------ | ------------------------------------------------------------------------------------ | ---------- |
 | `GET`    | `/health`                      | 健康檢查，回傳 `{status, timestamp, version}`                                        | 無限制     |
-| `POST`   | `/api/v1/search`               | 混合搜尋（語意 + 關鍵字 + 同義詞 + 時效性），body: `{query, top_k?, category?}`       | 60/min     |
-| `POST`   | `/api/v1/chat`                 | RAG 問答，body: `{message, history?}`                                                | 20/min     |
-| `GET`    | `/api/v1/qa`                   | 列表查詢，query: `category`, `keyword`, `difficulty`, `evergreen`, `limit`, `offset` | 60/min     |
+| `POST`   | `/api/v1/search`               | 混合搜尋，body: `{query, top_k?, category?}`；回傳含 `mode: "hybrid" \| "keyword"`   | 60/min     |
+| `POST`   | `/api/v1/chat`                 | RAG 問答，body: `{message, history?}`；回傳含 `mode: "full" \| "context-only"`        | 20/min     |
+| `GET`    | `/api/v1/qa`                   | 列表查詢，query: `category`, `keyword`, `difficulty`, `evergreen`, `source_type`, `source_collection`, `limit`, `offset` | 60/min     |
 | `GET`    | `/api/v1/qa/categories`        | 所有分類（依數量降序）                                                               | 60/min     |
+| `GET`    | `/api/v1/qa/collections`       | 所有 collection 清單（含 source_type + count）                                        | 60/min     |
 | `GET`    | `/api/v1/qa/{id}`              | 單筆 Q&A（支援 16-char hex stable_id 或 integer seq）                                 | 60/min     |
-| `GET`    | `/api/v1/reports`              | 週報列表（newest first）                                                             | 60/min     |
-| `GET`    | `/api/v1/reports/{date}`       | 單篇週報 Markdown（YYYYMMDD）                                                        | 60/min     |
-| `POST`   | `/api/v1/reports/generate`     | 觸發週報生成                                                                         | 5/min      |
-| `GET`    | `/api/v1/sessions`             | 對話列表（分頁）                                                                     | 60/min     |
-| `POST`   | `/api/v1/sessions`             | 建立對話                                                                             | 60/min     |
-| `GET`    | `/api/v1/sessions/{id}`        | 對話詳情（含訊息歷史）                                                               | 60/min     |
-| `POST`   | `/api/v1/sessions/{id}/messages` | 新增訊息並取得 RAG 回覆                                                             | 20/min     |
-| `DELETE` | `/api/v1/sessions/{id}`        | 刪除對話                                                                             | 60/min     |
-| `POST`   | `/api/v1/feedback`             | 使用者回饋（helpful / not_relevant）                                                  | 60/min     |
+
+#### Reports / Sessions / Feedback
+
+| Method   | Path                              | 說明                                    | Rate Limit |
+| -------- | --------------------------------- | --------------------------------------- | ---------- |
+| `GET`    | `/api/v1/reports`                 | 週報列表（newest first）                | 60/min     |
+| `GET`    | `/api/v1/reports/{date}`          | 單篇週報 Markdown（YYYYMMDD）           | 60/min     |
+| `POST`   | `/api/v1/reports/generate`        | 觸發週報生成                            | 5/min      |
+| `GET`    | `/api/v1/sessions`                | 對話列表（分頁）                        | 60/min     |
+| `POST`   | `/api/v1/sessions`                | 建立對話                                | 60/min     |
+| `GET`    | `/api/v1/sessions/{id}`           | 對話詳情（含訊息歷史）                  | 60/min     |
+| `POST`   | `/api/v1/sessions/{id}/messages`  | 新增訊息並取得 RAG 回覆（支援 context-only 降級） | 20/min     |
+| `DELETE` | `/api/v1/sessions/{id}`           | 刪除對話                                | 60/min     |
+| `POST`   | `/api/v1/feedback`                | 使用者回饋（helpful / not_relevant）     | 60/min     |
+
+#### Pipeline 管理
+
+| Method | Path                                     | 說明                            | Rate Limit |
+| ------ | ---------------------------------------- | ------------------------------- | ---------- |
+| `GET`  | `/api/v1/pipeline/status`                | 各步驟完成狀態（6 步驟）         | 60/min     |
+| `GET`  | `/api/v1/pipeline/meetings`              | 會議列表（含 metadata）          | 60/min     |
+| `GET`  | `/api/v1/pipeline/meetings/{id}/preview` | Markdown 預覽                   | 60/min     |
+| `GET`  | `/api/v1/pipeline/unprocessed`           | 待處理的 Markdown 列表（含 source_collection） | 60/min |
+| `GET`  | `/api/v1/pipeline/logs`                  | Fetch 歷史日誌                  | 60/min     |
+| `POST` | `/api/v1/pipeline/fetch`                 | 觸發 Notion 增量擷取            | 60/min     |
+| `POST` | `/api/v1/pipeline/fetch-articles`        | 觸發外部文章擷取（Medium + iThome + Google Cases） | 60/min  |
+| `POST` | `/api/v1/pipeline/extract-qa`            | 觸發 Q&A 萃取                   | 60/min     |
+| `POST` | `/api/v1/pipeline/dedupe-classify`       | 觸發去重 + 分類                  | 60/min     |
+| `POST` | `/api/v1/pipeline/metrics`               | 解析 SEO 指標（Google Sheets/TSV）| 60/min    |
+
+#### Eval 評估
+
+| Method | Path                     | 說明                                              | Rate Limit |
+| ------ | ------------------------ | ------------------------------------------------- | ---------- |
+| `POST` | `/api/v1/eval/sample`    | 抽樣 Q&A 供評估，body: `{size?, seed?, with_golden?}` | 60/min |
+| `POST` | `/api/v1/eval/retrieval` | 本地 Retrieval 指標，body: `{top_k?, use_enriched?}`   | 60/min |
+| `GET`  | `/api/v1/eval/compare`   | 跨 provider 比較                                       | 60/min |
+| `POST` | `/api/v1/eval/save`      | 儲存 eval 結果，body: `{input, extraction_engine?, update_baseline?}` | 60/min |
 
 #### 安全機制
 
@@ -813,7 +860,7 @@ docker-compose up
 curl http://localhost:8002/health
 curl 'http://localhost:8002/api/v1/qa/categories'
 
-# 執行測試（62 tests）
+# 執行測試（135 tests）
 cd api && pnpm test
 ```
 
@@ -846,18 +893,33 @@ GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workfl
 
 ### 環境變數（`api/`）
 
-| 變數                     | 預設值                   | 說明                         |
-| ------------------------ | ------------------------ | ---------------------------- |
-| `PORT`                   | `8002`                   | 伺服器埠號                   |
-| `OPENAI_API_KEY`         | —                        | 必填（chat/search 需要）     |
-| `OPENAI_MODEL`           | `gpt-5.2`                | RAG chat 模型                |
-| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding 模型               |
-| `SEO_API_KEY`            | —                        | API 認證金鑰（生產必填）     |
-| `CORS_ORIGINS`           | `http://localhost:3000`  | 逗號分隔多個 origin          |
-| `CHAT_CONTEXT_K`         | `5`                      | RAG chat 帶入的 context 筆數 |
-| `RATE_LIMIT_DEFAULT`     | `60`                     | 預設速率限制（/min）         |
-| `RATE_LIMIT_CHAT`        | `20`                     | 聊天速率限制（/min）         |
-| `RATE_LIMIT_GENERATE`    | `5`                      | 週報生成速率限制（/min）     |
+| 變數                     | 預設值                   | 說明                                                              |
+| ------------------------ | ------------------------ | ----------------------------------------------------------------- |
+| `PORT`                   | `8002`                   | 伺服器埠號                                                        |
+| `OPENAI_API_KEY`         | `""`（空字串）           | 選填；有值→hybrid search + RAG chat，無值→keyword search + context-only |
+| `OPENAI_MODEL`           | `gpt-5.2`                | RAG chat 模型（需 OPENAI_API_KEY）                                 |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding 模型（需 OPENAI_API_KEY）                                |
+| `SEO_API_KEY`            | —                        | API 認證金鑰（生產必填）                                           |
+| `CORS_ORIGINS`           | `http://localhost:3000`  | 逗號分隔多個 origin                                                |
+| `CHAT_CONTEXT_K`         | `5`                      | RAG chat 帶入的 context 筆數                                       |
+| `RATE_LIMIT_DEFAULT`     | `60`                     | 預設速率限制（/min）                                               |
+| `RATE_LIMIT_CHAT`        | `20`                     | 聊天速率限制（/min）                                               |
+| `RATE_LIMIT_GENERATE`    | `5`                      | 週報生成速率限制（/min）                                           |
+
+### Local Mode（無 OpenAI API Key）
+
+API 伺服器可在完全不設定 `OPENAI_API_KEY` 的情況下運作。此時 search 和 chat 端點自動降級：
+
+| 端點 | 有 OpenAI（Hybrid Mode） | 無 OpenAI（Local Mode） |
+|------|--------------------------|------------------------|
+| `POST /search` | 語意 + 關鍵字 + 同義詞 + 時效性，`mode: "hybrid"` | 原生 TypeScript keyword search（<5ms），`mode: "keyword"` |
+| `POST /chat` | RAG 檢索 + GPT 生成回答，`mode: "full"` | keyword 檢索 + 回傳 sources，`answer: null`，`mode: "context-only"` |
+
+其他端點（qa、reports、sessions、pipeline、eval）不依賴 OpenAI，兩種模式下行為相同。
+
+前端可根據 response 中的 `mode` 欄位決定 UI 顯示邏輯（例如 context-only 模式下顯示「以下是相關知識，請自行參考」）。
+
+QAStore 同樣支援 optional embedding：若 `output/qa_embeddings.npy` 不存在，自動切換為 keyword-only search engine。
 
 ---
 

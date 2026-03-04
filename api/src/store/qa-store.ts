@@ -33,6 +33,9 @@ export interface QAItem {
   readonly freshness_score: number;
   readonly search_hit_count: number;
   readonly notion_url: string;
+  readonly source_type: string; // "meeting" | "article" | "paper" | "transcript"
+  readonly source_collection: string; // "seo-meetings" | "genehong-medium" | "ithelp-sc-kpi"
+  readonly source_url: string; // canonical URL to original content
 }
 
 interface RawQAData {
@@ -49,11 +52,15 @@ interface RawQAData {
     source_title?: string;
     source_date?: string;
     is_merged?: boolean;
+    source_type?: string;
+    source_collection?: string;
+    source_url?: string;
     _enrichment?: {
       synonyms?: string[];
       freshness_score?: number;
       search_hit_count?: number;
       notion_url?: string;
+      source_url?: string;
     };
   }>;
 }
@@ -69,6 +76,7 @@ function computeStableId(sourceTitle: string, question: string): string {
 
 export class QAStore {
   private items: readonly QAItem[] = [];
+  private qaDicts: readonly QADict[] = [];
   private embNorm: Float32Array = new Float32Array(0); // flat [N x dim], L2-normalized
   private embDim: number = 1536;
   private idIndex: Map<string, QAItem> = new Map();
@@ -121,43 +129,54 @@ export class QAStore {
       freshness_score: qa._enrichment?.freshness_score ?? 1.0,
       search_hit_count: qa._enrichment?.search_hit_count ?? 0,
       notion_url: qa._enrichment?.notion_url ?? "",
+      source_type: qa.source_type ?? "meeting",
+      source_collection: qa.source_collection ?? "seo-meetings",
+      source_url: qa.source_url ?? qa._enrichment?.source_url ?? qa._enrichment?.notion_url ?? "",
     }));
 
     // Build ID index
     this.idIndex = new Map(this.items.map((item) => [item.id, item]));
 
-    // Load embeddings
-    const npyBuf = readFileSync(npyPath);
-    const npy = parseNpy(npyBuf);
-    this.embDim = npy.shape[1];
+    // Build QADicts for SearchEngine (needed for both hybrid and keyword-only)
+    const qaDicts: QADict[] = rawItems.map((qa) => ({
+      id: qa.stable_id ?? computeStableId(qa.source_title ?? "", qa.question),
+      question: qa.question,
+      answer: qa.answer,
+      keywords: qa.keywords ?? [],
+      category: qa.category ?? "",
+      _enrichment: qa._enrichment
+        ? {
+            synonyms: qa._enrichment.synonyms,
+            freshness_score: qa._enrichment.freshness_score,
+          }
+        : undefined,
+    }));
+    this.qaDicts = qaDicts;
 
-    // L2-normalize rows
-    this.embNorm = normalizeRows(npy.data, npy.shape[0], npy.shape[1]);
+    // Load embeddings (optional — keyword-only mode when npy not found)
+    if (existsSync(npyPath)) {
+      const npyBuf = readFileSync(npyPath);
+      const npy = parseNpy(npyBuf);
+      this.embDim = npy.shape[1];
 
-    console.log(
-      `QAStore loaded: ${this.items.length} items, embeddings shape [${npy.shape[0]}, ${npy.shape[1]}]`,
-    );
+      // L2-normalize rows
+      this.embNorm = normalizeRows(npy.data, npy.shape[0], npy.shape[1]);
 
-    // Initialize hybrid search engine
-    if (this.items.length === npy.shape[0]) {
-      const qaDicts: QADict[] = rawItems.map((qa) => ({
-        id: qa.stable_id ?? computeStableId(qa.source_title ?? "", qa.question),
-        question: qa.question,
-        answer: qa.answer,
-        keywords: qa.keywords ?? [],
-        category: qa.category ?? "",
-        _enrichment: qa._enrichment
-          ? {
-              synonyms: qa._enrichment.synonyms,
-              freshness_score: qa._enrichment.freshness_score,
-            }
-          : undefined,
-      }));
-      this.engine = new SearchEngine(qaDicts, npy.data, this.embDim);
-    } else {
-      console.warn(
-        `SearchEngine not initialized: items (${this.items.length}) != embeddings (${npy.shape[0]})`,
+      console.log(
+        `QAStore loaded: ${this.items.length} items, embeddings shape [${npy.shape[0]}, ${npy.shape[1]}]`,
       );
+
+      // Initialize hybrid search engine
+      if (this.items.length === npy.shape[0]) {
+        this.engine = new SearchEngine(qaDicts, npy.data, this.embDim);
+      } else {
+        console.warn(
+          `SearchEngine not initialized: items (${this.items.length}) != embeddings (${npy.shape[0]})`,
+        );
+        this.engine = null;
+      }
+    } else {
+      console.warn("QAStore: embeddings not found, keyword-only mode");
       this.engine = null;
     }
   }
@@ -244,6 +263,39 @@ export class QAStore {
   }
 
   /**
+   * Keyword-only search (no embedding required).
+   * Uses SearchEngine.keywordOnlySearch when available, otherwise basic substring.
+   */
+  keywordSearch(
+    query: string,
+    topK: number = 5,
+    category: string | null = null,
+  ): ReadonlyArray<{ item: QAItem; score: number }> {
+    if (this.engine) {
+      return this.engine
+        .keywordOnlySearch(query, topK, category)
+        .map(({ qa, score }) => {
+          const item = this.idIndex.get(qa.id);
+          return item ? { item, score } : null;
+        })
+        .filter((r): r is { item: QAItem; score: number } => r !== null);
+    }
+
+    // Fallback: basic substring matching
+    return this.listQa({ keyword: query, limit: topK }).items.map((item) => ({
+      item,
+      score: 1.0,
+    }));
+  }
+
+  /**
+   * Whether hybrid search (semantic + keyword) is available.
+   */
+  get hasEmbeddings(): boolean {
+    return this.embNorm.length > 0 && this.engine !== null;
+  }
+
+  /**
    * Filtered listing with pagination.
    */
   listQa(params: {
@@ -251,15 +303,21 @@ export class QAStore {
     keyword?: string | null;
     difficulty?: string | null;
     evergreen?: boolean | null;
+    source_type?: string | null;
+    source_collection?: string | null;
+    sort_by?: string | null;
+    sort_order?: string | null;
     limit?: number;
     offset?: number;
   }): { items: readonly QAItem[]; total: number } {
-    const { category, keyword, difficulty, evergreen, limit = 20, offset = 0 } = params;
+    const { category, keyword, difficulty, evergreen, source_type, source_collection, sort_by, sort_order, limit = 20, offset = 0 } = params;
 
     let results: readonly QAItem[] = this.items;
 
     if (category) {
-      results = results.filter((i) => i.category === category);
+      const cats = category.includes(",") ? category.split(",") : [category];
+      const catSet = new Set(cats);
+      results = results.filter((i) => catSet.has(i.category));
     }
     if (keyword) {
       const kwLower = keyword.toLowerCase();
@@ -271,10 +329,31 @@ export class QAStore {
       );
     }
     if (difficulty) {
-      results = results.filter((i) => i.difficulty === difficulty);
+      const diffs = difficulty.includes(",") ? difficulty.split(",") : [difficulty];
+      const diffSet = new Set(diffs);
+      results = results.filter((i) => diffSet.has(i.difficulty));
     }
     if (evergreen !== null && evergreen !== undefined) {
       results = results.filter((i) => i.evergreen === evergreen);
+    }
+    if (source_type) {
+      results = results.filter((i) => i.source_type === source_type);
+    }
+    if (source_collection) {
+      results = results.filter((i) => i.source_collection === source_collection);
+    }
+
+    // Sort if requested
+    if (sort_by === "source_date") {
+      const dir = sort_order === "asc" ? 1 : -1;
+      const sorted = [...results];
+      sorted.sort((a, b) => dir * a.source_date.localeCompare(b.source_date));
+      results = sorted;
+    } else if (sort_by === "confidence") {
+      const dir = sort_order === "asc" ? 1 : -1;
+      const sorted = [...results];
+      sorted.sort((a, b) => dir * (a.confidence - b.confidence));
+      results = sorted;
     }
 
     const total = results.length;
@@ -295,6 +374,38 @@ export class QAStore {
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([cat]) => cat);
+  }
+
+  /**
+   * Collections with counts, grouped by source_type.
+   */
+  collections(): ReadonlyArray<{
+    source_collection: string;
+    source_type: string;
+    count: number;
+  }> {
+    const counts = new Map<string, { source_type: string; count: number }>();
+    for (const item of this.items) {
+      const existing = counts.get(item.source_collection);
+      if (existing) {
+        counts.set(item.source_collection, {
+          source_type: existing.source_type,
+          count: existing.count + 1,
+        });
+      } else {
+        counts.set(item.source_collection, {
+          source_type: item.source_type,
+          count: 1,
+        });
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([collection, { source_type, count }]) => ({
+        source_collection: collection,
+        source_type,
+        count,
+      }));
   }
 }
 

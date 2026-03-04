@@ -5,3 +5,5 @@ numpy>=1.26.0
 tqdm>=4.66.0
 lmnr[openai]>=0.5.0
 opentelemetry-semantic-conventions-ai>=0.4.13,<0.4.14  # 0.4.14 removes SpanAttributes.LLM_SYSTEM, breaks lmnr 0.5.x
+markdownify>=0.13.0
+feedparser>=6.0.0

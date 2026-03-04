@@ -79,6 +79,11 @@ make generate-report   # 只執行週報生成
 make evaluate-qa       # 只執行品質評估
 make dry-run           # 驗證設定（不執行）
 make test              # 執行測試
+make fetch-medium      # 只執行 Medium 文章擷取（RSS → Markdown）
+make fetch-ithelp      # 只執行 iThome 鐵人賽擷取（HTML → Markdown）
+make fetch-google-cases # 只執行 Google Case Studies 擷取（HTML → Markdown）
+make fetch-articles    # 擷取所有外部文章（Medium + iThome + Google Cases）
+make fetch-all         # Notion + 所有外部文章
 make help              # 顯示所有可用 targets
 ```
 
@@ -157,13 +162,21 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
   - `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
   - `POST /api/v1/reports/generate` — 觸發週報生成
 
-#### TypeScript Hono（v2.3，port 8002）——當前主架構
+#### TypeScript Hono（v2.6，port 8002）——當前主架構
 
-開發環境：
+開發環境（後端 API）：
 ```bash
 cd api
 pnpm install           # 首次安裝依賴
 pnpm dev               # 啟動開發伺服器（tsx watch，port 8002）
+```
+
+前端開發環境（vocus-admin-dev）：
+```bash
+cd ../vocus-admin-dev
+git checkout feat/admin-seo-insight  # 切換到前端開發分支
+pnpm install
+pnpm dev               # 啟動前端伺服器（http://localhost:3000）
 ```
 
 測試：
@@ -189,19 +202,33 @@ docker-compose logs seo-api-ts  # 監看 Hono 日誌
 
 API 端點（與 Python 相同）：
 - `GET /health` — 健康檢查
-- 7 個路由器：qa、search、chat、reports、sessions、feedback、pipeline
+- 9 個路由器：qa、search、chat、reports、sessions、feedback、pipeline、eval、health
 - 認證：`X-API-Key` header
 - 詳見 `api/README.md`
 
-Pipeline API 端點（v2.3 新增）：
-- `GET /api/v1/pipeline/status` — 各步驟完成狀態
+QA API 端點（v2.6 多來源擴充）：
+- `GET /api/v1/qa` — 列表查詢（新增 `source_type`、`source_collection` filter）
+- `GET /api/v1/qa/categories` — 所有分類
+- `GET /api/v1/qa/collections` — 所有 collection 清單（含 source_type + count）
+- `GET /api/v1/qa/{id}` — 單筆 Q&A（hex stable_id 或 integer seq）
+
+Pipeline API 端點：
+- `GET /api/v1/pipeline/status` — 各步驟完成狀態（6 步驟：fetch-notion/fetch-medium/fetch-ithelp/fetch-google/extract-qa/dedupe-classify）
 - `GET /api/v1/pipeline/meetings` — 會議列表（含 metadata）
 - `GET /api/v1/pipeline/meetings/:id/preview` — Markdown 預覽
-- `GET /api/v1/pipeline/unprocessed` — 待處理的 Markdown 列表
+- `GET /api/v1/pipeline/unprocessed` — 待處理的 Markdown 列表（含 source_collection）
 - `GET /api/v1/pipeline/logs` — Fetch 歷史日誌
 - `POST /api/v1/pipeline/fetch` — 觸發 Notion 增量擷取（不暴露 --force）
+- `POST /api/v1/pipeline/fetch-articles` — 觸發外部文章擷取（Medium + iThome + Google Cases）
 - `POST /api/v1/pipeline/extract-qa` — 觸發 Q&A 萃取
 - `POST /api/v1/pipeline/dedupe-classify` — 觸發去重 + 分類
+- `POST /api/v1/pipeline/metrics` — 取得 Pipeline metrics
+
+Eval API 端點：
+- `POST /api/v1/eval/sample` — 隨機抽樣 Q&A 供評估（支援 seed + golden subset）
+- `POST /api/v1/eval/retrieval` — 計算 Retrieval 評估指標（hit rate、MRR）
+- `GET /api/v1/eval/compare` — 跨 LLM Provider 品質對比（Delta 報告）
+- `POST /api/v1/eval/save` — 儲存評估結果至 evals/ 目錄（含 path traversal 防護）
 
 ### 開發工具命令
 

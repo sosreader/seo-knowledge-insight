@@ -3,6 +3,7 @@ import { searchRequestSchema } from "../schemas/search.js";
 import { ok, fail } from "../schemas/api-response.js";
 import { getEmbedding } from "../services/embedding.js";
 import { qaStore } from "../store/qa-store.js";
+import { hasOpenAI, type SearchMode } from "../utils/mode-detect.js";
 
 export const searchRoute = new Hono();
 
@@ -16,21 +17,44 @@ searchRoute.post("/", async (c) => {
 
   const { query, top_k, category } = parsed.data;
 
-  const embedding = await getEmbedding(query);
-  const hits = qaStore.hybridSearch(query, embedding, top_k, category ?? null);
+  const mapResults = (
+    hits: ReadonlyArray<{ item: { id: string; question: string; answer: string; keywords: readonly string[]; category: string; difficulty: string; evergreen: boolean; source_title: string; source_date: string; source_type: string; source_collection: string; source_url: string }; score: number }>,
+  ) =>
+    hits.map(({ item, score }) => ({
+      id: item.id,
+      question: item.question,
+      answer: item.answer,
+      keywords: item.keywords,
+      category: item.category,
+      difficulty: item.difficulty,
+      evergreen: item.evergreen,
+      source_title: item.source_title,
+      source_date: item.source_date,
+      source_type: item.source_type,
+      source_collection: item.source_collection,
+      source_url: item.source_url,
+      score: Math.round(score * 10000) / 10000,
+    }));
 
-  const results = hits.map(({ item, score }) => ({
-    id: item.id,
-    question: item.question,
-    answer: item.answer,
-    keywords: item.keywords,
-    category: item.category,
-    difficulty: item.difficulty,
-    evergreen: item.evergreen,
-    source_title: item.source_title,
-    source_date: item.source_date,
-    score: Math.round(score * 10000) / 10000,
-  }));
+  if (hasOpenAI()) {
+    try {
+      const embedding = await getEmbedding(query);
+      const hits = qaStore.hybridSearch(query, embedding, top_k, category ?? null);
+      const results = mapResults(hits);
+      return c.json(ok({ results, total: results.length, mode: "hybrid" as SearchMode }));
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 401 || status === 403 || status === 429) {
+        console.warn(`OpenAI API error (${status}), falling back to keyword search`);
+        // Fall through to keyword search below
+      } else {
+        throw err;
+      }
+    }
+  }
 
-  return c.json(ok({ results, total: results.length }));
+  // Native TypeScript keyword search — in-memory, no OpenAI required
+  const hits = qaStore.keywordSearch(query, top_k, category ?? null);
+  const results = mapResults(hits);
+  return c.json(ok({ results, total: results.length, mode: "keyword" as SearchMode }));
 });

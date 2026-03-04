@@ -5,11 +5,14 @@
 
 ---
 
-## 架構圖（最新：v2.5，2026-03-05）
+## 架構圖（最新：v2.6，2026-03-05）
 
 ```mermaid
 flowchart TD
     N[Notion API<br/>87 份會議 2023-2026] --> S1
+    MED_SRC["Medium RSS<br/>genehong.medium.com"] --> S1M
+    ITH_SRC["iThome 鐵人賽<br/>30 篇 SC KPI 系列"] --> S1I
+    GC_SRC["Google Search Central<br/>Case Studies (12 篇)"] --> S1G
 
     subgraph Pipeline["離線知識蒸餾 Pipeline"]
         PF[utils/pipeline_deps.py<br/>preflight_check<br/>StepDependency 宣告式檢查] -.->|每個 Script 啟動前| S1
@@ -17,12 +20,18 @@ flowchart TD
         PF -.-> S3
         PF -.-> S4
         PF -.-> S5
-        S1[Step 1: fetch_notion.py<br/>增量擷取 + Markdown 轉換] --> MD[raw_data/markdown/*.md]
-        MD --> S2[Step 2: extract_qa.py<br/>gpt-5.2 萃取 Q&A<br/>+ Attribution Tag 補充]
-        S2 --> RAW[output/qa_all_raw.json<br/>670 筆原始 Q&A]
-        RAW --> S3[Step 3: dedupe_classify.py<br/>embedding 去重 + gpt-5-mini 分類<br/>或 Claude Code 本地關鍵字分類]
-        S3 --> QA[output/qa_final.json<br/>655 筆 + 10 分類]
-        S3 --> EMB[output/qa_embeddings.npy<br/>655 x 1536 維向量]
+        S1[Step 1a: fetch_notion.py<br/>增量擷取 + Markdown 轉換] --> MD[raw_data/markdown/*.md]
+        S1M[Step 1b: fetch_medium.py<br/>RSS → Markdown] --> MD_MED[raw_data/medium_markdown/*.md]
+        S1I[Step 1c: fetch_ithelp.py<br/>HTML → Markdown] --> MD_ITH[raw_data/ithelp_markdown/*.md]
+        S1G[Step 1d: fetch_google_cases.py<br/>HTML → Markdown] --> MD_GC[raw_data/google_cases_markdown/*.md]
+        MD --> S2[Step 2: extract_qa.py<br/>gpt-5.2 萃取 Q&A<br/>+ Attribution Tag 補充<br/>DIR_COLLECTION_MAP 自動偵測來源]
+        MD_MED --> S2
+        MD_ITH --> S2
+        MD_GC --> S2
+        S2 --> RAW[output/qa_all_raw.json<br/>source_type + source_collection 標記]
+        RAW --> S3[Step 3: dedupe_classify.py<br/>Collection-Scoped Dedup<br/>各 collection 內部獨立去重]
+        S3 --> QA[output/qa_final.json<br/>655+ 筆 + 10 分類]
+        S3 --> EMB[output/qa_embeddings.npy<br/>跨 collection 統一向量]
     end
 
     subgraph Eval["評估層（Claude Code 本地評估 + LLM Judge）"]
@@ -50,12 +59,12 @@ flowchart TD
 
     FE -->|"seoInsight.api.ts<br/>seoFetch（port 8002）"| HAPI
 
-    subgraph Hono_API["API Layer v2.5（Hono + TypeScript，port 8002，Local Mode 支援）"]
+    subgraph Hono_API["API Layer v2.6（Hono + TypeScript，port 8002，Local Mode 支援）"]
         QA --> HAPI["SEO Insight API<br/>Hono + TypeScript<br/>QAStore（npy-reader 向量解析，embedding optional）"]
         EMB -.->|"optional（Local Mode 不需要）"| HAPI
         SE -.->|hybrid_search / keywordOnlySearch| HAPI
         HAPI --> HMID["middleware/<br/>auth.ts（X-API-Key）<br/>rate-limit.ts（chat:20 search/qa:60 reports/gen:5 eval:60/min）<br/>cors.ts + error-handler.ts"]
-        HMID --> HEP["9 個 Router + health<br/>qa.ts — GET /qa, /qa/categories, /qa/{id}（hex+int）<br/>search.ts — POST /search（mode: hybrid|keyword）<br/>chat.ts — POST /chat（mode: full|context-only）<br/>reports.ts — GET/POST /reports<br/>sessions.ts — CRUD /sessions + messages（context-only fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — GET status/meetings/unprocessed/logs, POST fetch/extract-qa/dedupe-classify/metrics<br/>eval.ts — POST sample/retrieval/save, GET compare"]
+        HMID --> HEP["9 個 Router + health<br/>qa.ts — GET /qa, /qa/categories, /qa/{id}（hex+int）<br/>search.ts — POST /search（mode: hybrid|keyword）<br/>chat.ts — POST /chat（mode: full|context-only）<br/>reports.ts — GET/POST /reports<br/>sessions.ts — CRUD /sessions + messages（context-only fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — GET status/meetings/unprocessed/logs, POST fetch/fetch-articles/extract-qa/dedupe-classify/metrics<br/>eval.ts — POST sample/retrieval/save, GET compare"]
         HEP --> HENV["ApiResponse[T]<br/>Zod schema validation<br/>data / error / meta"]
         HEP -->|not_relevant / helpful| LS
         HEP -->|"pipeline/eval proxy"| QT

@@ -19,9 +19,13 @@ export interface SourceItem {
   readonly source_title: string;
   readonly source_date: string;
   readonly score: number;
+  readonly source_type: string;
+  readonly source_collection: string;
+  readonly source_url: string;
 }
 
 export interface ChatResponse {
-  readonly answer: string;
+  readonly answer: string | null;
   readonly sources: readonly SourceItem[];
+  readonly mode: "full" | "context-only";
 }

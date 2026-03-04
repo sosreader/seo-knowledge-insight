@@ -14,7 +14,11 @@ const rawDataDir = join(tmpDir, "raw_data");
 const outputDir = join(tmpDir, "output");
 const fetchLogsDir = join(outputDir, "fetch_logs");
 const markdownDir = join(rawDataDir, "markdown");
+const mediumMdDir = join(rawDataDir, "medium_markdown");
+const ithelpMdDir = join(rawDataDir, "ithelp_markdown");
+const googleCasesMdDir = join(rawDataDir, "google_cases_markdown");
 const qaPerMeetingDir = join(outputDir, "qa_per_meeting");
+const qaPerArticleDir = join(outputDir, "qa_per_article");
 
 vi.mock("../../src/store/qa-store.js", () => ({
   qaStore: { loaded: false, count: 0 },
@@ -33,10 +37,14 @@ vi.mock("../../src/config.js", () => ({
     rootDir: tmpDir,
     outputDir,
     rawDataDir,
+    rawMediumMdDir: mediumMdDir,
+    rawIthelpMdDir: ithelpMdDir,
+    rawGoogleCasesMdDir: googleCasesMdDir,
     fetchLogsDir,
     qaJsonPath: join(outputDir, "qa_final.json"),
     qaEnrichedJsonPath: join(outputDir, "qa_enriched.json"),
     qaEmbeddingsPath: join(outputDir, "qa_embeddings.npy"),
+    qaPerArticleDir,
     sessionsDir: join(outputDir, "sessions"),
     scriptsDir: join(tmpDir, "scripts"),
     accessLogsDir: join(outputDir, "access_logs"),
@@ -82,9 +90,13 @@ function setupTestData() {
   // Create directories
   mkdirSync(rawDataDir, { recursive: true });
   mkdirSync(markdownDir, { recursive: true });
+  mkdirSync(mediumMdDir, { recursive: true });
+  mkdirSync(ithelpMdDir, { recursive: true });
+  mkdirSync(googleCasesMdDir, { recursive: true });
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(fetchLogsDir, { recursive: true });
   mkdirSync(qaPerMeetingDir, { recursive: true });
+  mkdirSync(qaPerArticleDir, { recursive: true });
   mkdirSync(join(outputDir, "sessions"), { recursive: true });
 
   // meetings_index.json
@@ -94,7 +106,7 @@ function setupTestData() {
     "utf-8"
   );
 
-  // Markdown files
+  // Markdown files — meetings
   writeFileSync(
     join(markdownDir, "test_meeting.md"),
     "# SEO Meeting\n\nContent here.",
@@ -106,9 +118,47 @@ function setupTestData() {
     "utf-8"
   );
 
+  // Markdown files — Medium (2 articles, 1 processed)
+  writeFileSync(
+    join(mediumMdDir, "ai_seo_strategy.md"),
+    "# AI SEO Strategy\n\nMedium article.",
+    "utf-8"
+  );
+  writeFileSync(
+    join(mediumMdDir, "gsc_update.md"),
+    "# GSC Update\n\nAnother Medium article.",
+    "utf-8"
+  );
+
+  // Markdown files — iThome (1 article, unprocessed)
+  writeFileSync(
+    join(ithelpMdDir, "day01_intro.md"),
+    "# Day 01 Intro\n\niThome article.",
+    "utf-8"
+  );
+
+  // Markdown files — Google Cases (2 articles, unprocessed)
+  writeFileSync(
+    join(googleCasesMdDir, "saramin-case-study.md"),
+    "# Saramin Case Study\n\nGoogle case study.",
+    "utf-8"
+  );
+  writeFileSync(
+    join(googleCasesMdDir, "vidio-case-study.md"),
+    "# Vidio Case Study\n\nAnother Google case study.",
+    "utf-8"
+  );
+
   // QA per meeting (only one processed)
   writeFileSync(
     join(qaPerMeetingDir, "test_meeting_qa.json"),
+    JSON.stringify({ qa_pairs: [{ q: "Q1", a: "A1" }] }),
+    "utf-8"
+  );
+
+  // QA per article (one Medium article processed)
+  writeFileSync(
+    join(qaPerArticleDir, "ai_seo_strategy_qa.json"),
     JSON.stringify({ qa_pairs: [{ q: "Q1", a: "A1" }] }),
     "utf-8"
   );
@@ -163,17 +213,25 @@ beforeAll(async () => {
 // --- GET /pipeline/status ---
 
 describe("GET /api/v1/pipeline/status", () => {
-  it("returns pipeline step statuses", async () => {
+  it("returns pipeline step statuses with all sources", async () => {
     const res = await app.request("/api/v1/pipeline/status");
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.data.steps).toHaveLength(3);
+    expect(body.data.steps).toHaveLength(6);
 
-    const [fetch, extract, dedupe] = body.data.steps;
-    expect(fetch.name).toBe("fetch-notion");
-    expect(fetch.count).toBe(2); // 2 markdown files
+    const [fetchNotion, fetchMedium, fetchIthelp, fetchGoogle, extract, dedupe] =
+      body.data.steps;
+    expect(fetchNotion.name).toBe("fetch-notion");
+    expect(fetchNotion.count).toBe(2); // 2 meeting markdown files
+    expect(fetchMedium.name).toBe("fetch-medium");
+    expect(fetchMedium.count).toBe(2); // 2 medium markdown files
+    expect(fetchIthelp.name).toBe("fetch-ithelp");
+    expect(fetchIthelp.count).toBe(1); // 1 ithelp markdown file
+    expect(fetchGoogle.name).toBe("fetch-google");
+    expect(fetchGoogle.count).toBe(2); // 2 google case study files
     expect(extract.name).toBe("extract-qa");
-    expect(extract.count).toBe(1); // 1 qa_per_meeting file
+    expect(extract.count).toBe(2); // 1 qa_per_meeting + 1 qa_per_article
+    expect(extract.detail).toContain("2 / 7"); // 2 extracted out of 7 total
     expect(dedupe.name).toBe("dedupe-classify");
     expect(dedupe.count).toBe(2); // 2 qa_final items
   });
@@ -234,14 +292,48 @@ describe("GET /api/v1/pipeline/meetings/:id/preview", () => {
 // --- GET /pipeline/unprocessed ---
 
 describe("GET /api/v1/pipeline/unprocessed", () => {
-  it("returns unprocessed markdown files", async () => {
+  it("returns unprocessed markdown files from all sources", async () => {
     const res = await app.request("/api/v1/pipeline/unprocessed");
     expect(res.status).toBe(200);
     const body = await res.json();
-    // test_meeting.md has a qa file, test_meeting_2.md does not
-    expect(body.data.items).toHaveLength(1);
-    expect(body.data.items[0].file).toBe("test_meeting_2.md");
-    expect(body.data.total).toBe(1);
+    // Unprocessed: test_meeting_2.md (meeting), gsc_update.md (medium), day01_intro.md (ithelp),
+    //   saramin-case-study.md (google), vidio-case-study.md (google)
+    // Processed: test_meeting.md (meeting), ai_seo_strategy.md (medium)
+    expect(body.data.total).toBe(5);
+
+    const files = body.data.items.map(
+      (i: { file: string }) => i.file
+    );
+    expect(files).toContain("test_meeting_2.md");
+    expect(files).toContain("gsc_update.md");
+    expect(files).toContain("day01_intro.md");
+    expect(files).toContain("saramin-case-study.md");
+    expect(files).toContain("vidio-case-study.md");
+  });
+
+  it("includes source_collection for each unprocessed item", async () => {
+    const res = await app.request("/api/v1/pipeline/unprocessed");
+    const body = await res.json();
+
+    const meeting = body.data.items.find(
+      (i: { file: string }) => i.file === "test_meeting_2.md"
+    );
+    expect(meeting.source_collection).toBe("seo-meetings");
+
+    const medium = body.data.items.find(
+      (i: { file: string }) => i.file === "gsc_update.md"
+    );
+    expect(medium.source_collection).toBe("genehong-medium");
+
+    const ithelp = body.data.items.find(
+      (i: { file: string }) => i.file === "day01_intro.md"
+    );
+    expect(ithelp.source_collection).toBe("ithelp-sc-kpi");
+
+    const google = body.data.items.find(
+      (i: { file: string }) => i.file === "saramin-case-study.md"
+    );
+    expect(google.source_collection).toBe("google-case-studies");
   });
 });
 
@@ -344,6 +436,68 @@ describe("POST /api/v1/pipeline/fetch", () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(500);
+  });
+});
+
+// --- POST /pipeline/fetch-articles ---
+
+describe("POST /api/v1/pipeline/fetch-articles", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("triggers Medium, iThome, and Google Cases fetchers", async () => {
+    const { execPython } = await import(
+      "../../src/services/pipeline-runner.js"
+    );
+    const res = await app.request("/api/v1/pipeline/fetch-articles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.success).toBe(true);
+    expect(body.data.results).toHaveLength(3);
+    expect(body.data.results[0].source).toBe("medium");
+    expect(body.data.results[1].source).toBe("ithelp");
+    expect(body.data.results[2].source).toBe("google-cases");
+    expect(execPython).toHaveBeenCalledWith("01b_fetch_medium.py", []);
+    expect(execPython).toHaveBeenCalledWith("01c_fetch_ithelp.py", []);
+    expect(execPython).toHaveBeenCalledWith("01d_fetch_google_cases.py", []);
+  });
+
+  it("reports partial failure when one script fails", async () => {
+    const { execPython } = await import(
+      "../../src/services/pipeline-runner.js"
+    );
+    vi.mocked(execPython)
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Medium OK",
+        duration_ms: 1000,
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        output: "iThome error",
+        duration_ms: 500,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Google OK",
+        duration_ms: 800,
+      });
+    const res = await app.request("/api/v1/pipeline/fetch-articles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.success).toBe(false);
+    expect(body.data.results[0].success).toBe(true);
+    expect(body.data.results[1].success).toBe(false);
+    expect(body.data.results[2].success).toBe(true);
   });
 });
 

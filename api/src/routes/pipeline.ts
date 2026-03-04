@@ -6,6 +6,7 @@ import {
   fetchRequestSchema,
   extractQARequestSchema,
   dedupeClassifyRequestSchema,
+  metricsRequestSchema,
   type MeetingEntry,
   type MeetingsResponse,
   type MeetingPreviewResponse,
@@ -16,7 +17,7 @@ import {
   type PipelineStepStatus,
   type PipelineStatusResponse,
 } from "../schemas/pipeline.js";
-import { execPython } from "../services/pipeline-runner.js";
+import { execPython, execQaTools } from "../services/pipeline-runner.js";
 import { paths } from "../config.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -40,8 +41,19 @@ function readMeetingsIndex(): readonly MeetingEntry[] {
   }
 }
 
+function countMdFiles(dir: string): number {
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir).filter((f) => f.endsWith(".md")).length;
+}
+
 function countQAPerMeeting(): number {
   const dir = join(paths.outputDir, "qa_per_meeting");
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir).filter((f) => f.endsWith("_qa.json")).length;
+}
+
+function countQAPerArticle(): number {
+  const dir = paths.qaPerArticleDir;
   if (!existsSync(dir)) return 0;
   return readdirSync(dir).filter((f) => f.endsWith("_qa.json")).length;
 }
@@ -64,11 +76,16 @@ function countQAFinal(): number {
 function buildPipelineStatus(): PipelineStatusResponse {
   const meetings = readMeetingsIndex();
   const mdDir = join(paths.rawDataDir, "markdown");
-  const mdCount = existsSync(mdDir)
-    ? readdirSync(mdDir).filter((f) => f.endsWith(".md")).length
-    : 0;
+  const mdCount = countMdFiles(mdDir);
 
-  const extractedCount = countQAPerMeeting();
+  const mediumMdCount = countMdFiles(paths.rawMediumMdDir);
+  const ithelpMdCount = countMdFiles(paths.rawIthelpMdDir);
+  const googleMdCount = countMdFiles(paths.rawGoogleCasesMdDir);
+
+  const extractedMeetings = countQAPerMeeting();
+  const extractedArticles = countQAPerArticle();
+  const totalMd = mdCount + mediumMdCount + ithelpMdCount + googleMdCount;
+  const totalExtracted = extractedMeetings + extractedArticles;
   const finalCount = countQAFinal();
 
   const steps: PipelineStepStatus[] = [
@@ -79,10 +96,28 @@ function buildPipelineStatus(): PipelineStatusResponse {
       detail: `${meetings.length} 筆會議，${mdCount} 份 Markdown`,
     },
     {
+      name: "fetch-medium",
+      label: "Medium 擷取",
+      count: mediumMdCount,
+      detail: `${mediumMdCount} 篇文章`,
+    },
+    {
+      name: "fetch-ithelp",
+      label: "iThome 擷取",
+      count: ithelpMdCount,
+      detail: `${ithelpMdCount} 篇文章`,
+    },
+    {
+      name: "fetch-google",
+      label: "Google 個案擷取",
+      count: googleMdCount,
+      detail: `${googleMdCount} 篇個案研究`,
+    },
+    {
       name: "extract-qa",
       label: "Q&A 萃取",
-      count: extractedCount,
-      detail: `已萃取 ${extractedCount} / ${mdCount} 份`,
+      count: totalExtracted,
+      detail: `已萃取 ${totalExtracted} / ${totalMd} 份`,
     },
     {
       name: "dedupe-classify",
@@ -96,26 +131,59 @@ function buildPipelineStatus(): PipelineStatusResponse {
 }
 
 function findUnprocessed(): readonly UnprocessedItem[] {
-  const mdDir = join(paths.rawDataDir, "markdown");
-  const qaDir = join(paths.outputDir, "qa_per_meeting");
+  const sources: ReadonlyArray<{
+    readonly mdDir: string;
+    readonly qaDir: string;
+    readonly sourceCollection: string;
+  }> = [
+    {
+      mdDir: join(paths.rawDataDir, "markdown"),
+      qaDir: join(paths.outputDir, "qa_per_meeting"),
+      sourceCollection: "seo-meetings",
+    },
+    {
+      mdDir: paths.rawMediumMdDir,
+      qaDir: paths.qaPerArticleDir,
+      sourceCollection: "genehong-medium",
+    },
+    {
+      mdDir: paths.rawIthelpMdDir,
+      qaDir: paths.qaPerArticleDir,
+      sourceCollection: "ithelp-sc-kpi",
+    },
+    {
+      mdDir: paths.rawGoogleCasesMdDir,
+      qaDir: paths.qaPerArticleDir,
+      sourceCollection: "google-case-studies",
+    },
+  ];
 
-  if (!existsSync(mdDir)) return [];
+  const results: UnprocessedItem[] = [];
 
-  const mdFiles = readdirSync(mdDir).filter((f) => f.endsWith(".md"));
-  const processedSet = new Set(
-    existsSync(qaDir)
-      ? readdirSync(qaDir)
-          .filter((f) => f.endsWith("_qa.json"))
-          .map((f) => f.replace(/_qa\.json$/, ".md"))
-      : []
-  );
+  for (const { mdDir, qaDir, sourceCollection } of sources) {
+    if (!existsSync(mdDir)) continue;
 
-  return mdFiles
-    .filter((f) => !processedSet.has(f))
-    .map((f) => ({
-      file: f,
-      title: f.replace(/\.md$/, "").replace(/_/g, " "),
-    }));
+    const mdFiles = readdirSync(mdDir).filter((f) => f.endsWith(".md"));
+    const processedSet = new Set(
+      existsSync(qaDir)
+        ? readdirSync(qaDir)
+            .filter((f) => f.endsWith("_qa.json"))
+            .map((f) => f.replace(/_qa\.json$/, ".md"))
+        : []
+    );
+
+    for (const f of mdFiles) {
+      if (!processedSet.has(f)) {
+        results.push({
+          file: f,
+          title: f.replace(/\.md$/, "").replace(/_/g, " "),
+          source_collection: sourceCollection,
+        });
+      }
+    }
+  }
+
+  return results;
 }
 
 function readFetchLogs(limit = 200): FetchLogsResponse {
@@ -301,4 +369,76 @@ pipelineRoute.post("/dedupe-classify", async (c) => {
   }
 
   return c.json(ok(result));
+});
+
+// POST /fetch-articles — fetch Medium + iThome + Google Cases articles
+pipelineRoute.post("/fetch-articles", async (c) => {
+  const mediumResult = await execPython("01b_fetch_medium.py", []);
+  const ithelpResult = await execPython("01c_fetch_ithelp.py", []);
+  const googleResult = await execPython("01d_fetch_google_cases.py", []);
+
+  const allSuccess =
+    mediumResult.success && ithelpResult.success && googleResult.success;
+
+  if (!allSuccess) {
+    const failures = [mediumResult, ithelpResult, googleResult].filter(
+      (r) => !r.success
+    );
+    console.error(
+      "Pipeline fetch-articles partial failure:",
+      failures.map((f) => f.output).join("\n")
+    );
+  }
+
+  return c.json(
+    ok({
+      success: allSuccess,
+      results: [
+        {
+          source: "medium",
+          success: mediumResult.success,
+          output: mediumResult.output,
+          duration_ms: mediumResult.duration_ms,
+        },
+        {
+          source: "ithelp",
+          success: ithelpResult.success,
+          output: ithelpResult.output,
+          duration_ms: ithelpResult.duration_ms,
+        },
+        {
+          source: "google-cases",
+          success: googleResult.success,
+          output: googleResult.output,
+          duration_ms: googleResult.duration_ms,
+        },
+      ],
+    })
+  );
+});
+
+// POST /metrics — parse SEO metrics from source
+pipelineRoute.post("/metrics", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = metricsRequestSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(fail("Invalid request body"), 400);
+  }
+
+  const { source, tab } = parsed.data;
+  const args: string[] = ["--source", source, "--tab", tab, "--json"];
+
+  const result = await execQaTools("load-metrics", args);
+
+  if (!result.success) {
+    console.error("Pipeline load-metrics failed:", result.output);
+    return c.json(fail("Metrics loading failed"), 500);
+  }
+
+  try {
+    return c.json(ok(JSON.parse(result.output)));
+  } catch {
+    return c.json(ok({ raw: result.output }));
+  }
 });

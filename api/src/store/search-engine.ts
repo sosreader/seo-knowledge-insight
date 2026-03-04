@@ -164,12 +164,47 @@ export class SearchEngine {
     }
     return 0;
   }
+
+  /**
+   * Keyword-only search (no embedding required).
+   * Reuses keyword boost + synonym + freshness, skipping semantic scores.
+   */
+  keywordOnlySearch(
+    query: string,
+    topK: number = 5,
+    category: string | null = null,
+    minScore: number = 0.01,
+  ): readonly SearchResult[] {
+    const scores = new Float32Array(this.rows);
+    for (let i = 0; i < this.rows; i++) {
+      const kwBoost = computeKeywordBoostSingle(
+        query,
+        this.qaPairs[i]!.keywords,
+        this.config.kwBoost,
+      );
+      const synonymBonus = this.computeSynonymBonusSingle(query, i);
+      scores[i] = (kwBoost + synonymBonus) * this.freshnessVec[i]!;
+    }
+
+    if (category) {
+      for (let i = 0; i < this.rows; i++) {
+        if (this.qaPairs[i]!.category !== category) {
+          scores[i] = -1;
+        }
+      }
+    }
+
+    const indices = topKIndices(scores, topK);
+    return indices
+      .filter((idx) => scores[idx]! >= minScore)
+      .map((idx) => ({ qa: this.qaPairs[idx]!, score: scores[idx]! }));
+  }
 }
 
 /**
  * Get indices of top-K highest values in a Float32Array, sorted descending.
  */
-function topKIndices(arr: Float32Array, k: number): number[] {
+export function topKIndices(arr: Float32Array, k: number): number[] {
   const indexed: Array<{ idx: number; val: number }> = [];
   for (let i = 0; i < arr.length; i++) {
     indexed.push({ idx: i, val: arr[i]! });

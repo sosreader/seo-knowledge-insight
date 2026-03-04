@@ -99,11 +99,19 @@ def _enrich_qa(
     source_file = qa.get("source_file", "")
     notion_url = notion_url_map.get(source_file, "")
 
+    # source_url：article 類型直接使用 Q&A 本身的 source_url；meeting 類型用 notion_url
+    source_type = qa.get("source_type", "meeting")
+    if source_type != "meeting" and qa.get("source_url"):
+        source_url = qa["source_url"]
+    else:
+        source_url = notion_url
+
     enrichment = {
         "synonyms": synonyms,
         "freshness_score": freshness_score,
         "search_hit_count": search_hit_count,
         "notion_url": notion_url,
+        "source_url": source_url,
     }
     return {**qa, "_enrichment": enrichment}
 

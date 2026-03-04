@@ -97,57 +97,80 @@ def find_duplicate_groups(
     return groups, unique
 
 
+def _group_by_collection(qa_pairs: list[dict]) -> dict[str, list[dict]]:
+    """按 source_collection 分組（向下相容：無欄位預設 seo-meetings）。"""
+    from collections import defaultdict
+    by_collection: dict[str, list[dict]] = defaultdict(list)
+    for qa in qa_pairs:
+        collection = qa.get("source_collection", "seo-meetings")
+        by_collection[collection].append(qa)
+    return dict(by_collection)
+
+
 @observe(name="deduplicate_qas")
 def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
-    """去重並合併相似 Q&A"""
+    """Collection-scoped 去重：各 collection 內部獨立 dedup，跨 collection 不 dedup。"""
     threshold = config.SIMILARITY_THRESHOLD
     print(f"\n📊 去重分析（相似度閾值: {threshold}）")
     print(f"   原始 Q&A 數量: {len(qa_pairs)}")
 
-    groups, unique_indices = find_duplicate_groups(qa_pairs, threshold)
-    print(f"   找到 {len(groups)} 組重複")
-    print(f"   獨立 Q&A: {len(unique_indices)} 個")
+    by_collection = _group_by_collection(qa_pairs)
+    print(f"   Collections: {list(by_collection.keys())}")
 
-    result: list[dict] = []
+    all_result: list[dict] = []
 
-    # 獨立的直接保留
-    for idx in unique_indices:
-        qa = qa_pairs[idx].copy()
-        qa["is_merged"] = False
-        result.append(qa)
+    for collection, items in by_collection.items():
+        print(f"\n   ── {collection}（{len(items)} 筆）──")
+        groups, unique_indices = find_duplicate_groups(items, threshold)
+        print(f"      找到 {len(groups)} 組重複，獨立 {len(unique_indices)} 個")
 
-    # 重複的合併
-    if groups:
-        print("\n🔄 合併重複 Q&A ...")
-        for group_i, group in enumerate(tqdm(groups, desc="  合併中")):
-            group_qas = [qa_pairs[idx] for idx in group]
+        result: list[dict] = []
 
-            # 顯示合併的內容
-            questions_preview = [q["question"][:40] for q in group_qas]
-            tqdm.write(
-                f"  群組 {group_i+1}: {len(group_qas)} 筆 → "
-                f"{questions_preview[0]}..."
-            )
+        # 獨立的直接保留
+        for idx in unique_indices:
+            qa = items[idx].copy()
+            qa["is_merged"] = False
+            result.append(qa)
 
-            try:
-                merged = merge_similar_qas(group_qas)
-                merged["is_merged"] = True
-                merged["merge_count"] = len(group_qas)
-                # stable_id 由所有來源 stable_id 排序後取 hash
-                source_ids = [qa.get("stable_id", "") for qa in group_qas]
-                merged["stable_id"] = compute_stable_id_from_sources(source_ids)
-                result.append(merged)
-            except Exception as e:
-                tqdm.write(f"  ⚠️  合併失敗: {e}，保留第一筆")
-                qa = group_qas[0].copy()
-                qa["is_merged"] = False
-                qa["merge_note"] = f"合併失敗，共 {len(group_qas)} 筆相似"
-                result.append(qa)
+        # 重複的合併
+        if groups:
+            print(f"      合併重複 Q&A ...")
+            for group_i, group in enumerate(tqdm(groups, desc=f"  [{collection}] 合併中")):
+                group_qas = [items[idx] for idx in group]
 
-            time.sleep(0.5)
+                # 顯示合併的內容
+                questions_preview = [q["question"][:40] for q in group_qas]
+                tqdm.write(
+                    f"  群組 {group_i+1}: {len(group_qas)} 筆 → "
+                    f"{questions_preview[0]}..."
+                )
 
-    print(f"\n   去重後 Q&A 數量: {len(result)}")
-    return result
+                try:
+                    merged = merge_similar_qas(group_qas)
+                    merged["is_merged"] = True
+                    merged["merge_count"] = len(group_qas)
+                    # 保留 source metadata
+                    merged["source_type"] = group_qas[0].get("source_type", "meeting")
+                    merged["source_collection"] = collection
+                    merged["source_url"] = group_qas[0].get("source_url", "")
+                    # stable_id 由所有來源 stable_id 排序後取 hash
+                    source_ids = [qa.get("stable_id", "") for qa in group_qas]
+                    merged["stable_id"] = compute_stable_id_from_sources(source_ids)
+                    result.append(merged)
+                except Exception as e:
+                    tqdm.write(f"  ⚠️  合併失敗: {e}，保留第一筆")
+                    qa = group_qas[0].copy()
+                    qa["is_merged"] = False
+                    qa["merge_note"] = f"合併失敗，共 {len(group_qas)} 筆相似"
+                    result.append(qa)
+
+                time.sleep(0.5)
+
+        print(f"      去重後: {len(result)} 筆")
+        all_result.extend(result)
+
+    print(f"\n   去重後 Q&A 總數: {len(all_result)}")
+    return all_result
 
 
 @observe(name="classify_all_qas")

@@ -20,6 +20,11 @@ export const dedupeClassifyRequestSchema = z.object({
   limit: z.number().int().positive().optional(),
 });
 
+export const metricsRequestSchema = z.object({
+  source: z.string().min(1).max(500),
+  tab: z.string().min(1).max(100).default("vocus"),
+});
+
 // --- Response types ---
 
 export interface PipelineStepStatus {
@@ -59,6 +64,7 @@ export interface MeetingPreviewResponse {
 export interface UnprocessedItem {
   readonly file: string;
   readonly title: string;
+  readonly source_collection: string;
 }
 
 export interface UnprocessedResponse {

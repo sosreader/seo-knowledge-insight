@@ -58,8 +58,29 @@ extract-qa: ## Q&A 萃取（增量模式，跳過已完成）
 extract-qa-test: ## Q&A 萃取（只處理前 3 份，快速測試用）
 	$(PYTHON) $(SCRIPT) --step extract-qa --limit 3
 
+.PHONY: fetch-medium
+fetch-medium: ## Medium 文章擷取（RSS → Markdown）
+	$(PYTHON) scripts/01b_fetch_medium.py
+
+.PHONY: fetch-ithelp
+fetch-ithelp: ## iThome 鐵人賽擷取（HTML → Markdown）
+	$(PYTHON) scripts/01c_fetch_ithelp.py
+
+.PHONY: fetch-google-cases
+fetch-google-cases: ## Google Search Central Case Studies 擷取（HTML → Markdown）
+	$(PYTHON) scripts/01d_fetch_google_cases.py
+
+.PHONY: fetch-articles
+fetch-articles: ## 擷取所有外部文章（Medium + iThome + Google Cases）
+	$(PYTHON) scripts/01b_fetch_medium.py
+	$(PYTHON) scripts/01c_fetch_ithelp.py
+	$(PYTHON) scripts/01d_fetch_google_cases.py
+
+.PHONY: fetch-all
+fetch-all: fetch-notion fetch-articles ## Notion + 所有外部文章
+
 .PHONY: dedupe-classify
-dedupe-classify: ## 去重 + 分類
+dedupe-classify: ## 去重 + 分類（collection-scoped）
 	$(PYTHON) $(SCRIPT) --step dedupe-classify
 
 .PHONY: dedupe-only

@@ -40,9 +40,30 @@ from scripts.extract_qa_helpers import (
 )
 
 
+def _detect_source_metadata(md_path: Path) -> dict:
+    """從 Markdown 目錄名稱推斷 source_type 和 source_collection。"""
+    dir_name = md_path.parent.name
+    source_type, source_collection = config.DIR_COLLECTION_MAP.get(
+        dir_name, ("article", dir_name)
+    )
+
+    # 嘗試從 Markdown metadata 取 source_url
+    content = md_path.read_text(encoding="utf-8")
+    source_url = ""
+    url_match = re.search(r'\*\*來源 URL\*\*:\s*(.+)', content)
+    if url_match:
+        source_url = url_match.group(1).strip()
+
+    return {
+        "source_type": source_type,
+        "source_collection": source_collection,
+        "source_url": source_url,
+    }
+
+
 @observe(name="process_single_meeting")
 def process_single_meeting(md_path: Path) -> dict:
-    """處理單份會議紀錄（LLM 呼叫有 content-addressed cache 保護）"""
+    """處理單份會議紀錄或文章（LLM 呼叫有 content-addressed cache 保護）"""
     import copy
 
     content = md_path.read_text(encoding="utf-8")
@@ -61,8 +82,11 @@ def process_single_meeting(md_path: Path) -> dict:
         or _extract_date_from_title(filename)
     )
 
+    # 偵測來源 metadata（source_type, source_collection, source_url）
+    source_meta = _detect_source_metadata(md_path)
+
     print(f"  📄 {title}")
-    print(f"     字數: {len(content)}")
+    print(f"     字數: {len(content)}, 來源: {source_meta['source_collection']}")
 
     # ── Layer 1 cache check ──────────────────────────────────
     # Key = markdown content（title/date 均由 content 衍生，deterministic）
@@ -77,6 +101,9 @@ def process_single_meeting(md_path: Path) -> dict:
             qa["source_file"] = md_path.name
             qa["source_title"] = title
             qa["source_date"] = date
+            qa["source_type"] = source_meta["source_type"]
+            qa["source_collection"] = source_meta["source_collection"]
+            qa["source_url"] = source_meta["source_url"]
         return meeting_result
 
     # ── Cache miss：呼叫 OpenAI ──────────────────────────────
@@ -107,6 +134,9 @@ def process_single_meeting(md_path: Path) -> dict:
         qa["source_file"] = md_path.name
         qa["source_title"] = title
         qa["source_date"] = date
+        qa["source_type"] = source_meta["source_type"]
+        qa["source_collection"] = source_meta["source_collection"]
+        qa["source_url"] = source_meta["source_url"]
 
     qa_count = len(meeting_result.get("qa_pairs", []))
     print(f"     ✅ 萃取 {qa_count} 個 Q&A")
@@ -116,31 +146,31 @@ def process_single_meeting(md_path: Path) -> dict:
 
 def _rebuild_merged_from_per_meeting() -> dict:
     """
-    從 qa_per_meeting/ 下所有已完成的 JSON 重新組合 qa_all_raw.json。
+    從 qa_per_meeting/ 和 qa_per_article/ 下所有已完成的 JSON 重新組合 qa_all_raw.json。
     確保即使中途 crash，已處理的結果不會遺失。
     """
     all_qa: list[dict] = []
     summary: list[dict] = []
-    qa_dir = config.QA_PER_MEETING_DIR
+    qa_dirs = [config.QA_PER_MEETING_DIR, config.QA_PER_ARTICLE_DIR]
 
-    if not qa_dir.exists():
-        return {"total_qa_count": 0, "meetings_processed": 0, "qa_pairs": [], "processing_summary": []}
-
-    for f in sorted(qa_dir.glob("*_qa.json")):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-            pairs = data.get("qa_pairs", [])
-            # 跳過處理失敗的空結果
-            if not pairs and "處理失敗" in data.get("meeting_summary", ""):
-                continue
-            all_qa.extend(pairs)
-            summary.append({
-                "file": f.stem.replace("_qa", "") + ".md",
-                "qa_count": len(pairs),
-                "summary": data.get("meeting_summary", ""),
-            })
-        except (json.JSONDecodeError, KeyError):
+    for qa_dir in qa_dirs:
+        if not qa_dir.exists():
             continue
+        for f in sorted(qa_dir.glob("*_qa.json")):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                pairs = data.get("qa_pairs", [])
+                # 跳過處理失敗的空結果
+                if not pairs and "處理失敗" in data.get("meeting_summary", ""):
+                    continue
+                all_qa.extend(pairs)
+                summary.append({
+                    "file": f.stem.replace("_qa", "") + ".md",
+                    "qa_count": len(pairs),
+                    "summary": data.get("meeting_summary", ""),
+                })
+            except (json.JSONDecodeError, KeyError):
+                continue
 
     return {
         "total_qa_count": len(all_qa),
@@ -183,17 +213,33 @@ def main(args: argparse.Namespace) -> None:
         print("   📦 增量模式：跳過已完成的檔案")
     print("=" * 60)
 
-    # 收集要處理的檔案
+    # 收集要處理的檔案（多來源目錄）
+    source_dirs = [
+        config.RAW_MD_DIR,
+        config.RAW_MEDIUM_MD_DIR,
+        config.RAW_ITHELP_MD_DIR,
+    ]
+
     if args.file:
-        md_files = [config.RAW_MD_DIR / args.file]
-        if not md_files[0].exists():
-            print(f"❌ 找不到: {md_files[0]}")
+        # 在所有來源目錄中搜尋指定檔案
+        found = None
+        for d in source_dirs:
+            candidate = d / args.file
+            if candidate.exists():
+                found = candidate
+                break
+        if found is None:
+            print(f"❌ 找不到: {args.file}（已搜尋 {len(source_dirs)} 個目錄）")
             sys.exit(1)
+        md_files = [found]
     else:
-        md_files = sorted(config.RAW_MD_DIR.glob("*.md"))
+        md_files = []
+        for d in source_dirs:
+            if d.exists():
+                md_files.extend(sorted(d.glob("*.md")))
 
     if not md_files:
-        print("❌ raw_data/markdown/ 下沒有 .md 檔案，請先執行步驟 1")
+        print("❌ 所有來源目錄下沒有 .md 檔案，請先執行步驟 1")
         sys.exit(1)
 
     if args.limit:
@@ -204,7 +250,12 @@ def main(args: argparse.Namespace) -> None:
         filtered = []
         skipped = 0
         for md_path in md_files:
-            qa_path = config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json"
+            # 依來源目錄決定檢查位置
+            dir_name = md_path.parent.name
+            if dir_name == "markdown":
+                qa_path = config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json"
+            else:
+                qa_path = config.QA_PER_ARTICLE_DIR / f"{md_path.stem}_qa.json"
             if qa_path.exists():
                 try:
                     existing = json.loads(qa_path.read_text(encoding="utf-8"))
@@ -255,8 +306,13 @@ def main(args: argparse.Namespace) -> None:
             print(f"     ❌ 錯誤: {e}")
             result = {"qa_pairs": [], "meeting_summary": f"處理失敗: {e}"}
 
-        # 存單份結果
-        out_path = config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json"
+        # 存單份結果（依來源目錄決定輸出位置）
+        dir_name = md_path.parent.name
+        if dir_name == "markdown":
+            out_dir = config.QA_PER_MEETING_DIR
+        else:
+            out_dir = config.QA_PER_ARTICLE_DIR
+        out_path = out_dir / f"{md_path.stem}_qa.json"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(
             json.dumps(result, ensure_ascii=False, indent=2),

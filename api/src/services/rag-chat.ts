@@ -53,6 +53,9 @@ function itemToSource(item: QAItem, score: number): SourceItem {
     category: item.category,
     source_title: item.source_title,
     source_date: item.source_date,
+    source_type: item.source_type,
+    source_collection: item.source_collection,
+    source_url: item.source_url,
     score: Math.round(score * 10000) / 10000,
   };
 }
@@ -111,5 +114,5 @@ export async function ragChat(
   const answer = resp.choices[0]?.message?.content ?? "";
   const sources = hits.map(({ item, score }) => itemToSource(item, score));
 
-  return { answer, sources };
+  return { answer, sources, mode: "full" };
 }

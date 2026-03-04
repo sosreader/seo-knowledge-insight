@@ -18,9 +18,25 @@ load_dotenv()
 ROOT_DIR = Path(__file__).resolve().parent
 RAW_JSON_DIR = ROOT_DIR / "raw_data" / "notion_json"
 RAW_MD_DIR = ROOT_DIR / "raw_data" / "markdown"
+RAW_MEDIUM_MD_DIR = ROOT_DIR / "raw_data" / "medium_markdown"
+RAW_ITHELP_MD_DIR = ROOT_DIR / "raw_data" / "ithelp_markdown"
+RAW_GOOGLE_CASES_MD_DIR = ROOT_DIR / "raw_data" / "google_cases_markdown"
 IMAGES_DIR = ROOT_DIR / "raw_data" / "images"
 OUTPUT_DIR = ROOT_DIR / "output"
 QA_PER_MEETING_DIR = OUTPUT_DIR / "qa_per_meeting"
+QA_PER_ARTICLE_DIR = OUTPUT_DIR / "qa_per_article"
+
+# ── 多來源目錄 → (source_type, source_collection) 映射 ──
+DIR_COLLECTION_MAP: Dict[str, tuple] = {
+    "markdown": ("meeting", "seo-meetings"),
+    "medium_markdown": ("article", "genehong-medium"),
+    "ithelp_markdown": ("article", "ithelp-sc-kpi"),
+    "google_cases_markdown": ("article", "google-case-studies"),
+}
+
+# ── 外部文章來源 URL ─────────────────────────────────
+MEDIUM_RSS_URL = "https://genehong.medium.com/feed"
+ITHELP_SERIES_URL = "https://ithelp.ithome.com.tw/users/20000065/ironman/4545"
 
 # ── 常數（不依賴 env，無副作用）──────────────────────
 NOTION_API_VERSION = "2022-06-28"

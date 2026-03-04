@@ -13,6 +13,7 @@ import { reportsRoute } from "./routes/reports.js";
 import { sessionsRoute } from "./routes/sessions.js";
 import { feedbackRoute } from "./routes/feedback.js";
 import { pipelineRoute } from "./routes/pipeline.js";
+import { evalRoute } from "./routes/eval.js";
 import { qaStore } from "./store/qa-store.js";
 
 const app = new Hono();
@@ -41,6 +42,8 @@ api.use("/sessions", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/sessions/*", rateLimit(config.RATE_LIMIT_CHAT));
 api.use("/pipeline", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/pipeline/*", rateLimit(config.RATE_LIMIT_DEFAULT));
+api.use("/eval", rateLimit(config.RATE_LIMIT_DEFAULT));
+api.use("/eval/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 
 // Mount routes
 api.route("/qa", qaRoute);
@@ -50,6 +53,7 @@ api.route("/reports", reportsRoute);
 api.route("/sessions", sessionsRoute);
 api.route("/feedback", feedbackRoute);
 api.route("/pipeline", pipelineRoute);
+api.route("/eval", evalRoute);
 
 app.route("/api/v1", api);
 
