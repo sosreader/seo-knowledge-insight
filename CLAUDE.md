@@ -189,9 +189,19 @@ docker-compose logs seo-api-ts  # 監看 Hono 日誌
 
 API 端點（與 Python 相同）：
 - `GET /health` — 健康檢查
-- 6 個路由器：qa、search、chat、reports、sessions、feedback
+- 7 個路由器：qa、search、chat、reports、sessions、feedback、pipeline
 - 認證：`X-API-Key` header
 - 詳見 `api/README.md`
+
+Pipeline API 端點（v2.3 新增）：
+- `GET /api/v1/pipeline/status` — 各步驟完成狀態
+- `GET /api/v1/pipeline/meetings` — 會議列表（含 metadata）
+- `GET /api/v1/pipeline/meetings/:id/preview` — Markdown 預覽
+- `GET /api/v1/pipeline/unprocessed` — 待處理的 Markdown 列表
+- `GET /api/v1/pipeline/logs` — Fetch 歷史日誌
+- `POST /api/v1/pipeline/fetch` — 觸發 Notion 增量擷取（不暴露 --force）
+- `POST /api/v1/pipeline/extract-qa` — 觸發 Q&A 萃取
+- `POST /api/v1/pipeline/dedupe-classify` — 觸發去重 + 分類
 
 ### 開發工具命令
 
