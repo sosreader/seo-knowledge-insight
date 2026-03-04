@@ -6,6 +6,110 @@
 
 ## 12. 本專案完整架構與決策
 
+### Frontend UI 架構（v2.5，2026-03-05）
+
+**核心理念**：前端採用 custom hook + toolbar/dashboard 組件模式，提升 SPA 應用的可維護性與可測試性。
+
+**SEO 知識庫頁面（/admin/seoInsight）- UI 層次**：
+```
+                  QAFilterToolbar
+                 /      |      \      \
+        Keyword   Category  Difficulty  Evergreen
+        Input      Select     Select      Select
+           |         |          |          |
+           └─────────┴──────────┴──────────┘
+                     ↓
+           useQAFilters (hook)
+                     ↓
+           QA Table + Pagination
+```
+
+**useQAFilters Hook**（248 行）：
+- **State Management**：
+  - `filters` (Filters object)：category、keyword、difficulty、evergreen
+  - `page`、`sorting`、`items`、`total`、`categories`
+  - `isLoading`、`error`
+- **Derived State**（useMemo）：
+  - `hasActiveFilters`：判定是否有篩選條件
+  - `activeFilterChips`：已套用的篩選條件 array（用於 badge 顯示）
+- **Debouncing**：
+  - `debouncedKeyword` (300ms)：避免頻繁 API 呼叫
+  - 當 debouncedKeyword 變更時重置 page=0
+- **Actions**：
+  - `setFilter(key, value)`：設定篩選，非 keyword 時重置分頁
+  - `removeFilter(key)`：移除單一篩選
+  - `clearFilters()`：清除所有篩選
+  - `handleSortingChange()`：排序變更時重置分頁
+- **API 整合**（useEffect）：
+  - 依賴：[page, filters.category, debouncedKeyword, filters.difficulty, filters.evergreen, sorting]
+  - 呼叫 `getQAList({offset, limit, category, keyword, difficulty, evergreen, sort_by, sort_order})`
+  - Abort pattern：`cancelled` flag 防止競態條件
+
+**QAFilterToolbar 組件**（168 行）：
+- **Input 層**（shadcn-ui）：
+  - `InputWithClear`：keyword with X 按鈕
+  - `FilterSelect` (wrapper around Select)：category、difficulty、evergreen，支援 CLEAR_VALUE 機制
+- **Filter Chips**（Badge）：
+  - 顯示已套用的篩選條件
+  - 每個 badge 右側有 X 按鈕，點擊移除該篩選
+  - Display mapping：evergreen: {true: "新鮮", false: "老化"}
+- **Action 按鈕**：
+  - 「清除篩選」（條件：hasActiveFilters=true）
+  - Ghost variant，text-xs
+
+**設計決策**：
+1. **Separation of Concerns**：hook 負責狀態 + API，component 只負責 UI 渲染
+2. **Debouncing Strategy**：keyword 輸入延遲 300ms，避免 API 訪問頻率過高
+3. **Keyword 搜尋**：純關鍵字篩選（後端支援 CJK n-gram），移除語意搜尋 UI
+4. **Filter Chips 互動**：視覺反饋 + 單獨移除，提升 UX
+5. **Stateless FilterSelect**：CLEAR_VALUE 讓使用者可用鍵盤導航回到「全部」狀態
+
+**RAG 問答頁面（/admin/seoInsight/chat）- Context-Only 模式（v2.5）**：
+```
+                  chat.tsx
+                    |
+        chatMode state ("full" | "context-only" | null)
+                    |
+        ┌───────────┼───────────┐
+        ↓           ↓           ↓
+  Context-Only   Message     ChatMessage
+    Banner       Bubbles      Bubble
+  (mode banner)  (list)    (null content
+                            → fallback 文字
+                            + auto-expand
+                              SourcesList)
+```
+
+- `sendSessionMessage` 回傳 `mode` 欄位，驅動 `chatMode` state
+- `ChatMessageBubble` 的 `content` prop 支援 `string | null`
+- 無 content 且 role=assistant 時，顯示「OpenAI 未設定，僅顯示相關參考來源」
+- SourcesList 在 context-only 模式自動展開（`defaultExpanded={!hasContent}`）
+- `handleNewChat` 和 `loadSession` 重設 `chatMode` 避免殘留 badge
+
+**Q&A 評估儀表板（/admin/seoInsight/eval）- 四區段佈局（v2.5）**：
+```
+                eval.tsx
+                  |
+         useEvalDashboard (hook)
+        /        |        |        \
+  EvalMetrics  Provider  Sample   Save
+   Cards     Comparison  Table    Form
+```
+
+- `useEvalDashboard.ts`：集中管理 metrics/comparison/sample/save 四組 state + loading + error
+  - Auto-load: `evalCompare()` on mount
+  - Actions: `loadMetrics()`、`loadComparison()`、`loadSample(controls)`、`saveResults(params)`
+- **Section 1: EvalMetricsCards**：3 張指標卡（hit_rate/mrr/category_hit_rate），threshold 色彩（達標 black / 接近 gray / 未達 light gray），右上角「執行 Retrieval 評估」按鈕
+- **Section 2: EvalProviderComparison**：GET /eval/compare 載入，表格顯示 provider/relevance/accuracy/completeness/timestamp
+- **Section 3: EvalSampleTable**：控制列（size/seed/withGolden + 抽樣按鈕），表格可展開顯示 answer，keywords 以 badge 呈現
+- **Section 4: EvalSaveForm**：filename input（SAFE_FILENAME 前端驗證 `^[a-zA-Z0-9_-]+$`）、engine select、update_baseline checkbox
+
+**Pipeline 指標分析（PipelineMetrics 組件，嵌入 pipeline.tsx）**：
+- Source URL/path input + tab select（vocus/custom）
+- POST /pipeline/metrics 載入，結果以 key-value 表格顯示
+
+---
+
 ### Pipeline 全景
 
 ```
@@ -69,32 +173,40 @@ Notion 會議紀錄（87 份，2023–2026）
   Session 儲存：output/sessions/{uuid}.json（Repository Pattern）
             ↓ https://<service>.awsapprunner.com
 
-**TypeScript Hono（v2.3，port 8002，新架構）**——直接取代 Python API
-[SEO Insight API v2] api/src — Hono + TypeScript，完全移植 Python 功能
+**TypeScript Hono（v2.3+，port 8002，新架構）**——直接取代 Python API
+[SEO Insight API v2] api/src — Hono + TypeScript，完全移植 Python 功能 + Local Mode 降級
   框架：Hono（輕量、Cloudflare Workers / Node.js 相容）
   驗證：Zod schema validation（TypeScript-first）
   回應格式：ApiResponse[T] envelope（data / error / meta）
   認證：X-API-Key middleware
-  速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min）
+  速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min・eval 60/min）
   QA ID：stable_id（SHA256[:16] hex），與 Python 相同驗證規則
-  endpoint 同步（6 個 router）：
-    - routes/qa.ts        — GET /qa, /qa/{id}
-    - routes/search.ts    — POST /search
-    - routes/chat.ts      — POST /chat（需要 OpenAI API key）
+  Local Mode：無 OpenAI API key 時自動降級（search→keyword-only，chat→context-only）
+  endpoint（9 個 router）：
+    - routes/qa.ts        — GET /qa, /qa/categories, /qa/{id}（hex+int）
+    - routes/search.ts    — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換）
+    - routes/chat.ts      — POST /chat（mode: full|context-only，無 OpenAI 時回傳 sources + answer:null）
     - routes/reports.ts   — GET /reports, /reports/{id}, POST /reports/generate
-    - routes/sessions.ts  — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages, DELETE /sessions/{id}
+    - routes/sessions.ts  — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages（context-only fallback）, DELETE /sessions/{id}
     - routes/feedback.ts  — POST /feedback
+    - routes/pipeline.ts  — GET /status, /meetings, /meetings/:id/preview, /unprocessed, /logs, POST /fetch, /extract-qa, /dedupe-classify, /metrics
+    - routes/eval.ts      — POST /eval/sample, /eval/retrieval, /eval/save, GET /eval/compare
   核心模組：
-    - store/qa-store.ts：QAStore（讀 qa_final.json + embedding 向量）
+    - store/qa-store.ts：QAStore（讀 qa_final.json + embedding 向量，embedding optional）
     - store/session-store.ts：FileSessionStore（Repository Pattern）
     - store/learning-store.ts：LearningStore（feedback + miss 記錄）
-    - store/search-engine.ts：SearchEngine（hybrid search + keyword boost）
+    - store/search-engine.ts：SearchEngine（hybrid search + keyword boost + keywordOnlySearch）
     - utils/npy-reader.ts：NumPy .npy 檔案解析（numpy 相容）
     - utils/cosine-similarity.ts：向量運算（Float32Array）
     - utils/keyword-boost.ts：4 層關鍵字匹配
+    - utils/cjk-tokenizer.ts：CJK 分詞（2-gram + 單字，中文 keyword search 支援）
+    - utils/mode-detect.ts：hasOpenAI() helper（Local Mode 偵測）
     - services/embedding.ts：OpenAI embedding wrapper
     - services/rag-chat.ts：RAG 問答（需要 OpenAI API key）
-  測試：Vitest（13 個 test files，60 tests passing）
+    - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools）
+  schemas：
+    - qa / search / chat / feedback / report / session / pipeline / eval / api-response
+  測試：Vitest（19 個 test files，125 tests passing）
   部署：docker-compose（port 8002），未來支援 ECR + App Runner
   與 Python 並行運作（遷移期間）
             ↓ http://localhost:8002 (開發) 或 https://<service-v2>.awsapprunner.com (未來)
@@ -163,16 +275,19 @@ Notion 會議紀錄（87 份，2023–2026）
 
 **決策核心**：
 1. **分層遷移**：新功能優先在 Hono 實作，Python 保留作為穩定層
-2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料，search/chat/sessions 需要 OpenAI API key（embedding + completion）
-3. **測試優先**：Vitest 路由覆蓋（13 個 test files，60 tests），unit + integration
-4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取
+2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid/full，無 → keyword/context-only）
+3. **測試優先**：Vitest 路由覆蓋（18 個 test files，117 tests），unit + integration
+4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取（optional，無 .npy 時 keyword-only mode）
 
 **實作成果**：
-- 31 個源碼檔案（routes 6、store 3、search 4、middleware 3、等）
-- 14 個測試檔案（routes 6 個完整測試套件）
-- 6 個完整路由器（qa、search、chat、reports、sessions、feedback）+ health 檢查
+- ~40 個源碼檔案（routes 9、store 4、utils 5、middleware 4、schemas 9、services 3）
+- 18 個測試檔案（routes 9 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 1）
+- 9 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、eval）+ health 檢查
 - NumPy .npy 檔案解析引擎（向量相容）
 - 速率限制 middleware（同步 Python layer 配置）
+- Local Mode 降級（無 OpenAI 時 keyword-only search + context-only chat）
+- CJK 分詞支援（中文 keyword search）
+- Python CLI 代理（pipeline + eval 端點透過 subprocess 執行 qa_tools.py）
 
 **技術決策**：
 
@@ -194,10 +309,10 @@ Notion 會議紀錄（87 份，2023–2026）
 
 4. **測試策略**
    - Vitest（Vite native test runner）
-   - Unit tests：純邏輯（search、store、validators）
-   - Integration tests：mocked external calls（OpenAI、Supabase）
-   - Router tests：完整 HTTP 請求/回應循環
-   - 100% endpoint 覆蓋（6 個 routes × ~2 test per endpoint）
+   - Unit tests：純邏輯（search、store、validators、cjk-tokenizer）
+   - Integration tests：mocked external calls（OpenAI、Python CLI subprocess）
+   - Router tests：完整 HTTP 請求/回應循環（含 Local Mode 降級測試）
+   - 100% endpoint 覆蓋（9 個 routes × ~2-6 tests per endpoint，共 117 tests）
 
 **向下相容**：
 - Python API（port 8001）保持不變，允許 2-4 週過渡期

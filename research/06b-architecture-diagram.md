@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v2.3，2026-03-04）
+## 架構圖（最新：v2.5，2026-03-05）
 
 ```mermaid
 flowchart TD
@@ -41,18 +41,28 @@ flowchart TD
         S4 --> RPT[report_YYYYMMDD.md]
     end
 
-    subgraph Hono_API["API Layer v2.3（Hono + TypeScript，port 8002）"]
-        QA --> HAPI["SEO Insight API<br/>Hono + TypeScript<br/>QAStore（npy-reader 向量解析）"]
-        EMB --> HAPI
-        SE -.->|hybrid_search| HAPI
-        HAPI --> HMID["middleware/<br/>auth.ts（X-API-Key）<br/>rate-limit.ts（chat:20/min search/qa:60/min reports/gen:5/min）<br/>cors.ts + error-handler.ts"]
-        HMID --> HEP["6 個 Router + health<br/>qa.ts — GET /qa, /qa/{id}（hex+int）<br/>search.ts — POST /search<br/>chat.ts — POST /chat<br/>reports.ts — GET/POST /reports<br/>sessions.ts — CRUD /sessions（60/min, msg:20/min）<br/>feedback.ts — POST /feedback"]
+    subgraph Frontend["Frontend（vocus-admin-dev，Next.js，port 3000）"]
+        FE["6 頁 SPA<br/>SEO 知識庫 / QA 詳情 / RAG 問答<br/>SEO 週報 / Pipeline / Q&A 評估"]
+        FE --> FEHOOK["Custom Hooks<br/>useQAFilters / useEvalDashboard"]
+        FE --> FECOMP["Components<br/>ChatMessage（null content 支援）<br/>EvalMetricsCards / EvalProviderComparison<br/>EvalSampleTable / EvalSaveForm<br/>PipelineMetrics / QAFilterToolbar"]
+        FECOMP -->|context-only 模式| FEFB["Context-Only Badge<br/>+ SourcesList auto-expand"]
+    end
+
+    FE -->|"seoInsight.api.ts<br/>seoFetch（port 8002）"| HAPI
+
+    subgraph Hono_API["API Layer v2.5（Hono + TypeScript，port 8002，Local Mode 支援）"]
+        QA --> HAPI["SEO Insight API<br/>Hono + TypeScript<br/>QAStore（npy-reader 向量解析，embedding optional）"]
+        EMB -.->|"optional（Local Mode 不需要）"| HAPI
+        SE -.->|hybrid_search / keywordOnlySearch| HAPI
+        HAPI --> HMID["middleware/<br/>auth.ts（X-API-Key）<br/>rate-limit.ts（chat:20 search/qa:60 reports/gen:5 eval:60/min）<br/>cors.ts + error-handler.ts"]
+        HMID --> HEP["9 個 Router + health<br/>qa.ts — GET /qa, /qa/categories, /qa/{id}（hex+int）<br/>search.ts — POST /search（mode: hybrid|keyword）<br/>chat.ts — POST /chat（mode: full|context-only）<br/>reports.ts — GET/POST /reports<br/>sessions.ts — CRUD /sessions + messages（context-only fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — GET status/meetings/unprocessed/logs, POST fetch/extract-qa/dedupe-classify/metrics<br/>eval.ts — POST sample/retrieval/save, GET compare"]
         HEP --> HENV["ApiResponse[T]<br/>Zod schema validation<br/>data / error / meta"]
         HEP -->|not_relevant / helpful| LS
-        HAPI --> HSTORE["store/<br/>qa-store.ts（QAStore singleton）<br/>search-engine.ts（hybrid search + keyword boost）<br/>session-store.ts（FileSessionStore）<br/>learning-store.ts"]
-        HAPI --> HUTIL["utils/<br/>npy-reader.ts（NumPy .npy 解析）<br/>cosine-similarity.ts（Float32Array）<br/>keyword-boost.ts（4 層匹配）<br/>sanitize.ts（HTML escape 防 XSS）"]
-        HAPI --> HSVC["services/<br/>embedding.ts（OpenAI wrapper）<br/>rag-chat.ts（RAG 問答）"]
-        HAPI --> HSCHEMA["schemas/<br/>Zod runtime validation<br/>qa / search / chat / feedback<br/>report / session"]
+        HEP -->|"pipeline/eval proxy"| QT
+        HAPI --> HSTORE["store/<br/>qa-store.ts（QAStore singleton，embedding optional）<br/>search-engine.ts（hybrid + keyword boost + keywordOnlySearch）<br/>session-store.ts（FileSessionStore）<br/>learning-store.ts"]
+        HAPI --> HUTIL["utils/<br/>npy-reader.ts（NumPy .npy 解析）<br/>cosine-similarity.ts（Float32Array）<br/>keyword-boost.ts（4 層匹配）<br/>sanitize.ts（HTML escape 防 XSS）<br/>cjk-tokenizer.ts（CJK 分詞 2-gram）<br/>mode-detect.ts（hasOpenAI 偵測）"]
+        HAPI --> HSVC["services/<br/>embedding.ts（OpenAI wrapper）<br/>rag-chat.ts（RAG 問答）<br/>pipeline-runner.ts（Python CLI 代理）"]
+        HAPI --> HSCHEMA["schemas/ 9 個<br/>Zod runtime validation<br/>qa / search / chat / feedback<br/>report / session / pipeline / eval<br/>api-response"]
     end
 
     subgraph Legacy_API["Python API Layer（FastAPI，port 8001，legacy — 預計下線）"]

@@ -9,8 +9,20 @@ import {
 import { ok, fail } from "../schemas/api-response.js";
 import { sessionStore, type Session } from "../store/session-store.js";
 import { ragChat } from "../services/rag-chat.js";
+import { hasOpenAI } from "../utils/mode-detect.js";
+import { qaStore } from "../store/qa-store.js";
+import { config } from "../config.js";
 
 export const sessionsRoute = new Hono();
+
+function keywordHitsToSources(message: string, k: number) {
+  const hits = qaStore.keywordSearch(message, k);
+  return hits.map(({ item, score }) => ({
+    id: item.id, question: item.question, category: item.category,
+    source_title: item.source_title, source_date: item.source_date,
+    score: Math.round(score * 10000) / 10000,
+  }));
+}
 
 function toSummary(s: Session): SessionSummaryOut {
   return {
@@ -82,7 +94,7 @@ sessionsRoute.get("/:session_id", (c) => {
 
 sessionsRoute.post("/:session_id/messages", async (c) => {
   const sessionId = c.req.param("session_id");
-  const body = await c.req.json();
+  const body = await c.req.json().catch(() => ({}));
   const parsed = sendMessageSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -113,14 +125,36 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     content: m.content,
   }));
 
-  // 3. Call RAG chat
-  const result = await ragChat(parsed.data.message, history.length > 0 ? history : null);
+  // 3. Call RAG chat (with context-only fallback when no OpenAI)
+  let result: { answer: string | null; sources: Record<string, unknown>[]; mode: string };
+
+  if (hasOpenAI()) {
+    try {
+      const ragResult = await ragChat(parsed.data.message, history.length > 0 ? history : null);
+      result = {
+        answer: ragResult.answer,
+        sources: ragResult.sources as unknown as Record<string, unknown>[],
+        mode: ragResult.mode ?? "full",
+      };
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 401 || status === 403 || status === 429) {
+        const sources = keywordHitsToSources(parsed.data.message, config.CHAT_CONTEXT_K);
+        result = { answer: null, sources, mode: "context-only" };
+      } else {
+        throw err;
+      }
+    }
+  } else {
+    const sources = keywordHitsToSources(parsed.data.message, config.CHAT_CONTEXT_K);
+    result = { answer: null, sources, mode: "context-only" };
+  }
 
   // 4. Save assistant message
   const assistantMsg = {
     role: "assistant" as const,
-    content: result.answer,
-    sources: result.sources as unknown as Record<string, unknown>[],
+    content: result.answer ?? "",
+    sources: result.sources,
     created_at: new Date().toISOString().replace(/(\.\d{3})\d*Z$/, "$1Z"),
   };
 
@@ -133,6 +167,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     ok({
       answer: result.answer,
       sources: result.sources,
+      mode: result.mode,
       session: toDetail(session),
     }),
   );
