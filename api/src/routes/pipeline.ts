@@ -198,9 +198,10 @@ function findUnprocessed(): readonly UnprocessedItem[] {
 
     for (const f of mdFiles) {
       if (!processedSet.has(f)) {
+        const fm = parseArticleFrontmatter(join(mdDir, f));
         results.push({
           file: f,
-          title: f.replace(/\.md$/, "").replace(/_/g, " "),
+          title: fm.title ?? f.replace(/\.md$/, "").replace(/_/g, " "),
           source_collection: sourceCollection,
         });
       }
@@ -241,13 +242,17 @@ function readFetchLogs(limit = 200): FetchLogsResponse {
 // --- Article frontmatter helpers ---
 
 /** Parse key-value pairs from article Markdown frontmatter (lines like `- **Key**: Value`). */
-function parseArticleFrontmatter(filePath: string): { publishedAt: string | null; sourceUrl: string | null } {
+function parseArticleFrontmatter(filePath: string): { title: string | null; publishedAt: string | null; sourceUrl: string | null } {
+  let title: string | null = null;
   let publishedAt: string | null = null;
   let sourceUrl: string | null = null;
   try {
     const content = readFileSync(filePath, "utf-8");
     const lines = content.split("\n").slice(0, 10);
     for (const line of lines) {
+      const h1Match = line.match(/^#\s+(.+)/);
+      if (h1Match && !title) title = h1Match[1].trim();
+
       const dateMatch = line.match(/\*\*發佈日期\*\*:\s*(\d{4}-\d{2}-\d{2})/);
       if (dateMatch) publishedAt = `${dateMatch[1]}T00:00:00.000Z`;
 
@@ -257,7 +262,7 @@ function parseArticleFrontmatter(filePath: string): { publishedAt: string | null
   } catch {
     // ignore read errors
   }
-  return { publishedAt, sourceUrl };
+  return { title, publishedAt, sourceUrl };
 }
 
 // --- Collection → Directory mapping (whitelist, lazy to avoid module-scope path issues in tests) ---
@@ -312,17 +317,17 @@ function buildSourceDocs(): readonly SourceDocEntry[] {
       }
 
       const meeting = sourceType === "meeting" ? meetingsByMd.get(file) : undefined;
-      const title = meeting
-        ? meeting.title
-        : file.replace(/\.md$/, "").replace(/[-_]/g, " ");
 
+      let title: string;
       let createdTime: string;
       let sourceUrl: string;
       if (meeting) {
+        title = meeting.title;
         createdTime = meeting.created_time;
         sourceUrl = meeting.url;
       } else {
         const fm = parseArticleFrontmatter(filePath);
+        title = fm.title ?? file.replace(/\.md$/, "").replace(/[-_]/g, " ");
         createdTime = fm.publishedAt ?? stat.mtime.toISOString();
         sourceUrl = fm.sourceUrl ?? "";
       }
@@ -519,7 +524,10 @@ pipelineRoute.get("/source-docs/:collection/:file/preview", (c) => {
 
   const content = readFileSync(filePath, "utf-8");
   const size_bytes = statSync(filePath).size;
-  const title = file.replace(/\.md$/, "").replace(/[-_]/g, " ");
+
+  // Extract H1 title from content, fallback to filename slug
+  const h1Match = content.match(/^#\s+(.+)/m);
+  const title = h1Match ? h1Match[1].trim() : file.replace(/\.md$/, "").replace(/[-_]/g, " ");
 
   const response: SourceDocPreviewResponse = {
     file,
