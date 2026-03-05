@@ -37,6 +37,7 @@ class QAItem:
     freshness_score: float = 1.0
     search_hit_count: int = 0
     notion_url: str = ""
+    extraction_model: Optional[str] = field(default=None)
 
 
 @dataclass
@@ -86,6 +87,7 @@ class QAStore:
                 freshness_score=float(qa.get("_enrichment", {}).get("freshness_score", 1.0)),
                 search_hit_count=int(qa.get("_enrichment", {}).get("search_hit_count", 0)),
                 notion_url=qa.get("_enrichment", {}).get("notion_url", ""),
+                extraction_model=qa.get("extraction_model"),
             )
             for qa in raw_items
         ]

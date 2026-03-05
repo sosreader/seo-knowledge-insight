@@ -7,8 +7,6 @@
     python scripts/run_pipeline.py --step extract-qa            # 只執行 Q&A 萃取
     python scripts/run_pipeline.py --step dedupe-classify       # 只執行去重 + 分類
     python scripts/run_pipeline.py --step generate-report --input metrics.tsv  # 產生週報
-    python scripts/run_pipeline.py --step evaluate-qa           # 品質評估
-    python scripts/run_pipeline.py --step evaluate-qa --sample 50              # 抽樣 50 筆評估
     python scripts/run_pipeline.py --check      # 只檢查所有步驟的依賴
     python scripts/run_pipeline.py --dry-run    # 同 --check（向下相容）
 """
@@ -32,27 +30,25 @@ STEP_SCRIPTS = {
     "extract-qa":      "02_extract_qa.py",
     "dedupe-classify": "03_dedupe_classify.py",
     "generate-report": "04_generate_report.py",
-    "evaluate-qa":     "05_evaluate.py",
 }
 
-# 向下相容：數字 1-5 對應步驟名稱
+# 向下相容：數字 1-4 對應步驟名稱
 _STEP_NUMBER_MAP = {
     1: "fetch-notion",
     2: "extract-qa",
     3: "dedupe-classify",
     4: "generate-report",
-    5: "evaluate-qa",
 }
 
 
 def _parse_step(value: str) -> str:
-    """接受步驟名稱或數字（1-5），回傳步驟名稱"""
+    """接受步驟名稱或數字（1-4），回傳步驟名稱"""
     if value.isdigit():
         n = int(value)
         if n in _STEP_NUMBER_MAP:
             return _STEP_NUMBER_MAP[n]
         raise argparse.ArgumentTypeError(
-            f"步驟數字必須是 1-5，收到：{n}"
+            f"步驟數字必須是 1-4，收到：{n}"
         )
     if value in STEP_SCRIPTS:
         return value
@@ -81,8 +77,8 @@ def main() -> None:
         "--step",
         type=_parse_step,
         default=None,
-        metavar="{fetch-notion,extract-qa,dedupe-classify,generate-report,evaluate-qa}",
-        help="只執行指定步驟（也接受數字 1-5，不指定則執行 fetch-notion→extract-qa→dedupe-classify）",
+        metavar="{fetch-notion,extract-qa,dedupe-classify,generate-report}",
+        help="只執行指定步驟（也接受數字 1-4，不指定則執行 fetch-notion→extract-qa→dedupe-classify）",
     )
     parser.add_argument(
         "--check",

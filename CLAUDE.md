@@ -76,7 +76,7 @@ make fetch-notion      # 只執行 Notion 擷取
 make extract-qa        # 只執行 Q&A 萃取
 make dedupe-classify   # 只執行去重 + 分類
 make generate-report   # 只執行週報生成
-make evaluate-qa       # 只執行品質評估
+make evaluate-qa       # 品質評估（呼叫 _eval_laminar.py，推送至 Laminar Dashboard）
 make dry-run           # 驗證設定（不執行）
 make test              # 執行測試
 make fetch-medium      # 只執行 Medium 文章擷取（RSS → Markdown）
@@ -127,6 +127,10 @@ make merge-qa          # AI 萃取完成後合併 JSON
 ```bash
 make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 ```
+
+> **首次接入 OPENAI_API_KEY 注意**：現有 QA 由 Claude Code 模式生成（未走 openai_helper cache）。
+> 首次執行 `make extract-qa` 會重新萃取全部文件，請先 `make cache-stats` 確認 cache 狀態。
+> 若 cache 為空，建議從 `--limit 3` 小量驗證開始：`make extract-qa-test`。
 
 ---
 

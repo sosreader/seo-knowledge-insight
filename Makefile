@@ -112,12 +112,12 @@ generate-report-local: ## 週報生成（使用本機 TSV 指標，INPUT=path/to
 	$(PYTHON) $(SCRIPT) --step generate-report --input $(INPUT)
 
 .PHONY: evaluate-qa
-evaluate-qa: ## 品質評估（預設抽樣 30 筆）
-	$(PYTHON) $(SCRIPT) --step evaluate-qa
+evaluate-qa: ## 品質評估（Laminar eval push，keyword baseline）
+	$(PYTHON) scripts/_eval_laminar.py
 
 .PHONY: evaluate-qa-full
-evaluate-qa-full: ## 品質評估（完整：100 筆 + 來源驗證 + Retrieval 評估）
-	$(PYTHON) $(SCRIPT) --step evaluate-qa --sample 100 --with-source --eval-retrieval
+evaluate-qa-full: ## Semantic + Reranker Retrieval Eval（比較 keyword/hybrid/rerank 三種模式）
+	cd api && npx tsx scripts/eval-semantic.ts
 
 .PHONY: eval-semantic
 eval-semantic: ## Semantic + Reranker Retrieval Eval（比較 keyword/hybrid/rerank 三種模式）
