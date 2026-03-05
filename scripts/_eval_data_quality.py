@@ -1,8 +1,9 @@
 """
-_eval_data_quality.py — Layer 1 Data Quality Evaluators（v2.13）
+_eval_data_quality.py — Layer 1 Data Quality Evaluators（v2.13+）
 
-直接檢查 qa_final.json 的整體健康度，不依賴 golden_retrieval.json。
+直接檢查 qa_final.json 或 Supabase qa_items 的整體健康度。
 推送至 Laminar Dashboard 的 "data-quality" group。
+選擇性儲存至 Supabase eval_runs 表（需設定 SUPABASE_URL/SUPABASE_ANON_KEY）。
 
 指標（無 API 成本）：
   qa_count_in_range   — QA 總數在 [100, 2000] 之間（1.0 = 合格，0.0 = 異常）
@@ -12,6 +13,7 @@ _eval_data_quality.py — Layer 1 Data Quality Evaluators（v2.13）
 
 使用：
     python scripts/_eval_data_quality.py
+    python scripts/_eval_data_quality.py --source supabase
     python scripts/_eval_data_quality.py --group "data-quality"
 """
 from __future__ import annotations
@@ -19,8 +21,11 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
+
+import requests
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -51,12 +56,87 @@ _ADMIN_PATTERNS = [
 ]
 
 
-def _load_qas() -> list[dict]:
+def _load_qas_local() -> list[dict]:
+    """從本機 JSON 載入 QA 資料。"""
     path = QA_ENRICHED_PATH if QA_ENRICHED_PATH.exists() else QA_FINAL_PATH
     if not path.exists():
         raise FileNotFoundError(f"QA 資料不存在：{path}")
     data = json.loads(path.read_text(encoding="utf-8"))
     return data["qa_database"]
+
+
+def _load_qas_supabase() -> list[dict]:
+    """從 Supabase qa_items 表載入 QA 資料（分頁）。"""
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        raise ValueError("Missing SUPABASE_URL or SUPABASE_ANON_KEY for --source supabase")
+
+    headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+    all_rows: list[dict] = []
+    page_size = 500
+    offset = 0
+
+    while True:
+        resp = requests.get(
+            f"{url}/rest/v1/qa_items"
+            f"?select=id,question,answer,keywords,confidence&order=seq.asc"
+            f"&limit={page_size}&offset={offset}",
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+        if not rows:
+            break
+        all_rows.extend(rows)
+        if len(rows) < page_size:
+            break
+        offset += page_size
+
+    logger.info("Loaded %d QA items from Supabase", len(all_rows))
+    return all_rows
+
+
+def _load_qas(source: str = "local") -> list[dict]:
+    """Load QA items from local JSON or Supabase based on --source."""
+    if source == "supabase":
+        return _load_qas_supabase()
+    return _load_qas_local()
+
+
+def _upsert_eval_run(metrics: dict, group: str, passed: bool) -> None:
+    """Save eval results to Supabase eval_runs table (best-effort)."""
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        return
+
+    payload = {
+        "trigger": "manual",
+        "group_name": group,
+        "metrics": {k: v for k, v in metrics.items() if isinstance(v, (int, float, str))},
+        "passed": passed,
+        "qa_count": metrics.get("total"),
+    }
+    try:
+        resp = requests.post(
+            f"{url}/rest/v1/eval_runs",
+            headers={
+                "apikey": key,
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            },
+            json=payload,
+            timeout=10,
+        )
+        if resp.status_code in (200, 201):
+            logger.info("Saved eval_run to Supabase (group=%s)", group)
+        else:
+            logger.warning("eval_runs upsert returned %d: %s", resp.status_code, resp.text[:200])
+    except Exception as exc:
+        logger.warning("Failed to save eval_run to Supabase: %s", exc)
 
 
 def _is_admin_content(qa: dict) -> bool:
@@ -105,7 +185,7 @@ def compute_data_quality_metrics(qas: list[dict]) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Layer 1 Data Quality Evaluators（v2.13）"
+        description="Layer 1 Data Quality Evaluators（v2.13+）"
     )
     parser.add_argument(
         "--group",
@@ -117,11 +197,17 @@ def main() -> None:
         action="store_true",
         help="只列出指標，不推送至 Laminar",
     )
+    parser.add_argument(
+        "--source",
+        choices=["local", "supabase"],
+        default="local",
+        help="資料來源：local（qa_final.json）或 supabase（qa_items 表）",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-    qas = _load_qas()
+    qas = _load_qas(args.source)
     metrics = compute_data_quality_metrics(qas)
 
     logger.info("=== Data Quality 指標（%d 筆 QA）===", metrics["total"])
@@ -133,6 +219,16 @@ def main() -> None:
                 metrics["keyword_coverage"], KEYWORD_COVERAGE_TARGET, MIN_KEYWORDS_PER_QA)
     logger.info("  no_admin_content    : %.4f  （污染筆數：%d）",
                 metrics["no_admin_content"], metrics["admin_count"])
+
+    # 判斷是否通過（用於 eval_runs 記錄）
+    _passed = (
+        metrics["qa_count_in_range"] >= 1.0
+        and metrics["avg_confidence"] >= CONFIDENCE_TARGET
+        and metrics["keyword_coverage"] >= KEYWORD_COVERAGE_TARGET
+    )
+
+    # 儲存至 Supabase eval_runs（best-effort，不影響主流程）
+    _upsert_eval_run(metrics, args.group, _passed)
 
     if args.dry_run:
         logger.info("--dry-run 模式：不推送至 Laminar")

@@ -25,6 +25,8 @@ services:
     ports:
       - "8002:8002"
     volumes:
+      # output volume only needed in file-based mode (no SUPABASE_URL).
+      # When SUPABASE_URL is set, the output volume can be removed.
       - ./output:/app/output:ro
       - ./scripts:/app/scripts:ro
     environment:
@@ -33,4 +35,6 @@ services:
       - SEO_API_KEY=
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - LMNR_PROJECT_API_KEY=${LMNR_PROJECT_API_KEY:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     restart: unless-stopped

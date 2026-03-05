@@ -15,6 +15,8 @@ import { paths } from "../config.js";
 import { parseNpy } from "../utils/npy-reader.js";
 import { normalizeRows, normalizeL2, matrixDotVector } from "../utils/cosine-similarity.js";
 import { SearchEngine, type QADict, type SearchResult } from "./search-engine.js";
+import { hasSupabase } from "./supabase-client.js";
+import { SupabaseQAStore } from "./supabase-qa-store.js";
 
 export interface QAItem {
   readonly id: string; // stable_id (16-char hex)
@@ -234,14 +236,15 @@ export class QAStore {
 
   /**
    * Hybrid search (semantic + keyword boost + synonym + freshness).
+   * Returns a Promise for interface compatibility with SupabaseQAStore.
    */
-  hybridSearch(
+  async hybridSearch(
     query: string,
     queryEmbedding: readonly number[] | Float32Array,
     topK: number = 5,
     category: string | null = null,
     minScore: number = 0.2,
-  ): ReadonlyArray<{ item: QAItem; score: number }> {
+  ): Promise<ReadonlyArray<{ item: QAItem; score: number }>> {
     if (!this.engine) {
       console.warn("hybridSearch: SearchEngine not initialized, fallback to search()");
       return this.search(queryEmbedding, topK, category);
@@ -412,5 +415,20 @@ export class QAStore {
   }
 }
 
-// Module-level singleton
-export const qaStore = new QAStore();
+// Module-level singleton — use Supabase backend when configured, file-based otherwise
+export const qaStore: QAStore | SupabaseQAStore = hasSupabase()
+  ? new SupabaseQAStore()
+  : new QAStore();
+
+/**
+ * Initialise the qa store.
+ * - Supabase mode: async load from Supabase (no .npy needed)
+ * - File mode: sync load from qa_final.json + qa_embeddings.npy
+ */
+export async function loadQaStore(): Promise<void> {
+  if (qaStore instanceof SupabaseQAStore) {
+    await qaStore.load();
+  } else {
+    qaStore.load();
+  }
+}

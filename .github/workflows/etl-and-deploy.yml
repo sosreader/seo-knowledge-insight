@@ -1,0 +1,252 @@
+name: ETL Pipeline + Quality Gate + Deploy
+
+on:
+  # 每週一 09:00 UTC 自動執行
+  schedule:
+    - cron: "0 9 * * 1"
+  # 手動觸發
+  workflow_dispatch:
+    inputs:
+      skip_quality_gate:
+        description: "Skip quality gate (emergency deploy)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: etl-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  # ── Job 1: ETL ─────────────────────────────────────────────────────────────
+  etl:
+    name: ETL Pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch from Notion (incremental)
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        run: python scripts/01_fetch_notion.py
+
+      - name: Fetch external articles (Medium + iThome + Google Cases)
+        run: python scripts/run_pipeline.py --step fetch-articles
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+
+      - name: Extract Q&A (OpenAI)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
+        run: python scripts/02_extract_qa.py
+
+      - name: Deduplicate + Classify
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python scripts/03_dedupe_classify.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-output
+          path: |
+            output/qa_final.json
+            output/qa_enriched.json
+            output/qa_embeddings.npy
+          retention-days: 7
+
+  # ── Job 2: Migrate to Supabase ─────────────────────────────────────────────
+  migrate:
+    name: Migrate to Supabase
+    needs: etl
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-output
+          path: output/
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Migrate to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/migrate_to_supabase.py
+
+  # ── Job 3: Eval + Quality Gate ─────────────────────────────────────────────
+  eval:
+    name: Eval + Quality Gate
+    needs: migrate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-output
+          path: output/
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run data quality eval
+        env:
+          LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python scripts/_eval_data_quality.py --source supabase
+
+      - name: Run retrieval eval
+        env:
+          LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python scripts/_eval_laminar.py --source supabase --group keyword-retrieval
+
+      - name: Quality Gate
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ "${{ inputs.skip_quality_gate }}" = "true" ]; then
+            echo "Quality gate skipped (emergency deploy)"
+            python scripts/quality_gate.py --source supabase --dry-run
+          else
+            python scripts/quality_gate.py --source supabase
+          fi
+
+  # ── Job 4: Build & Deploy TS API ───────────────────────────────────────────
+  build-and-deploy:
+    name: Build & Deploy TS API
+    needs: eval
+    runs-on: ubuntu-latest
+    env:
+      ECR_REPO: seo-insight-api-ts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        run: |
+          TAG="etl-$(date +%Y%m%d%H%M)-${{ github.run_number }}"
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        timeout-minutes: 20
+        with:
+          context: ./api
+          push: true
+          tags: |
+            ${{ secrets.ECR_DOMAIN }}/${{ env.ECR_REPO }}:latest
+            ${{ secrets.ECR_DOMAIN }}/${{ env.ECR_REPO }}:${{ env.TAG }}
+          cache-from: type=registry,ref=${{ secrets.ECR_DOMAIN }}/${{ env.ECR_REPO }}:cache
+          cache-to: type=registry,ref=${{ secrets.ECR_DOMAIN }}/${{ env.ECR_REPO }}:cache,mode=max
+
+      - name: Deploy to App Runner
+        timeout-minutes: 10
+        env:
+          SERVICE_ARN: ${{ secrets.APP_RUNNER_TS_SERVICE_ARN }}
+        run: |
+          set -e
+          IMAGE="${{ secrets.ECR_DOMAIN }}/${ECR_REPO}:${TAG}"
+
+          SOURCE_CONFIG=$(jq -n \
+            --arg image "$IMAGE" \
+            --arg role "${{ secrets.APP_RUNNER_ECR_ROLE_ARN }}" \
+            --arg openai "${{ secrets.OPENAI_API_KEY }}" \
+            --arg seo "${{ secrets.SEO_API_KEY }}" \
+            --arg lmnr "${{ secrets.LMNR_PROJECT_API_KEY }}" \
+            --arg supabase_url "${{ secrets.SUPABASE_URL }}" \
+            --arg supabase_key "${{ secrets.SUPABASE_ANON_KEY }}" \
+            '{
+              ImageRepository: {
+                ImageIdentifier: $image,
+                ImageRepositoryType: "ECR",
+                ImageConfiguration: {
+                  Port: "8002",
+                  RuntimeEnvironmentVariables: {
+                    PORT: "8002",
+                    OPENAI_API_KEY: $openai,
+                    SEO_API_KEY: $seo,
+                    LMNR_PROJECT_API_KEY: $lmnr,
+                    SUPABASE_URL: $supabase_url,
+                    SUPABASE_ANON_KEY: $supabase_key
+                  }
+                }
+              },
+              AuthenticationConfiguration: {
+                AccessRoleArn: $role
+              }
+            }')
+
+          OPERATION_ID=$(aws apprunner update-service \
+            --service-arn "$SERVICE_ARN" \
+            --source-configuration "$SOURCE_CONFIG" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query "OperationId" --output text)
+
+          for i in $(seq 1 60); do
+            STATUS=$(aws apprunner list-operations \
+              --service-arn "$SERVICE_ARN" \
+              --region "${{ secrets.AWS_REGION }}" \
+              --query "OperationSummaryList[?Id=='${OPERATION_ID}'].Status | [0]" \
+              --output text)
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "Deployment succeeded"
+              break
+            elif [ "$STATUS" = "FAILED" ]; then
+              echo "Deployment FAILED"
+              exit 1
+            fi
+            echo "  Attempt $i/60: $STATUS, retrying in 10s..."
+            sleep 10
+          done
+
+          SERVICE_URL=$(aws apprunner describe-service \
+            --service-arn "$SERVICE_ARN" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query "Service.ServiceUrl" --output text)
+          echo "Deployed $IMAGE to https://$SERVICE_URL"

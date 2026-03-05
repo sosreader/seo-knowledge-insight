@@ -14,7 +14,7 @@ import { sessionsRoute } from "./routes/sessions.js";
 import { feedbackRoute } from "./routes/feedback.js";
 import { pipelineRoute } from "./routes/pipeline.js";
 import { synonymsRoute } from "./routes/synonyms.js";
-import { qaStore } from "./store/qa-store.js";
+import { qaStore, loadQaStore } from "./store/qa-store.js";
 import { synonymsStore } from "./store/synonyms-store.js";
 import { initLaminar, flushLaminar } from "./utils/observability.js";
 
@@ -67,8 +67,10 @@ if (process.env.NODE_ENV !== "test") {
   await initLaminar();
 
   // Load QA store before starting server
+  // - Supabase mode: fetches metadata from Supabase (no .npy needed)
+  // - File mode: reads qa_final.json + qa_embeddings.npy from disk
   try {
-    qaStore.load();
+    await loadQaStore();
     console.log(`QAStore loaded: ${qaStore.count} items`);
   } catch (err) {
     console.warn("QAStore load failed (API will run without search):", err);

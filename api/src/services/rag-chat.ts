@@ -79,7 +79,7 @@ export async function ragChat(
 
   // 2. Hybrid search (over-retrieve for reranker)
   const retrieveK = config.ANTHROPIC_API_KEY ? config.CHAT_CONTEXT_K * 3 : config.CHAT_CONTEXT_K;
-  const hits = qaStore.hybridSearch(message, queryVec, retrieveK);
+  const hits = await qaStore.hybridSearch(message, queryVec, retrieveK);
 
   // 2b. Re-ranking (Phase 3)
   const { rerank } = await import("./reranker.js");

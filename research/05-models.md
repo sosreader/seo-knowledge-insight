@@ -139,6 +139,26 @@ is_reasoning = getattr(details, "reasoning_tokens", 0) > 0
 
 ---
 
+## CHAT_MODEL 獨立設定（v2.22，2026-03-06）
+
+v2.22 起，`CHAT_MODEL` 環境變數獨立於 `OPENAI_MODEL`，讓 Chat 問答可使用不同模型：
+
+```python
+# config.py
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.2")      # 萃取/分類/報告
+CHAT_MODEL   = os.getenv("CHAT_MODEL", "gpt-5.2")         # RAG Chat 問答
+```
+
+**用途**：Chat 問答可切換至更便宜的模型（如 `gpt-5-mini`），而萃取/報告仍用 `gpt-5.2`。
+
+**影響範圍**：
+- `services/rag-chat.ts`：使用 `CHAT_MODEL`
+- `04_generate_report.py`：使用 `OPENAI_MODEL`
+- `02_extract_qa.py`：使用 `OPENAI_MODEL`
+- Cache key：`extraction_model` 記錄實際使用的模型名稱
+
+---
+
 ## Model Provenance Tracking（v2.8，2026-03-05）
 
 ### 為什麼需要追蹤模型版本

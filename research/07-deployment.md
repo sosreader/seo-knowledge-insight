@@ -10,21 +10,24 @@
 
 > v2.3（2026-03-04）從 Python FastAPI 遷移至 TypeScript Hono。保持相同 API 介面，全面重寫內部實作。
 
-### 設計原則：無 DB、No ORM、全記憶體（Phase 1）
+### 資料層架構（Phase 2 — Supabase pgvector）
 
 ```
-# Phase 1（當前）                # Phase 2（Supabase 遷移後）
-Float32Array @ vector = cosine  →  PostgreSQL + pgvector
-Map<string, QAItem> 啟動載入    →  Supabase REST / PostgREST
-同步 load() 啟動時一次載入      →  store 切換為 DB 查詢
+# Phase 1（檔案模式）              # Phase 2（Supabase，v2.24 完成）
+Float32Array @ cosine similarity  →  PostgreSQL + pgvector IVFFlat
+Map<string, QAItem> 啟動載入      →  Supabase REST paginated fetch（metadata only）
+同步 hybridSearch()               →  async RPC match_qa_items()（pgvector + TS re-rank）
 ```
 
-**決策依據**：655 筆 Q&A x 1536 維 = 約 4MB，遠小於容器記憶體。
-Phase 1 使用記憶體載入，Phase 2 遷移至 Supabase 後支援 API 即時寫入。
+**Factory Pattern**：`hasSupabase()` 偵測 env → `SupabaseQAStore` 或 `QAStore`。
+Route 層零修改，只有 `hybridSearch()` 從 sync 改為 async。
 
-> **Supabase 遷移預備**：所有資料存取均透過 `api/src/store/qa-store.ts` 的 `QAStore` 抽象層。
-> 遷移時只需替換 `QAStore` 內部實作（file → Supabase client），route 層零修改。
-> 詳見 S21.4「資料層遷移路徑」。
+**Supabase 配置**：
+- Project: `eqrlomuujichshkbtoat`（ap-northeast-1）
+- Tables: `qa_items`（1,323 rows + vector(1536)）、`eval_runs`
+- RPC: `match_qa_items()`、`search_qa_items_keyword()`
+- Thin REST client（`supabase-client.ts`），不依賴 `@supabase/supabase-js`
+- MCP: `https://mcp.supabase.com/mcp?project_ref=eqrlomuujichshkbtoat`
 
 ### QAStore：啟動時載入資料
 
@@ -70,7 +73,7 @@ search(queryEmbedding: Float32Array, topK = 5, category = null) {
 ```
 
 **數學同上**：兩個 L2 歸一化向量的點積 = cosine similarity。
-`Float32Array` 矩陣乘法一次計算全部 655 筆相似度。效能與 numpy 相當。
+`Float32Array` 矩陣乘法一次計算全部 1,323 筆相似度。效能與 numpy 相當。
 
 ### Hybrid Search（語意 + 關鍵字 + 同義詞 + 時效性）
 
@@ -118,41 +121,55 @@ async function ragChat(message: string, history: ChatMessage[]): Promise<RagResu
 api/src/
 ├── index.ts              # 入口：全域 middleware + route mounting
 ├── config.ts             # Zod 驗證環境變數 + 資料路徑
-├── routes/               # 7 個路由
+├── routes/               # 9 個路由（v2.23）
 │   ├── health.ts         # GET /health（不需認證）
-│   ├── qa.ts             # GET /qa, /qa/categories, /qa/{id}
-│   ├── search.ts         # POST /search
-│   ├── chat.ts           # POST /chat
+│   ├── qa.ts             # GET /qa, /qa/categories, /qa/collections, /qa/{id}
+│   ├── search.ts         # POST /search（hybrid + keyword fallback）
+│   ├── chat.ts           # POST /chat（RAG + context-only fallback）
 │   ├── reports.ts        # GET /reports, /reports/{date}, POST /reports/generate
 │   ├── sessions.ts       # CRUD /sessions
-│   └── feedback.ts       # POST /feedback
+│   ├── feedback.ts       # POST /feedback
+│   ├── pipeline.ts       # 16 個 pipeline 管理端點
+│   └── synonyms.ts       # CRUD /synonyms（v2.10 新增）
 ├── middleware/            # 4 個中間件
 │   ├── auth.ts           # X-API-Key + timingSafeEqual
 │   ├── cors.ts           # CORS origins 白名單
 │   ├── error-handler.ts  # 全域錯誤處理，不洩漏 stack trace
 │   └── rate-limit.ts     # Sliding window，per-IP per-path
-├── store/                # 4 個資料層
+├── store/                # 5 個資料層（v2.10+）
 │   ├── qa-store.ts       # QAStore singleton（JSON + npy → 記憶體）
 │   ├── search-engine.ts  # Hybrid search 引擎
 │   ├── session-store.ts  # 檔案式對話儲存（Repository Pattern）
-│   └── learning-store.ts # Learning Store（失敗記憶庫）
-├── services/             # 2 個服務
+│   ├── learning-store.ts # Learning Store（失敗記憶庫）
+│   └── synonyms-store.ts # 同義詞（雙層：靜態 + custom JSON）
+├── services/             # 7 個服務（v2.23）
 │   ├── embedding.ts      # OpenAI Embedding API
-│   └── rag-chat.ts       # RAG 問答 + context 組裝
-├── schemas/              # 7 個 Zod schema
+│   ├── rag-chat.ts       # RAG 問答 + context 組裝
+│   ├── reranker.ts       # Claude Haiku reranker（v2.11）
+│   ├── context-relevance.ts  # Context Relevance 評估（v2.12）
+│   ├── report-generator-local.ts  # ECC 6 維度本地週報（v2.13）
+│   ├── report-evaluator.ts  # 5 維度品質評估（v2.13）
+│   └── pipeline-runner.ts # Python CLI 代理
+├── schemas/              # 10 個 Zod schema（v2.23）
 │   ├── api-response.ts   # ApiResponse<T> envelope（ok/fail）
 │   ├── qa.ts
 │   ├── search.ts
 │   ├── chat.ts
 │   ├── report.ts
 │   ├── session.ts
-│   └── feedback.ts
-└── utils/                # 5 個工具
+│   ├── feedback.ts
+│   ├── pipeline.ts
+│   ├── eval.ts
+│   └── synonyms.ts
+└── utils/                # 8 個工具（v2.23）
     ├── npy-reader.ts     # 解析 .npy 二進制格式
     ├── cosine-similarity.ts  # L2 正規化 + 矩陣點積
     ├── keyword-boost.ts  # CJK n-gram 關鍵字加權
-    ├── sanitize.ts       # 輸入清理
-    └── audit-logger.ts   # JSONL append-only 存取紀錄
+    ├── sanitize.ts       # HTML escape 防 XSS
+    ├── cjk-tokenizer.ts  # CJK 分詞 2-gram
+    ├── mode-detect.ts    # hasOpenAI() 偵測
+    ├── observability.ts  # Laminar tracing
+    └── laminar-scoring.ts # Online scoring
 ```
 
 **設計原則**：`api/` 自包含，不 import pipeline 的 `utils/` 或 `scripts/`。日後可獨立部署。
@@ -525,6 +542,10 @@ export function fail(message: string): ApiResponse<null> { ... }
 | `OPENAI_MODEL`          | `gpt-5.2`             | Chat completion 模型                         |
 | `OPENAI_EMBEDDING_MODEL`| `text-embedding-3-small` | Embedding 模型                             |
 | `SEO_API_KEY`           | （空字串）             | API Key 認證（空 = 開發模式，跳過驗證）      |
+| `ANTHROPIC_API_KEY`     | （空字串）             | Reranker + Context Relevance（v2.11+，auto 模式偵測） |
+| `CHAT_MODEL`            | `gpt-5.2`             | RAG Chat 問答模型（v2.22+，獨立於 OPENAI_MODEL）     |
+| `CONTEXT_EMBEDDING_WEIGHT` | `0.6`               | Contextual embedding 加權（v2.11+）                   |
+| `RERANKER_ENABLED`      | `auto`                 | Reranker 開關（auto/true/false，v2.11+）              |
 | `CORS_ORIGINS`          | `http://localhost:3000` | CORS 白名單（逗號分隔）                     |
 | `CHAT_CONTEXT_K`        | `5`                    | RAG 搜尋回傳 top-K 筆數                     |
 | `RATE_LIMIT_DEFAULT`    | `60`                   | 預設速率限制（次/分鐘）                     |

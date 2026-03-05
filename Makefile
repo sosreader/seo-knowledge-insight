@@ -220,6 +220,24 @@ audit-access: ## 資料存取記錄（今天）
 audit-top: ## Top 30 最常被存取的 QA
 	$(PYTHON) scripts/audit_trail.py access --top 30
 
+# ── Supabase 遷移 ──────────────────────────────────────
+
+.PHONY: migrate-supabase
+migrate-supabase: ## 將 qa_final.json + qa_embeddings.npy 遷移至 Supabase pgvector
+	$(PYTHON) scripts/migrate_to_supabase.py
+
+.PHONY: migrate-supabase-dry
+migrate-supabase-dry: ## 遷移試跑（不寫入）
+	$(PYTHON) scripts/migrate_to_supabase.py --dry-run
+
+.PHONY: migrate-supabase-verify
+migrate-supabase-verify: ## 驗證 Supabase qa_items 筆數
+	$(PYTHON) scripts/migrate_to_supabase.py --verify
+
+.PHONY: quality-gate
+quality-gate: ## ETL 品質門檻檢查（hit_rate/mrr/qa_count）
+	$(PYTHON) scripts/quality_gate.py
+
 # ── 說明 ─────────────────────────────────────────────
 
 .PHONY: help

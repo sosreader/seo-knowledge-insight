@@ -48,6 +48,10 @@ const envSchema = z.object({
       if (v === "false") return false;
       return "auto" as const;
     }),
+
+  // Supabase (Phase 3: pgvector backend)
+  SUPABASE_URL: z.string().default(""),
+  SUPABASE_ANON_KEY: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);

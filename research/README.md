@@ -15,9 +15,9 @@
 | [05-models.md](./05-models.md)                                   | 模型選擇決策 / Embedding 模型比較                                           |
 | [06-project-architecture.md](./06-project-architecture.md)       | 本專案架構 / Pipeline 全景 / 技術決策學術支撐                               |
 | [06a-architecture-changelog.md](./06a-architecture-changelog.md) | 架構變更紀錄（Changelog），每次架構調整後新增一行                           |
-| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.12，Hono API + Reranker + Context Relevance；v2.13 eval 腳本新增）|
+| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.23，Hono API + Reranker + Context Relevance + Report Cache）|
 | [07-deployment.md](./07-deployment.md)                           | Hono API 部署 / ECR + App Runner / Supabase 遷移路徑                        |
-| [08-fetch-optimization.md](./08-fetch-optimization.md)           | Notion 爬取優化 / ETag / 增量更新                                           |
+| [08-fetch-optimization.md](./08-fetch-optimization.md)           | Fetch 優化 / Notion 增量 / Medium Scrapling / 多來源爬取架構                |
 | [09-provider-comparison.md](./09-provider-comparison.md)         | AI Provider 輸出品質比較方法論與歷次跑分結果                                |
 | [10-multi-layer-context.md](./10-multi-layer-context.md)         | Multi-Layer Context / enrichment / 同義詞擴展 / 時效性衰減 / Learning Store |
 
@@ -38,17 +38,18 @@
 
 ---
 
-## 當前指標現況（2026-03-05，v2.13 — Eval 4 層框架整合 + RAGAS Faithfulness/Context Precision）
+## 當前指標現況（2026-03-06，v2.23 — OpenAI 報告模式 + Report Cache Hit + Quality Eval 優化）
 
 | 指標                   | 數值       | 說明                                                      |
 | ---------------------- | ---------- | --------------------------------------------------------- |
-| Q&A 總量               | **1,317 筆** | 4 來源：notion-seo-meetings 584、medium-genehong 505、ithelp-gsc-kpi 185、google-case-studies 43 |
+| Q&A 總量               | **1,323 筆** | 4 來源：notion-seo-meetings 584、medium-genehong 511、ithelp-gsc-kpi 185、google-case-studies 43 |
 | QA ID 格式             | 16-char hex | stable_id（SHA256[:16]），取代 sequential int             |
+| Hit Rate               | **100%**   | top-k=5，20 cases（keyword-retrieval group）             |
 | KW Hit Rate            | **73%**    | CJK n-gram + synonym 展開（目標 ≥ 85%；中間目標 78%+）  |
 | Precision@K            | **76%**    | category-level（目標 ≥ 80%）                              |
-| Recall@K               | **80%**    | ✅（目標 ≥ 80%）                                          |
-| F1 Score               | **0.73**   | Precision/Recall 調和平均                                 |
-| NDCG@K                 | 待測       | v2.13 新增（預期 ≥ MRR=0.88，Jarvelin & Kekalainen, 2002）|
+| Recall@K               | **77.5%**  | （目標 ≥ 80%）                                            |
+| F1 Score               | **0.74**   | Precision/Recall 調和平均                                 |
+| NDCG@K                 | **0.72**   | v2.13 bug 修正後（≤ 1）                                  |
 | freshness_rank_quality | **1.0**    | 時效衰減正常，舊文件未擠掉新文件                          |
 | synonym_coverage       | **1.0**    | 所有 Q&A 已完成 enrichment                               |
 | avg_synonyms / Q&A     | 11.09      | enrichment 後平均同義詞數                                |
@@ -60,8 +61,8 @@
 | Context Relevance      | **0.32**（1 query）| NVIDIA style，keyword fallback（v2.12）          |
 | Faithfulness           | 待測       | RAGAS，v2.13 `/evaluate-faithfulness-local`（目標 ≥ 0.80）|
 | Context Precision      | 待測       | RAGAS，v2.13 `/evaluate-context-precision-local`（目標 ≥ 0.70）|
-| **Test 通過率**        | **215/215** | Hono TypeScript Vitest（25 test files，v2.13）           |
-| **API endpoints**      | **37 個**   | 10 routers：qa/search/chat/reports/sessions/feedback/pipeline(15)/eval(6)/synonyms/health |
+| **Test 通過率**        | **207/207** | Hono TypeScript Vitest（24 test files，v2.23）           |
+| **API endpoints**      | **32 個**   | 9 routers：qa/search/chat/reports/sessions/feedback/pipeline(16)/synonyms/health |
 | **Observability**      | **完備**    | Laminar traces + Audit logs + Scoring events（三柱）     |
 
 ---

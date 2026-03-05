@@ -1,10 +1,10 @@
-# Hono TypeScript API (v2.7)
+# Hono TypeScript API (v2.23)
 
 REST API 伺服器，主要架構採用 Hono 框架。
 
 **特點：**
 - 9 個路由器（Routers）
-- 30 個 API endpoints
+- 32 個 API endpoints
 - Rate limiting + API Key 認證
 - Zod schema validation
 - Local Mode graceful degradation（無 OpenAI 時自動降級）
@@ -99,7 +99,7 @@ pnpm start                   # 執行 build 版本（node dist/index.js，port 8
 |------|------|------|------|-----------|
 | POST | `/api/v1/feedback` | 提交使用者回饋 | ✓ | 60/min |
 
-### 8. Pipeline 管理 (pipeline) — 10 個 endpoints
+### 8. Pipeline 管理 (pipeline) — 16 個 endpoints
 
 | 方法 | 路由 | 說明 | 認證 | Rate Limit |
 |------|------|------|------|-----------|
@@ -112,16 +112,23 @@ pnpm start                   # 執行 build 版本（node dist/index.js，port 8
 | POST | `/api/v1/pipeline/fetch-articles` | 觸發外部文章擷取（Medium + iThome + Google Cases） | ✓ | 60/min |
 | POST | `/api/v1/pipeline/extract-qa` | 觸發 Q&A 萃取 | ✓ | 60/min |
 | POST | `/api/v1/pipeline/dedupe-classify` | 觸發去重 + 分類 | ✓ | 60/min |
+| GET | `/api/v1/pipeline/source-docs` | 列出所有來源文件（支援 filter + pagination） | ✓ | 60/min |
+| GET | `/api/v1/pipeline/source-docs/:collection/:file/preview` | 來源文件 Markdown 預覽 | ✓ | 60/min |
 | POST | `/api/v1/pipeline/metrics` | 取得 Pipeline metrics | ✓ | 60/min |
+| POST | `/api/v1/pipeline/metrics/save` | 儲存指標快照 | ✓ | 60/min |
+| GET | `/api/v1/pipeline/metrics/snapshots` | 列出指標快照清單 | ✓ | 60/min |
+| DELETE | `/api/v1/pipeline/metrics/snapshots/:id` | 刪除指定快照 | ✓ | 60/min |
 
-### 9. 評估工具 (eval) — 4 個 endpoints
+### 9. 同義詞管理 (synonyms) — 4 個 endpoints（v2.10 新增）
 
 | 方法 | 路由 | 說明 | 認證 | Rate Limit |
 |------|------|------|------|-----------|
-| POST | `/api/v1/eval/sample` | 隨機抽樣 Q&A（支援 seed + golden） | ✓ | 60/min |
-| POST | `/api/v1/eval/retrieval` | Retrieval 評估指標（hit rate、MRR） | ✓ | 60/min |
-| GET | `/api/v1/eval/compare` | 跨 Provider 品質對比 | ✓ | 60/min |
-| POST | `/api/v1/eval/save` | 儲存評估結果 | ✓ | 60/min |
+| GET | `/api/v1/synonyms` | 列出所有同義詞（靜態 + 自訂） | ✓ | 60/min |
+| POST | `/api/v1/synonyms` | 新增自訂同義詞 | ✓ | 60/min |
+| PUT | `/api/v1/synonyms/{term}` | 更新自訂同義詞 | ✓ | 60/min |
+| DELETE | `/api/v1/synonyms/{term}` | 刪除自訂同義詞 | ✓ | 60/min |
+
+> **Note**: Eval Router 已於 v2.18 移除。報告品質評估改由 `report-evaluator.ts` 在報告生成流程中自動執行。
 
 ---
 
@@ -186,7 +193,7 @@ api/
 ├── src/
 │   ├── index.ts              # 入口點（middleware + route mount）
 │   ├── config.ts             # Zod 驗證環境變數 + paths
-│   ├── routes/               # 9 個路由
+│   ├── routes/               # 9 個路由（eval 已於 v2.18 移除）
 │   │   ├── health.ts
 │   │   ├── qa.ts
 │   │   ├── search.ts
@@ -195,7 +202,7 @@ api/
 │   │   ├── sessions.ts
 │   │   ├── feedback.ts
 │   │   ├── pipeline.ts
-│   │   └── eval.ts           # v2.3 新增
+│   │   └── synonyms.ts       # v2.10 新增
 │   ├── middleware/
 │   │   ├── auth.ts           # API Key 驗證
 │   │   ├── rate-limit.ts     # slowapi 速率限制
@@ -209,6 +216,10 @@ api/
 │   ├── services/
 │   │   ├── embedding.ts      # OpenAI embedding 服務
 │   │   ├── rag-chat.ts       # RAG 問答邏輯
+│   │   ├── reranker.ts       # v2.11 新增：Claude Haiku reranker
+│   │   ├── context-relevance.ts  # v2.12 新增：Context Relevance 評估
+│   │   ├── report-generator-local.ts  # v2.13 新增：ECC 6 維度本地週報
+│   │   ├── report-evaluator.ts  # v2.13 新增：5 維度品質評估
 │   │   └── pipeline-runner.ts # Python 腳本執行器
 │   ├── schemas/              # Zod schemas
 │   │   ├── api-response.ts   # 統一回應格式
@@ -255,6 +266,10 @@ PORT=8002
 # Optional
 OPENAI_API_KEY=sk-...          # 若無，則 search/chat 自動降級
 OPENAI_MODEL=gpt-5.2
+CHAT_MODEL=gpt-5.2             # RAG Chat 問答模型（v2.22，獨立於 OPENAI_MODEL）
+ANTHROPIC_API_KEY=sk-ant-...   # Reranker + Context Relevance（v2.11+）
+CONTEXT_EMBEDDING_WEIGHT=0.6   # Contextual embedding 加權（v2.11+）
+RERANKER_ENABLED=auto          # Reranker 開關（auto/true/false）
 LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 
 # 資料路徑
@@ -345,9 +360,9 @@ pnpm test api/tests/routes/eval.test.ts
 pnpm test api/tests/utils/cjk-tokenizer.test.ts
 ```
 
-**測試套件統計（v2.7）：**
-- 總測試數：144 個
-- 通過：144/144 (100%)
+**測試套件統計（v2.23）：**
+- 總測試數：207 個（24 個測試檔案）
+- 通過：207/207 (100%)
 - 覆蓋率：80%+
 
 ---

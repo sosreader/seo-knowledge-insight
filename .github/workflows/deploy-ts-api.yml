@@ -1,0 +1,156 @@
+name: Deploy TypeScript API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - ".github/workflows/deploy-ts-api.yml"
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: "Force deploy even if no API changes"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-ts-api
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: api/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: TypeScript type check
+        run: pnpm typecheck
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  deploy:
+    name: Deploy to App Runner
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      ECR_REPO: seo-insight-api-ts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        run: |
+          TAG="$(date +%Y%m%d%H%M)-${{ github.run_number }}-${GITHUB_SHA::8}"
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        timeout-minutes: 20
+        with:
+          context: ./api
+          push: true
+          tags: |
+            ${{ secrets.ECR_DOMAIN }}/${{ env.ECR_REPO }}:latest
+            ${{ secrets.ECR_DOMAIN }}/${{ env.ECR_REPO }}:${{ env.TAG }}
+          cache-from: type=registry,ref=${{ secrets.ECR_DOMAIN }}/${{ env.ECR_REPO }}:cache
+          cache-to: type=registry,ref=${{ secrets.ECR_DOMAIN }}/${{ env.ECR_REPO }}:cache,mode=max
+
+      - name: Deploy to App Runner
+        timeout-minutes: 10
+        env:
+          SERVICE_ARN: ${{ secrets.APP_RUNNER_TS_SERVICE_ARN }}
+        run: |
+          set -e
+          IMAGE="${{ secrets.ECR_DOMAIN }}/${ECR_REPO}:${TAG}"
+
+          SOURCE_CONFIG=$(jq -n \
+            --arg image "$IMAGE" \
+            --arg role "${{ secrets.APP_RUNNER_ECR_ROLE_ARN }}" \
+            --arg openai "${{ secrets.OPENAI_API_KEY }}" \
+            --arg seo "${{ secrets.SEO_API_KEY }}" \
+            --arg lmnr "${{ secrets.LMNR_PROJECT_API_KEY }}" \
+            --arg supabase_url "${{ secrets.SUPABASE_URL }}" \
+            --arg supabase_key "${{ secrets.SUPABASE_ANON_KEY }}" \
+            '{
+              ImageRepository: {
+                ImageIdentifier: $image,
+                ImageRepositoryType: "ECR",
+                ImageConfiguration: {
+                  Port: "8002",
+                  RuntimeEnvironmentVariables: {
+                    PORT: "8002",
+                    OPENAI_API_KEY: $openai,
+                    SEO_API_KEY: $seo,
+                    LMNR_PROJECT_API_KEY: $lmnr,
+                    SUPABASE_URL: $supabase_url,
+                    SUPABASE_ANON_KEY: $supabase_key
+                  }
+                }
+              },
+              AuthenticationConfiguration: {
+                AccessRoleArn: $role
+              }
+            }')
+
+          echo "Updating App Runner service (TS API)..."
+          OPERATION_ID=$(aws apprunner update-service \
+            --service-arn "$SERVICE_ARN" \
+            --source-configuration "$SOURCE_CONFIG" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query "OperationId" --output text)
+
+          for i in $(seq 1 60); do
+            STATUS=$(aws apprunner list-operations \
+              --service-arn "$SERVICE_ARN" \
+              --region "${{ secrets.AWS_REGION }}" \
+              --query "OperationSummaryList[?Id=='${OPERATION_ID}'].Status | [0]" \
+              --output text)
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "Deployment succeeded"
+              break
+            elif [ "$STATUS" = "FAILED" ]; then
+              echo "Deployment FAILED"
+              exit 1
+            fi
+            echo "  Attempt $i/60: $STATUS, retrying in 10s..."
+            sleep 10
+          done
+
+          SERVICE_URL=$(aws apprunner describe-service \
+            --service-arn "$SERVICE_ARN" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query "Service.ServiceUrl" --output text)
+
+          echo "Deployed $IMAGE to https://$SERVICE_URL"

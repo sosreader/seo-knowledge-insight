@@ -368,6 +368,12 @@ def main() -> None:
             "retrieval-enhancement: Layer 3 synonym+freshness 指標（3 個 evaluators）"
         ),
     )
+    parser.add_argument(
+        "--source",
+        choices=["local", "supabase"],
+        default="local",
+        help="資料來源（local 或 supabase；目前 retrieval eval 使用 golden_retrieval.json，此參數保留供未來擴充）",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")

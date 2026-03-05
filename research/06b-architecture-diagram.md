@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v2.12，2026-03-05）
+## 架構圖（最新：v2.24，2026-03-06）
 
 ```mermaid
 flowchart TD
@@ -30,7 +30,7 @@ flowchart TD
         MD_GC --> S2
         S2 --> RAW[output/qa_all_raw.json<br/>source_type + source_collection 標記]
         RAW --> S3[Step 3: dedupe_classify.py<br/>Collection-Scoped Dedup<br/>各 collection 內部獨立去重]
-        S3 --> QA[output/qa_final.json<br/>1,317 筆 + 10 分類]
+        S3 --> QA[output/qa_final.json<br/>1,323 筆 + 10 分類]
         S3 --> EMB[output/qa_embeddings.npy<br/>跨 collection 統一向量]
     end
 
@@ -51,7 +51,7 @@ flowchart TD
     end
 
     subgraph Frontend["Frontend（vocus-admin-dev，Next.js，port 3000）"]
-        FE["7 頁 SPA<br/>Q&A Chunk（改名）/ QA 詳情 / RAG 問答<br/>SEO 週報 / Pipeline / Q&A 評估 / 同義詞管理（v2.10 新增）"]
+        FE["6 頁 SPA<br/>Q&A Chunk / QA 詳情 / RAG 問答<br/>SEO 週報 / Pipeline / 同義詞管理"]
         FE --> FEHOOK["Custom Hooks<br/>useQAFilters / useEvalDashboard"]
         FE --> FECOMP["Components<br/>ChatMessage（null content 支援）<br/>EvalMetricsCards / EvalProviderComparison<br/>EvalSampleTable / EvalSaveForm<br/>PipelineMetrics / QAFilterToolbar"]
         FECOMP -->|context-only 模式| FEFB["Context-Only Badge<br/>+ SourcesList auto-expand"]
@@ -59,17 +59,17 @@ flowchart TD
 
     FE -->|"seoInsight.api.ts<br/>seoFetch（port 8002）"| HAPI
 
-    subgraph Hono_API["API Layer v2.7（Hono + TypeScript，port 8002，Local Mode + Laminar）"]
-        QA --> HAPI["SEO Insight API<br/>Hono + TypeScript<br/>QAStore（npy-reader 向量解析，embedding optional）"]
+    subgraph Hono_API["API Layer v2.24（Hono + TypeScript，port 8002，Local Mode + Laminar）"]
+        QA --> HAPI["SEO Insight API<br/>Hono + TypeScript<br/>QAStore / SupabaseQAStore（factory pattern）"]
         EMB -.->|"optional（Local Mode 不需要）"| HAPI
         SE -.->|hybrid_search / keywordOnlySearch| HAPI
         HAPI --> HMID["middleware/<br/>auth.ts（X-API-Key）<br/>rate-limit.ts（chat:20 search/qa:60 reports/gen:5 eval:60/min）<br/>cors.ts + error-handler.ts"]
-        HMID --> HEP["10 個 Router + health（v2.12，37 端點）<br/>qa.ts — GET /qa, /qa/categories, /qa/collections, /qa/{id}（hex+int）<br/>search.ts — POST /search（mode: hybrid|keyword；v2.11 over-retrieve+rerank）<br/>chat.ts — POST /chat（mode: full|context-only；v2.11 rerank 支援）<br/>reports.ts — GET/POST /reports（本地 + OpenAI 雙模式，v2.12）<br/>sessions.ts — CRUD /sessions + messages（context-only fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — GET status/source-docs/source-docs/:col/:file/preview/unprocessed/logs/metrics/snapshots, POST fetch/fetch-articles/extract-qa/dedupe-classify/metrics/metrics/save（v2.12，15 端點）<br/>eval.ts — POST sample/retrieval/reranking（v2.11）/context-relevance（v2.12 新增）/save, GET compare<br/>synonyms.ts — GET/POST /synonyms, PUT/DELETE /synonyms/{term}（v2.10 新增）"]
+        HMID --> HEP["9 個 Router + health（v2.23，32 端點）<br/>qa.ts — GET /qa, /qa/categories, /qa/collections, /qa/{id}（hex+int）<br/>search.ts — POST /search（mode: hybrid|keyword；v2.11 over-retrieve+rerank）<br/>chat.ts — POST /chat（mode: full|context-only；v2.11 rerank 支援）<br/>reports.ts — GET/POST /reports（本地 + OpenAI 雙模式，cache_hit v2.23）<br/>sessions.ts — CRUD /sessions + messages（context-only fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — 16 端點（status/source-docs/metrics/snapshots 等）<br/>synonyms.ts — GET/POST /synonyms, PUT/DELETE /synonyms/{term}（v2.10）"]
         HEP --> HENV["ApiResponse[T]<br/>Zod schema validation<br/>data / error / meta"]
         HEP -->|not_relevant / helpful| LS
         HEP -->|"pipeline/eval proxy"| QT
         HEP -->|"read/write"| SYNSTORE["synonyms-store.ts<br/>output/synonym_custom.json"]
-        HAPI --> HSTORE["store/<br/>qa-store.ts（QAStore singleton，embedding optional）<br/>search-engine.ts（hybrid + keyword boost + keywordOnlySearch）<br/>session-store.ts（FileSessionStore）<br/>learning-store.ts<br/>synonyms-store.ts（雙層：28 靜態 + custom JSON，v2.10）"]
+        HAPI --> HSTORE["store/<br/>qa-store.ts（QAStore / SupabaseQAStore factory）<br/>supabase-client.ts（thin REST，no SDK）<br/>supabase-qa-store.ts（pgvector hybrid search）<br/>search-engine.ts（hybrid + keyword boost + keywordOnlySearch）<br/>session-store.ts（FileSessionStore）<br/>learning-store.ts<br/>synonyms-store.ts（雙層：28 靜態 + custom JSON，v2.10）"]
         HAPI --> HUTIL["utils/<br/>npy-reader.ts（NumPy .npy 解析）<br/>cosine-similarity.ts（Float32Array）<br/>keyword-boost.ts（4 層匹配）<br/>sanitize.ts（HTML escape 防 XSS）<br/>cjk-tokenizer.ts（CJK 分詞 2-gram）<br/>mode-detect.ts（hasOpenAI 偵測）"]
         HAPI --> HSVC["services/<br/>embedding.ts（OpenAI wrapper）<br/>rag-chat.ts（RAG 問答 + v2.11 rerank 支援）<br/>reranker.ts（v2.11 新增，Haiku）<br/>context-relevance.ts（v2.12 新增，Claude haiku judge）<br/>report-generator-local.ts（v2.13 重寫，ECC 6 維度本地週報）<br/>report-evaluator.ts（v2.13 新增，5 維度規則式品質評估）<br/>pipeline-runner.ts（Python CLI 代理）"]
         HAPI --> HSCHEMA["schemas/ 10 個<br/>Zod runtime validation<br/>qa / search / chat / feedback<br/>report / session / pipeline / eval<br/>synonyms / api-response"]
@@ -145,10 +145,11 @@ flowchart TD
         API -.->|"legacy port 8001"| ECR
     end
 
-    subgraph DataLayer["資料層（Supabase-ready）"]
+    subgraph DataLayer["資料層（v2.24 Supabase pgvector 完成）"]
         direction LR
-        QA -.->|"Phase 1: 檔案載入"| STORE["store/qa-store.ts<br/>QAStore 抽象層<br/>（遷移邊界）"]
-        STORE -.->|"Phase 2: Supabase"| SB["Supabase<br/>PostgreSQL + pgvector<br/>API 即時讀寫"]
+        QA -->|"hasSupabase() = true"| SB_STORE["SupabaseQAStore<br/>supabase-client.ts REST API<br/>async hybridSearch → RPC match_qa_items"]
+        QA -.->|"hasSupabase() = false"| FILE_STORE["QAStore（檔案模式）<br/>npy-reader + Float32Array"]
+        SB_STORE --> SB["Supabase pgvector<br/>eqrlomuujichshkbtoat<br/>qa_items 1,323 rows<br/>eval_runs<br/>IVFFlat index（lists=50）"]
     end
 ```
 

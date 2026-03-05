@@ -268,6 +268,16 @@ CONTEXT_EMBEDDING_WEIGHT=0.6     # Contextual embedding 加權（預設 0.6）
 RERANKER_ENABLED=auto            # "auto"/"true"/"false"，預設 auto
 ```
 
+Supabase 環境變數（v2.24，設定後自動切換至 pgvector 模式）：
+
+```env
+SUPABASE_URL=https://eqrlomuujichshkbtoat.supabase.co
+SUPABASE_ANON_KEY=your_anon_key       # REST API 讀取（RLS SELECT）
+SUPABASE_SERVICE_KEY=your_service_key  # Migration 寫入（bypasses RLS，不可暴露前端）
+```
+
+> `hasSupabase()` 偵測 `SUPABASE_URL` + `SUPABASE_ANON_KEY`，有設定則用 `SupabaseQAStore`（pgvector hybrid search），否則退回 `QAStore`（檔案模式）。
+
 ### Observability（v2.7 三路整合）
 
 | 路徑               | 追蹤方式                                                | 輸出              |

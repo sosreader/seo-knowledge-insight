@@ -47,7 +47,7 @@ const mockKeywordSearch = vi.fn().mockReturnValue([
   },
 ]);
 
-const mockHybridSearch = vi.fn().mockReturnValue([
+const mockHybridSearch = vi.fn().mockResolvedValue([
   {
     item: {
       id: "abc123def456",

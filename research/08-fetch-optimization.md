@@ -106,3 +106,67 @@ python scripts/01_fetch_notion.py --block-depth 1 --limit 5
 # 強制全量（保留舊用法）
 python scripts/01_fetch_notion.py --force
 ```
+
+---
+
+## 多來源爬取架構（v2.6+，2026-03-05）
+
+v2.6 起擴展至 4 個獨立 fetcher，各來源有不同的爬取策略和優化手段。
+
+### 來源對照表
+
+| Fetcher | 腳本 | 來源格式 | 輸出目錄 | 策略 |
+|---------|------|---------|---------|------|
+| Notion | `01_fetch_notion.py` | API（blocks 遞迴） | `raw_data/markdown/` | 增量索引 + ETag |
+| Medium | `01b_fetch_medium.py` | RSS + HTML（Scrapling） | `raw_data/medium_markdown/` | StealthyFetcher + DynamicFetcher fallback |
+| iThome | `01c_fetch_ithelp.py` | HTML scraping | `raw_data/ithelp_markdown/` | 靜態 HTML 解析 |
+| Google Cases | `01d_fetch_google_cases.py` | HTML scraping | `raw_data/google_cases_markdown/` | 靜態 HTML 解析 |
+
+### Medium 爬取優化（v2.15 + v2.19）
+
+**挑戰**：Medium 有反爬機制（JavaScript shell、rate limiting）。
+
+**解法**：
+
+```python
+# 主路徑：StealthyFetcher（~4s/篇，不需 browser）
+page = StealthyFetcher.fetch(url)
+
+# Fallback：DynamicFetcher（JS shell 偵測後，啟動 headless browser）
+if _is_js_shell(page):
+    page = DynamicFetcher.fetch(url)
+```
+
+**v2.19 Noise 清除**：Medium 文章轉 Markdown 後包含大量 UI 噪音。雙層清除機制：
+
+1. `_MEDIUM_NOISE_INLINE`：regex 移除內嵌 UI 文字（如 "Sign up"、"Follow" 等）
+2. `_MEDIUM_UI_TEXTS`：frozenset 比對整行匹配的 UI 元素
+
+### 分頁重複文件處理
+
+Medium 文章分頁抓取會產生 `_10`~`_19` suffix 的 chunk 檔案。這些是同一篇文章的重複片段。
+
+**處理方式**：在 `extract-qa` 步驟建立空佔位符（`{}`），讓 pipeline 跳過萃取，避免重複 Q&A。
+
+### `--force` 覆寫修復（v2.19）
+
+```python
+# 修正前：force 模式下 while 迴圈無限自增 suffix
+# 修正後：force 模式直接覆寫，不進入 while md_path.exists() 迴圈
+if force:
+    md_path.write_text(content, encoding="utf-8")
+else:
+    while md_path.exists():
+        md_path = md_path.with_stem(f"{stem}_{suffix}")
+        suffix += 1
+```
+
+### CLI 用法
+
+```bash
+make fetch-medium        # Medium 文章擷取
+make fetch-ithelp        # iThome 鐵人賽擷取
+make fetch-google-cases  # Google Case Studies 擷取
+make fetch-articles      # 以上全部（Medium + iThome + Google Cases）
+make fetch-all           # Notion + 所有外部文章
+```

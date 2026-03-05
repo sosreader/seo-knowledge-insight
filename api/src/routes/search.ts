@@ -39,7 +39,7 @@ searchRoute.post("/", async (c) => {
   if (hasOpenAI()) {
     try {
       const embedding = await getEmbedding(query);
-      const hits = qaStore.hybridSearch(query, embedding, top_k, category ?? null);
+      const hits = await qaStore.hybridSearch(query, embedding, top_k, category ?? null);
       const results = mapResults(hits);
       return c.json(ok({ results, total: results.length, mode: "hybrid" as SearchMode }));
     } catch (err: unknown) {
