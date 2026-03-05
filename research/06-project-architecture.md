@@ -11,6 +11,7 @@
 **核心理念**：前端採用 custom hook + toolbar/dashboard 組件模式，提升 SPA 應用的可維護性與可測試性。
 
 **SEO 知識庫頁面（/admin/seoInsight/chunk，v2.10 改名）- UI 層次**：
+
 ```
                   QAFilterToolbar
                  /      |      \      \
@@ -25,6 +26,7 @@
 ```
 
 **useQAFilters Hook**（248 行）：
+
 - **State Management**：
   - `filters` (Filters object)：category、keyword、difficulty、evergreen
   - `page`、`sorting`、`items`、`total`、`categories`
@@ -46,6 +48,7 @@
   - Abort pattern：`cancelled` flag 防止競態條件
 
 **QAFilterToolbar 組件**（168 行）：
+
 - **Input 層**（shadcn-ui）：
   - `InputWithClear`：keyword with X 按鈕
   - `FilterSelect` (wrapper around Select)：category、difficulty、evergreen，支援 CLEAR_VALUE 機制
@@ -58,6 +61,7 @@
   - Ghost variant，text-xs
 
 **設計決策**：
+
 1. **Separation of Concerns**：hook 負責狀態 + API，component 只負責 UI 渲染
 2. **Debouncing Strategy**：keyword 輸入延遲 300ms，避免 API 訪問頻率過高
 3. **Keyword 搜尋**：純關鍵字篩選（後端支援 CJK n-gram），移除語意搜尋 UI
@@ -65,6 +69,7 @@
 5. **Stateless FilterSelect**：CLEAR_VALUE 讓使用者可用鍵盤導航回到「全部」狀態
 
 **RAG 問答頁面（/admin/seoInsight/chat）- Context-Only 模式（v2.5）**：
+
 ```
                   chat.tsx
                     |
@@ -87,6 +92,7 @@
 - `handleNewChat` 和 `loadSession` 重設 `chatMode` 避免殘留 badge
 
 **Q&A 評估儀表板（/admin/seoInsight/eval）- 四區段佈局（v2.5）**：
+
 ```
                 eval.tsx
                   |
@@ -102,9 +108,10 @@
 - **Section 1: EvalMetricsCards**：3 張指標卡（hit_rate/mrr/category_hit_rate），threshold 色彩（達標 black / 接近 gray / 未達 light gray），右上角「執行 Retrieval 評估」按鈕
 - **Section 2: EvalProviderComparison**：GET /eval/compare 載入，表格顯示 provider/relevance/accuracy/completeness/timestamp
 - **Section 3: EvalSampleTable**：控制列（size/seed/withGolden + 抽樣按鈕），表格可展開顯示 answer，keywords 以 badge 呈現
-- **Section 4: EvalSaveForm**：filename input（SAFE_FILENAME 前端驗證 `^[a-zA-Z0-9_-]+$`）、engine select、update_baseline checkbox
+- **Section 4: EvalSaveForm**：filename input（SAFE*FILENAME 前端驗證 `^[a-zA-Z0-9*-]+$`）、engine select、update_baseline checkbox
 
 **Pipeline 指標分析（PipelineMetrics 組件，嵌入 pipeline.tsx）**：
+
 - Source URL/path input + tab select（vocus/custom）
 - POST /pipeline/metrics 載入，結果以 key-value 表格顯示
 
@@ -223,7 +230,12 @@ Notion 會議紀錄（87 份，2023–2026）
 - `scripts/qa_tools.py`：`cmd_eval_retrieval_local()` 新增 precision_at_k、recall_at_k（cat_hit_rate alias）、f1_score
   - 計算：precision = hits / k，recall = hits / total_relevant，f1 = 2×(p×r)/(p+r)
   - 5 個 Laminar score events 直接記錄
-- `scripts/_eval_laminar.py`（新建）：Laminar 離線 eval run，將 precision/recall/f1 送出 Dashboard
+- `scripts/_eval_laminar.py`（新建，v2.12 增強）：Laminar 離線 eval run
+  - 5 個 evaluator：precision, recall, f1, hit_rate, mrr
+  - CLI 參數：`--top-k 5` 改變檢索深度、`--group "retrieval-eval"` 指定 group（預設固定值，便於趨勢圖）
+  - 執行者防護：`safe_executor` try-except 包裝，失敗時回傳空列表
+  - Padding workaround：補 2 個虛擬 items 防 Laminar SDK span flush bug
+  - 並發限制：`concurrency_limit=1` 避免上傳失敗
 
 **Phase 1 — Synonym Dict 擴充**
 - `utils/synonym_dict.py`：新增 32 個術語（214 個詞條），覆蓋技術 SEO、關鍵字、UX、GSC 指標
@@ -347,16 +359,19 @@ Notion 會議紀錄（87 份，2023–2026）
 ### 遷移背景與決策
 
 **版本演進**：
+
 - v2.0—v2.2：Python FastAPI（單體 8001 port），完整 API 功能
 - **v2.3**：開始 TypeScript Hono 並行架構（port 8002）
 
 **決策核心**：
+
 1. **分層遷移**：新功能優先在 Hono 實作，Python 保留作為穩定層
 2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid/full，無 → keyword/context-only）
 3. **測試優先**：Vitest 路由覆蓋（24 個 test files，189 tests），unit + integration
 4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取（optional，無 .npy 時 keyword-only mode）
 
 **實作成果（v2.12 更新）**：
+
 - ~44 個源碼檔案（routes 10、store 5、utils 5、middleware 4、schemas 10、services 4）
 - 24 個測試檔案（routes 10 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 2 + observability/laminar-scoring 2 + others 2）
 - 10 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、eval、synonyms）+ health 檢查
@@ -393,12 +408,14 @@ Notion 會議紀錄（87 份，2023–2026）
    - 100% endpoint 覆蓋（10 個 routers × ~2-6 tests per endpoint，共 175 tests）
 
 **向下相容**：
+
 - Python API（port 8001）保持不變，允許 2-4 週過渡期
 - 前端同時支援兩個 port（通過 .env 開關）
 - QA ID 驗證規則完全同步（16-char hex）
 - Response envelope 格式一致（data / error / meta）
 
 **遷移路徑**：
+
 ```
 Phase 1（現在）：Hono 並行運行 (port 8002)
   ↓ 前端測試、性能驗證 (1-2 週)
@@ -417,6 +434,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 **決策**：QAItem.id 從 sequential int（1–655）變更為 16 字元 hex string（stable_id），保留原始 seq 欄位供顯示用。
 
 **背景**：
+
 - Sequential int 在 append-only 知識庫中容易引發歧義（重新排序、去重時改變）
 - stable_id 是 qa_final.json 產生時的 SHA256(question+answer) 截短 16 字元，保證不可變性與唯一性
 - 影響範圍：API endpoint path、URL validation、audit log 記錄
@@ -424,6 +442,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 **實作細節**：
 
 1. **數據層（QAItem 定義）** — `/app/core/store.py`
+
    ```python
    @dataclass
    class QAItem:
@@ -446,11 +465,13 @@ Phase 3（4 週後）：下線 Python API (port 8001)
    - 客戶端可用任一欄位判讀，建議優先使用 id
 
 **向下相容**：
+
 - Q&A 搜尋/列表 endpoint 變更最小（只需調整驗證規則）
 - 沒有 breaking change（seq 欄位始終存在）
 - 測試套件已全數更新（247 passing）
 
 **優勢**：
+
 - stable_id 保證長期穩定性，不受 pipeline 重跑影響
 - 便於外部系統建置永久參考（如知識庫外部連結、行銷素材引用）
 - 提升 API 安全性（id 無法通過順序猜測下一個）
@@ -462,6 +483,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 **新增三個 endpoint** — Python: `/app/routers/reports.py` / TypeScript: `api/src/routes/reports.ts`
 
 1. **GET /api/v1/reports** — 列出所有週報（newest first）
+
    ```json
    {
      "data": {
@@ -473,10 +495,12 @@ Phase 3（4 週後）：下線 Python API (port 8001)
      }
    }
    ```
+
    - 速率限制：60/minute
    - 用途：前端「週報列表」頁面展示
 
 2. **GET /api/v1/reports/{date}** — 取得單篇週報（Markdown 原文）
+
    ```json
    {
      "data": {
@@ -487,6 +511,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
      }
    }
    ```
+
    - date 格式：YYYYMMDD（regex validated）
    - 404 if not found
    - 用途：前端「週報詳情」頁面展示 Markdown 內容
@@ -507,17 +532,20 @@ Phase 3（4 週後）：下線 Python API (port 8001)
      }
    }
    ```
+
    - 速率限制：5/minute（計算密集）
    - Timeout：120 秒
    - 流程：執行 `scripts/04_generate_report.py` 並回傳最新生成的報告檔案
 
 **架構決策**：
+
 - 週報儲存位置：`config.OUTPUT_DIR`（預設 `./output/`）
 - 檔案格式：`report_YYYYMMDD.md`（immutable）
 - API 層零邏輯：只提供讀取 + 觸發，實際生成邏輯在 CLI script
 - 無狀態性：多次 POST 同一 metrics_url 會覆寫，符合冪等性原則
 
 **測試覆蓋**：
+
 - 目錄掃描、日期驗證、超時處理、錯誤回應
 - 已整合 conftest.py fixture `mock_output_dir`
 
@@ -541,20 +569,21 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 
 ### 當前品質基準線（最新：2026-03-02，v2.0+cjk，CJK N-gram + Synonym 修復後）
 
-| 指標                | v1.0 初始 baseline | v2.0+cjk 最新數值 | 狀態                |
-| ------------------- | --------- | -------------- | ------------------- |
-| **Relevance**       | 4.65      | **5.00** / 5   | ✅ 提升至滿分             |
-| **Accuracy**        | 3.80      | **4.30** / 5   | ✅ 大幅提升             |
-| **Completeness**    | 3.70      | **3.95** / 5   | ✅ 達標（目標 3.8） |
-| **Granularity**     | 4.65      | **4.75** / 5   | ✅ 達標             |
-| Category 正確率     | 75%       | 80%            | ✅ 提升             |
-| Retrieval MRR       | 0.79      | 0.87           | ✅ 大幅提升         |
-| LLM Top-1 Precision | 100%      | 80%            | ✅ 符合預期（20 案例評估） |
-| **KW Hit Rate（eval）** | 54%   | **74%** ✅     | +20pp（含 9pp enrichment delta）、目標 85% 差 11pp |
-| freshness_rank_quality | —      | **1.0**        | ✅ 完全保留排名序序           |
-| synonym_coverage    | —         | **1.0**        | ✅ 1,317 筆全覆蓋          |
+| 指標                    | v1.0 初始 baseline | v2.0+cjk 最新數值 | 狀態                                               |
+| ----------------------- | ------------------ | ----------------- | -------------------------------------------------- |
+| **Relevance**           | 4.65               | **5.00** / 5      | ✅ 提升至滿分                                      |
+| **Accuracy**            | 3.80               | **4.30** / 5      | ✅ 大幅提升                                        |
+| **Completeness**        | 3.70               | **3.95** / 5      | ✅ 達標（目標 3.8）                                |
+| **Granularity**         | 4.65               | **4.75** / 5      | ✅ 達標                                            |
+| Category 正確率         | 75%                | 80%               | ✅ 提升                                            |
+| Retrieval MRR           | 0.79               | 0.87              | ✅ 大幅提升                                        |
+| LLM Top-1 Precision     | 100%               | 80%               | ✅ 符合預期（20 案例評估）                         |
+| **KW Hit Rate（eval）** | 54%                | **74%** ✅        | +20pp（含 9pp enrichment delta）、目標 85% 差 11pp |
+| freshness_rank_quality  | —                  | **1.0**           | ✅ 完全保留排名序序                                |
+| synonym_coverage        | —                  | **1.0**           | ✅ 1,317 筆全覆蓋                                  |
 
 > **v2.0+cjk 評估完成（2026-03-02）**：
+>
 > - 知識庫規模：717 筆（v1.0）→ 655 筆（v2.0，去重+防幻覺）→ 1,317 筆（v2.12，多來源知識庫）
 > - Embeddings 重建：(1317, 1536) numpy array（v2.12 重建）
 > - 生成維度（4 項）基於 20 案例 golden set，Claude Code 本地評估
@@ -734,6 +763,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 **實作進展（v1.19，2026-03-02）**：
 
 新增模組：
+
 - `utils/observability.py`：`init_laminar()` + `flush_laminar()` + `start_cli_span()` context manager，CLI script 專用初始化
   - `@observe(name=...)` re-export from lmnr with no-op fallback
   - 多次調用 `init_laminar()` 為 safe（idempotent）
@@ -751,6 +781,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 - `tests/conftest.py`：測試隔離（`monkeypatch.delenv("LMNR_PROJECT_API_KEY")` 防止測試 traces 洩漏到 Laminar）
 
 **qa_tools.py 集成**（6 個子命令）：
+
 ```python
 @observe(name="qa_tools.merge_qa")       # Step 2 QA 合併
 @observe(name="qa_tools.search")         # 知識庫搜尋
@@ -761,12 +792,14 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 ```
 
 **依賴更新**（requirements.txt，2026-03-02）：
+
 ```
 lmnr[openai]>=0.5.0
 opentelemetry-semantic-conventions-ai>=0.4.13,<0.4.14
 ```
 
 **Laminar 呼叫路徑**：
+
 - FastAPI lifespan：app/main.py 啟動時 `Laminar.initialize()`
 - CLI scripts：各 step script 呼叫 `init_laminar()` at main() 開始 + `flush_laminar()` at 結束（finally 區塊）
 - evals：eval_chat.py 手動初始化 + LLM auto-instrumentation
@@ -857,12 +890,14 @@ CLI scripts 不依賴 FastAPI lifespan，需要在 `main()` 手動呼叫 `init_l
 4. **L4 Runtime Context**（P1-C）：聚合 access logs，識別高頻查詢、零命中盲點、時效性衰減
 
 **預期效益**：
+
 - KW Hit Rate：78% → 85%+
 - Accuracy：3.95 → 4.2+
 - 搜尋延遲：50ms → 30ms
 - 整體實作週期：1-2 週（Phase 1）+ 2-3 週（Phase 2）
 
 **不建議引入**：
+
 - ~~向量資料庫（655 筆，numpy 已足夠快）~~ → Phase 2 將遷移至 Supabase pgvector（因 API 有即時更新需求）
 - 模型 Fine-tuning（學習機制 + 人工回饋更靈活）
 - Real-time Schema Introspection（schema 穩定，無必要）
@@ -870,6 +905,7 @@ CLI scripts 不依賴 FastAPI lifespan，需要在 `main()` 手動呼叫 `init_l
 ### 架構圖演進
 
 **現狀（v2.0）**：
+
 ```
 qa_final.json（1,317 筆）
        ↓
@@ -879,6 +915,7 @@ API / Chat 回答
 ```
 
 **改進後（v1.17）**：
+
 ```
 qa_final.json → enrich_qa.py → qa_enriched.json
                                    ↓
@@ -896,27 +933,27 @@ qa_final.json → enrich_qa.py → qa_enriched.json
 
 ### 新增模組清單（Phases 1-2）
 
-| 模組 | 檔案 | 行數 | 責任層級 |
-|------|------|------|---------|
-| **L1 同義詞** | `utils/synonym_dict.py` | ~120 | Query Patterns |
-| **L4 時效性** | `utils/freshness.py` | ~60 | Runtime Context |
-| **L3 失敗學習** | `utils/learning_store.py` | ~150 | Learnings |
-| **L4 使用聚合** | `utils/usage_aggregator.py` | ~100 | Runtime Context |
-| **Enrichment 主控** | `scripts/enrich_qa.py` | ~200 | Pipeline Step |
-| **回饋路徑** | `app/routers/feedback.py` | ~80 | Annotations |
-| **合計新增** | | **~710 行** | |
+| 模組                | 檔案                        | 行數        | 責任層級        |
+| ------------------- | --------------------------- | ----------- | --------------- |
+| **L1 同義詞**       | `utils/synonym_dict.py`     | ~120        | Query Patterns  |
+| **L4 時效性**       | `utils/freshness.py`        | ~60         | Runtime Context |
+| **L3 失敗學習**     | `utils/learning_store.py`   | ~150        | Learnings       |
+| **L4 使用聚合**     | `utils/usage_aggregator.py` | ~100        | Runtime Context |
+| **Enrichment 主控** | `scripts/enrich_qa.py`      | ~200        | Pipeline Step   |
+| **回饋路徑**        | `app/routers/feedback.py`   | ~80         | Annotations     |
+| **合計新增**        |                             | **~710 行** |                 |
 
 ### 修改模組清單
 
-| 檔案 | 修改項目 | 向下相容 |
-|------|---------|--------|
-| `utils/search_engine.py` | `_hybrid_scores()` 新增 4 個加權因子 | ✅ |
-| `app/core/store.py` | 優先載入 qa_enriched.json，fallback qa_final.json | ✅ |
-| `scripts/04_generate_report.py` | Step 4 記錄 learnings（top_score < 0.35） | ✅ 副作用 |
-| `app/core/chat.py` | 整合 learning + staleness 警示 | ✅ 副作用 |
-| `config.py` | 新增 5 常數（SYNONYM_BOOST 等） | ✅ |
-| `qa_tools.py` | 新增子命令：analyze-access、annotate-category、compare-eval | ✅ |
-| `Makefile` | 新增 targets：enrich-qa、pipeline-v2、eval-compare | ✅ |
+| 檔案                            | 修改項目                                                    | 向下相容  |
+| ------------------------------- | ----------------------------------------------------------- | --------- |
+| `utils/search_engine.py`        | `_hybrid_scores()` 新增 4 個加權因子                        | ✅        |
+| `app/core/store.py`             | 優先載入 qa_enriched.json，fallback qa_final.json           | ✅        |
+| `scripts/04_generate_report.py` | Step 4 記錄 learnings（top_score < 0.35）                   | ✅ 副作用 |
+| `app/core/chat.py`              | 整合 learning + staleness 警示                              | ✅ 副作用 |
+| `config.py`                     | 新增 5 常數（SYNONYM_BOOST 等）                             | ✅        |
+| `qa_tools.py`                   | 新增子命令：analyze-access、annotate-category、compare-eval | ✅        |
+| `Makefile`                      | 新增 targets：enrich-qa、pipeline-v2、eval-compare          | ✅        |
 
 ### 技術亮點與設計原則
 
@@ -928,23 +965,25 @@ qa_final.json → enrich_qa.py → qa_enriched.json
 ### 依賴與風險管理
 
 **關鍵依賴**：
+
 - `source_date` 欄位：若 `qa_final.json` 缺少此欄，需從 `qa_per_meeting/` 回填
 - Access logs 持續記錄：FastAPI 的 `audit_logger` 需正常運作
 
 **緩解策略**：
+
 - Enrichment 檔案過大 → 分塊載入（千筆級批次）
 - Learning JSONL 無限增長 → 按月輪轉，保留最近 12 個月
 - 同義詞詞典維護負擔 → 初始 100+ 詞彙後穩定；靠 P1-C zero-hit 識別新詞
 
 ### 評估指標進展
 
-| 指標 | 目前（v2.0） | 目標（v1.17） | 機制 |
-|------|-------------|-------------|------|
-| KW Hit Rate | 78% | 85%+ | L1 + L3 + L4 |
-| Accuracy | 3.95 | 4.2+ | L2 + L4 |
-| Completeness | 3.85 | 4.1+ | L1 + L3 |
-| Category Acc. | 68% | 80%+ | P2-B 人工回饋 |
-| 搜尋延遲 | 50ms | 30ms | 預計算 + 緩存 |
+| 指標          | 目前（v2.0） | 目標（v1.17） | 機制          |
+| ------------- | ------------ | ------------- | ------------- |
+| KW Hit Rate   | 78%          | 85%+          | L1 + L3 + L4  |
+| Accuracy      | 3.95         | 4.2+          | L2 + L4       |
+| Completeness  | 3.85         | 4.1+          | L1 + L3       |
+| Category Acc. | 68%          | 80%+          | P2-B 人工回饋 |
+| 搜尋延遲      | 50ms         | 30ms          | 預計算 + 緩存 |
 
 ### 後續研究方向（v2.0+）
 
@@ -984,7 +1023,7 @@ qa_final.json → enrich_qa.py → qa_enriched.json
    - `03_dedupe_classify.py`：dict 複製而非直接修改
 
 5. **Schema 驗證強化** — TypeScript API
-   - `pipeline.ts` 新增 SAFE_MD_FILENAME regex：`^[a-zA-Z0-9._\u4e00-\u9fff-]+\.md$`（含中文字元）
+   - `pipeline.ts` 新增 SAFE*MD_FILENAME regex：`^[a-zA-Z0-9.*\u4e00-\u9fff-]+\.md$`（含中文字元）
    - `metricsRequestSchema` 新增 URL format + regex validation
    - `readMeetingsIndex()` 改用 Zod schema 驗證取代 bare type assertion
 
@@ -1028,6 +1067,7 @@ qa_final.json → enrich_qa.py → qa_enriched.json
    - 提供標準化工作流：抽樣 → 評估 → 對比 → 報告
 
 **預期效益**：
+
 - 安全性：覆蓋 OWASP Top 10（SSRF/Path Traversal/XSS）中的 3 項關鍵風險
 - 代碼品質：logging 統一、exception 分級、不可變性強化
 - Model Traceability：未來可溯源任一答案由哪個模型生成、何時生成
@@ -1060,6 +1100,7 @@ qa_final.json → enrich_qa.py → qa_enriched.json
    - OpenAI auto-instrumentation：所有 gpt-5.2 呼叫自動追蹤
 
 4. **scripts/qa_tools.py @observe 裝飾器**
+
    ```
    merge_qa (Step 2 QA 合併)
    search (知識庫搜尋)
@@ -1081,6 +1122,7 @@ opentelemetry-semantic-conventions-ai>=0.4.13,<0.4.14    # +new, pinned
 ```
 
 Laminar 版本 0.5.x 變更重點：
+
 - `Laminar.initialize(project_api_key=...)`：取代 0.4.x 的 `Laminar(project_api_key=...)`
 - `Laminar.start_as_current_span(name, input, span_type)`：新增 span_type 參數（TOOL, LLM, etc.）
 - `Laminar.event(name, value)`：Span 內記錄事件（用於即時評分）
@@ -1089,6 +1131,7 @@ Laminar 版本 0.5.x 變更重點：
 ### 架構演變
 
 **呼叫路徑**：
+
 ```
 FastAPI lifespan                CLI scripts              evals
     ↓                              ↓                        ↓

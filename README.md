@@ -1027,17 +1027,24 @@ pip install lmnr
 export LMNR_PROJECT_API_KEY=<your-key-from-laminar.sh>
 ```
 
-**執行全部評估**：
+**執行評估**：
 
 ```bash
-# 方式 1：Laminar CLI（推薦）
-lmnr eval
+# 方式 1：Laminar 正式 eval run（推薦，20 cases 黃金集合）
+python scripts/_eval_laminar.py                  # 預設 top-k=5，group="retrieval-eval"
+python scripts/_eval_laminar.py --top-k 10      # 改變檢索深度
+python scripts/_eval_laminar.py --group "v2.12" # 自訂 group 名稱
 
-# 方式 2：直接執行各評估腳本
+# 方式 2：其他評估腳本
 python evals/eval_retrieval.py
 python evals/eval_extraction.py
 python evals/eval_chat.py
 ```
+
+**Group 設計**：
+- 預設 `--group "retrieval-eval"` 讓所有 eval run 進同一 group
+- Laminar Dashboard 上可畫趨勢折線圖，追蹤 5 個指標變化
+- `concurrency_limit=1`：每次單個 run，避免並發上傳失敗
 
 **檢視結果**：
 
@@ -1048,11 +1055,11 @@ https://laminar.sh/app/evals
 
 ### 評估維度
 
-| 評估類型            | 檔案                       | 測試集                         | 評估指標                                 |
-| ------------------- | -------------------------- | ------------------------------ | ---------------------------------------- |
-| **Retrieval 品質**  | `evals/eval_retrieval.py`  | golden_retrieval.json (307 筆) | Keyword Hit Rate、Category Hit Rate、MRR |
-| **Extraction 品質** | `evals/eval_extraction.py` | golden_extraction.json         | Q&A 計數、Keyword Coverage、無管理內容   |
-| **Chat 品質**       | `evals/eval_chat.py`       | 前 10 retrieval scenarios      | 回答長度、來源涵蓋、關鍵字匹配           |
+| 評估類型                | 檔案                           | 測試集                         | 評估指標（v2.12）                                      |
+| ----------------------- | ------------------------------ | ------------------------------ | ------------------------------------------------------ |
+| **Retrieval 品質**      | `scripts/_eval_laminar.py`     | golden_retrieval.json (20 筆)  | Precision@K、Recall@K、F1 Score、Hit Rate、MRR         |
+| **Extraction 品質**     | `evals/eval_extraction.py`     | golden_extraction.json         | Q&A 計數、Keyword Coverage、無管理內容                 |
+| **Chat 品質**           | `evals/eval_chat.py`           | 前 10 retrieval scenarios      | 回答長度、來源涵蓋、關鍵字匹配                         |
 
 ---
 

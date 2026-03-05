@@ -981,10 +981,12 @@ score_event("mrr", avg_mrr)
 | Recall@K | **80%** | ≥ 80% ✅ | binary |
 | Precision@K | **76%** | ≥ 80% | binary |
 | F1 Score | **0.73** | ≥ 0.78 | binary |
-| **Context Relevance** | **TBD**（v2.12 新增） | > KW Hit Rate | **LLM semantic** |
+| **Context Relevance** | **0.32**（1 query sample，keyword fallback）| > KW Hit Rate | **LLM semantic** |
 
-Context Relevance 為語意連續評分（0–1），需線上執行 `POST /eval/context-relevance` 取得實測值。
-預期應高於 KW Hit Rate（語意評估涵蓋 keyword 無法捕捉的相關性）。
+Context Relevance 初測（2026-03-05，query="Discover 流量下降"）：
+- **score = 0.32**：keyword search 雖然 5/5 命中「流量」「下降」關鍵字，但只有 1/5 真正語意相關（Discover 專屬）
+- 揭示 keyword 的語意盲區：「流量下降」的字面匹配掩蓋了實際 Discover 情境相關性的缺失
+- 下一步：設定 golden query set（~20 queries）取得多 query 平均基準線
 
 ### Laminar 正式 Eval Run（`scripts/_eval_laminar.py`）
 
@@ -997,28 +999,59 @@ Context Relevance 為語意連續評分（0–1），需線上執行 `POST /eval
 
 **離線 eval run 使用方式**：
 ```bash
-python scripts/_eval_laminar.py                           # 全量（20 cases）
-python scripts/_eval_laminar.py --dataset-name "v2.11"   # 自訂 dataset 名稱
-python scripts/_eval_laminar.py --top-k 10               # 改變 top-K
+python scripts/_eval_laminar.py                  # 全量（20 cases）
+python scripts/_eval_laminar.py --top-k 10      # 改變 top-K
+python scripts/_eval_laminar.py --group "abc"   # 自訂 group 名稱（預設："retrieval-eval"）
 ```
 
-執行後結果出現在 Laminar Dashboard 的 Evaluations 頁面，可追蹤 Precision/Recall/F1 的歷史趨勢。
+**Group 名稱設計**：
+- 預設 `--group "retrieval-eval"` — 所有 eval run 進同一 group，方便 Laminar Dashboard 畫趨勢折線圖
+- `concurrency_limit=1` — 避免並發上傳失敗，每次建議只執行一個 eval run
 
-**三個 evaluator 設計**：
-```python
-def precision_evaluator(output: list[dict], target: dict) -> float:
-    expected_cats = set(target.get("expected_categories", []))
-    return sum(1 for qa in output if qa.get("category") in expected_cats) / len(output)
+執行後結果出現在 Laminar Dashboard 的 Evaluations 頁面，可追蹤 5 個評估指標的歷史趨勢。
 
-def recall_evaluator(output: list[dict], target: dict) -> float:
-    expected_cats = set(target.get("expected_categories", []))
-    retrieved_cats = {qa.get("category") for qa in output}
-    return len(retrieved_cats & expected_cats) / len(expected_cats)
+**五個 evaluator 函式**（v2.12 擴充）：
 
-def f1_evaluator(output, target) -> float:
-    p, r = precision_evaluator(output, target), recall_evaluator(output, target)
-    return 2 * p * r / (p + r) if (p + r) > 0 else 0.0
-```
+1. **`precision_evaluator`** — Precision@K（回傳精準比例）
+   ```python
+   expected_cats = set(target.get("expected_categories", []))
+   relevant = sum(1 for qa in output if qa.get("category", "") in expected_cats)
+   return relevant / len(output) if output else 0.0
+   ```
+
+2. **`recall_evaluator`** — Recall@K（涵蓋期望分類比例）
+   ```python
+   expected_cats = set(target.get("expected_categories", []))
+   retrieved_cats = {qa.get("category", "") for qa in output}
+   return len(retrieved_cats & expected_cats) / len(expected_cats) if expected_cats else 1.0
+   ```
+
+3. **`f1_evaluator`** — F1 Score（Precision 與 Recall 調和平均）
+   ```python
+   p = precision_evaluator(output, target)
+   r = recall_evaluator(output, target)
+   return 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+   ```
+
+4. **`hit_rate_evaluator`** — Hit Rate（至少命中一筆期望分類，0 或 1）
+   ```python
+   expected_cats = set(target.get("expected_categories", []))
+   return 1.0 if any(qa.get("category", "") in expected_cats for qa in output) else 0.0
+   ```
+
+5. **`mrr_evaluator`** — Mean Reciprocal Rank（第一筆命中的排名倒數）
+   ```python
+   expected_cats = set(target.get("expected_categories", []))
+   for rank, qa in enumerate(output, start=1):
+       if qa.get("category", "") in expected_cats:
+           return 1.0 / rank
+   return 0.0
+   ```
+
+**實作細節**（v2.12）：
+- `safe_executor` — try-except 防護，executor 失敗時回傳空列表而非拋例外
+- Padding workaround — Laminar SDK 最後 2 筆 OTel span 有時在 `L.shutdown()` 前來不及 flush，補 2 個虛擬 items，分類為 `__padding__`，確保真正的 golden cases 不在末尾被截斷
+- 回傳精簡欄位 — `_keyword_search` 只回傳 `id, category, question[:120]`，避免大型 payload 上傳失敗
 
 ---
 
