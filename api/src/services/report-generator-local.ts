@@ -145,6 +145,7 @@ function buildSituationSnapshot(
   alerts: readonly AlertMetric[],
   core: readonly AlertMetric[],
   down: readonly AlertMetric[],
+  qaMap: Map<string, readonly QAItem[]>,
 ): string {
   const { score, label } = calcHealthScore(down, core);
   const lines: string[] = [
@@ -152,31 +153,27 @@ function buildSituationSnapshot(
     `**SEO 健康評分：${score}/100（${label}）**\n`,
   ];
 
-  // Top 3 phenomena with Observation → Implication → Urgency
+  // Top phenomena summary
   const phenomena = [
-    ...down.slice(0, 2).map((m) => ({
-      metric: m.name,
-      change: fmtPct(m.monthly),
+    ...down.slice(0, 3).map((m) => ({
       urgency: "🔴 高",
       observation: `**${m.name}** 月趨勢 ${fmtPct(m.monthly)}，週趨勢 ${fmtPct(m.weekly)}。`,
       implication: `指標持續下滑代表搜尋可見度或使用者互動品質惡化，需優先介入。`,
     })),
     ...alerts
       .filter((a) => a.flag === "ALERT_UP")
-      .slice(0, 1)
+      .slice(0, 2)
       .map((m) => ({
-        metric: m.name,
-        change: fmtPct(m.monthly),
         urgency: "🟢 低",
         observation: `**${m.name}** 月趨勢 ${fmtPct(m.monthly)}，週趨勢 ${fmtPct(m.weekly)}。`,
         implication: `正向成長，建議深入分析驅動因素以複製策略。`,
       })),
-  ].slice(0, 3);
+  ].slice(0, 5);
 
   if (phenomena.length === 0) {
-    lines.push("本週無重大異常（月趨勢閾值 ±15%，週趨勢閾值 ±20%）。核心指標整體穩定。");
+    lines.push("本週無重大異常（月趨勢閾值 ±15%，週趨勢閾值 ±20%）。核心指標整體穩定。\n");
   } else {
-    lines.push("**本週 3 大現象：**\n");
+    lines.push(`**本週 ${phenomena.length} 大現象：**\n`);
     phenomena.forEach((p, i) => {
       lines.push(
         `${i + 1}. ${p.urgency} | ${p.observation}`,
@@ -184,6 +181,46 @@ function buildSituationSnapshot(
         "",
       );
     });
+  }
+
+  // ── Per-indicator deep-dive with KB citations ─────────────────────
+  if (down.length > 0) {
+    lines.push("### 異常指標逐項解讀\n");
+    for (const m of down) {
+      lines.push(
+        `#### ${m.name}（${fmtPct(m.monthly)} 月趨勢 / ${fmtPct(m.weekly)} 週趨勢）\n`,
+        `【可能原因】此指標持續下滑，常見因素包含頁面品質下降、競爭者強化或 Google 演算法調整。`,
+      );
+      const related = qaMap.get(m.name) ?? [];
+      if (related.length > 0) {
+        const qa = related[0]!;
+        const snippet = qa.answer.slice(0, 350) + (qa.answer.length > 350 ? "…" : "");
+        const source = [qa.source_title, qa.source_date].filter(Boolean).join("、");
+        lines.push(
+          `【知識庫佐證】${snippet}`,
+          source ? `來源：${source}` : "",
+          `${kbLink(qa)}`,
+          "",
+        );
+        // Second citation if available
+        if (related.length > 1) {
+          const qa2 = related[1]!;
+          const snippet2 = qa2.answer.slice(0, 200) + (qa2.answer.length > 200 ? "…" : "");
+          const source2 = [qa2.source_title, qa2.source_date].filter(Boolean).join("、");
+          lines.push(
+            `【延伸參考】${snippet2}`,
+            source2 ? `來源：${source2}` : "",
+            `${kbLink(qa2)}`,
+            "",
+          );
+        }
+      } else {
+        lines.push(
+          `【行動建議】立即在 GSC 確認 ${m.name} 相關頁面近期變化，比對演算法更新時間軸。`,
+          "",
+        );
+      }
+    }
   }
 
   return lines.join("\n");
@@ -478,9 +515,9 @@ function buildKbCitations(topQas: readonly QAItem[]): string {
     return lines.join("\n");
   }
 
-  const cited = topQas.slice(0, 3);
+  const cited = topQas.slice(0, 6);
   for (const qa of cited) {
-    const snippet = qa.answer.slice(0, 300) + (qa.answer.length > 300 ? "…" : "");
+    const snippet = qa.answer.slice(0, 400) + (qa.answer.length > 400 ? "…" : "");
     const source = [qa.source_title, qa.source_date].filter(Boolean).join("、");
     lines.push(
       `**Q**：${qa.question}`,
@@ -561,26 +598,35 @@ export async function generateReportLocal(
   const queries = buildSearchQueries(typedMetrics);
   const seen = new Map<string, QAItem>();
   for (const q of queries) {
-    const results = qaStore.keywordSearch(q, 3);
+    const results = qaStore.keywordSearch(q, 5);
     for (const { item } of results) {
       if (!seen.has(item.id)) seen.set(item.id, item);
-      if (seen.size >= 15) break;
+      if (seen.size >= 20) break;
     }
-    if (seen.size >= 15) break;
+    if (seen.size >= 20) break;
   }
-  const topQas = [...seen.values()].slice(0, 6);
+  const topQas = [...seen.values()].slice(0, 8);
 
-  // Per-metric Q&A map for inline references
+  // Per-metric Q&A map for inline references (3 per metric for richer citations)
   const qaMap = new Map<string, readonly QAItem[]>();
   for (const m of alerts) {
-    const results = qaStore.keywordSearch(m.name, 2);
+    const results = qaStore.keywordSearch(m.name, 3);
     if (results.length > 0) {
       qaMap.set(m.name, results.map((r) => r.item));
     }
   }
+  // Also search broader topic terms
+  for (const term of ["CTR", "曝光", "索引", "AMP", "Discover", "工作階段"]) {
+    if (!qaMap.has(term)) {
+      const results = qaStore.keywordSearch(term, 2);
+      if (results.length > 0) {
+        qaMap.set(term, results.map((r) => r.item));
+      }
+    }
+  }
 
   // Build all 6 sections
-  const s1 = buildSituationSnapshot(alerts, core, down);
+  const s1 = buildSituationSnapshot(alerts, core, down, qaMap);
   const s2 = buildTrafficSignals(core, down, qaMap);
   const s3 = buildTechnicalHealth(typedMetrics, down, qaMap);
   const s4 = buildIntentMapping(core, down, qaMap);

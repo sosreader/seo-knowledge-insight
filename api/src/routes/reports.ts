@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
 import { generateRequestSchema, type ReportSummary } from "../schemas/report.js";
@@ -13,8 +14,9 @@ import { scoreEvent } from "../utils/laminar-scoring.js";
 import { qaStore } from "../store/qa-store.js";
 
 const execFileAsync = promisify(execFile);
-const REPORT_PATTERN = /^report_(\d{8})\.md$/;
-const DATE_RE = /^\d{8}$/;
+// Matches report_YYYYMMDD.md (legacy) and report_YYYYMMDD_<sha1-8>.md (content-addressed)
+const REPORT_PATTERN = /^report_(\d{8}(?:_[0-9a-f]{8})?)\.md$/;
+const DATE_RE = /^\d{8}(?:_[0-9a-f]{8})?$/;
 const ALLOWED_URL_SCHEMES = new Set(["https:", "http:"]);
 const ALLOWED_URL_HOSTS = new Set(["docs.google.com", "sheets.google.com"]);
 
@@ -110,7 +112,9 @@ reportsRoute.post("/generate", async (c) => {
     try {
       const qaCount = qaStore.count;
       reportContent = await generateReportLocal(snapshotMetrics, reportDate, qaCount);
-      const dateKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const dateOnly = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const hash8 = createHash("sha1").update(reportContent).digest("hex").slice(0, 8);
+      const dateKey = `${dateOnly}_${hash8}`;
       saveReport(reportContent, dateKey);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";

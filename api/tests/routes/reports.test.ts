@@ -4,6 +4,8 @@ import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
+const CONTENT_HASH_RE = /^report_\d{8}_[0-9a-f]{8}\.md$/;
+
 const tmpDir = mkdtempSync(join(tmpdir(), "reports-test-"));
 const tmpSnapshotsDir = join(tmpDir, "metrics_snapshots");
 mkdirSync(tmpSnapshotsDir, { recursive: true });
@@ -68,12 +70,21 @@ describe("GET /api/v1/reports", () => {
 });
 
 describe("GET /api/v1/reports/:date", () => {
-  it("returns report content", async () => {
+  it("returns report content for legacy YYYYMMDD format", async () => {
     const res = await app.request("/api/v1/reports/20260301");
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.content).toBe("# Report March 1");
     expect(body.data.date).toBe("20260301");
+  });
+
+  it("returns report content for content-addressed YYYYMMDD_hash format", async () => {
+    writeFileSync(join(tmpDir, "report_20260301_abc12345.md"), "# Report March 1 v2", "utf-8");
+    const res = await app.request("/api/v1/reports/20260301_abc12345");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.content).toBe("# Report March 1 v2");
+    expect(body.data.date).toBe("20260301_abc12345");
   });
 
   it("returns 400 for invalid date format", async () => {
@@ -121,6 +132,10 @@ describe("POST /api/v1/reports/generate (local mode — no OpenAI)", () => {
     expect(body.data).toHaveProperty("date");
     expect(body.data).toHaveProperty("filename");
     expect(body.data).toHaveProperty("size_bytes");
+    // Filename must use content-addressed naming: report_YYYYMMDD_<sha1-8>.md
+    expect(CONTENT_HASH_RE.test(body.data.filename)).toBe(true);
+    // date field must be YYYYMMDD_hash8
+    expect(/^\d{8}_[0-9a-f]{8}$/.test(body.data.date)).toBe(true);
   });
 
   it("returns 404 when snapshot does not exist", async () => {
