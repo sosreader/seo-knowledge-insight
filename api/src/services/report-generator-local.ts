@@ -109,7 +109,7 @@ function detectAlerts(metrics: Record<string, MetricData>): AlertMetric[] {
 function kbLink(qa: QAItem): string {
   return qa.source_url
     ? `[查看原文 →](${qa.source_url})`
-    : `[知識庫 →](/admin/seoInsight/chunk/${qa.id})`;
+    : `[知識庫 →](/admin/seoInsight/${qa.id})`;
 }
 
 // ── Citation tracker ──────────────────────────────────────────────────
@@ -143,7 +143,7 @@ class CitationTracker {
           .replace(/\[(What|Why|How|Evidence)\]\s*/g, " ")
           .trim()
           .slice(0, 120),
-        chunk_url: `/admin/seoInsight/chunk/${qa.id}`,
+        chunk_url: `/admin/seoInsight/${qa.id}`,
         source_url: qa.source_url ?? null,
       });
     }
@@ -189,7 +189,7 @@ const TAG_LABEL_MAP: Record<string, string> = {
 function formatKbCitation(qa: QAItem, tracker: CitationTracker, snippetLimit = 350): string {
   const segments = qa.answer.split(/\[(What|Why|How|Evidence)\]\s*/);
   const source = [qa.source_title, qa.source_date].filter(Boolean).join("、");
-  const chunkLink = `[知識庫 →](/admin/seoInsight/chunk/${qa.id})`;
+  const chunkLink = `[知識庫 →](/admin/seoInsight/${qa.id})`;
   const citation = tracker.cite(qa);
   const attribution = [source ? `— ${source}` : "", chunkLink, citation]
     .filter(Boolean)
@@ -621,7 +621,7 @@ function buildKbCitations(topQas: readonly QAItem[], tracker: CitationTracker): 
     const n = tracker.cite(qa);
     const title = [qa.source_title, qa.source_date].filter(Boolean).join("、") || qa.question.slice(0, 40);
     const snippet = qa.answer.replace(/\[(What|Why|How|Evidence)\]\s*/g, " ").trim().slice(0, 80);
-    lines.push(`${n} **${title}** — ${snippet}… [→](/admin/seoInsight/chunk/${qa.id})`);
+    lines.push(`${n} **${title}** — ${snippet}… [→](/admin/seoInsight/${qa.id})`);
   }
 
   return lines.join("\n");

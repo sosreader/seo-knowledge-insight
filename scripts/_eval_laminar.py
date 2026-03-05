@@ -62,7 +62,7 @@ REPORT_RESEARCH_KEYWORDS = [
     "Semrush", "GSC", "Backlinko", "First Page Sage",
     "NavBoost", "E-E-A-T", "arxiv",
 ]
-KB_LINK_PATTERN = "/admin/seoInsight/chunk/"
+KB_LINK_PATTERN = "/admin/seoInsight/"
 
 
 # ── 資料載入 ────────────────────────────────────────────────────────────────

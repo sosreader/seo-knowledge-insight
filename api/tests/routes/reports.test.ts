@@ -209,7 +209,7 @@ describe("POST /api/v1/reports/generate (local mode — no OpenAI)", () => {
     // Section 六 should exist and have a link (KB or external)
     expect(content).toContain("## 六、來源");
     // When no QAs found, section says "未找到" — this is acceptable fallback
-    const hasKbLink = content.includes("/admin/seoInsight/chunk/") || content.includes("https://") || content.includes("未找到");
+    const hasKbLink = content.includes("/admin/seoInsight/") || content.includes("https://") || content.includes("未找到");
     expect(hasKbLink).toBe(true);
   });
 
