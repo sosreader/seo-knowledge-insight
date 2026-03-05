@@ -121,8 +121,10 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | Step 2 — Q&A 萃取           | `make extract-qa`                                 | `/extract-qa`（不需要 OpenAI）                      | `POST /api/v1/pipeline/extract-qa`          |
 | Step 3 — 去重 + 分類        | `make dedupe-classify`                            | `/dedupe-classify`（不需要 OpenAI）                 | `POST /api/v1/pipeline/dedupe-classify`     |
 | Step 4 — 週報生成           | `make generate-report`                            | `/generate-report <URL>`（不需要 OpenAI）           | `POST /api/v1/reports/generate`             |
-| Step 5 — 品質評估           | `make evaluate-qa`                                | `/evaluate-qa-local`（不需要 OpenAI）               | 無對應 — 屬長時間離線作業                    |
-| Step 5 — Provider 評估      | 無獨立指令                                        | `/evaluate-provider <目錄>`（不需要 OpenAI）        | 無對應 — 屬長時間離線作業                    |
+| Step 5 — Q&A 品質評估       | `make evaluate-qa`                                | `/evaluate-qa-local`（不需要 OpenAI）               | 無對應 — 屬長時間離線作業                    |
+| Step 5a — 語意 Reranker 評估| `make eval-semantic` / `make eval-semantic-k3`   | 無獨立指令                                          | 無對應 — 對比三種模式（keyword/hybrid/rerank）|
+| Step 5b — Laminar Eval Run | `make eval-laminar`                               | 無獨立指令                                          | 無對應 — keyword baseline，推送 Dashboard   |
+| Step 5c — Provider 評估     | 無獨立指令                                        | `/evaluate-provider <目錄>`（不需要 OpenAI）        | 無對應 — 屬長時間離線作業                    |
 | Steps 1–4 — 知識庫建構      | `make pipeline`                                   | `/pipeline-local`（不需要 OpenAI）                  | 無對應 — 請依序呼叫上方個別端點               |
 | Steps 1–5 — 完整 Pipeline   | `python scripts/run_pipeline.py`                  | `/run-pipeline`（需要 OpenAI）                      | 無對應 — 請依序呼叫上方個別端點               |
 
@@ -163,7 +165,9 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
 | 抽樣 Q&A                    | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/eval/sample`                  |
 | Retrieval 指標               | `make evaluate-qa`（含 `--eval-retrieval`）        | `/evaluate-qa-local`（含 Retrieval）                 | `POST /api/v1/eval/retrieval`               |
+| 語意 + Reranker 對比         | `make eval-semantic`（三模式）、`make eval-semantic-k3`（top-k=3）| 無獨立指令 | 無對應 — 屬 CLI 快速評估     |
 | Reranking 評估              | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/eval/reranking`               |
+| Laminar 正式 Eval Run       | `make eval-laminar`（推送 Dashboard）             | 無獨立指令                                          | 無對應 — 屬離線 Laminar dataset |
 | Context Relevance 評估      | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/eval/context-relevance`       |
 | 跨 Provider 比較             | 無獨立指令                                        | `/evaluate-provider`                                 | `GET /api/v1/eval/compare`                  |
 | 儲存評估結果                | 無獨立指令 — 直接寫 `output/eval_report.json`      | 無獨立指令                                          | `POST /api/v1/eval/save`                    |

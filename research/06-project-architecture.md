@@ -1114,11 +1114,126 @@ qa_final.json → enrich_qa.py → qa_enriched.json
    - `monkeypatch.delenv("LMNR_PROJECT_API_KEY", raising=False)`
    - 防止測試 traces 洩漏到 Laminar dashboard（test isolation）
 
+## v2.12 — Semantic Reranker Evaluation 與離線 Laminar Eval（2026-03-05）
+
+### 新增評估腳本架構
+
+#### 1. **`scripts/_eval_laminar.py`** — Laminar 正式 Eval Run
+
+**目的**：將 golden_retrieval.json 的 20 筆 cases 推送至 Laminar Dashboard 作為離線評估資料集。
+
+**主要特性**：
+- Golden set：`output/evals/golden_retrieval.json`（20 cases）
+- 評估模式：keyword-only baseline（純關鍵字搜尋）
+- 評估器數量：5 個（precision、recall、f1、hit_rate、mrr）
+- 資料來源：優先 `qa_enriched.json`，降級至 `qa_final.json`
+- 並發策略：`concurrency_limit=1`（避免 Laminar SDK 上傳失敗）
+- Group 名稱：固定 `"retrieval-eval"`（所有 run 納入同一組，利於 Dashboard 折線圖）
+
+**使用方式**：
+```bash
+python scripts/_eval_laminar.py              # 使用預設 group
+python scripts/_eval_laminar.py --top-k 10  # 改變 top-K
+python scripts/_eval_laminar.py --group custom_name  # 自訂 group
+```
+
+**實作細節**：
+- Executor：`_keyword_search()` 執行關鍵字搜尋，回傳精簡欄位（id/category/question[:120]）
+- Safe executor：try-except 防護，搜尋失敗回傳空列表而非拋例外
+- Padding workaround：Laminar SDK 最後 2 筆 span 有時未能 flush，補 2 個虛擬 items（`__padding__`）確保真實 golden cases 不被截斷
+- 連接 Laminar 後自動推送評估結果至 Dashboard，可追蹤歷史趨勢
+
+#### 2. **`api/scripts/eval-semantic.ts`** — 語意 + Reranker 對比評估
+
+**目的**：量化三種檢索模式的品質差異。
+
+**評估三種模式**：
+1. **Keyword-only**（baseline）— 純關鍵字搜尋，無語意評估
+2. **Hybrid search** — embedding + keyword boost + synonym + freshness
+3. **Hybrid + Rerank** — over-retrieve K×3 → Claude haiku reranker → top-K
+
+**主要特性**：
+- Golden set：`output/evals/golden_retrieval.json`（20 cases）
+- 評估指標：Precision@K、Recall@K、F1、Hit Rate、MRR（category level）
+- Reranker 模型：Claude haiku-4-5-20251001
+- Over-retrieve 因子：3×（給 reranker 足夠池子）
+- 支援參數：`--top-k`（預設 5）、`--mode`（keyword/hybrid/rerank/all，預設 all）、`--json`（JSON 輸出）
+
+**使用方式**：
+```bash
+cd api && npx tsx scripts/eval-semantic.ts              # 三模式對比
+cd api && npx tsx scripts/eval-semantic.ts --top-k 3   # 改變 top-K
+cd api && npx tsx scripts/eval-semantic.ts --json      # JSON 輸出
+make eval-semantic                                      # Makefile wrapper
+make eval-semantic-k3                                   # top-k=3 版本
+```
+
+**評估結果儲存**：輸出至 stdout（可重導向至檔案或 Laminar Dashboard），包含：
+- 聚合指標（5 個）
+- 每個 case 的詳細分析（query、expected categories、retrieved categories、四項指標）
+
+**實作細節**：
+- Store initialization：`new QAStore()` 載入 qa_final.json 與 embeddings
+- Reranker integration：動態 import 防護（SDK 不存在時自動 fallback）
+- Metric computation：四層嵌套計算，確保計算的準確性（category-level 而非 QA-level）
+
+#### 3. **Makefile 新增 targets（v2.12）**
+
+```makefile
+.PHONY: eval-semantic
+eval-semantic: ## Semantic + Reranker Retrieval Eval（比較 keyword/hybrid/rerank 三種模式）
+	cd api && npx tsx scripts/eval-semantic.ts
+
+.PHONY: eval-semantic-k3
+eval-semantic-k3: ## 同上，top-k=3
+	cd api && npx tsx scripts/eval-semantic.ts --top-k 3
+
+.PHONY: eval-laminar
+eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboard）
+	$(PYTHON) scripts/_eval_laminar.py
+```
+
+### 五個 Laminar Evaluators（v2.12）
+
+| 評估器 | 輸入 | 計算方式 | 輸出 | 用途 |
+|--------|------|---------|------|------|
+| `precision_evaluator` | retrieved categories + expected categories | `|relevant ∩ retrieved| / K` | 0–1 | top-K 結果品質 |
+| `recall_evaluator` | 同上 | `|expected ∩ retrieved| / len(expected)` | 0–1 | 期望分類涵蓋度 |
+| `f1_evaluator` | precision, recall | `2×P×R/(P+R)` | 0–1 | 兼衡指標 |
+| `hit_rate_evaluator` | 同上 | `1.0 if any match else 0.0` | 0 or 1 | 至少命中二元 |
+| `mrr_evaluator` | rank of first match | `1 / rank` | 0–1 | 排序品質 |
+
+### Observability 擴充（v2.12）
+
+- `score_event("precision_at_k", value)`
+- `score_event("recall_at_k", value)`
+- `score_event("f1_score", value)`
+- `score_event("hit_rate", value)`
+- `score_event("mrr", value)`
+
+每次評估執行後自動發送至 Laminar Dashboard，可在 Evaluations 頁面查看歷史趨勢。
+
+### 評估結果基準線（v2.12，2026-03-05）
+
+**三模式對比（20 golden cases，top-k=5）**：
+
+| 模式 | Precision | Recall | F1 | Hit Rate | MRR |
+|------|-----------|--------|-----|----------|-----|
+| Keyword | 0.810 | 0.800 | 0.768 | 1.0 | 0.938 |
+| Keyword + Rerank | **0.950** | **0.825** | **0.861** | 1.0 | **1.0** |
+| Delta | **+14pp** | **+2.5pp** | **+9.3pp** | — | **+6.2pp** |
+
+**主要發現**：
+- Precision +14pp：Reranker 有效過濾語意不相關的結果
+- MRR 達到 1.0：第一筆結果 100% 正確，排序最優化
+- Recall 小幅提升：受 over-retrieve pool 限制
+
 ### 依賴更新
 
 ```
 lmnr[openai]>=0.5.0                                        # +new
 opentelemetry-semantic-conventions-ai>=0.4.13,<0.4.14    # +new, pinned
+anthropic>=0.39.0                                         # +new (reranker SDK)
 ```
 
 Laminar 版本 0.5.x 變更重點：
