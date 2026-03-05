@@ -145,7 +145,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/pipeline-local` — 完整 pipeline Steps 1–4（你是 LLM 引擎）
 - `/extract-qa` — 只執行 Step 2 Q&A 萃取（parallel sub-agents）
 - `/dedupe-classify` — 只執行 Step 3 去重 + 分類
-- `/generate-report <URL 或路徑>` — 生成 SEO 週報（解析指標 + 知識庫搜尋）
+- `/generate-report <URL 或路徑>` — 生成 SEO 週報（解析指標 + 知識庫搜尋，支援 `--snapshot <snapshot_id>` 參數）
 - `/search <問題>` — 搜尋知識庫（關鍵字加權，回傳 top-K Q&A）
 - `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
 - `/evaluate-qa-local` — Q&A 品質評估（Claude Code 作為 Judge，不需要 OpenAI）
@@ -230,9 +230,10 @@ Reports API 端點：
 
 - `GET /api/v1/reports` — 列出所有週報
 - `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
-- `POST /api/v1/reports/generate` — 生成週報（支援兩種模式）
+- `POST /api/v1/reports/generate` — 生成週報（支援三種模式）
   - 本地模式：`snapshot_id` 參數指定已儲存的指標快照（無需 OpenAI API key）
-  - OpenAI 模式：`metrics_url` 參數指定 Google Sheets URL + `weeks` 參數（需 OpenAI API key）
+  - OpenAI 模式：`snapshot_id` + `use_openai` 參數（需 OpenAI API key，走 Python `04_generate_report.py`）
+  - Legacy OpenAI 模式：`metrics_url` 參數指定 Google Sheets URL + `weeks` 參數（需 OpenAI API key）
 
 Pipeline API 端點：
 
@@ -293,7 +294,7 @@ RERANKER_ENABLED=auto            # "auto"/"true"/"false"，預設 auto
 | 去重 + 分類       | `text-embedding-3-small` + `gpt-5.2`                         | 語意理解取代向量                                                      |
 | 指標解析          | `fetch_from_sheets()`                                        | `qa_tools.py load-metrics`                                            |
 | 知識庫搜尋        | `text-embedding-3-small` + cosine                            | `qa_tools.py search`（關鍵字加權）                                    |
-| 週報生成          | `gpt-5.2` API                                                | Claude Code 直接推理                                                  |
+| 週報生成          | `04_generate_report.py` + OpenAI API（ECC 6 維度 prompt，支援 snapshot） | `/generate-report` 指令（Claude Code 直接推理，支援 snapshot）        |
 | Q&A 品質評估      | `gpt-5.2` + `gpt-5-mini`                                     | `/evaluate-qa-local`（Claude Code 作為 Judge）                        |
 | Provider 品質評估 | 無對應                                                       | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
 | API 伺服器        | `cd api && pnpm dev`（Hono, port 8002，需要 OPENAI_API_KEY） | `cd api && pnpm dev`（Hono, port 8002）                               |

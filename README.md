@@ -19,10 +19,16 @@
 
 - **自動指標拉取** — 從 Google Sheets 讀取週度指標（無需手動複製貼上）
 - **異常值偵測** — 月趨勢 ±15% 或週趨勢 ±20% 自動標記異常；Health Score 演算法：100 - (DOWN×10)，三級標籤（良好/需關注/警示）
-- **ECC 6 維度報告** — 本地模板引擎 v1.0（不需要 OpenAI API）：情勢快照、流量信號（CTR 三象限分析）、技術 SEO、搜尋意圖對映、優先行動清單、知識庫引用
+- **四層生成模式**（v2.23）
+  - `template`：本地模板引擎（無需 API）
+  - `hybrid`：模板 + LLM 5 維度增強（前端可選）
+  - `openai`：Python `04_generate_report.py` + OpenAI API（ECC 6 維度 + Health Score 扣分明細）
+  - `claude-code`：前端 Claude Code 自動 fallback
+- **ECC 6 維度報告** — OpenAI 模式升級到 Health Score 扣分明細、CTR 四象限分析、Perplexity 風格 [N] 引用；本地模板 v1.0：情勢快照、流量信號、技術 SEO、搜尋意圖、優先行動、知識庫引用
 - **業界研究引用** — 內建 7 條引用常數（Backlinko 2024、arxiv SERP Features、NavBoost 洩露、E-E-A-T 2024、First Page Sage 2025、Semrush Intent Framework、GSC CausalImpact）
 - **報告品質評估** — `report-evaluator.ts` 5 維度規則式評分（section_coverage / kb_citations / research_cited / kb_links / alert_coverage），生成後非同步推送 Laminar scoreEvent
 - **知識庫交叉引用** — 關鍵字搜尋對應 Q&A，生成含原文連結的行動建議
+- **報告元資料** — `<!-- report_meta {"generation_mode":"openai","model":"gpt-5.2",...} -->` 紀錄生成模式與模型版本
 
 ### 3. Q&A 品質評估（步驟 5）
 
@@ -898,13 +904,30 @@ api/src/
 | -------- | --------------------------------- | --------------------------------------- | ---------- |
 | `GET`    | `/api/v1/reports`                 | 週報列表（newest first）                | 60/min     |
 | `GET`    | `/api/v1/reports/{date}`          | 單篇週報 Markdown（YYYYMMDD）           | 60/min     |
-| `POST`   | `/api/v1/reports/generate`        | 觸發週報生成                            | 5/min      |
+| `POST`   | `/api/v1/reports/generate`        | 觸發週報生成（支援 3 種模式，詳見下方） | 5/min      |
 | `GET`    | `/api/v1/sessions`                | 對話列表（分頁）                        | 60/min     |
 | `POST`   | `/api/v1/sessions`                | 建立對話                                | 60/min     |
 | `GET`    | `/api/v1/sessions/{id}`           | 對話詳情（含訊息歷史）                  | 60/min     |
 | `POST`   | `/api/v1/sessions/{id}/messages`  | 新增訊息並取得 RAG 回覆（支援 context-only 降級） | 20/min     |
 | `DELETE` | `/api/v1/sessions/{id}`           | 刪除對話                                | 60/min     |
 | `POST`   | `/api/v1/feedback`                | 使用者回饋（helpful / not_relevant）     | 60/min     |
+
+**週報生成模式（`POST /api/v1/reports/generate`，v2.23）**
+
+四層生成模式支援前端無 OpenAI 情況下自動 fallback：
+
+| 模式 | 需求 | 請求參數 | 說明 |
+|------|------|---------|------|
+| `template` | `snapshot_id` | — | 本地模板引擎：情勢快照、流量信號、技術 SEO、行動清單（<1s） |
+| `hybrid` | `snapshot_id` + 5 維度分析欄位 | — | 模板 + LLM 5 維度增強（前端注入 `situation_analysis` 等） |
+| `openai` | `snapshot_id` + `use_openai: true` | OPENAI_API_KEY | Python `04_generate_report.py --snapshot`：ECC 6 維度、Health Score、Perplexity [N] 引用 |
+| `claude-code` | `/generate-report` 指令 | — | Claude Code 語意推理（互動式，非 API 觸發） |
+
+**前端 OpenAI 模式切換（v2.23）**：
+- UI：「OpenAI 模式」checkbox（勾選後搭配 snapshot_id 走 OpenAI 生成）
+- `openai` 模式：需先儲存指標快照（獲得 `snapshot_id`），才能觸發 Python 後端
+- Loading UX：spinner + elapsed timer + mode-aware 訊息（「準備指標中...」→「呼叫 LLM 中...」→「完成」）
+- 報告元資料：`<!-- report_meta {"generation_mode":"openai","model":"gpt-5.2"} -->` 記錄生成模式
 
 #### Pipeline 管理
 
