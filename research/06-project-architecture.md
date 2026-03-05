@@ -91,24 +91,9 @@
 - SourcesList 在 context-only 模式自動展開（`defaultExpanded={!hasContent}`）
 - `handleNewChat` 和 `loadSession` 重設 `chatMode` 避免殘留 badge
 
-**Q&A 評估儀表板（/admin/seoInsight/eval）- 四區段佈局（v2.5）**：
+**Q&A 評估儀表板（已於 v2.18 移除）**：
 
-```
-                eval.tsx
-                  |
-         useEvalDashboard (hook)
-        /        |        |        \
-  EvalMetrics  Provider  Sample   Save
-   Cards     Comparison  Table    Form
-```
-
-- `useEvalDashboard.ts`：集中管理 metrics/comparison/sample/save 四組 state + loading + error
-  - Auto-load: `evalCompare()` on mount
-  - Actions: `loadMetrics()`、`loadComparison()`、`loadSample(controls)`、`saveResults(params)`
-- **Section 1: EvalMetricsCards**：3 張指標卡（hit_rate/mrr/category_hit_rate），threshold 色彩（達標 black / 接近 gray / 未達 light gray），右上角「執行 Retrieval 評估」按鈕
-- **Section 2: EvalProviderComparison**：GET /eval/compare 載入，表格顯示 provider/relevance/accuracy/completeness/timestamp
-- **Section 3: EvalSampleTable**：控制列（size/seed/withGolden + 抽樣按鈕），表格可展開顯示 answer，keywords 以 badge 呈現
-- **Section 4: EvalSaveForm**：filename input（SAFE*FILENAME 前端驗證 `^[a-zA-Z0-9*-]+$`）、engine select、update_baseline checkbox
+eval.tsx、useEvalDashboard.ts 及四個 Eval 組件（EvalMetricsCards/EvalProviderComparison/EvalSampleTable/EvalSaveForm）已全部刪除。評估結果改直接使用 Laminar Dashboard 追蹤（`report-quality`、`keyword-retrieval`、`data-quality` groups）。
 
 **Pipeline 指標分析（PipelineMetrics 組件，嵌入 pipeline.tsx）**：
 
@@ -186,7 +171,7 @@ Notion 會議紀錄（87 份，2023–2026）
   驗證：Zod schema validation（TypeScript-first）
   回應格式：ApiResponse[T] envelope（data / error / meta）
   認證：X-API-Key middleware
-  速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min・eval 60/min）
+  速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min）
   QA ID：stable_id（SHA256[:16] hex），與 Python 相同驗證規則
   Local Mode：無 OpenAI API key 時自動降級（search→keyword-only，chat→context-only）
   endpoint（9 個 router，31 端點，v2.12～v2.18）：
@@ -377,13 +362,13 @@ Notion 會議紀錄（87 份，2023–2026）
 
 - ~44 個源碼檔案（routes 10、store 5、utils 5、middleware 4、schemas 10、services 4）
 - 25 個測試檔案（routes 10 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 3 + observability/laminar-scoring 2 + others 2）
-- 10 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、eval、synonyms）+ health 檢查
-- 216 tests passing
+- 9 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、synonyms）+ health 檢查（v2.18 移除 eval router）
+- 207 tests passing（24 test files）
 - NumPy .npy 檔案解析引擎（向量相容）
 - 速率限制 middleware（同步 Python layer 配置）
 - Local Mode 降級（無 OpenAI 時 keyword-only search + context-only chat）
 - CJK 分詞支援（中文 keyword search）
-- Python CLI 代理（pipeline + eval 端點透過 subprocess 執行 qa_tools.py）
+- Python CLI 代理（pipeline 端點透過 subprocess 執行 qa_tools.py）
 
 **技術決策**：
 
