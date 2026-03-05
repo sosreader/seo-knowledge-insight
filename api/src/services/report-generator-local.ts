@@ -129,8 +129,8 @@ class CitationTracker {
   private readonly map = new Map<string, CitationItem>();
   private counter = 0;
 
-  /** Register QA, return markdown link `[N](/admin/seoInsight/{id})` badge */
-  cite(qa: QAItem): string {
+  /** Register QA, return citation number */
+  cite(qa: QAItem): number {
     if (!this.map.has(qa.id)) {
       this.counter += 1;
       this.map.set(qa.id, {
@@ -147,8 +147,7 @@ class CitationTracker {
         source_url: qa.source_url ?? null,
       });
     }
-    const item = this.map.get(qa.id)!;
-    return `[${item.n}](/admin/seoInsight/${qa.id})`;
+    return this.map.get(qa.id)!.n;
   }
 
   /** `<!-- citations [...] -->` block appended at end of report */
@@ -190,9 +189,9 @@ const TAG_LABEL_MAP: Record<string, string> = {
 function formatKbCitation(qa: QAItem, tracker: CitationTracker, snippetLimit = 350): string {
   const segments = qa.answer.split(/\[(What|Why|How|Evidence)\]\s*/);
   const source = [qa.source_title, qa.source_date].filter(Boolean).join("、");
-  const chunkLink = `[知識庫 →](/admin/seoInsight/${qa.id})`;
-  const citation = tracker.cite(qa);
-  const attribution = [source ? `— ${source}` : "", chunkLink, citation]
+  const n = tracker.cite(qa);
+  const chunkLink = `[知識庫${n} →](/admin/seoInsight/${qa.id})`;
+  const attribution = [source ? `— ${source}` : "", chunkLink]
     .filter(Boolean)
     .join("  ");
 
@@ -220,28 +219,66 @@ function formatKbCitation(qa: QAItem, tracker: CitationTracker, snippetLimit = 3
 
 // ── Health score ──────────────────────────────────────────────────────
 
+interface HealthDeduction {
+  readonly metric: string;
+  readonly reason: string;
+  readonly points: number;
+}
+
 interface HealthScore {
   readonly score: number;
   readonly label: string;
+  readonly deductions: readonly HealthDeduction[];
 }
 
 function calcHealthScore(
   down: readonly AlertMetric[],
   core: readonly AlertMetric[],
 ): HealthScore {
-  let score = 100;
-  score -= Math.min(down.length * 10, 50);
+  const deductions: HealthDeduction[] = [];
+
+  // CORE metrics that breach alert thresholds (prioritized)
+  const coreAlertDown = core
+    .filter(
+      (m) =>
+        (m.monthly ?? 0) < -ALERT_THRESHOLD_MONTHLY ||
+        (m.weekly ?? 0) < -ALERT_THRESHOLD_WEEKLY,
+    )
+    .sort((a, b) => (a.monthly ?? 0) - (b.monthly ?? 0));
+
+  for (const m of coreAlertDown) {
+    deductions.push({
+      metric: m.name,
+      reason: `MoM ${fmtPct(m.monthly)}`,
+      points: 10,
+    });
+  }
+
+  // Non-CORE ALERT_DOWN (fill remaining slots up to 5 total)
+  const remaining = 5 - deductions.length;
+  for (const m of down.slice(0, Math.max(0, remaining))) {
+    deductions.push({
+      metric: m.name,
+      reason: `MoM ${fmtPct(m.monthly)}`,
+      points: 10,
+    });
+  }
 
   // Extra penalty when all core metrics are declining
   const coreDown = core.filter((m) => (m.monthly ?? 0) < 0);
   if (coreDown.length > 0 && coreDown.length === core.length && core.length > 0) {
-    score -= 20;
+    deductions.push({
+      metric: "全 CORE 同時下滑",
+      reason: `${coreDown.length} 個核心指標月趨勢皆為負`,
+      points: 20,
+    });
   }
 
-  score = Math.max(0, score);
+  const totalDeduction = deductions.reduce((sum, d) => sum + d.points, 0);
+  const score = Math.max(0, 100 - totalDeduction);
 
   const label = score >= 80 ? "良好" : score >= 60 ? "需關注" : "警示";
-  return { score, label };
+  return { score, label, deductions };
 }
 
 // ── Section builders ──────────────────────────────────────────────────
@@ -255,11 +292,20 @@ function buildSituationSnapshot(
   tracker: CitationTracker,
   llmAnalysis?: string | null,
 ): string {
-  const { score, label } = calcHealthScore(down, core);
+  const { score, label, deductions } = calcHealthScore(down, core);
   const lines: string[] = [
     `${SECTION_HEADINGS[0]}本週 SEO 情勢快照\n`,
     `**SEO 健康評分：${score}/100（${label}）**\n`,
   ];
+
+  if (deductions.length > 0) {
+    lines.push("| 扣分原因 | 趨勢 | 扣分 |");
+    lines.push("| --- | --- | ---: |");
+    for (const d of deductions) {
+      lines.push(`| ${d.metric} | ${d.reason} | -${d.points} |`);
+    }
+    lines.push("");
+  }
 
   if (llmAnalysis) {
     lines.push("### 跨指標關聯分析（AI 輔助）\n", llmAnalysis, "");
@@ -622,7 +668,7 @@ function buildKbCitations(topQas: readonly QAItem[], tracker: CitationTracker): 
     const n = tracker.cite(qa);
     const title = [qa.source_title, qa.source_date].filter(Boolean).join("、") || qa.question.slice(0, 40);
     const snippet = qa.answer.replace(/\[(What|Why|How|Evidence)\]\s*/g, " ").trim().slice(0, 80);
-    lines.push(`${n} **${title}** — ${snippet}… [→](/admin/seoInsight/${qa.id})`);
+    lines.push(`[知識庫${n} →](/admin/seoInsight/${qa.id}) **${title}** — ${snippet}…`);
   }
 
   return lines.join("\n");
