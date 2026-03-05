@@ -488,11 +488,15 @@ def fetch_medium_articles(
         # Write Markdown file
         filename = _safe_filename(article["title"])
         md_path = output_dir / f"{filename}.md"
-        # Avoid overwriting
-        counter = 1
-        while md_path.exists():
-            md_path = output_dir / f"{filename}_{counter}.md"
-            counter += 1
+        if force:
+            # In force mode: always overwrite the canonical file
+            pass
+        else:
+            # Incremental mode: avoid overwriting a file belonging to a different article
+            counter = 1
+            while md_path.exists():
+                md_path = output_dir / f"{filename}_{counter}.md"
+                counter += 1
 
         md_path.write_text(full_md, encoding="utf-8")
 

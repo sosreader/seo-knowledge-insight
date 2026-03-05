@@ -210,9 +210,8 @@ docker-compose logs seo-api-ts  # 監看 Hono 日誌
 API 端點（與 Python 相同）：
 
 - `GET /health` — 健康檢查
-- 10 個路由器：qa、search、chat、reports、sessions、feedback、pipeline、eval、synonyms、health
+- 9 個路由器：qa、search、chat、reports、sessions、feedback、pipeline、synonyms、health
 - Pipeline 端點：15 個（狀態、會議、來源文件、指標、快照等）
-- Eval 端點：6 個（抽樣、Retrieval、Reranking、Context Relevance、跨 Provider 比較、儲存）
 - 認證：`X-API-Key` header
 - 詳見 `api/README.md`
 
@@ -248,15 +247,6 @@ Pipeline API 端點：
 - `POST /api/v1/pipeline/metrics/save` — 儲存指標快照（支援 source、tab、label、weeks metadata）
 - `GET /api/v1/pipeline/metrics/snapshots` — 列出指標快照清單（含 metadata）
 - `DELETE /api/v1/pipeline/metrics/snapshots/:id` — 刪除指定快照
-
-Eval API 端點：
-
-- `POST /api/v1/eval/sample` — 隨機抽樣 Q&A 供評估（支援 seed + golden subset）
-- `POST /api/v1/eval/retrieval` — 計算 Retrieval 評估指標（hit rate、MRR、Precision@K、Recall@K、F1）
-- `POST /api/v1/eval/reranking` — 評估 reranker 品質提升（比較 keyword/hybrid/hybrid+rerank 三種模式）
-- `POST /api/v1/eval/context-relevance` — 評估檢索片段與 query 的語意相關性（0–1 分，含 per-context 細分評分）
-- `GET /api/v1/eval/compare` — 跨 LLM Provider 品質對比（Delta 報告）
-- `POST /api/v1/eval/save` — 儲存評估結果至 evals/ 目錄（含 path traversal 防護）
 
 Synonyms API 端點（v2.11 新增）：
 

@@ -220,7 +220,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port，複製 report-evaluator.ts 邏輯；7 維度推送 Laminar `report-quality` group；供 `/generate-report` 存檔後呼叫）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / synonyms / api-response
-  測試：Vitest（24 個 test files，223 tests passing）— v2.18 移除 eval route
+  測試：Vitest（24 個 test files，207 tests passing）— v2.18 移除 eval route（-16 tests）
   部署：docker-compose（port 8002），未來支援 ECR + App Runner
   與 Python 並行運作（遷移期間）
             ↓ http://localhost:8002 (開發) 或 https://<service-v2>.awsapprunner.com (未來)
