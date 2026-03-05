@@ -543,17 +543,23 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 
 ```
 需要理解複雜文本、推理、生成高品質輸出
-  → gpt-5.2（主力模型）
+  → gpt-5.2（主力模型，OPENAI_MODEL env var）
   → 用於：Q&A 萃取、Q&A 合併、週報生成、LLM Judge
 
+需要即時對話回應（RAG Chat）
+  → gpt-5.2（預設，CHAT_MODEL env var，可降至 gpt-5-mini 節省成本）
+  → 用於：POST /chat endpoint（v2.22 獨立設定）
+
 需要結構化輸出、分類、簡單判斷
-  → gpt-5-mini（省成本）
+  → gpt-5-mini（省成本，CLASSIFY_MODEL env var）
   → 用於：Q&A 分類、Retrieval 相關性判斷
 
 需要計算語意向量
   → text-embedding-3-small（極便宜，只做向量計算）
   → 用於：去重、Step 4/5 語意搜尋
 ```
+
+> **v2.22 更新**：`CHAT_MODEL` 與 `OPENAI_MODEL` 解耦，允許以不同成本策略配置萃取品質（高）vs 對話速度（低）。
 
 ### 當前品質基準線（最新：2026-03-02，v2.0+cjk，CJK N-gram + Synonym 修復後）
 
