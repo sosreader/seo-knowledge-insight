@@ -33,6 +33,7 @@ import argparse
 import json
 import logging
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -68,10 +69,49 @@ KB_LINK_PATTERN = "/admin/seoInsight/"
 # ── 資料載入 ────────────────────────────────────────────────────────────────
 
 
-def _load_qas() -> list[dict]:
+def _load_qas(source: str = "local") -> list[dict]:
+    if source == "supabase":
+        return _load_qas_supabase()
     path = QA_ENRICHED_PATH if QA_ENRICHED_PATH.exists() else QA_FINAL_PATH
     data = json.loads(path.read_text(encoding="utf-8"))
     return data["qa_database"]
+
+
+def _load_qas_supabase() -> list[dict]:
+    """從 Supabase qa_items 表載入 QA 資料（分頁）。"""
+    import requests
+
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_ANON_KEY", "")
+    if not url or not key:
+        raise ValueError("Missing SUPABASE_URL or SUPABASE_ANON_KEY for --source supabase")
+
+    headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+    all_rows: list[dict] = []
+    page_size = 500
+    offset = 0
+
+    while True:
+        resp = requests.get(
+            f"{url}/rest/v1/qa_items"
+            f"?select=id,seq,question,answer,keywords,confidence,category,difficulty,"
+            f"evergreen,source_title,source_date,source_type,source_collection,"
+            f"source_url,is_merged,extraction_model,synonyms,freshness_score,search_hit_count"
+            f"&order=seq.asc&limit={page_size}&offset={offset}",
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+        if not rows:
+            break
+        all_rows.extend(rows)
+        if len(rows) < page_size:
+            break
+        offset += page_size
+
+    logger.info("Loaded %d QA items from Supabase", len(all_rows))
+    return all_rows
 
 
 def _load_synonyms() -> dict[str, list[str]]:
@@ -372,7 +412,7 @@ def main() -> None:
         "--source",
         choices=["local", "supabase"],
         default="local",
-        help="資料來源（local 或 supabase；目前 retrieval eval 使用 golden_retrieval.json，此參數保留供未來擴充）",
+        help="資料來源（local 或 supabase）",
     )
     args = parser.parse_args()
 
@@ -422,7 +462,7 @@ def main() -> None:
         logger.error("golden_retrieval.json 應為非空 JSON array")
         sys.exit(1)
 
-    qas = _load_qas()
+    qas = _load_qas(args.source)
     top_k = args.top_k
 
     logger.info(

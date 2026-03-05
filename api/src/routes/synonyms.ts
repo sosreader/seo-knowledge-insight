@@ -27,7 +27,7 @@ synonymsRoute.post("/", async (c) => {
     return c.json(fail(`Term '${term}' already exists. Use PUT to update.`), 409);
   }
 
-  const item = synonymsStore.create(term, synonyms);
+  const item = await synonymsStore.create(term, synonyms);
   return c.json(ok(item), 201);
 });
 
@@ -49,13 +49,13 @@ synonymsRoute.put("/:term", async (c) => {
   }
 
   const { synonyms } = parsed.data;
-  const item = synonymsStore.update(term, synonyms);
+  const item = await synonymsStore.update(term, synonyms);
   return c.json(ok(item));
 });
 
 // DELETE /api/v1/synonyms/:term — remove custom override
 // Static-only terms return 403; non-existent terms return 404
-synonymsRoute.delete("/:term", (c) => {
+synonymsRoute.delete("/:term", async (c) => {
   const term = decodeURIComponent(c.req.param("term"));
 
   const existing = synonymsStore.get(term);
@@ -68,6 +68,6 @@ synonymsRoute.delete("/:term", (c) => {
     return c.json(fail(`Term '${term}' is a built-in entry and cannot be deleted`), 403);
   }
 
-  synonymsStore.delete(term);
+  await synonymsStore.delete(term);
   return c.json(ok({ deleted: true, term }));
 });

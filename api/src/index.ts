@@ -77,7 +77,17 @@ if (process.env.NODE_ENV !== "test") {
   }
 
   // Load custom synonyms
-  synonymsStore.init(paths.synonymCustomJsonPath);
+  // - Supabase mode: fetches from synonym_custom table
+  // - File mode: reads synonym_custom.json from disk
+  try {
+    if (synonymsStore.load) {
+      await synonymsStore.load();
+    } else if (synonymsStore.init) {
+      synonymsStore.init(paths.synonymCustomJsonPath);
+    }
+  } catch (err) {
+    console.warn("SynonymsStore load failed:", err);
+  }
 
   serve({ fetch: app.fetch, port }, (info) => {
     console.log(`Server running on http://localhost:${info.port}`);

@@ -7,7 +7,8 @@ import {
   type SessionSummaryOut,
 } from "../schemas/session.js";
 import { ok, fail } from "../schemas/api-response.js";
-import { sessionStore, type Session } from "../store/session-store.js";
+import { sessionStore } from "../store/session-store.js";
+import type { Session } from "../store/session-store.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
 import { hasOpenAI } from "../utils/mode-detect.js";
 import { qaStore } from "../store/qa-store.js";
@@ -48,7 +49,7 @@ function toDetail(s: Session): SessionDetailOut {
   };
 }
 
-sessionsRoute.get("/", (c) => {
+sessionsRoute.get("/", async (c) => {
   const parsed = sessionListParamsSchema.safeParse({
     limit: c.req.query("limit"),
     offset: c.req.query("offset"),
@@ -59,7 +60,7 @@ sessionsRoute.get("/", (c) => {
   }
 
   const { limit, offset } = parsed.data;
-  const { sessions, total } = sessionStore.listSessions(limit, offset);
+  const { sessions, total } = await sessionStore.listSessions(limit, offset);
 
   return c.json(
     ok({
@@ -77,13 +78,13 @@ sessionsRoute.post("/", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  const session = sessionStore.createSession(parsed.data.title ?? "");
+  const session = await sessionStore.createSession(parsed.data.title ?? "");
   return c.json(ok(toDetail(session)));
 });
 
-sessionsRoute.get("/:session_id", (c) => {
+sessionsRoute.get("/:session_id", async (c) => {
   const sessionId = c.req.param("session_id");
-  const session = sessionStore.getSession(sessionId);
+  const session = await sessionStore.getSession(sessionId);
 
   if (!session) {
     return c.json(fail("Session not found"), 404);
@@ -101,7 +102,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  let session = sessionStore.getSession(sessionId);
+  let session = await sessionStore.getSession(sessionId);
   if (!session) {
     return c.json(fail("Session not found"), 404);
   }
@@ -114,7 +115,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     created_at: new Date().toISOString().replace(/(\.\d{3})\d*Z$/, "$1Z"),
   };
 
-  session = sessionStore.addMessage(sessionId, userMsg);
+  session = await sessionStore.addMessage(sessionId, userMsg);
   if (!session) {
     return c.json(fail("Failed to add message (session full or conflict)"), 409);
   }
@@ -158,7 +159,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     created_at: new Date().toISOString().replace(/(\.\d{3})\d*Z$/, "$1Z"),
   };
 
-  session = sessionStore.addMessage(sessionId, assistantMsg);
+  session = await sessionStore.addMessage(sessionId, assistantMsg);
   if (!session) {
     return c.json(fail("Failed to save assistant response"), 500);
   }
@@ -173,9 +174,9 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
   );
 });
 
-sessionsRoute.delete("/:session_id", (c) => {
+sessionsRoute.delete("/:session_id", async (c) => {
   const sessionId = c.req.param("session_id");
-  const deleted = sessionStore.deleteSession(sessionId);
+  const deleted = await sessionStore.deleteSession(sessionId);
 
   if (!deleted) {
     return c.json(fail("Session not found"), 404);

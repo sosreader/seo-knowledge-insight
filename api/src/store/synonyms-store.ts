@@ -185,4 +185,35 @@ class SynonymsStore {
   }
 }
 
-export const synonymsStore = new SynonymsStore();
+import { hasSupabase } from "./supabase-client.js";
+import { SupabaseSynonymsStore } from "./supabase-synonyms-store.js";
+
+/**
+ * Unified async synonyms store interface.
+ * Read methods are sync (in-memory cache); write methods are async.
+ */
+export interface AsyncSynonymsStore {
+  readonly loaded?: boolean;
+  load?(): Promise<void>;
+  init?(path: string): void;
+  list(): readonly SynonymItem[];
+  get(term: string): SynonymItem | undefined;
+  create(term: string, synonyms: string[]): SynonymItem | Promise<SynonymItem>;
+  update(term: string, synonyms: string[]): SynonymItem | Promise<SynonymItem>;
+  delete(term: string): boolean | Promise<boolean>;
+  isCustom(term: string): boolean;
+  isStatic(term: string): boolean;
+  getCustom(): Readonly<Record<string, string[]>>;
+}
+
+/** Factory: returns SupabaseSynonymsStore or file-based SynonymsStore. */
+export function createSynonymsStore(): AsyncSynonymsStore {
+  if (hasSupabase()) {
+    console.log("SynonymsStore: using Supabase");
+    return new SupabaseSynonymsStore();
+  }
+  console.log("SynonymsStore: using file-based");
+  return new SynonymsStore();
+}
+
+export const synonymsStore = createSynonymsStore();

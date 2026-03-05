@@ -68,7 +68,7 @@ def _load_qas_local() -> list[dict]:
 def _load_qas_supabase() -> list[dict]:
     """從 Supabase qa_items 表載入 QA 資料（分頁）。"""
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    key = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    key = os.environ.get("SUPABASE_ANON_KEY", "")
     if not url or not key:
         raise ValueError("Missing SUPABASE_URL or SUPABASE_ANON_KEY for --source supabase")
 
@@ -108,7 +108,7 @@ def _load_qas(source: str = "local") -> list[dict]:
 def _upsert_eval_run(metrics: dict, group: str, passed: bool) -> None:
     """Save eval results to Supabase eval_runs table (best-effort)."""
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    key = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    key = os.environ.get("SUPABASE_ANON_KEY", "")
     if not url or not key:
         return
 

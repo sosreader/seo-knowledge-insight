@@ -28,3 +28,6 @@ laminar-*.png
 # Node.js (api/)
 node_modules/
 api/dist/
+
+# Supabase CLI temp files
+supabase/.temp/

@@ -166,4 +166,39 @@ export class FileSessionStore {
   }
 }
 
-export const sessionStore = new FileSessionStore();
+import { hasSupabase } from "./supabase-client.js";
+import { SupabaseSessionStore } from "./supabase-session-store.js";
+
+/**
+ * Unified async session store interface.
+ * FileSessionStore methods are sync but wrapped in Promise for compatibility.
+ */
+export interface AsyncSessionStore {
+  listSessions(limit?: number, offset?: number): Promise<{ sessions: readonly Session[]; total: number }>;
+  getSession(sessionId: string): Promise<Session | null>;
+  createSession(title?: string): Promise<Session>;
+  addMessage(sessionId: string, msg: SessionMessage): Promise<Session | null>;
+  deleteSession(sessionId: string): Promise<boolean>;
+}
+
+function wrapFileStore(fs: FileSessionStore): AsyncSessionStore {
+  return {
+    listSessions: (limit, offset) => Promise.resolve(fs.listSessions(limit, offset)),
+    getSession: (id) => Promise.resolve(fs.getSession(id)),
+    createSession: (title) => Promise.resolve(fs.createSession(title)),
+    addMessage: (id, msg) => Promise.resolve(fs.addMessage(id, msg)),
+    deleteSession: (id) => Promise.resolve(fs.deleteSession(id)),
+  };
+}
+
+/** Factory: returns SupabaseSessionStore or FileSessionStore (async wrapper). */
+export function createSessionStore(): AsyncSessionStore {
+  if (hasSupabase()) {
+    console.log("SessionStore: using Supabase");
+    return new SupabaseSessionStore();
+  }
+  console.log("SessionStore: using file-based");
+  return wrapFileStore(new FileSessionStore());
+}
+
+export const sessionStore = createSessionStore();
