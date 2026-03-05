@@ -153,18 +153,77 @@ def _fetch_single_url_playwright(url: str) -> dict:
     return _parse_article_html(url, html)
 
 
+def _strip_medium_ui_elements(soup: "BeautifulSoup", base_url: str) -> None:
+    """Remove Medium UI elements from parsed article soup (in-place).
+
+    Cleans:
+    - Author byline / signature blocks
+    - "Press enter or click to view image in full size" accessibility text
+    - Subscription CTA ("Join Medium for free", "stories in your inbox")
+    - Relative URL fragments → absolute Medium URLs
+    """
+    from bs4 import NavigableString
+
+    # 1. Fix relative URLs before cleaning (avoid broken links in output)
+    medium_base = "https://medium.com"
+    for tag in soup.find_all(href=True):
+        href = tag["href"]
+        if href.startswith("/?") or href.startswith("/@"):
+            tag["href"] = medium_base + href
+        elif href.startswith("/") and not href.startswith("//"):
+            tag["href"] = medium_base + href
+
+    # 2. Remove byline/author blocks: <a> tags with /?source= or /@author patterns
+    #    These appear in header and footer signature sections
+    _BYLINE_PATTERNS = re.compile(r'/\?source=|/@[a-zA-Z0-9_]+')
+    for a_tag in soup.find_all("a", href=True):
+        if _BYLINE_PATTERNS.search(a_tag["href"]):
+            # Walk up to remove the enclosing block (div/section/p)
+            parent = a_tag.parent
+            while parent and parent.name not in ("article", "section", "div", "header", "footer", "p"):
+                parent = parent.parent
+            if parent and parent.name in ("div", "section", "header", "footer"):
+                parent.decompose()
+            else:
+                a_tag.decompose()
+
+    # 3. Remove "Press enter or click to view image in full size" nodes
+    _PRESS_ENTER_RE = re.compile(r'Press enter or click to view image in full size', re.IGNORECASE)
+    for text_node in soup.find_all(string=_PRESS_ENTER_RE):
+        parent = text_node.parent
+        if parent and parent.name in ("span", "p", "div", "figcaption", "button"):
+            parent.decompose()
+        elif isinstance(text_node, NavigableString):
+            text_node.extract()
+
+    # 4. Remove subscription CTA blocks
+    _CTA_PATTERNS = re.compile(
+        r'Join Medium for free|stories in your inbox|Follow to never miss|Get unlimited access|'
+        r'Membership|Read every story from|Already a member',
+        re.IGNORECASE,
+    )
+    for text_node in soup.find_all(string=_CTA_PATTERNS):
+        # Walk up to nearest block container
+        parent = text_node.parent
+        for _ in range(4):  # max 4 levels up
+            if parent is None:
+                break
+            if parent.name in ("div", "section", "aside", "p", "blockquote"):
+                parent.decompose()
+                break
+            parent = parent.parent
+
+
 def _parse_article_html(url: str, html: str) -> dict:
     """Parse article HTML into a metadata dict."""
+    from bs4 import BeautifulSoup
+
     # Extract title from HTML
     title_match = re.search(r'<title[^>]*>(.+?)</title>', html, re.DOTALL)
     title = title_match.group(1).strip() if title_match else "Untitled"
     # Clean Medium title suffix
     title = re.sub(r'\s*\|\s*by\s+.*$', '', title)
     title = re.sub(r'\s*[-–—]\s*Medium\s*$', '', title)
-
-    # Extract article content (Medium uses <article> tag)
-    article_match = re.search(r'<article[^>]*>(.*?)</article>', html, re.DOTALL)
-    html_content = article_match.group(1) if article_match else html
 
     # Try to extract published date from meta tags
     published = ""
@@ -178,6 +237,19 @@ def _parse_article_html(url: str, html: str) -> dict:
             published = dt.strftime("%Y-%m-%d")
         except ValueError:
             pass
+
+    # Extract article content using BeautifulSoup for proper DOM parsing
+    soup = BeautifulSoup(html, "html.parser")
+    article_tag = soup.find("article")
+    if article_tag:
+        article_soup = article_tag
+    else:
+        article_soup = soup
+
+    # Strip Medium UI elements before converting to Markdown
+    _strip_medium_ui_elements(article_soup, base_url=url)
+
+    html_content = str(article_soup)
 
     return {
         "guid": url,
@@ -306,21 +378,33 @@ def _scrape_article_urls_playwright(profile_url: str = "https://genehong.medium.
     return results
 
 
+_PAYWALL_MIN_CHARS = 500  # articles below this plain-text length are likely paywalled
+
+
+def _is_paywalled(html_content: str) -> bool:
+    """Return True if the article content looks like a paywall stub (< 500 plain-text chars)."""
+    import re as _re
+    text = _re.sub(r'<[^>]+>', ' ', html_content)
+    text = _re.sub(r'\s+', ' ', text).strip()
+    return len(text) < _PAYWALL_MIN_CHARS
+
+
 def fetch_medium_articles(
     feed_url: str = config.MEDIUM_RSS_URL,
     extra_urls: list[str] | None = None,
     use_playwright: bool = False,
+    force: bool = False,
 ) -> dict:
     """Fetch Medium articles and save as Markdown.
 
     Returns:
-        {"fetched": int, "skipped": int, "total": int}
+        {"fetched": int, "skipped": int, "paywalled": int, "total": int}
     """
     output_dir = config.RAW_MEDIUM_MD_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
     index = _load_index()
-    existing_guids = {entry["guid"] for entry in index}
+    existing_guids: set[str] = set() if force else {entry["guid"] for entry in index}
 
     # Collect articles from RSS or full-scrape mode (sitemap → playwright fallback)
     if use_playwright:
@@ -355,13 +439,20 @@ def fetch_medium_articles(
 
     fetched = 0
     skipped = 0
+    paywalled = 0
 
     for article in articles:
         guid = article["guid"]
 
-        # Skip already fetched
+        # Skip already fetched (unless --force)
         if guid in existing_guids:
             skipped += 1
+            continue
+
+        # Phase 2: Paywall detection — skip articles with too little content
+        if _is_paywalled(article["html_content"]):
+            logger.warning("付費牆文章，跳過: %s (%d bytes)", article["title"], len(article["html_content"]))
+            paywalled += 1
             continue
 
         # Convert HTML to Markdown
@@ -407,23 +498,28 @@ def fetch_medium_articles(
 
     _save_index(index)
 
-    return {"fetched": fetched, "skipped": skipped, "total": len(index)}
+    return {"fetched": fetched, "skipped": skipped, "paywalled": paywalled, "total": len(index)}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="從 Medium RSS 擷取 SEO 文章")
     parser.add_argument("--url", nargs="*", default=[], help="手動加入的文章 URL")
     parser.add_argument("--playwright", action="store_true", help="用 headless browser 抓完整文章清單（突破 RSS 10 篇限制）")
+    parser.add_argument("--force", action="store_true", help="重新擷取所有文章（忽略現有 index）")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     logger.info("步驟 1b：擷取 Medium 文章")
 
-    result = fetch_medium_articles(extra_urls=args.url or None, use_playwright=args.playwright)
+    result = fetch_medium_articles(
+        extra_urls=args.url or None,
+        use_playwright=args.playwright,
+        force=args.force,
+    )
 
     logger.info(
-        "完成 — 新擷取: %d, 跳過: %d, 索引總計: %d",
-        result["fetched"], result["skipped"], result["total"],
+        "完成 — 新擷取: %d, 跳過: %d, 付費牆: %d, 索引總計: %d",
+        result["fetched"], result["skipped"], result["paywalled"], result["total"],
     )
 
 

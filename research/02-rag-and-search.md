@@ -612,6 +612,37 @@ cd api && npx tsx scripts/eval-semantic.ts --top-k 3 # 改變 top-K 參數
 - Discover 專屬情境（keyword 命中「流量」但非 Discover 導向的結果被降權）
 - 相關性梯度（部分相關 vs 完全相關，而非二元 relevant/irrelevant）
 
+### Synonym Expansion 評估維度（v2.13）
+
+**評估問題**：Synonym 擴充後，搜尋品質改善了多少？
+
+本專案引入兩個 Layer 3 指標（`_eval_laminar.py --group retrieval-enhancement`）：
+
+| 指標 | 定義 | 測量意義 |
+|------|------|---------|
+| `synonym_coverage` | `expected_keywords` 中有 synonym 對應的比例 | 詞典覆蓋密度——若 query 的 expected keywords 都沒有 synonym，擴充無效 |
+| `kw_hit_rate_with_synonyms` | 同義詞展開後的 hit rate | 展開後搜尋是否實際改善命中（與 baseline hit_rate 對比）|
+
+**Synonym Expansion 機制**：
+
+```python
+# 雙向展開：術語出現在 query → 加入所有同義詞
+for term, syn_list in synonyms.items():
+    if term.lower() in query_lower:
+        expanded_terms.update(syn.lower() for syn in syn_list)
+    for syn in syn_list:
+        if syn.lower() in query_lower:
+            expanded_terms.add(term.lower())  # 反向：同義詞 → 術語
+            expanded_terms.update(s.lower() for s in syn_list)
+```
+
+**已知基準線**（v2.11，`qa_enriched.json`）：
+
+| 指標 | 值 | 說明 |
+|------|----|----|
+| `synonym_coverage` | 100% | qa_enriched 有完整同義詞擴充；新 query 可能低於此值 |
+| `kw_hit_rate_with_synonyms` | 79.67% | vs keyword hit_rate 74%（+5.67pp）|
+
 ### Phase 4：Context Relevance 評估（`api/src/services/context-relevance.ts`，v2.12）
 
 **目標**：量化 retrieved contexts 對 query 的語意相關程度。補充 Hit Rate / MRR 的二元評估缺口。

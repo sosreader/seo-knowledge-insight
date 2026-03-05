@@ -146,6 +146,8 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
 - `/evaluate-qa-local` — Q&A 品質評估（Claude Code 作為 Judge，不需要 OpenAI）
 - `/evaluate-provider <目錄路徑>` — 評估通用 LLM Provider 的 SEO 洞察品質（Claude Code 作為 Judge）
+- `/evaluate-faithfulness-local` — RAGAS Faithfulness 評估（Answer 是否有幻覺，Claude Code 作為 Judge，不需要 OpenAI）
+- `/evaluate-context-precision-local` — RAGAS Context Precision 評估（Retrieved contexts 有多少真正相關，Claude Code 作為 Judge）
 
 ### 評估命令（需要 OpenAI API key）
 

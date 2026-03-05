@@ -214,10 +214,12 @@ Notion 會議紀錄（87 份，2023–2026）
     - services/rag-chat.ts：RAG 問答（需要 OpenAI API key；v2.11 支援 reranker）
     - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
     - services/context-relevance.ts：Context Relevance 評估（v2.12 新增，Claude haiku judge；per-context 細分；escapeXml() 防 prompt injection）
+    - services/report-generator-local.ts：本地週報生成（v2.13 新增；6 維度 ECC 分析；無需 OpenAI API；含 RESEARCH_CITATIONS 業界研究引用庫）
+    - services/report-evaluator.ts：報告品質規則式評估（v2.13 新增；5 維度 section_coverage/kb_citation/research/kb_links/alert_coverage；online scoring）
     - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / eval / synonyms / api-response
-  測試：Vitest（24 個 test files，189 tests passing）
+  測試：Vitest（25 個 test files，215 tests passing）
   部署：docker-compose（port 8002），未來支援 ECR + App Runner
   與 Python 並行運作（遷移期間）
             ↓ http://localhost:8002 (開發) 或 https://<service-v2>.awsapprunner.com (未來)
@@ -277,7 +279,7 @@ Notion 會議紀錄（87 份，2023–2026）
 - `components/admin/seoInsight/useEvalDashboard.ts`：metrics state 新增 3 個欄位
   - `avg_precision_at_k`、`avg_recall_at_k`、`f1_score`
 
-**測試結果（v2.11 snapshot）**：23 個 test files，179 tests passing（v2.12 更新至 24 files，189 tests）
+**測試結果（v2.11 snapshot）**：23 個 test files，179 tests passing（v2.12 更新至 24 files，189 tests；v2.13 更新至 25 files，215 tests）
 
 **評估基準線（v2.11，20 cases，top-k=5）**：
 | 指標 | 數值 | 說明 |
@@ -367,15 +369,15 @@ Notion 會議紀錄（87 份，2023–2026）
 
 1. **分層遷移**：新功能優先在 Hono 實作，Python 保留作為穩定層
 2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid/full，無 → keyword/context-only）
-3. **測試優先**：Vitest 路由覆蓋（24 個 test files，189 tests），unit + integration
+3. **測試優先**：Vitest 路由覆蓋（25 個 test files，215 tests），unit + integration
 4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取（optional，無 .npy 時 keyword-only mode）
 
 **實作成果（v2.12 更新）**：
 
 - ~44 個源碼檔案（routes 10、store 5、utils 5、middleware 4、schemas 10、services 4）
-- 24 個測試檔案（routes 10 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 2 + observability/laminar-scoring 2 + others 2）
+- 25 個測試檔案（routes 10 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 3 + observability/laminar-scoring 2 + others 2）
 - 10 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、eval、synonyms）+ health 檢查
-- 189 tests passing
+- 215 tests passing
 - NumPy .npy 檔案解析引擎（向量相容）
 - 速率限制 middleware（同步 Python layer 配置）
 - Local Mode 降級（無 OpenAI 時 keyword-only search + context-only chat）
@@ -405,7 +407,7 @@ Notion 會議紀錄（87 份，2023–2026）
    - Unit tests：純邏輯（search、store、validators、cjk-tokenizer）
    - Integration tests：mocked external calls（OpenAI、Python CLI subprocess）
    - Router tests：完整 HTTP 請求/回應循環（含 Local Mode 降級測試）
-   - 100% endpoint 覆蓋（10 個 routers × ~2-6 tests per endpoint，v2.12 共 189 tests）
+   - 100% endpoint 覆蓋（10 個 routers × ~2-6 tests per endpoint，v2.13 共 215 tests）
 
 **向下相容**：
 
@@ -1193,15 +1195,42 @@ eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboar
 	$(PYTHON) scripts/_eval_laminar.py
 ```
 
-### 五個 Laminar Evaluators（v2.12）
+### Laminar Evaluators（v2.13，4 層架構）
 
-| 評估器 | 輸入 | 計算方式 | 輸出 | 用途 |
-|--------|------|---------|------|------|
-| `precision_evaluator` | retrieved categories + expected categories | `|relevant ∩ retrieved| / K` | 0–1 | top-K 結果品質 |
-| `recall_evaluator` | 同上 | `|expected ∩ retrieved| / len(expected)` | 0–1 | 期望分類涵蓋度 |
-| `f1_evaluator` | precision, recall | `2×P×R/(P+R)` | 0–1 | 兼衡指標 |
-| `hit_rate_evaluator` | 同上 | `1.0 if any match else 0.0` | 0 or 1 | 至少命中二元 |
-| `mrr_evaluator` | rank of first match | `1 / rank` | 0–1 | 排序品質 |
+#### Layer 2 — retrieval-eval group（8 evaluators）
+
+| 評估器 | 計算方式 | 學術依據 |
+|--------|---------|---------|
+| `precision_evaluator` | `|relevant ∩ retrieved| / K` | IR 標準（Voorhees）|
+| `recall_evaluator` | `|expected ∩ retrieved| / len(expected)` | IR 標準 |
+| `f1_evaluator` | `2×P×R/(P+R)` | IR 標準 |
+| `hit_rate_evaluator` | `1.0 if any match else 0.0` | TREC |
+| `mrr_evaluator` | `1 / rank_of_first_match` | TREC |
+| `ndcg_at_k_evaluator` | `DCG / IDCG`（graded relevance）| Jarvelin & Kekalainen (2002) |
+| `top1_category_match_evaluator` | `1.0 if output[0].category in expected else 0.0` | 本專案 |
+| `top5_category_coverage_evaluator` | ≡ `recall_evaluator`（語意更清楚）| 本專案 |
+
+#### Layer 3 — retrieval-enhancement group（2 evaluators）
+
+| 評估器 | 說明 |
+|--------|------|
+| `kw_hit_rate_with_synonyms_evaluator` | 同義詞展開 executor 後的 hit rate（vs baseline）|
+| `synonym_coverage_evaluator` | expected_keywords 有多少比例有 synonym 覆蓋 |
+
+#### Layer 1 — data-quality group（`scripts/_eval_data_quality.py`）
+
+| 評估器 | 合格線 |
+|--------|--------|
+| `qa_count_in_range` | [100, 2000] |
+| `avg_confidence` | ≥ 0.80 |
+| `keyword_coverage` | ≥ 0.85（≥3 keywords per QA）|
+| `no_admin_content` | 1.0（無污染）|
+
+#### Layer 4 — generation-quality group（`scripts/_push_laminar_score.py`）
+
+由 Claude Code as Judge slash commands 執行後，用 `_push_laminar_score.py` 推送：
+- `faithfulness`（RAGAS Faithfulness，`/evaluate-faithfulness-local`）
+- `context_precision`（RAGAS Context Precision，`/evaluate-context-precision-local`）
 
 ### Observability 擴充（v2.12）
 

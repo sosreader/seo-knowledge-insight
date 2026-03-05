@@ -18,10 +18,11 @@
 ### 2. 每週 SEO 週報生成（步驟 4）
 
 - **自動指標拉取** — 從 Google Sheets 讀取週度指標（無需手動複製貼上）
-- **異常值偵測** — 月趨勢 ±15% 或週趨勢 ±20% 自動標記異常
-- **知識庫 Hybrid Search** — 將異常指標對應到相關 Q&A，生成行動建議
-- **Notion 連結引用** — 知識庫引用自動附上原始會議紀錄的 Notion 連結
-- **完整報告輸出** — Markdown 格式，包含概覽、指標分析、異常原因、Todo 與相關知識補充
+- **異常值偵測** — 月趨勢 ±15% 或週趨勢 ±20% 自動標記異常；Health Score 演算法：100 - (DOWN×10)，三級標籤（良好/需關注/警示）
+- **ECC 6 維度報告** — 本地模板引擎 v1.0（不需要 OpenAI API）：情勢快照、流量信號（CTR 三象限分析）、技術 SEO、搜尋意圖對映、優先行動清單、知識庫引用
+- **業界研究引用** — 內建 7 條引用常數（Backlinko 2024、arxiv SERP Features、NavBoost 洩露、E-E-A-T 2024、First Page Sage 2025、Semrush Intent Framework、GSC CausalImpact）
+- **報告品質評估** — `report-evaluator.ts` 5 維度規則式評分（section_coverage / kb_citations / research_cited / kb_links / alert_coverage），生成後非同步推送 Laminar scoreEvent
+- **知識庫交叉引用** — 關鍵字搜尋對應 Q&A，生成含原文連結的行動建議
 
 ### 3. Q&A 品質評估（步驟 5）
 

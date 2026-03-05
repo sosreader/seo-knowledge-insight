@@ -1,22 +1,79 @@
 # EVAL DEFINITION: SEO QA Pipeline Quality
 # 建立日期：2026-02-27
-# 狀態：基準線已建立（eval_report.md, 2026-02-27 01:20）
+# 更新至：v2.13（2026-03-05）
+# 狀態：4 層評估框架整合完成
 
 ---
 
-## 當前基準線（Baseline）
+## 統一 4 層評估框架（v2.13）
 
-| 指標 | 當前值 | 目標值 | 成本 |
+本專案評估框架基於以下學術/業界依據：
+
+| 框架 | 來源 | 本專案對應指標 |
+|------|------|--------------|
+| RAGAS (Es et al., 2023) | ACL 2024 | Context Relevance ✅、Faithfulness（v2.13 新增）、Context Precision（v2.13 新增）|
+| IR 標準（TREC, Voorhees）| NIST/ACM SIGIR | MRR、Precision@K、Recall@K、NDCG@K（v2.13 新增）|
+| RAG Triad（TruLens）| Truera/LlamaIndex | Context Relevance、Groundedness、Answer Relevance |
+| LLM-as-Judge（Zheng et al., 2023）| NeurIPS 2023 | Relevance、Accuracy、Completeness |
+| NVIDIA Context Relevance | NVIDIA NeMo Guardrails | context_relevance ✅（v2.12）|
+
+### Layer 1 — Data Quality（無 API 成本）
+
+| 指標 | 定義 | 合格線 | 腳本 |
+|------|------|--------|------|
+| `qa_count_in_range` | QA 總數在 [100, 2000] | 1.0 | `_eval_data_quality.py` |
+| `avg_confidence` | 平均信心分數 | ≥ 0.80 | `_eval_data_quality.py` |
+| `keyword_coverage` | ≥3 keywords 的 QA 比例 | ≥ 0.85 | `_eval_data_quality.py` |
+| `no_admin_content` | 無管理/模板污染比例 | 1.0 | `_eval_data_quality.py` |
+
+### Layer 2 — Retrieval IR Metrics（無 API 成本）
+
+| 指標 | 學術依據 | Laminar group |
+|------|---------|--------------|
+| `hit_rate` | TREC | retrieval-eval |
+| `mrr` | TREC（Voorhees）| retrieval-eval |
+| `precision_at_k` | IR 標準 | retrieval-eval |
+| `recall_at_k` | IR 標準 | retrieval-eval |
+| `f1_at_k` | IR 標準 | retrieval-eval |
+| `ndcg_at_k` | Jarvelin & Kekalainen (2002) | retrieval-eval（v2.13 新增）|
+| `top1_category_match` | 本專案 | retrieval-eval（v2.13 新增）|
+| `top5_category_coverage` | 本專案（≡ Recall@K）| retrieval-eval（v2.13 新增）|
+
+### Layer 3 — Retrieval Enhancement（無 API 成本）
+
+| 指標 | 說明 | Laminar group |
+|------|------|--------------|
+| `kw_hit_rate_with_synonyms` | 同義詞展開後 hit rate | retrieval-enhancement（v2.13 新增）|
+| `synonym_coverage` | query keywords 的 synonym 覆蓋比例 | retrieval-enhancement（v2.13 新增）|
+
+### Layer 4 — Context Quality（Claude haiku，API 成本）
+
+| 指標 | 框架 | 實作 |
+|------|------|------|
+| `context_relevance` | NVIDIA RAGAS | `POST /eval/context-relevance`（v2.12）|
+| `faithfulness` | RAGAS | `/evaluate-faithfulness-local`（v2.13，Claude Code as Judge）|
+| `context_precision` | RAGAS | `/evaluate-context-precision-local`（v2.13，Claude Code as Judge）|
+
+---
+
+## 當前基準線（v2.12，2026-03-05）
+
+| 指標 | 當前值 | 目標值 | 層次 |
 |------|--------|--------|------|
-| Relevance | 4.65 / 5 | ≥ 4.5 | — |
-| Accuracy | 3.80 / 5 | ≥ 4.0 | Step 2 重跑 |
-| Completeness | 3.70 / 5 | ≥ 4.0 | Step 2 重跑 |
-| Granularity | 4.65 / 5 | ≥ 4.5 | — |
-| Category 正確率 | 10% ⚠️ | ≥ 80% | 見 BUG-001 |
-| Retrieval MRR | 0.85 | ≥ 0.80 | — |
-| Retrieval LLM Top-1 Precision | 10% ⚠️ | ≥ 70% | 見 BUG-002 |
-| KW Hit Rate | 53% | ≥ 70% | reranker |
-| Category Hit Rate | 65% | ≥ 80% | 新分類 |
+| Relevance | **5.00** / 5 | ≥ 4.5 ✅ | L4（LLM-as-Judge）|
+| Accuracy | **4.30** / 5 | ≥ 4.0 ✅ | L4（LLM-as-Judge）|
+| Completeness | **3.95** / 5 | ≥ 4.0 | L4（LLM-as-Judge）|
+| KW Hit Rate | **73%** | ≥ 85% | L2 |
+| MRR | **0.88** | ≥ 0.85 ✅ | L2 |
+| Recall@K | **80%** | ≥ 80% ✅ | L2 |
+| Precision@K | **76%** | ≥ 80% | L2 |
+| F1 Score | **0.73** | ≥ 0.78 | L2 |
+| NDCG@K | 待測（預期 ≥ MRR=0.88）| ≥ 0.85 | L2（v2.13 新增）|
+| Top-1 Category Match | 待測 | ≥ 0.85 | L2（v2.13 新增）|
+| Synonym Coverage | 待測 | ≥ 0.70 | L3（v2.13 新增）|
+| Context Relevance | **0.32**（1 query）| ≥ 0.70 | L4（v2.12）|
+| Faithfulness | 待測 | ≥ 0.80 | L4（v2.13）|
+| Context Precision | 待測 | ≥ 0.70 | L4（v2.13）|
 
 ---
 

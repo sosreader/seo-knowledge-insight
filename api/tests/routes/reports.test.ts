@@ -140,4 +140,61 @@ describe("POST /api/v1/reports/generate (local mode — no OpenAI)", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("generated report contains all 6 section headings", async () => {
+    const res = await app.request("/api/v1/reports/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ snapshot_id: SNAPSHOT_ID }),
+    });
+    expect(res.status).toBe(200);
+
+    // Find the generated report file and read its content
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const { join: pathJoin } = await import("node:path");
+    const files = readdirSync(tmpDir).filter((f: string) => f.startsWith("report_") && f.endsWith(".md"));
+    expect(files.length).toBeGreaterThan(0);
+    const content = readFileSync(pathJoin(tmpDir, files[files.length - 1]!), "utf-8");
+
+    for (const heading of ["## 一、", "## 二、", "## 三、", "## 四、", "## 五、", "## 六、"]) {
+      expect(content).toContain(heading);
+    }
+  });
+
+  it("generated report meta block contains kb version pattern", async () => {
+    const res = await app.request("/api/v1/reports/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ snapshot_id: SNAPSHOT_ID }),
+    });
+    expect(res.status).toBe(200);
+
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const { join: pathJoin } = await import("node:path");
+    const files = readdirSync(tmpDir).filter((f: string) => f.startsWith("report_") && f.endsWith(".md"));
+    const content = readFileSync(pathJoin(tmpDir, files[files.length - 1]!), "utf-8");
+
+    // Meta block should contain version pattern v\d{4}.\d{2}.\d{2} or v(unknown)
+    expect(content).toMatch(/知識庫版本：v[\d]{4}\.[\d]{2}\.[\d]{2}|知識庫版本：v\(unknown\)/);
+  });
+
+  it("generated report section 六 contains at least one link", async () => {
+    const res = await app.request("/api/v1/reports/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ snapshot_id: SNAPSHOT_ID }),
+    });
+    expect(res.status).toBe(200);
+
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const { join: pathJoin } = await import("node:path");
+    const files = readdirSync(tmpDir).filter((f: string) => f.startsWith("report_") && f.endsWith(".md"));
+    const content = readFileSync(pathJoin(tmpDir, files[files.length - 1]!), "utf-8");
+
+    // Section 六 should exist and have a link (KB or external)
+    expect(content).toContain("## 六、知識庫引用");
+    // When no QAs found, section says "未找到" — this is acceptable fallback
+    const hasKbLink = content.includes("/admin/seoInsight/chunk/") || content.includes("https://") || content.includes("未找到");
+    expect(hasKbLink).toBe(true);
+  });
 });

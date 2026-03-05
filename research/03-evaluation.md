@@ -1408,3 +1408,202 @@ Response (200 OK):
 
 ---
 
+## 23. 統一 4 層評估框架（v2.13，2026-03-05）
+
+> 整合 RAGAS、TREC IR 標準、RAG Triad、NVIDIA Context Relevance 四個學術/業界框架。
+
+### 為什麼需要整合框架？
+
+每次重寫評估腳本（如 v2.12 的 `_eval_laminar.py`）時，舊 evaluator 會消失。
+根本原因是缺乏「各層 evaluator 的統一登記」。v2.13 建立明確的 4 層結構，
+每層 evaluator 都有對應的學術依據、實作腳本、Laminar group 名稱。
+
+### 學術框架對照
+
+| 框架 | 來源 | 本專案對應 |
+|------|------|----------|
+| **RAGAS**（Es et al., 2023）| ACL 2024 | Context Relevance、Faithfulness、Context Precision |
+| **IR 標準**（Voorhees, TREC）| NIST/ACM SIGIR | MRR、Precision@K、Recall@K、F1@K、NDCG@K |
+| **RAG Triad**（TruLens）| Truera/LlamaIndex | Context Relevance、Groundedness（≈Faithfulness）、Answer Relevance |
+| **LLM-as-Judge**（Zheng et al., 2023）| NeurIPS 2023 | Relevance、Accuracy、Completeness、Granularity |
+| **NVIDIA Context Relevance** | NVIDIA NeMo | context_relevance（v2.12）|
+
+### RAGAS 四大指標詳解
+
+RAGAS（Retrieval Augmented Generation Assessment System）提出 4 個互補指標：
+
+| 指標 | 定義 | 計算方式 | 本專案實作 |
+|------|------|---------|----------|
+| **Context Relevance** | Retrieved contexts 對 query 的語意相關性 | LLM judge 0–1 分 | `POST /eval/context-relevance`（v2.12）|
+| **Faithfulness** | Answer 的 claims 是否都能從 contexts 中找到支撐 | supported_claims / total_claims | `/evaluate-faithfulness-local`（v2.13）|
+| **Context Precision** | Retrieved contexts 中「真正有助於回答」的比例 | relevant_contexts / total_contexts | `/evaluate-context-precision-local`（v2.13）|
+| **Answer Relevance** | Answer 對 query 的回應相關性（reverse generation test）| embed(query) ↔ embed(generated_questions) | 待實作（v2.16 roadmap）|
+
+**RAGAS 的設計原則**：每個指標針對 RAG pipeline 的不同環節，可以獨立評估也可以組合：
+- Context Relevance + Context Precision = Retrieval 層品質
+- Faithfulness = Generation 層品質（有無幻覺）
+- Answer Relevance = End-to-end 品質
+
+### NDCG@K 說明（Jarvelin & Kekalainen, 2002）
+
+**MRR vs NDCG@K 的差異**：
+
+| 指標 | 計算方式 | 適合場景 |
+|------|---------|---------|
+| MRR | `1 / rank_of_first_relevant` | 只關心「第一筆」；常見於 QA、知識庫 |
+| NDCG@K | `DCG / IDCG`（考慮所有命中位置）| 多筆相關；電商搜尋、推薦系統 |
+
+本專案同時報告兩者。NDCG@K 應 ≥ MRR（因為它也計入後面的命中），
+若 NDCG << MRR 表示多個相關結果集中在後段，排序仍有改善空間。
+
+```python
+# NDCG@K 計算（graded relevance，binary 版）
+DCG = Σ rel_i / log2(i+1)   # rel_i = 1 if category matches else 0
+IDCG = Σ 1 / log2(i+2) for i in range(min(n_relevant, K))
+NDCG@K = DCG / IDCG
+```
+
+### RAG Triad（TruLens/LlamaIndex）
+
+RAG Triad 是 Truera 提出的三角形評估框架，衡量 RAG pipeline 的三個面向：
+
+```
+                     [Query]
+                    /         \
+    Context Relevance         Answer Relevance
+            |                       |
+       [Contexts] ── Faithfulness ── [Answer]
+```
+
+| 邊 | 指標 | 問題 |
+|----|------|------|
+| Query → Contexts | Context Relevance | 「檢索到的內容夠相關嗎？」|
+| Query → Answer | Answer Relevance | 「回答有回應到問題嗎？」|
+| Contexts → Answer | Faithfulness（Groundedness）| 「回答有無幻覺？」|
+
+**本專案當前狀態**：
+- Context Relevance ✅（v2.12，API endpoint）
+- Faithfulness ✅（v2.13，Claude Code as Judge slash command）
+- Answer Relevance：留待 v2.16（需要 reverse generation）
+
+### 4 層框架實作總覽
+
+| 層次 | 指標 | 腳本 | Laminar group | API 成本 |
+|------|------|------|--------------|---------|
+| **L1 Data Quality** | qa_count、avg_confidence、keyword_coverage、no_admin_content | `_eval_data_quality.py` | `data-quality` | 無 |
+| **L2 IR Metrics** | hit_rate、mrr、precision、recall、f1、ndcg、top1_match、top5_coverage | `_eval_laminar.py` | `retrieval-eval` | 無 |
+| **L3 Enhancement** | kw_hit_rate_with_synonyms、synonym_coverage | `_eval_laminar.py --group retrieval-enhancement` | `retrieval-enhancement` | 無 |
+| **L4 Context Quality** | context_relevance、faithfulness、context_precision | API + slash commands | `generation-quality` | Claude haiku |
+
+### Roadmap
+
+| 版本 | 新增指標 | 實作方式 | 成本 |
+|------|---------|---------|------|
+| v2.13（本次）| NDCG@K、Top-1 Match、Synonym Coverage + Faithfulness、Context Precision | L2/3 純 Python；F+CP = Claude Code as Judge | 無外部 API |
+| v2.14 | Faithfulness 全量 golden（API 版）| Anthropic haiku API，自動化 | Claude haiku |
+| v2.15 | Context Precision（GT 版，expected_qa_ids）| 人工標記 20 cases + 純 Python | 標記時間 |
+| v2.16 | Answer Relevance（reverse generation）| haiku reverse-gen + embedding similarity | Claude haiku |
+
+---
+
+## 24. 報告品質評估（v2.13）
+
+### 為什麼評估週報品質？
+
+SEO 週報的目的是將複雜的指標數據轉化為可行的策略建議。單純「生成報告」的成功，不代表「報告有用」。因此需要三層評估：
+
+1. **結構完整性**（rule-based）— 報告是否包含預期的 6 個分析維度？
+2. **知識庫融合度**（rule-based）— 是否有效引用內部知識庫的相關 Q&A？
+3. **語義品質**（LLM-as-Judge，可選）— 建議是否有根據、邏輯是否清晰？
+
+### 5 維度規則式評估（rule-based，零成本）
+
+本專案採用 **5 維度規則式框架**，在報告生成直後立即評分，無需 LLM API：
+
+| 維度 | 定義 | 評分邏輯 | 0–1 scale |
+|------|------|---------|----------|
+| **section_coverage** | 6 個分析段落完整性 | 實際段落數 / 6 | 0 → 1 |
+| **kb_citation_count** | 知識庫引用密度 | min(引用連結數 / 6, 1.0) | 0 → 1 |
+| **has_research_citations** | 是否包含業界研究佐証 | Backlinko / Semrush / arxiv 等關鍵字 | 0 or 1 |
+| **has_kb_links** | 是否包含知識庫內部連結 | `/admin/seoInsight/chunk/` 連結出現 | 0 or 1 |
+| **alert_coverage** | 異常指標討論覆蓋率 | 被標記為異常的指標在「第五章」提及比例 | 0 → 1 |
+| **overall** | 綜合評分 | 5 維度平均值 | 0 → 1 |
+
+### 7 條業界研究引用庫（RESEARCH_CITATIONS）
+
+`api/src/services/report-generator-local.ts` 預載 7 條同行評審 / 業界報告，供 6 個 section builder 佐証主張：
+
+```javascript
+{
+  "ctr_baseline": "Backlinko 2024（67K 關鍵字、2400 萬曝光）：Position 1 平均 CTR 27.6%",
+  "ctr_serp_features": "arxiv 2306.01785：Knowledge Panel 降 CTR ~8pp；Featured Snippet 升 ~20%",
+  "navboost": "Google 排名因素洩露（2024）：NavBoost 以 13 月滾動聚合用戶點擊",
+  "causal_attribution": "SEOCausal / CausalImpact：貝氏時間序列是因果歸因業界標準",
+  "eeeat_2024": "Google E-E-A-T 2024 更新：體驗 = 作者署名 + About 頁 + 外部聲譽",
+  "discover_signal": "First Page Sage 2025：高品質內容 + 搜尋者參與度（點擊）",
+  "intent_framework": "Semrush 2025：Awareness / Consideration / Conversion 漏斗"
+}
+```
+
+### 健康評分演算法（Health Score）
+
+報告輸出時自動計算一個 0–100 分的健康指數，用於快速判斷網站狀態：
+
+```
+Health Score = 100
+              - (DOWN 異常數 × 10)        // 下降異常扣分
+              - (allCoreDown 全核心都下 × 20) // 全面下滑扣重分
+```
+
+輸出三級標籤：
+
+| 分數 | 狀態 | 行動 |
+|------|------|------|
+| 80–100 | 💚 良好 | 維持現狀，重點監控新機會 |
+| 60–79 | 🟡 需關注 | 調查特定異常指標根因 |
+| < 60 | 🔴 警示 | 啟動應急除錯（structure / indexing / traffic） |
+
+### Laminar Online Scoring（非同步）
+
+報告生成成功後，`api/src/routes/reports.ts` 非同步呼叫 `evaluateReport()`，推送 6 個 Laminar `scoreEvent`：
+
+```typescript
+// POST /api/v1/reports/generate 成功 → 200 立即回傳
+// 同時異步推送 Laminar scoring（不阻塞回應）
+await evaluateReport(content, alertNames).then(scores => {
+  laminar.scoreEvent('section_coverage', scores.section_coverage);
+  laminar.scoreEvent('kb_citation_count', scores.kb_citation_count);
+  laminar.scoreEvent('has_research_citations', scores.has_research_citations);
+  laminar.scoreEvent('has_kb_links', scores.has_kb_links);
+  laminar.scoreEvent('alert_coverage', scores.alert_coverage);
+  laminar.scoreEvent('overall', scores.overall);
+});
+```
+
+### Laminar Offline Eval Run（批量評估）
+
+離線評估歷史報告品質：
+
+```bash
+# 評估最多 10 份最新報告，推送至 Laminar report-quality-eval group
+python scripts/_eval_laminar.py --mode report
+```
+
+對應 Python evaluators（`scripts/_eval_laminar.py`）：
+
+- `section_coverage_eval()` — 段落完整性
+- `kb_links_eval()` — 知識庫引用數量
+- `research_cited_eval()` — 業界研究提及
+- `overall_eval()` — 綜合評分
+
+### 規則式 vs LLM-as-Judge 的選擇
+
+| 維度         | 為何用規則式？                                                  | 何時轉向 LLM-as-Judge？      |
+|--------------|-------------------------------------------------------------|-----------------------------|
+| 結構品質     | 段落標題、連結計數是黑白分明的                                | 不需要（規則式已充分）       |
+| 知識庫融合   | 連結計數、關鍵字出現是客觀可測的                              | 未來：語義相關性升級（v2.15） |
+| 業界研究引用 | 關鍵字匹配足以判斷引用存在                                    | 可能過度簡化，但對本量足夠   |
+| 邏輯清晰性   | 需要深度理解「建議是否合理」 → **LLM-as-Judge** ✅             | 現已透過 slash command 提供 |
+
+---
+

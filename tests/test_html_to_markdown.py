@@ -60,6 +60,45 @@ class TestCleanup:
         assert result.endswith("\n")
         assert not result.endswith("\n\n")
 
+    def test_strips_medium_press_enter_noise(self):
+        """'Press enter or click to view image in full size' 應被清除"""
+        text = "## Section\n\nPress enter or click to view image in full size\n\n![](https://example.com/img.png)"
+        result = _cleanup(text)
+        assert "Press enter or click to view image in full size" not in result
+        assert "## Section" in result
+        assert "example.com/img.png" in result
+
+    def test_strips_medium_inbox_noise(self):
+        """'Get X's stories in your inbox' 應被清除"""
+        text = "Some content\n\nGet Gene Hong\u2019s stories in your inbox\n\nMore content"
+        result = _cleanup(text)
+        assert "stories in your inbox" not in result
+        assert "Some content" in result
+        assert "More content" in result
+
+    def test_strips_medium_join_noise(self):
+        """'Join Medium for free' 應被清除"""
+        text = "Article body\n\nJoin Medium for free to get updates from this writer\n\nEnd"
+        result = _cleanup(text)
+        assert "Join Medium for free" not in result
+        assert "Article body" in result
+
+
+class TestHtmlToMarkdownMediumNoise:
+    """確保 Medium 特有的 UI 殘留在 HTML 轉換階段也被過濾。"""
+
+    def test_removes_press_enter_element(self):
+        html = '<p>Text</p><a tabindex="0" role="button">Press enter or click to view image in full size</a><img src="img.png">'
+        md = html_to_markdown(html)
+        assert "Press enter or click to view image in full size" not in md
+        assert "Text" in md
+
+    def test_removes_inbox_promo_element(self):
+        html = '<p>Article</p><div>Get Gene Hong\u2019s stories in your inbox</div>'
+        md = html_to_markdown(html)
+        assert "stories in your inbox" not in md
+        assert "Article" in md
+
 
 class TestAddMetadataHeader:
     def test_basic_header(self):

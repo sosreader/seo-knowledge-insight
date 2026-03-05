@@ -8,6 +8,8 @@ import { generateRequestSchema, type ReportSummary } from "../schemas/report.js"
 import { paths } from "../config.js";
 import { hasOpenAI } from "../utils/mode-detect.js";
 import { generateReportLocal, saveReport } from "../services/report-generator-local.js";
+import { evaluateReport } from "../services/report-evaluator.js";
+import { scoreEvent } from "../utils/laminar-scoring.js";
 import { qaStore } from "../store/qa-store.js";
 
 const execFileAsync = promisify(execFile);
@@ -104,9 +106,10 @@ reportsRoute.post("/generate", async (c) => {
       year: "numeric", month: "2-digit", day: "2-digit",
     }).replace(/\//g, "/");
 
+    let reportContent: string;
     try {
       const qaCount = qaStore.count;
-      const reportContent = await generateReportLocal(snapshotMetrics, reportDate, qaCount);
+      reportContent = await generateReportLocal(snapshotMetrics, reportDate, qaCount);
       const dateKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       saveReport(reportContent, dateKey);
     } catch (err: unknown) {
@@ -114,6 +117,24 @@ reportsRoute.post("/generate", async (c) => {
       console.error("Local report generation failed:", msg);
       return c.json(fail("Local report generation failed"), 500);
     }
+
+    // Async quality eval — does not block response
+    void (async () => {
+      try {
+        const alertNames = Object.keys(snapshotMetrics);
+        const evalResult = evaluateReport(reportContent, alertNames);
+        await Promise.all([
+          scoreEvent("report_section_coverage", evalResult.section_coverage),
+          scoreEvent("report_kb_citations", evalResult.kb_citation_count),
+          scoreEvent("report_has_research", evalResult.has_research_citations),
+          scoreEvent("report_has_links", evalResult.has_kb_links),
+          scoreEvent("report_alert_coverage", evalResult.alert_coverage),
+          scoreEvent("report_overall", evalResult.overall),
+        ]);
+      } catch {
+        // Scoring failures must never affect the main response path.
+      }
+    })();
 
     const reports = listReportFiles();
     if (reports.length === 0) {

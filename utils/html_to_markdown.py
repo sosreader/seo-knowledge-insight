@@ -29,6 +29,16 @@ def html_to_markdown(html: str, strip_tags: tuple[str, ...] = ("script", "style"
         for tag in soup.find_all(tag_name):
             tag.decompose()
 
+    # Remove Medium accessibility UI elements
+    # e.g. <a ...>Press enter or click to view image in full size</a>
+    _MEDIUM_UI_TEXTS = frozenset({
+        "press enter or click to view image in full size",
+        "get gene hong, 還是黑貘's stories in your inbox",
+    })
+    for tag in soup.find_all(True):
+        if tag.get_text(strip=True).lower() in _MEDIUM_UI_TEXTS:
+            tag.decompose()
+
     # Strip event handler attributes and javascript: URLs
     for tag in soup.find_all(True):
         for attr in list(tag.attrs):
@@ -45,13 +55,31 @@ def html_to_markdown(html: str, strip_tags: tuple[str, ...] = ("script", "style"
     return _cleanup(md)
 
 
+# Medium-specific UI strings that appear as inline or standalone noise.
+# Order matters: inline substitutions before line-level cleanups.
+_MEDIUM_INLINE_NOISE = re.compile(
+    r'Press enter or click to view image in full size',
+    re.IGNORECASE,
+)
+_MEDIUM_LINE_NOISE = re.compile(
+    r'^\s*(Get .+?[\u2018\u2019\u0027]s stories in your inbox'
+    r'|Join Medium for free to get updates from this writer'
+    r')\s*$',
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
 def _cleanup(md: str) -> str:
     """Post-process Markdown: remove excess blank lines, fix formatting."""
-    # Collapse 3+ consecutive blank lines to 2
+    # 1. Strip inline Medium UI noise (may appear before image refs on same line)
+    md = _MEDIUM_INLINE_NOISE.sub('', md)
+    # 2. Strip full-line Medium promo noise
+    md = _MEDIUM_LINE_NOISE.sub('', md)
+    # 3. Collapse 3+ consecutive blank lines to 2
     md = re.sub(r'\n{3,}', '\n\n', md)
-    # Remove trailing whitespace per line
+    # 4. Remove trailing whitespace per line
     md = '\n'.join(line.rstrip() for line in md.splitlines())
-    # Ensure single trailing newline
+    # 5. Ensure single trailing newline
     return md.strip() + '\n'
 
 

@@ -235,6 +235,28 @@ function readFetchLogs(limit = 200): FetchLogsResponse {
   return { files, entries, total: entries.length };
 }
 
+// --- Article frontmatter helpers ---
+
+/** Parse key-value pairs from article Markdown frontmatter (lines like `- **Key**: Value`). */
+function parseArticleFrontmatter(filePath: string): { publishedAt: string | null; sourceUrl: string | null } {
+  let publishedAt: string | null = null;
+  let sourceUrl: string | null = null;
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    const lines = content.split("\n").slice(0, 10);
+    for (const line of lines) {
+      const dateMatch = line.match(/\*\*發佈日期\*\*:\s*(\d{4}-\d{2}-\d{2})/);
+      if (dateMatch) publishedAt = `${dateMatch[1]}T00:00:00.000Z`;
+
+      const urlMatch = line.match(/\*\*來源 URL\*\*:\s*(https?:\/\/\S+)/);
+      if (urlMatch) sourceUrl = urlMatch[1];
+    }
+  } catch {
+    // ignore read errors
+  }
+  return { publishedAt, sourceUrl };
+}
+
 // --- Collection → Directory mapping (whitelist, lazy to avoid module-scope path issues in tests) ---
 
 function getCollectionDirMap(): Readonly<Record<string, { dir: string; sourceType: "meeting" | "article" }>> {
@@ -290,13 +312,24 @@ function buildSourceDocs(): readonly SourceDocEntry[] {
         ? meeting.title
         : file.replace(/\.md$/, "").replace(/[-_]/g, " ");
 
+      let createdTime: string;
+      let sourceUrl: string;
+      if (meeting) {
+        createdTime = meeting.created_time;
+        sourceUrl = meeting.url;
+      } else {
+        const fm = parseArticleFrontmatter(filePath);
+        createdTime = fm.publishedAt ?? stat.mtime.toISOString();
+        sourceUrl = fm.sourceUrl ?? "";
+      }
+
       results.push({
         file,
         title,
         source_type: sourceType,
         source_collection: collection,
-        source_url: meeting?.url ?? "",
-        created_time: meeting?.created_time ?? stat.birthtime.toISOString(),
+        source_url: sourceUrl,
+        created_time: createdTime,
         size_bytes: stat.size,
         is_processed: processedSet.has(file),
       });
