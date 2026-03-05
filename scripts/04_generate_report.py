@@ -603,9 +603,19 @@ Discover 單獨分析，引用 First Page Sage 2025。
 
 ## Citation 規則（Perplexity 風格）
 body text 引用 KB 後，句末加 `[N]`（同一 QA 重複引用用同一 N）。
-QA 答案若含 [What]/[Why]/[How]/[Evidence] 標籤，以 blockquote 輸出：
-> **現象** {What} / **原因** {Why} / **行動** {How}
-— {source_title}、{source_date}  [知識庫N →](/admin/seoInsight/{id})
+
+### 知識庫引用格式（重要）
+在各 section 引用 Q&A 時，使用四層分類 blockquote：
+> **現象** {What 或觀察摘要}
+> **原因** {Why 或機制解釋}
+> **行動** {How 或具體步驟}
+> **依據** {Evidence 或佐證資料}
+>
+> — {source_title}、{source_date}  [知識庫N →](/admin/seoInsight/{id})
+
+若 QA 答案含 [What]/[Why]/[How]/[Evidence] 標籤，直接對應填入。
+若不含標籤，根據答案內容拆分為四層。
+每個 section 至少一個知識庫引用應使用此格式。
 """
 
 
@@ -616,20 +626,23 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
     # ─ Meta 前置（動態取出 KB 大小）─
     _qa_path = config.OUTPUT_DIR / "qa_final.json"
     _total_qa = 0
+    _source_collections = 0
     try:
         with open(_qa_path, encoding="utf-8") as _f:
-            _total_qa = len(json.load(_f))
+            _qa_data = json.load(_f)
+            _total_qa = _qa_data.get("total_count", len(_qa_data.get("qa_database", [])))
+            _source_collections = len({qa.get("source_collection", "") for qa in _qa_data.get("qa_database", []) if qa.get("source_collection")})
     except Exception as e:
         logger.warning("無法讀取 qa_final.json 以取得 KB 大小：%s", e)
     _kb_label = f"{_total_qa} Q&A" if _total_qa else "知識庫"
     _model_name = config.OPENAI_MODEL
     meta_block = f"""---
-**Meta 資訊**
-- **生成方式**：OpenAI {_model_name} 生成
-- **知識庫支撐**：{_kb_label}（來自過去 SEO 顧問會議記錄）
-- **生成日期**：{metrics_date}
-- **特性**：零捏造數字、知識庫驗證、具體行動步驟
-
+**報告資訊**
+- 生成方式：OpenAI {_model_name} 生成
+- 知識庫版本：{_kb_label}，{_source_collections} 個來源集合
+- 分析框架：Semrush 2025 / GSC 官方指引 / First Page Sage 2025 排名因素
+- 分析維度：6 維度（情勢 / 流量 / 技術 / 意圖 / 行動 / 知識庫）
+- 生成日期：{metrics_date}
 ---
 """
 
@@ -689,7 +702,7 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
             logger.error(f"   ❌ refusal={getattr(msg, 'refusal', None)}")
             logger.error(f"   ❌ msg fields: {getattr(msg, 'model_fields_set', None)}")
 
-    # 將 meta_block 加入報告開頭，report_meta JSON 加入尾端
+    # 將 meta_block 加入報告開頭，citations + report_meta JSON 加入尾端
     _generated_at = datetime.now().isoformat()
     _report_meta = json.dumps({
         "weeks": weeks,
@@ -698,7 +711,31 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
         "generation_label": f"OpenAI {_model_name} 生成",
         "model": _model_name,
     }, ensure_ascii=False)
-    full_report = meta_block + (content or "（報告產生失敗）") + f"\n<!-- report_meta {_report_meta} -->"
+
+    _citations_block = ""
+    if relevant_qas:
+        _citation_items = []
+        for i, qa in enumerate(relevant_qas[:12], 1):
+            qa_id = qa.get("id", "")
+            source_title = qa.get("source_title", "")
+            source_date = qa.get("source_date", "")
+            title = "、".join(p for p in [source_title, source_date] if p) or qa.get("question", "")[:40]
+            answer_clean = qa.get("answer", "")
+            for tag in ["[What]", "[Why]", "[How]", "[Evidence]"]:
+                answer_clean = answer_clean.replace(tag, " ")
+            _citation_items.append({
+                "n": i,
+                "id": qa_id,
+                "title": title,
+                "category": qa.get("category", ""),
+                "date": source_date or "",
+                "snippet": answer_clean.strip()[:120],
+                "chunk_url": f"/admin/seoInsight/{qa_id}",
+                "source_url": qa.get("source_url"),
+            })
+        _citations_block = f"\n<!-- citations {json.dumps(_citation_items, ensure_ascii=False)} -->"
+
+    full_report = meta_block + (content or "（報告產生失敗）") + _citations_block + f"\n<!-- report_meta {_report_meta} -->"
     
     # ─ Laminar metadata 記錄 ─
     try:
