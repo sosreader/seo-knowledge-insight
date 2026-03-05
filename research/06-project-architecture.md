@@ -180,7 +180,7 @@ Notion 會議紀錄（87 份，2023–2026）
   Session 儲存：output/sessions/{uuid}.json（Repository Pattern）
             ↓ https://<service>.awsapprunner.com
 
-**TypeScript Hono（v2.11，port 8002，新架構）**——直接取代 Python API
+**TypeScript Hono（v2.12，port 8002，新架構）**——直接取代 Python API
 [SEO Insight API v2] api/src — Hono + TypeScript，完全移植 Python 功能 + Local Mode 降級
   框架：Hono（輕量、Cloudflare Workers / Node.js 相容）
   驗證：Zod schema validation（TypeScript-first）
@@ -189,7 +189,7 @@ Notion 會議紀錄（87 份，2023–2026）
   速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min・eval 60/min）
   QA ID：stable_id（SHA256[:16] hex），與 Python 相同驗證規則
   Local Mode：無 OpenAI API key 時自動降級（search→keyword-only，chat→context-only）
-  endpoint（10 個 router，v2.11）：
+  endpoint（10 個 router，37 端點，v2.12）：
     - routes/qa.ts        — GET /qa, /qa/categories, /qa/{id}（hex+int）
     - routes/search.ts    — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；v2.11 over-retrieve + rerank）
     - routes/chat.ts      — POST /chat（mode: full|context-only，無 OpenAI 時回傳 sources + answer:null；v2.11 rerank 可啟用）
@@ -203,7 +203,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - store/qa-store.ts：QAStore（讀 qa_final.json + embedding 向量，embedding optional）
     - store/session-store.ts：FileSessionStore（Repository Pattern）
     - store/learning-store.ts：LearningStore（feedback + miss 記錄）
-    - store/synonyms-store.ts：SynonymsStore（雙層設計：28 個靜態術語 + output/synonym_custom.json 自訂覆蓋，v2.10 新增）
+    - store/synonyms-store.ts：SynonymsStore（雙層設計：28 基礎術語 + 31 補充術語（v2.11）= 59 靜態術語 + output/synonym_custom.json 自訂覆蓋，v2.10 新增）
     - store/search-engine.ts：SearchEngine（hybrid search + keyword boost + keywordOnlySearch）
     - utils/npy-reader.ts：NumPy .npy 檔案解析（numpy 相容）
     - utils/cosine-similarity.ts：向量運算（Float32Array）
@@ -239,7 +239,7 @@ Notion 會議紀錄（87 份，2023–2026）
 
 **Phase 1 — Synonym Dict 擴充**
 - `utils/synonym_dict.py`：新增 32 個術語（214 個詞條），覆蓋技術 SEO、關鍵字、UX、GSC 指標
-  - 三層合併：METRIC_QUERY_MAP（基礎） < _SUPPLEMENTAL_SYNONYMS（v2.11 新增 32 項） < custom JSON（使用者自訂層，v2.10）
+  - 三層合併：METRIC_QUERY_MAP（基礎） < _SUPPLEMENTAL_SYNONYMS（v2.11 新增 31 項） < custom JSON（使用者自訂層，v2.10）
   - KW Hit Rate baseline 提升預期：73% → 78%+
 
 **Phase 2 — Contextual Embeddings** ✅ 已完成（2026-03-06）
@@ -249,7 +249,7 @@ Notion 會議紀錄（87 份，2023–2026）
 - `api/src/config.ts`：新增環境變數
   - `ANTHROPIC_API_KEY`：Anthropic API key（用於 reranker）
   - `CONTEXT_EMBEDDING_WEIGHT`：context 加權因子（0–1，**預設 0.6**）
-  - `RERANKER_ENABLED`：是否啟用 reranker（預設 true）
+  - `RERANKER_ENABLED`：是否啟用 reranker（`"auto"/"true"/"false"`，預設 `"auto"`）
 
 **Phase 3 — Re-ranking**
 - `api/src/services/reranker.ts`（新建）：Claude Haiku reranker service
@@ -277,7 +277,7 @@ Notion 會議紀錄（87 份，2023–2026）
 - `components/admin/seoInsight/useEvalDashboard.ts`：metrics state 新增 3 個欄位
   - `avg_precision_at_k`、`avg_recall_at_k`、`f1_score`
 
-**測試結果**：23 個 test files，179 tests passing
+**測試結果（v2.11 snapshot）**：23 個 test files，179 tests passing（v2.12 更新至 24 files，189 tests）
 
 **評估基準線（v2.11，20 cases，top-k=5）**：
 | 指標 | 數值 | 說明 |
@@ -405,7 +405,7 @@ Notion 會議紀錄（87 份，2023–2026）
    - Unit tests：純邏輯（search、store、validators、cjk-tokenizer）
    - Integration tests：mocked external calls（OpenAI、Python CLI subprocess）
    - Router tests：完整 HTTP 請求/回應循環（含 Local Mode 降級測試）
-   - 100% endpoint 覆蓋（10 個 routers × ~2-6 tests per endpoint，共 175 tests）
+   - 100% endpoint 覆蓋（10 個 routers × ~2-6 tests per endpoint，v2.12 共 189 tests）
 
 **向下相容**：
 
@@ -431,7 +431,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 
 ### QA ID 從 Sequential Int 遷移至 Stable UUID（v2.2）
 
-**決策**：QAItem.id 從 sequential int（1–655）變更為 16 字元 hex string（stable_id），保留原始 seq 欄位供顯示用。
+**決策**：QAItem.id 從 sequential int 變更為 16 字元 hex string（stable_id），保留原始 seq 欄位供顯示用。
 
 **背景**：
 

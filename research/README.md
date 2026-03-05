@@ -15,7 +15,7 @@
 | [05-models.md](./05-models.md)                                   | 模型選擇決策 / Embedding 模型比較                                           |
 | [06-project-architecture.md](./06-project-architecture.md)       | 本專案架構 / Pipeline 全景 / 技術決策學術支撐                               |
 | [06a-architecture-changelog.md](./06a-architecture-changelog.md) | 架構變更紀錄（Changelog），每次架構調整後新增一行                           |
-| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.3，Hono API 主架構 + stable_id）         |
+| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.12，Hono API + Reranker + Context Relevance）|
 | [07-deployment.md](./07-deployment.md)                           | Hono API 部署 / ECR + App Runner / Supabase 遷移路徑                        |
 | [08-fetch-optimization.md](./08-fetch-optimization.md)           | Notion 爬取優化 / ETag / 增量更新                                           |
 | [09-provider-comparison.md](./09-provider-comparison.md)         | AI Provider 輸出品質比較方法論與歷次跑分結果                                |
@@ -38,24 +38,27 @@
 
 ---
 
-## 當前指標現況（2026-03-04，v2.3 — Hono API + stable_id + reports + sessions）
+## 當前指標現況（2026-03-05，v2.12 — Reranker + Context Relevance + eval-semantic CLI）
 
 | 指標                   | 數值       | 說明                                                      |
 | ---------------------- | ---------- | --------------------------------------------------------- |
-| Q&A 總量               | 655 筆     | Step 2: 670 原始 → Step 3: 去除 15 組重複                |
+| Q&A 總量               | **1,317 筆** | 4 來源：notion-seo-meetings 584、medium-genehong 505、ithelp-gsc-kpi 185、google-case-studies 43 |
 | QA ID 格式             | 16-char hex | stable_id（SHA256[:16]），取代 sequential int             |
-| KW Hit Rate            | **74%**    | CJK n-gram + synonym 展開（目標 ≥ 85%）                  |
+| KW Hit Rate            | **73%**    | CJK n-gram + synonym 展開（目標 ≥ 85%；中間目標 78%+）  |
+| Precision@K            | **76%**    | v2.11 新增，category-level（目標 ≥ 80%）                 |
+| Recall@K               | **80%**    | v2.11 新增（目標 ≥ 80%）✅                               |
+| F1 Score               | **0.73**   | v2.11 新增                                               |
 | freshness_rank_quality | **1.0**    | 時效衰減正常，舊文件未擠掉新文件                          |
 | synonym_coverage       | **1.0**    | 所有 Q&A 已完成 enrichment                               |
 | avg_synonyms / Q&A     | 11.09      | enrichment 後平均同義詞數                                |
 | avg_freshness          | 0.9076     | 知識庫整體新鮮度（max=1.0）                              |
-| MRR                    | **0.87**   | 平均倒數排名（v2.0+cjk）                                |
-| Relevance              | **5.00** / 5 | Claude Code as Judge（v2.0+cjk）                        |
-| Accuracy               | **4.30** / 5 | Claude Code as Judge（v2.0+cjk）                        |
-| Completeness           | **3.95** / 5 | Claude Code as Judge（v2.0+cjk）                        |
-| **Test 通過率**        | **277/277** | v2.2（stable_id + reports + sessions + rate limit）       |
-| **API endpoints**      | **15 個**   | qa(3)/search/chat/feedback/reports(3)/sessions(5)/health(main.py) |
-| **Observability**      | **完備**    | Laminar traces + Audit logs + Scoring events（三柱）      |
+| MRR                    | **0.88**   | 平均倒數排名（v2.12）                                    |
+| Relevance              | **5.00** / 5 | Claude Code as Judge（v2.12）                           |
+| Accuracy               | **4.30** / 5 | Claude Code as Judge（v2.12）                           |
+| Completeness           | **3.95** / 5 | Claude Code as Judge（v2.12）                           |
+| **Test 通過率**        | **189/189** | Hono TypeScript Vitest（24 test files，v2.12）           |
+| **API endpoints**      | **37 個**   | 10 routers：qa/search/chat/reports/sessions/feedback/pipeline(15)/eval(6)/synonyms/health |
+| **Observability**      | **完備**    | Laminar traces + Audit logs + Scoring events（三柱）     |
 
 ---
 

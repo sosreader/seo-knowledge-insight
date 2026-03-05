@@ -13,7 +13,7 @@
 - **Collection-Scoped 去重合併** — 各 collection 內部獨立去重，跨 collection 保留（支援多來源知識不互相覆蓋）
 - **智能分類標籤** — 10 個分類（技術 SEO、內容策略、連結建設等），用 `gpt-5-mini` 自動標記難度與時效性
 - **雙層 metadata** — `source_type`（meeting/article）+ `source_collection`（seo-meetings/genehong-medium/ithelp-sc-kpi/google-case-studies）
-- **目前規模** — 87 場會議、655 筆 Q&A（預計新增 ~120-200 筆文章 Q&A）
+- **目前規模** — 1,317 筆 Q&A（4 個 collection：notion-seo-meetings 584、medium-genehong 505、ithelp-gsc-kpi 185、google-case-studies 43）
 
 ### 2. 每週 SEO 週報生成（步驟 4）
 
@@ -37,7 +37,7 @@
 - **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢，使用穩定的 16-char hex ID 或 seq number）
 - **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）
 - **對話管理** — `GET/POST/DELETE /api/v1/sessions/*`（CRUD、訊息歷史）
-- **Pipeline 管理** — `/api/v1/pipeline/*`（10 endpoints：狀態、會議、預覽、日誌、觸發 fetch/fetch-articles/extract/dedupe/metrics）
+- **Pipeline 管理** — `/api/v1/pipeline/*`（14 endpoints：狀態、會議、來源文件、指標、快照、觸發 fetch/fetch-articles/extract/dedupe）
 - **Eval 評估** — `/api/v1/eval/*`（6 endpoints：抽樣、Retrieval 評估、Reranking 評估、Context Relevance、跨 provider 比較、儲存結果）
 - **同義詞管理** — `/api/v1/synonyms/*`（4 endpoints：列表、新增、更新、刪除；雙層設計：靜態+自訂）
 - **API 安全** — API Key 認證（`X-API-Key` header）、Rate Limit（chat 20/min、search/qa 60/min）、Zod schema validation
@@ -120,7 +120,7 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | Step 1b-d — 文章擷取        | `make fetch-articles`                             | 由 `/pipeline-local` 整合執行                       | `POST /api/v1/pipeline/fetch-articles`      |
 | Step 2 — Q&A 萃取           | `make extract-qa`                                 | `/extract-qa`（不需要 OpenAI）                      | `POST /api/v1/pipeline/extract-qa`          |
 | Step 3 — 去重 + 分類        | `make dedupe-classify`                            | `/dedupe-classify`（不需要 OpenAI）                 | `POST /api/v1/pipeline/dedupe-classify`     |
-| Step 4 — 週報生成           | `make generate-report`                            | `/generate-report <URL>`（不需要 OpenAI）           | `POST /api/v1/reports/generate`             |
+| Step 4 — 週報生成           | `make generate-report`                            | `/generate-report <URL>`（不需要 OpenAI）           | `POST /api/v1/reports/generate`（支援兩種模式：snapshot_id 本地 / metrics_url OpenAI） |
 | Step 5 — Q&A 品質評估       | `make evaluate-qa`                                | `/evaluate-qa-local`（不需要 OpenAI）               | 無對應 — 屬長時間離線作業                    |
 | Step 5a — 語意 Reranker 評估| `make eval-semantic` / `make eval-semantic-k3`   | 無獨立指令                                          | 無對應 — 對比三種模式（keyword/hybrid/rerank）|
 | Step 5b — Laminar Eval Run | `make eval-laminar`                               | 無獨立指令                                          | 無對應 — keyword baseline，推送 Dashboard   |
@@ -136,8 +136,11 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | 待處理列表                  | `make list-unprocessed`                           | 無獨立指令                                          | `GET /api/v1/pipeline/unprocessed`          |
 | 會議列表                    | 無獨立指令                                        | 無獨立指令                                          | `GET /api/v1/pipeline/meetings`             |
 | 會議預覽                    | 無獨立指令 — 直接讀 `raw_data/markdown/*.md`      | 無獨立指令 — 直接讀檔案                              | `GET /api/v1/pipeline/meetings/{id}/preview`|
+| 來源文件列表                | 無獨立指令                                        | 無獨立指令                                          | `GET /api/v1/pipeline/source-docs`（支援 filter） |
+| 來源文件預覽                | 無獨立指令 — 直接讀檔案                            | 無獨立指令 — 直接讀檔案                              | `GET /api/v1/pipeline/source-docs/:collection/:file/preview` |
 | Fetch 日誌                  | 無獨立指令 — 讀 `output/fetch_logs/`              | 無獨立指令 — 直接讀檔案                              | `GET /api/v1/pipeline/logs`                 |
 | 指標解析                    | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/pipeline/metrics`             |
+| 指標快照管理                | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/pipeline/metrics/save`、`GET /api/v1/pipeline/metrics/snapshots`、`DELETE /api/v1/pipeline/metrics/snapshots/{id}` |
 
 ### 搜尋與問答
 
@@ -190,7 +193,7 @@ Notion/Medium/iThome/Google Cases → Markdown 轉換 → OpenAI 萃取 Q&A → 
 
 ```
 seo-knowledge-insight/
-├── api/                         # Hono TypeScript API（v2.7，主架構）
+├── api/                         # Hono TypeScript API（v2.12+，主架構）
 │   ├── src/
 │   │   ├── index.ts             # 入口（middleware + route mount）
 │   │   ├── config.ts            # Zod 驗證環境變數

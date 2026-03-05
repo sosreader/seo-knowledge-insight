@@ -162,7 +162,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
   - `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
   - `POST /api/v1/reports/generate` — 觸發週報生成
 
-#### TypeScript Hono（v2.12，port 8002）——當前主架構
+#### TypeScript Hono（v2.12+，port 8002）——當前主架構
 
 開發環境（後端 API）：
 
@@ -209,33 +209,50 @@ API 端點（與 Python 相同）：
 
 - `GET /health` — 健康檢查
 - 10 個路由器：qa、search、chat、reports、sessions、feedback、pipeline、eval、synonyms、health
+- Pipeline 端點：15 個（狀態、會議、來源文件、指標、快照等）
+- Eval 端點：6 個（抽樣、Retrieval、Reranking、Context Relevance、跨 Provider 比較、儲存）
 - 認證：`X-API-Key` header
 - 詳見 `api/README.md`
 
 QA API 端點（v2.6 多來源擴充）：
 
-- `GET /api/v1/qa` — 列表查詢（新增 `source_type`、`source_collection` filter）
+- `GET /api/v1/qa` — 列表查詢（支援 source_type、source_collection、category、difficulty、evergreen、keyword 等 filter）
 - `GET /api/v1/qa/categories` — 所有分類
 - `GET /api/v1/qa/collections` — 所有 collection 清單（含 source_type + count）
 - `GET /api/v1/qa/{id}` — 單筆 Q&A（hex stable_id 或 integer seq）
+
+Reports API 端點：
+
+- `GET /api/v1/reports` — 列出所有週報
+- `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
+- `POST /api/v1/reports/generate` — 生成週報（支援兩種模式）
+  - 本地模式：`snapshot_id` 參數指定已儲存的指標快照（無需 OpenAI API key）
+  - OpenAI 模式：`metrics_url` 參數指定 Google Sheets URL + `weeks` 參數（需 OpenAI API key）
 
 Pipeline API 端點：
 
 - `GET /api/v1/pipeline/status` — 各步驟完成狀態（6 步驟：fetch-notion/fetch-medium/fetch-ithelp/fetch-google/extract-qa/dedupe-classify）
 - `GET /api/v1/pipeline/meetings` — 會議列表（含 metadata）
 - `GET /api/v1/pipeline/meetings/:id/preview` — Markdown 預覽
+- `GET /api/v1/pipeline/source-docs` — 列出所有來源文件（支援 source_type、source_collection、keyword、is_processed 等 filter + pagination）
+- `GET /api/v1/pipeline/source-docs/:collection/:file/preview` — 來源文件預覽（會議/文章均支援）
 - `GET /api/v1/pipeline/unprocessed` — 待處理的 Markdown 列表（含 source_collection）
 - `GET /api/v1/pipeline/logs` — Fetch 歷史日誌
 - `POST /api/v1/pipeline/fetch` — 觸發 Notion 增量擷取（不暴露 --force）
 - `POST /api/v1/pipeline/fetch-articles` — 觸發外部文章擷取（Medium + iThome + Google Cases）
 - `POST /api/v1/pipeline/extract-qa` — 觸發 Q&A 萃取
 - `POST /api/v1/pipeline/dedupe-classify` — 觸發去重 + 分類
-- `POST /api/v1/pipeline/metrics` — 取得 Pipeline metrics
+- `POST /api/v1/pipeline/metrics` — 取得 Pipeline metrics（解析 SEO 指標）
+- `POST /api/v1/pipeline/metrics/save` — 儲存指標快照（支援 source、tab、label、weeks metadata）
+- `GET /api/v1/pipeline/metrics/snapshots` — 列出指標快照清單（含 metadata）
+- `DELETE /api/v1/pipeline/metrics/snapshots/:id` — 刪除指定快照
 
 Eval API 端點：
 
 - `POST /api/v1/eval/sample` — 隨機抽樣 Q&A 供評估（支援 seed + golden subset）
-- `POST /api/v1/eval/retrieval` — 計算 Retrieval 評估指標（hit rate、MRR）
+- `POST /api/v1/eval/retrieval` — 計算 Retrieval 評估指標（hit rate、MRR、Precision@K、Recall@K、F1）
+- `POST /api/v1/eval/reranking` — 評估 reranker 品質提升（比較 keyword/hybrid/hybrid+rerank 三種模式）
+- `POST /api/v1/eval/context-relevance` — 評估檢索片段與 query 的語意相關性（0–1 分，含 per-context 細分評分）
 - `GET /api/v1/eval/compare` — 跨 LLM Provider 品質對比（Delta 報告）
 - `POST /api/v1/eval/save` — 儲存評估結果至 evals/ 目錄（含 path traversal 防護）
 

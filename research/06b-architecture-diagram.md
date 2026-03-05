@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v2.11，2026-03-05）
+## 架構圖（最新：v2.12，2026-03-05）
 
 ```mermaid
 flowchart TD
@@ -64,19 +64,19 @@ flowchart TD
         EMB -.->|"optional（Local Mode 不需要）"| HAPI
         SE -.->|hybrid_search / keywordOnlySearch| HAPI
         HAPI --> HMID["middleware/<br/>auth.ts（X-API-Key）<br/>rate-limit.ts（chat:20 search/qa:60 reports/gen:5 eval:60/min）<br/>cors.ts + error-handler.ts"]
-        HMID --> HEP["10 個 Router + health（v2.11）<br/>qa.ts — GET /qa, /qa/categories, /qa/{id}（hex+int）<br/>search.ts — POST /search（mode: hybrid|keyword；v2.11 over-retrieve+rerank）<br/>chat.ts — POST /chat（mode: full|context-only；v2.11 rerank 支援）<br/>reports.ts — GET/POST /reports<br/>sessions.ts — CRUD /sessions + messages（context-only fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — GET status/source-docs/unprocessed/logs, POST fetch/fetch-articles/extract-qa/dedupe-classify/metrics<br/>eval.ts — POST sample/retrieval/reranking（v2.11 新增）/save, GET compare<br/>synonyms.ts — GET/POST /synonyms, PUT/DELETE /synonyms/{term}（v2.10 新增）"]
+        HMID --> HEP["10 個 Router + health（v2.12，37 端點）<br/>qa.ts — GET /qa, /qa/categories, /qa/collections, /qa/{id}（hex+int）<br/>search.ts — POST /search（mode: hybrid|keyword；v2.11 over-retrieve+rerank）<br/>chat.ts — POST /chat（mode: full|context-only；v2.11 rerank 支援）<br/>reports.ts — GET/POST /reports（本地 + OpenAI 雙模式，v2.12）<br/>sessions.ts — CRUD /sessions + messages（context-only fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — GET status/source-docs/source-docs/:col/:file/preview/unprocessed/logs/metrics/snapshots, POST fetch/fetch-articles/extract-qa/dedupe-classify/metrics/metrics/save（v2.12，15 端點）<br/>eval.ts — POST sample/retrieval/reranking（v2.11）/context-relevance（v2.12 新增）/save, GET compare<br/>synonyms.ts — GET/POST /synonyms, PUT/DELETE /synonyms/{term}（v2.10 新增）"]
         HEP --> HENV["ApiResponse[T]<br/>Zod schema validation<br/>data / error / meta"]
         HEP -->|not_relevant / helpful| LS
         HEP -->|"pipeline/eval proxy"| QT
         HEP -->|"read/write"| SYNSTORE["synonyms-store.ts<br/>output/synonym_custom.json"]
         HAPI --> HSTORE["store/<br/>qa-store.ts（QAStore singleton，embedding optional）<br/>search-engine.ts（hybrid + keyword boost + keywordOnlySearch）<br/>session-store.ts（FileSessionStore）<br/>learning-store.ts<br/>synonyms-store.ts（雙層：28 靜態 + custom JSON，v2.10）"]
         HAPI --> HUTIL["utils/<br/>npy-reader.ts（NumPy .npy 解析）<br/>cosine-similarity.ts（Float32Array）<br/>keyword-boost.ts（4 層匹配）<br/>sanitize.ts（HTML escape 防 XSS）<br/>cjk-tokenizer.ts（CJK 分詞 2-gram）<br/>mode-detect.ts（hasOpenAI 偵測）"]
-        HAPI --> HSVC["services/<br/>embedding.ts（OpenAI wrapper）<br/>rag-chat.ts（RAG 問答 + v2.11 rerank 支援）<br/>reranker.ts（v2.11 新增，Haiku）<br/>pipeline-runner.ts（Python CLI 代理）"]
+        HAPI --> HSVC["services/<br/>embedding.ts（OpenAI wrapper）<br/>rag-chat.ts（RAG 問答 + v2.11 rerank 支援）<br/>reranker.ts（v2.11 新增，Haiku）<br/>context-relevance.ts（v2.12 新增，Claude haiku judge）<br/>report-generator-local.ts（v2.12 新增，本地週報）<br/>pipeline-runner.ts（Python CLI 代理）"]
         HAPI --> HSCHEMA["schemas/ 10 個<br/>Zod runtime validation<br/>qa / search / chat / feedback<br/>report / session / pipeline / eval<br/>synonyms / api-response"]
     end
 
     subgraph Legacy_API["Python API Layer（FastAPI，port 8001，legacy — 預計下線）"]
-        QA -.-> API["FastAPI QAStore singleton<br/>app/ 目錄<br/>277 tests passing"]
+        QA -.-> API["FastAPI QAStore singleton<br/>app/ 目錄<br/>（舊架構，主要由 Hono v2.12 取代）"]
         EMB -.-> API
         API -.-> EP["15 endpoints<br/>同 Hono 功能對等"]
     end
@@ -98,7 +98,7 @@ flowchart TD
 
     subgraph MultiLayerContext["Multi-Layer Context v2.11（離線 Enrichment + Contextual Embeddings）"]
         QA --> ENRICH["scripts/enrich_qa.py<br/>make enrich<br/>冪等 / 無 LLM / atomic write"]
-        SYN["utils/synonym_dict.py<br/>三層合併（v2.11）：METRIC_QUERY_MAP<br/>+ _SUPPLEMENTAL_SYNONYMS（v2.11 新增 31 項，共 59 項）<br/>+ output/synonym_custom.json<br/>@lru_cache(maxsize=1)"] --> ENRICH
+        SYN["utils/synonym_dict.py<br/>三層合併（v2.11）：METRIC_QUERY_MAP（基礎 28 術語）<br/>+ _SUPPLEMENTAL_SYNONYMS（v2.11 新增 31 術語，共 59 術語）<br/>+ output/synonym_custom.json<br/>@lru_cache(maxsize=1)"] --> ENRICH
         CTX["scripts/_generate_context.py（v2.11 新增）<br/>Claude Haiku situating context<br/>150-300 字/筆"] --> ENRICH
         SYNSTORE -->|"custom synonyms"| SYN
         FRESH["utils/freshness.py<br/>exp(-0.693×age/540d)<br/>min_score=0.5"] --> ENRICH
