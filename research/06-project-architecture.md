@@ -214,12 +214,12 @@ Notion 會議紀錄（87 份，2023–2026）
     - services/rag-chat.ts：RAG 問答（需要 OpenAI API key；v2.11 支援 reranker）
     - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
     - services/context-relevance.ts：Context Relevance 評估（v2.12 新增，Claude haiku judge；per-context 細分；escapeXml() 防 prompt injection）
-    - services/report-generator-local.ts：本地週報生成（v2.13 新增；6 維度 ECC 分析；無需 OpenAI API；含 RESEARCH_CITATIONS 業界研究引用庫）
+    - services/report-generator-local.ts：本地週報生成（v2.13 新增；6 維度 ECC 分析；無需 OpenAI API；含 RESEARCH_CITATIONS 業界研究引用庫；v2.14 加入 CitationTracker — `[N]` 標記 + `<!-- citations [...] -->` block）
     - services/report-evaluator.ts：報告品質規則式評估（v2.13 新增；5 維度 section_coverage/kb_citation/research/kb_links/alert_coverage；online scoring）
     - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / eval / synonyms / api-response
-  測試：Vitest（25 個 test files，215 tests passing）
+  測試：Vitest（25 個 test files，216 tests passing）
   部署：docker-compose（port 8002），未來支援 ECR + App Runner
   與 Python 並行運作（遷移期間）
             ↓ http://localhost:8002 (開發) 或 https://<service-v2>.awsapprunner.com (未來)
@@ -279,7 +279,7 @@ Notion 會議紀錄（87 份，2023–2026）
 - `components/admin/seoInsight/useEvalDashboard.ts`：metrics state 新增 3 個欄位
   - `avg_precision_at_k`、`avg_recall_at_k`、`f1_score`
 
-**測試結果（v2.11 snapshot）**：23 個 test files，179 tests passing（v2.12 更新至 24 files，189 tests；v2.13 更新至 25 files，215 tests）
+**測試結果（v2.11 snapshot）**：23 個 test files，179 tests passing（v2.12 更新至 24 files，189 tests；v2.13 更新至 25 files，215 tests；v2.14 更新至 216 tests）
 
 **評估基準線（v2.11，20 cases，top-k=5）**：
 | 指標 | 數值 | 說明 |
@@ -369,7 +369,7 @@ Notion 會議紀錄（87 份，2023–2026）
 
 1. **分層遷移**：新功能優先在 Hono 實作，Python 保留作為穩定層
 2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid/full，無 → keyword/context-only）
-3. **測試優先**：Vitest 路由覆蓋（25 個 test files，215 tests），unit + integration
+3. **測試優先**：Vitest 路由覆蓋（25 個 test files，216 tests），unit + integration
 4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取（optional，無 .npy 時 keyword-only mode）
 
 **實作成果（v2.12 更新）**：
@@ -377,7 +377,7 @@ Notion 會議紀錄（87 份，2023–2026）
 - ~44 個源碼檔案（routes 10、store 5、utils 5、middleware 4、schemas 10、services 4）
 - 25 個測試檔案（routes 10 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 3 + observability/laminar-scoring 2 + others 2）
 - 10 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、eval、synonyms）+ health 檢查
-- 215 tests passing
+- 216 tests passing
 - NumPy .npy 檔案解析引擎（向量相容）
 - 速率限制 middleware（同步 Python layer 配置）
 - Local Mode 降級（無 OpenAI 時 keyword-only search + context-only chat）
@@ -407,7 +407,7 @@ Notion 會議紀錄（87 份，2023–2026）
    - Unit tests：純邏輯（search、store、validators、cjk-tokenizer）
    - Integration tests：mocked external calls（OpenAI、Python CLI subprocess）
    - Router tests：完整 HTTP 請求/回應循環（含 Local Mode 降級測試）
-   - 100% endpoint 覆蓋（10 個 routers × ~2-6 tests per endpoint，v2.13 共 215 tests）
+   - 100% endpoint 覆蓋（10 個 routers × ~2-6 tests per endpoint，v2.14 共 216 tests）
 
 **向下相容**：
 

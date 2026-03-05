@@ -123,4 +123,44 @@ describe("evaluateReport()", () => {
     const result = evaluateReport(partial, []);
     expect(result.section_coverage).toBeCloseTo(3 / 6, 5);
   });
+
+  it("llm_augmented: 1 when report contains AI 輔助 marker", () => {
+    const hybridReport = FULL_SIX_SECTION_REPORT + "\n### 跨指標關聯分析（AI 輔助）\n分析內容";
+    const result = evaluateReport(hybridReport, []);
+    expect(result.llm_augmented).toBe(1);
+  });
+
+  it("llm_augmented: 1 when report contains AI 解讀 marker", () => {
+    const hybridReport = FULL_SIX_SECTION_REPORT + "\n### 流量信號 AI 解讀\n分析內容";
+    const result = evaluateReport(hybridReport, []);
+    expect(result.llm_augmented).toBe(1);
+  });
+
+  it("llm_augmented: 0 for standard template report", () => {
+    const result = evaluateReport(FULL_SIX_SECTION_REPORT, []);
+    expect(result.llm_augmented).toBe(0);
+  });
+
+  it("llm_augmented: 0 for empty report", () => {
+    const result = evaluateReport(EMPTY_REPORT, []);
+    expect(result.llm_augmented).toBe(0);
+  });
+
+  it("overall is not affected by llm_augmented field", () => {
+    const hybridReport = FULL_SIX_SECTION_REPORT + "\n### 跨指標關聯分析（AI 輔助）\n分析內容";
+    const templateResult = evaluateReport(FULL_SIX_SECTION_REPORT, []);
+    const hybridResult = evaluateReport(hybridReport, []);
+    // overall should be the same (llm_augmented not counted), section_coverage slightly differs
+    expect(hybridResult.llm_augmented).toBe(1);
+    expect(templateResult.llm_augmented).toBe(0);
+    // Both should use the same 5-dimension formula
+    const expectedTemplate =
+      (templateResult.section_coverage +
+        templateResult.kb_citation_count +
+        templateResult.has_research_citations +
+        templateResult.has_kb_links +
+        templateResult.alert_coverage) /
+      5;
+    expect(templateResult.overall).toBeCloseTo(expectedTemplate, 5);
+  });
 });

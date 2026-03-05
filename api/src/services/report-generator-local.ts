@@ -112,6 +112,52 @@ function kbLink(qa: QAItem): string {
     : `[知識庫 →](/admin/seoInsight/chunk/${qa.id})`;
 }
 
+// ── Citation tracker ──────────────────────────────────────────────────
+
+interface CitationItem {
+  readonly n: number;
+  readonly id: string;
+  readonly title: string;
+  readonly category: string;
+  readonly date: string;
+  readonly snippet: string;
+  readonly chunk_url: string;
+  readonly source_url: string | null;
+}
+
+class CitationTracker {
+  private readonly map = new Map<string, CitationItem>();
+  private counter = 0;
+
+  /** Register QA, return plain text `[N]` marker */
+  cite(qa: QAItem): string {
+    if (!this.map.has(qa.id)) {
+      this.counter += 1;
+      this.map.set(qa.id, {
+        n: this.counter,
+        id: qa.id,
+        title: [qa.source_title, qa.source_date].filter(Boolean).join("、"),
+        category: qa.category ?? "",
+        date: qa.source_date ?? "",
+        snippet: qa.answer
+          .replace(/\[(What|Why|How|Evidence)\]\s*/g, " ")
+          .trim()
+          .slice(0, 120),
+        chunk_url: `/admin/seoInsight/chunk/${qa.id}`,
+        source_url: qa.source_url ?? null,
+      });
+    }
+    return `[${this.map.get(qa.id)!.n}]`;
+  }
+
+  /** `<!-- citations [...] -->` block appended at end of report */
+  toBlock(): string {
+    if (this.map.size === 0) return "";
+    const items = [...this.map.values()].sort((a, b) => a.n - b.n);
+    return `\n<!-- citations ${JSON.stringify(items)} -->`;
+  }
+}
+
 // ── KB Citation formatter ─────────────────────────────────────────────
 
 /**
@@ -123,7 +169,7 @@ function kbLink(qa: QAItem): string {
  *   > **行動** …
  *   > **依據** …
  *   >
- *   > — SEO 1018、2023-10-18 ｜ [知識庫 →](link)
+ *   > — SEO 1018、2023-10-18 ｜ [知識庫 →](link)  [N]
  *
  * Fallback (no tags): plain snippet in blockquote with attribution.
  *
@@ -140,12 +186,14 @@ const TAG_LABEL_MAP: Record<string, string> = {
   Evidence: "依據",
 };
 
-function formatKbCitation(qa: QAItem, snippetLimit = 350): string {
+function formatKbCitation(qa: QAItem, tracker: CitationTracker, snippetLimit = 350): string {
   const segments = qa.answer.split(/\[(What|Why|How|Evidence)\]\s*/);
   const source = [qa.source_title, qa.source_date].filter(Boolean).join("、");
-  const attribution = [source ? `— ${source}` : "", kbLink(qa)]
+  const chunkLink = `[知識庫 →](/admin/seoInsight/chunk/${qa.id})`;
+  const citation = tracker.cite(qa);
+  const attribution = [source ? `— ${source}` : "", chunkLink, citation]
     .filter(Boolean)
-    .join(" ｜ ");
+    .join("  ");
 
   // Structured path: segments alternates ["prefix?", "Tag", "text", "Tag", "text", ...]
   if (segments.length > 1) {
@@ -159,14 +207,14 @@ function formatKbCitation(qa: QAItem, snippetLimit = 350): string {
       parts.push(`**${label}** ${truncated}`);
     }
     if (parts.length > 0) {
-      return [...parts, "", attribution].join("\n\n");
+      return [...parts.map(p => `> ${p}`), "", attribution].join("\n");
     }
   }
 
-  // Fallback: plain snippet with attribution
+  // Fallback: plain blockquote with attribution below
   const snippet =
     qa.answer.slice(0, snippetLimit) + (qa.answer.length > snippetLimit ? "…" : "");
-  return [snippet, "", attribution].join("\n\n");
+  return [`> ${snippet}`, "", attribution].join("\n");
 }
 
 // ── Health score ──────────────────────────────────────────────────────
@@ -203,12 +251,18 @@ function buildSituationSnapshot(
   core: readonly AlertMetric[],
   down: readonly AlertMetric[],
   qaMap: Map<string, readonly QAItem[]>,
+  tracker: CitationTracker,
+  llmAnalysis?: string | null,
 ): string {
   const { score, label } = calcHealthScore(down, core);
   const lines: string[] = [
     `${SECTION_HEADINGS[0]}本週 SEO 情勢快照\n`,
     `**SEO 健康評分：${score}/100（${label}）**\n`,
   ];
+
+  if (llmAnalysis) {
+    lines.push("### 跨指標關聯分析（AI 輔助）\n", llmAnalysis, "");
+  }
 
   // Top phenomena summary
   const phenomena = [
@@ -251,10 +305,10 @@ function buildSituationSnapshot(
       const related = qaMap.get(m.name) ?? [];
       if (related.length > 0) {
         lines.push("**知識庫佐證**\n");
-        lines.push(formatKbCitation(related[0]!, 350), "");
+        lines.push(formatKbCitation(related[0]!, tracker, 350), "");
         if (related.length > 1) {
           lines.push("**延伸參考**\n");
-          lines.push(formatKbCitation(related[1]!, 200), "");
+          lines.push(formatKbCitation(related[1]!, tracker, 200), "");
         }
       } else {
         lines.push(
@@ -273,6 +327,7 @@ function buildTrafficSignals(
   core: readonly AlertMetric[],
   down: readonly AlertMetric[],
   qaMap: Map<string, readonly QAItem[]>,
+  llmAnalysis?: string | null,
 ): string {
   const lines: string[] = [`${SECTION_HEADINGS[1]}流量信號解讀\n`];
 
@@ -327,6 +382,10 @@ function buildTrafficSignals(
     }
   } else {
     lines.push("（本期無 CTR / 曝光 / 點擊核心指標數據）\n");
+  }
+
+  if (llmAnalysis) {
+    lines.push("### 流量信號 AI 解讀\n", llmAnalysis, "");
   }
 
   // 各流量來源趨勢
@@ -548,19 +607,21 @@ function buildPriorityActions(
   return lines.join("\n");
 }
 
-/** 六、知識庫引用 */
-function buildKbCitations(topQas: readonly QAItem[]): string {
-  const lines: string[] = [`${SECTION_HEADINGS[5]}知識庫引用\n`];
+/** 六、來源 */
+function buildKbCitations(topQas: readonly QAItem[], tracker: CitationTracker): string {
+  const lines: string[] = [`${SECTION_HEADINGS[5]}來源\n`];
 
   if (topQas.length === 0) {
     lines.push("（本週指標未找到直接對應的 Q&A）");
     return lines.join("\n");
   }
 
-  const cited = topQas.slice(0, 6);
+  const cited = topQas.slice(0, 8);
   for (const qa of cited) {
-    lines.push(`**Q**：${qa.question}`);
-    lines.push(formatKbCitation(qa, 400), "");
+    const n = tracker.cite(qa);
+    const title = [qa.source_title, qa.source_date].filter(Boolean).join("、") || qa.question.slice(0, 40);
+    const snippet = qa.answer.replace(/\[(What|Why|How|Evidence)\]\s*/g, " ").trim().slice(0, 80);
+    lines.push(`${n} **${title}** — ${snippet}… [→](/admin/seoInsight/chunk/${qa.id})`);
   }
 
   return lines.join("\n");
@@ -609,6 +670,8 @@ export async function generateReportLocal(
   metrics: Record<string, unknown>,
   reportDate: string,
   qaCount: number,
+  situationAnalysis?: string | null,
+  trafficAnalysis?: string | null,
 ): Promise<string> {
   const typedMetrics = metrics as Record<string, MetricData>;
   const alerts = detectAlerts(typedMetrics);
@@ -661,19 +724,24 @@ export async function generateReportLocal(
   }
 
   // Build all 6 sections
-  const s1 = buildSituationSnapshot(alerts, core, down, qaMap);
-  const s2 = buildTrafficSignals(core, down, qaMap);
+  const tracker = new CitationTracker();
+  const s1 = buildSituationSnapshot(alerts, core, down, qaMap, tracker, situationAnalysis);
+  const s2 = buildTrafficSignals(core, down, qaMap, trafficAnalysis);
   const s3 = buildTechnicalHealth(typedMetrics, down, qaMap);
   const s4 = buildIntentMapping(core, down, qaMap);
   const s5 = buildPriorityActions(down, up, topQas);
-  const s6 = buildKbCitations(topQas);
+  const s6 = buildKbCitations(topQas, tracker);
 
   // Meta block
   const kbVersion = getKbVersion();
   const kbLabel = qaCount > 0 ? `${qaCount} Q&A` : "知識庫";
+  const llmUsed = !!situationAnalysis || !!trafficAnalysis;
+  const generationMode = llmUsed
+    ? "Hybrid Mode（本地模板 + Claude Code 語意輔助）"
+    : "Template Mode（本地模板引擎，不呼叫任何 LLM API）";
   const metaBlock = `---
 **報告資訊**
-- 生成方式：本地模板引擎 v1.0（Template Mode，不呼叫任何 LLM API）
+- 生成方式：${generationMode}
 - 知識庫版本：${kbVersion}（${kbLabel}，4 個來源集合）
 - 分析框架：Semrush 2025 / GSC 官方指引 / First Page Sage 2025 排名因素
 - 分析維度：6 維度（情勢 / 流量 / 技術 / 意圖 / 行動 / 知識庫）
@@ -681,7 +749,7 @@ export async function generateReportLocal(
 ---
 `;
 
-  return [metaBlock, s1, s2, s3, s4, s5, s6].join("\n");
+  return [metaBlock, s1, s2, s3, s4, s5, s6].join("\n") + tracker.toBlock();
 }
 
 /**

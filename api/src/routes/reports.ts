@@ -111,7 +111,13 @@ reportsRoute.post("/generate", async (c) => {
     let reportContent: string;
     try {
       const qaCount = qaStore.count;
-      reportContent = await generateReportLocal(snapshotMetrics, reportDate, qaCount);
+      reportContent = await generateReportLocal(
+        snapshotMetrics,
+        reportDate,
+        qaCount,
+        parsed.data.situation_analysis,
+        parsed.data.traffic_analysis,
+      );
       const dateOnly = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const hash8 = createHash("sha1").update(reportContent).digest("hex").slice(0, 8);
       const dateKey = `${dateOnly}_${hash8}`;
@@ -134,6 +140,7 @@ reportsRoute.post("/generate", async (c) => {
           scoreEvent("report_has_links", evalResult.has_kb_links),
           scoreEvent("report_alert_coverage", evalResult.alert_coverage),
           scoreEvent("report_overall", evalResult.overall),
+          scoreEvent("report_llm_augmented", evalResult.llm_augmented),
         ]);
       } catch {
         // Scoring failures must never affect the main response path.

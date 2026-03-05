@@ -20,6 +20,8 @@ export interface ReportEvalResult {
   alert_coverage: number;
   /** Average of the 5 scores above */
   overall: number;
+  /** 1 if report contains Claude Code LLM-augmented sections, else 0 (not counted in overall) */
+  llm_augmented: number;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────
@@ -65,6 +67,7 @@ export function evaluateReport(
       has_kb_links: 0,
       alert_coverage: 0,
       overall: 0,
+      llm_augmented: 0,
     };
   }
 
@@ -112,6 +115,9 @@ export function evaluateReport(
       alert_coverage) /
     5;
 
+  const llm_augmented =
+    content.includes("AI 輔助") || content.includes("AI 解讀") ? 1 : 0;
+
   return {
     section_coverage,
     kb_citation_count,
@@ -119,6 +125,7 @@ export function evaluateReport(
     has_kb_links,
     alert_coverage,
     overall,
+    llm_augmented,
   };
 }
 
