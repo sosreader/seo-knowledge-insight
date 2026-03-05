@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-import httpx
+from scrapling.fetchers import StealthyFetcher, DynamicFetcher
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +118,9 @@ def _parse_rss_feed(feed_url: str) -> list[dict]:
 def _fetch_single_url(url: str, use_playwright: bool = False) -> dict:
     """Fetch a single Medium article by URL.
 
+    Uses StealthyFetcher (TLS fingerprint spoofing) to bypass Medium 403.
+    Falls back to DynamicFetcher (headless browser) on failure.
+
     Returns dict with: guid, title, url, published, html_content
     """
     _validate_medium_url(url)
@@ -126,31 +129,28 @@ def _fetch_single_url(url: str, use_playwright: bool = False) -> dict:
     if use_playwright:
         return _fetch_single_url_playwright(url)
 
-    resp = httpx.get(url, follow_redirects=True, timeout=30)
-    if resp.status_code == 403:
-        logger.info("  httpx 403，改用 Playwright: %s", url)
+    try:
+        page = StealthyFetcher(auto_match=False).fetch(url, timeout=30000)
+        if page.status != 200:
+            raise ValueError(f"HTTP {page.status}")
+        html = page.html_content
+        result = _parse_article_html(url, html)
+        # Medium uses React SSR: StealthyFetcher may return the JS shell without article body.
+        # Detect shell by checking title ("Medium") or thin article content.
+        if result["title"] in ("Medium", "Untitled") or _is_paywalled(result["html_content"]):
+            raise ValueError(f"JS shell detected (title={result['title']!r}), needs browser render")
+        return result
+    except Exception as e:
+        logger.info("  StealthyFetcher 失敗 (%s)，改用 DynamicFetcher: %s", e, url)
         return _fetch_single_url_playwright(url)
-    resp.raise_for_status()
-    return _parse_article_html(url, resp.text)
 
 
 def _fetch_single_url_playwright(url: str) -> dict:
-    """Fetch a single Medium article using Playwright headless browser."""
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        page = browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        ).new_page()
-        page.goto(url, wait_until="domcontentloaded", timeout=30000)
-        # Wait for article content to load
-        try:
-            page.wait_for_selector("article", timeout=8000)
-        except Exception:
-            pass
-        html = page.content()
-        browser.close()
-    return _parse_article_html(url, html)
+    """Fallback: DynamicFetcher (Scrapling's Playwright wrapper, JS-rendered)."""
+    page = DynamicFetcher(auto_match=False).fetch(
+        url, timeout=60000, network_idle=True, render_wait=2.0,
+    )
+    return _parse_article_html(url, page.html_content)
 
 
 def _strip_medium_ui_elements(soup: "BeautifulSoup", base_url: str) -> None:
@@ -167,7 +167,9 @@ def _strip_medium_ui_elements(soup: "BeautifulSoup", base_url: str) -> None:
     # 1. Fix relative URLs before cleaning (avoid broken links in output)
     medium_base = "https://medium.com"
     for tag in soup.find_all(href=True):
-        href = tag["href"]
+        href = tag.attrs.get("href") if tag.attrs else None
+        if not href:
+            continue
         if href.startswith("/?") or href.startswith("/@"):
             tag["href"] = medium_base + href
         elif href.startswith("/") and not href.startswith("//"):
@@ -180,7 +182,10 @@ def _strip_medium_ui_elements(soup: "BeautifulSoup", base_url: str) -> None:
     _BYLINE_PATTERNS = re.compile(r'/\?source=.*byline|/@[a-zA-Z0-9_]+\?source=')
     _BLOCK_STOP = ("article", "section", "div", "header", "footer", "p", "h1", "h2", "h3")
     for a_tag in soup.find_all("a", href=True):
-        if _BYLINE_PATTERNS.search(a_tag["href"]):
+        href = a_tag.attrs.get("href") if a_tag.attrs else None
+        if not href:
+            continue
+        if _BYLINE_PATTERNS.search(href):
             parent = a_tag.parent
             while parent and parent.name not in _BLOCK_STOP:
                 parent = parent.parent
@@ -274,10 +279,11 @@ def _scrape_article_urls_sitemap(
     sitemap_url: str = "https://genehong.medium.com/sitemap/sitemap.xml",
 ) -> list[str]:
     """Fetch all article URLs from Medium's sitemap.xml (fast, no JS needed)."""
+    import httpx as _httpx
     _validate_medium_url(sitemap_url)
     logger.info("[Sitemap] 從 sitemap 取得完整文章清單: %s", sitemap_url)
 
-    resp = httpx.get(sitemap_url, follow_redirects=True, timeout=30)
+    resp = _httpx.get(sitemap_url, follow_redirects=True, timeout=30)
     resp.raise_for_status()
 
     # Extract <loc> URLs that look like articles (have a slug path)
@@ -442,7 +448,7 @@ def fetch_medium_articles(
                     article = _fetch_single_url(url, use_playwright=use_playwright)
                     articles.append(article)
                     time.sleep(1)  # rate limiting
-                except (httpx.HTTPError, ValueError) as e:
+                except (ValueError, RuntimeError) as e:
                     logger.warning("擷取失敗: %s — %s", url, e)
                 except Exception as e:
                     logger.error("擷取意外錯誤: %s", url, exc_info=True)

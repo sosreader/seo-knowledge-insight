@@ -4,7 +4,7 @@ from __future__ import annotations
 import importlib
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -202,6 +202,54 @@ class TestIsPaywalled:
     def test_499_chars_is_paywalled(self):
         content = "<p>" + "A" * 499 + "</p>"
         assert self._check(content) is True
+
+
+class TestFetchSingleUrl:
+    """Tests for _fetch_single_url() using Scrapling StealthyFetcher."""
+
+    def _make_mock_page(self, status: int = 200, html: str = "") -> MagicMock:
+        page = MagicMock()
+        page.status = status
+        page.html_content = html or "<html><article><h1>Test</h1><p>Content here!</p></article></html>"
+        return page
+
+    def test_fetch_single_url_uses_stealth_fetcher(self):
+        mod = _import_fetch_medium()
+        mock_page = self._make_mock_page()
+
+        with patch("scrapling.fetchers.StealthyFetcher.fetch", return_value=mock_page):
+            result = mod._fetch_single_url("https://genehong.medium.com/test-article")
+
+        assert result["url"] == "https://genehong.medium.com/test-article"
+        assert "html_content" in result
+
+    def test_fetch_single_url_fallback_to_dynamic_on_failure(self):
+        mod = _import_fetch_medium()
+        mock_page = self._make_mock_page()
+
+        with (
+            patch("scrapling.fetchers.StealthyFetcher.fetch", side_effect=RuntimeError("connection error")),
+            patch.object(mod, "_fetch_single_url_playwright", return_value={"url": "https://genehong.medium.com/test", "guid": "https://genehong.medium.com/test", "title": "Test", "published": "", "html_content": "<article></article>"}) as mock_fallback,
+        ):
+            result = mod._fetch_single_url("https://genehong.medium.com/test")
+            mock_fallback.assert_called_once_with("https://genehong.medium.com/test")
+
+    def test_fetch_single_url_validates_url(self):
+        """SSRF guard: non-Medium URLs must be rejected before any network call."""
+        mod = _import_fetch_medium()
+        with pytest.raises(ValueError, match="allowlist"):
+            mod._fetch_single_url("https://evil.com/steal")
+
+    def test_fetch_single_url_non_200_falls_back(self):
+        mod = _import_fetch_medium()
+        mock_page = self._make_mock_page(status=403)
+
+        with (
+            patch("scrapling.fetchers.StealthyFetcher.fetch", return_value=mock_page),
+            patch.object(mod, "_fetch_single_url_playwright", return_value={"url": "https://genehong.medium.com/test", "guid": "https://genehong.medium.com/test", "title": "Test", "published": "", "html_content": "<article></article>"}) as mock_fallback,
+        ):
+            mod._fetch_single_url("https://genehong.medium.com/test")
+            mock_fallback.assert_called_once()
 
 
 class TestMediumIndexOperations:

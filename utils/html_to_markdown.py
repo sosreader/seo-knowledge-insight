@@ -55,31 +55,26 @@ def html_to_markdown(html: str, strip_tags: tuple[str, ...] = ("script", "style"
     return _cleanup(md)
 
 
-# Medium-specific UI strings that appear as inline or standalone noise.
-# Order matters: inline substitutions before line-level cleanups.
-_MEDIUM_INLINE_NOISE = re.compile(
-    r'Press enter or click to view image in full size',
+# Medium-specific UI strings to strip wherever they appear in the Markdown output.
+# These come from Playwright-rendered DOM (accessibility buttons, newsletter prompts).
+_MEDIUM_NOISE_INLINE = re.compile(
+    r'(Press enter or click to view image in full size'
+    r'|Join Medium for free to get updates from this writer\.?'
+    r'|Get .{1,80}[\u2018\u2019\u0027]s stories in your inbox'
+    r')',
     re.IGNORECASE,
-)
-_MEDIUM_LINE_NOISE = re.compile(
-    r'^\s*(Get .+?[\u2018\u2019\u0027]s stories in your inbox'
-    r'|Join Medium for free to get updates from this writer'
-    r')\s*$',
-    re.IGNORECASE | re.MULTILINE,
 )
 
 
 def _cleanup(md: str) -> str:
     """Post-process Markdown: remove excess blank lines, fix formatting."""
-    # 1. Strip inline Medium UI noise (may appear before image refs on same line)
-    md = _MEDIUM_INLINE_NOISE.sub('', md)
-    # 2. Strip full-line Medium promo noise
-    md = _MEDIUM_LINE_NOISE.sub('', md)
-    # 3. Collapse 3+ consecutive blank lines to 2
+    # 1. Strip Medium UI noise wherever it appears (inline or standalone)
+    md = _MEDIUM_NOISE_INLINE.sub('', md)
+    # 2. Collapse 3+ consecutive blank lines to 2
     md = re.sub(r'\n{3,}', '\n\n', md)
-    # 4. Remove trailing whitespace per line
+    # 3. Remove trailing whitespace per line
     md = '\n'.join(line.rstrip() for line in md.splitlines())
-    # 5. Ensure single trailing newline
+    # 4. Ensure single trailing newline
     return md.strip() + '\n'
 
 
