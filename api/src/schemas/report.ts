@@ -14,6 +14,7 @@ export interface ReportSummary {
   readonly date: string;
   readonly filename: string;
   readonly size_bytes: number;
+  readonly meta?: ReportMeta;
 }
 
 export interface ReportMeta {

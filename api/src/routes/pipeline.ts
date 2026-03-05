@@ -74,9 +74,10 @@ function countQAPerMeeting(): number {
 }
 
 function countQAPerArticle(): number {
-  const dir = paths.qaPerArticleDir;
-  if (!existsSync(dir)) return 0;
-  return readdirSync(dir).filter((f) => f.endsWith("_qa.json")).length;
+  // Article QA files are also stored in qa_per_meeting/ (shared directory)
+  // This function is kept for API compatibility but returns 0 since
+  // countQAPerMeeting() already counts all QA files (meetings + articles)
+  return 0;
 }
 
 function countQAFinal(): number {
@@ -152,6 +153,8 @@ function buildPipelineStatus(): PipelineStatusResponse {
 }
 
 function findUnprocessed(): readonly UnprocessedItem[] {
+  // All QA JSONs are written to qa_per_meeting/ (including articles)
+  const qaDir = join(paths.outputDir, "qa_per_meeting");
   const sources: ReadonlyArray<{
     readonly mdDir: string;
     readonly qaDir: string;
@@ -159,22 +162,22 @@ function findUnprocessed(): readonly UnprocessedItem[] {
   }> = [
     {
       mdDir: join(paths.rawDataDir, "markdown"),
-      qaDir: join(paths.outputDir, "qa_per_meeting"),
+      qaDir,
       sourceCollection: "seo-meetings",
     },
     {
       mdDir: paths.rawMediumMdDir,
-      qaDir: paths.qaPerArticleDir,
+      qaDir,
       sourceCollection: "genehong-medium",
     },
     {
       mdDir: paths.rawIthelpMdDir,
-      qaDir: paths.qaPerArticleDir,
+      qaDir,
       sourceCollection: "ithelp-sc-kpi",
     },
     {
       mdDir: paths.rawGoogleCasesMdDir,
-      qaDir: paths.qaPerArticleDir,
+      qaDir,
       sourceCollection: "google-case-studies",
     },
   ];
@@ -282,9 +285,10 @@ function buildSourceDocs(): readonly SourceDocEntry[] {
           .map((f) => f.replace(/_qa\.json$/, ".md"))
       : []
   );
+  // Article QA files are also stored in qa_per_meeting/ (shared directory)
   const processedArticles = new Set(
-    existsSync(paths.qaPerArticleDir)
-      ? readdirSync(paths.qaPerArticleDir)
+    existsSync(qaPerMeetingDir)
+      ? readdirSync(qaPerMeetingDir)
           .filter((f) => f.endsWith("_qa.json"))
           .map((f) => f.replace(/_qa\.json$/, ".md"))
       : []

@@ -129,7 +129,7 @@ class CitationTracker {
   private readonly map = new Map<string, CitationItem>();
   private counter = 0;
 
-  /** Register QA, return plain text `[N]` marker */
+  /** Register QA, return markdown link `[N](/admin/seoInsight/{id})` badge */
   cite(qa: QAItem): string {
     if (!this.map.has(qa.id)) {
       this.counter += 1;
@@ -147,7 +147,8 @@ class CitationTracker {
         source_url: qa.source_url ?? null,
       });
     }
-    return `[${this.map.get(qa.id)!.n}]`;
+    const item = this.map.get(qa.id)!;
+    return `[${item.n}](/admin/seoInsight/${qa.id})`;
   }
 
   /** `<!-- citations [...] -->` block appended at end of report */

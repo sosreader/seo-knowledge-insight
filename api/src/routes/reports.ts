@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, existsSync, openSync, readSync, closeSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
@@ -37,6 +37,20 @@ function parseReportMeta(content: string): ReportMeta | undefined {
   }
 }
 
+/** Read last N bytes of a file (for parsing meta from tail without reading entire file). */
+function readTail(filepath: string, bytes: number): string {
+  const { size } = statSync(filepath);
+  const start = Math.max(0, size - bytes);
+  const buf = Buffer.alloc(Math.min(bytes, size));
+  const fd = openSync(filepath, "r");
+  try {
+    readSync(fd, buf, 0, buf.length, start);
+    return buf.toString("utf-8");
+  } finally {
+    closeSync(fd);
+  }
+}
+
 function listReportFiles(): readonly ReportSummary[] {
   const dir = paths.outputDir;
   if (!existsSync(dir)) return [];
@@ -45,16 +59,22 @@ function listReportFiles(): readonly ReportSummary[] {
     .filter((f) => REPORT_PATTERN.test(f))
     .map((f) => {
       const m = REPORT_PATTERN.exec(f)!;
+      const filepath = join(dir, f);
+      const st = statSync(filepath);
+      // Parse meta from file tail (report_meta is appended at the end, ~200 bytes)
+      const tail = readTail(filepath, 300);
+      const meta = parseReportMeta(tail);
       return {
         date: m[1]!,
         filename: f,
-        size_bytes: statSync(join(dir, f)).size,
-        mtime: statSync(join(dir, f)).mtimeMs,
+        size_bytes: st.size,
+        mtime: st.mtimeMs,
+        meta,
       };
     })
     .sort((a, b) => b.mtime - a.mtime);
 
-  return files.map(({ date, filename, size_bytes }) => ({ date, filename, size_bytes }));
+  return files.map(({ date, filename, size_bytes, meta }) => ({ date, filename, size_bytes, meta }));
 }
 
 export const reportsRoute = new Hono();

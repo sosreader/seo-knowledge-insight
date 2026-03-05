@@ -159,9 +159,9 @@ function setupTestData() {
     "utf-8"
   );
 
-  // QA per article (one Medium article processed)
+  // QA per article — all QA JSONs go to qa_per_meeting/ (same as meetings)
   writeFileSync(
-    join(qaPerArticleDir, "ai_seo_strategy_qa.json"),
+    join(qaPerMeetingDir, "ai_seo_strategy_qa.json"),
     JSON.stringify({ qa_pairs: [{ q: "Q1", a: "A1" }] }),
     "utf-8"
   );
@@ -233,7 +233,7 @@ describe("GET /api/v1/pipeline/status", () => {
     expect(fetchGoogle.name).toBe("fetch-google");
     expect(fetchGoogle.count).toBe(2); // 2 google case study files
     expect(extract.name).toBe("extract-qa");
-    expect(extract.count).toBe(2); // 1 qa_per_meeting + 1 qa_per_article
+    expect(extract.count).toBe(2); // 2 qa JSONs in qa_per_meeting/
     expect(extract.detail).toContain("2 / 7"); // 2 extracted out of 7 total
     expect(dedupe.name).toBe("dedupe-classify");
     expect(dedupe.count).toBe(2); // 2 qa_final items
