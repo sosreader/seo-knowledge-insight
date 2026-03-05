@@ -234,9 +234,9 @@ Notion 會議紀錄（87 份，2023–2026）
   - 5 個 Laminar score events 直接記錄
 - `scripts/_eval_laminar.py`（新建，v2.12 增強）：Laminar 離線 eval run
   - 5 個 evaluator：precision, recall, f1, hit_rate, mrr
-  - CLI 參數：`--top-k 5` 改變檢索深度、`--group "retrieval-eval"` 指定 group（預設固定值，便於趨勢圖）
+  - CLI 參數：`--top-k 5` 改變檢索深度、`--group "keyword-retrieval"` 指定 group（預設固定值，便於趨勢圖）
   - 執行者防護：`safe_executor` try-except 包裝，失敗時回傳空列表
-  - Padding workaround：補 2 個虛擬 items 防 Laminar SDK span flush bug
+  - NDCG@K 修正：每個 expected_category 只計算一次（防止 NDCG > 1）
   - 並發限制：`concurrency_limit=1` 避免上傳失敗
 
 **Phase 1 — Synonym Dict 擴充**
@@ -1130,7 +1130,7 @@ qa_final.json → enrich_qa.py → qa_enriched.json
 - 評估器數量：5 個（precision、recall、f1、hit_rate、mrr）
 - 資料來源：優先 `qa_enriched.json`，降級至 `qa_final.json`
 - 並發策略：`concurrency_limit=1`（避免 Laminar SDK 上傳失敗）
-- Group 名稱：固定 `"retrieval-eval"`（所有 run 納入同一組，利於 Dashboard 折線圖）
+- Group 名稱：固定 `"keyword-retrieval"`（所有 run 納入同一組，利於 Dashboard 折線圖）
 
 **使用方式**：
 ```bash
@@ -1142,7 +1142,7 @@ python scripts/_eval_laminar.py --group custom_name  # 自訂 group
 **實作細節**：
 - Executor：`_keyword_search()` 執行關鍵字搜尋，回傳精簡欄位（id/category/question[:120]）
 - Safe executor：try-except 防護，搜尋失敗回傳空列表而非拋例外
-- Padding workaround：Laminar SDK 最後 2 筆 span 有時未能 flush，補 2 個虛擬 items（`__padding__`）確保真實 golden cases 不被截斷
+- NDCG@K bug 修正：每個 expected_category 只計算第一次命中，確保 NDCG ≤ 1
 - 連接 Laminar 後自動推送評估結果至 Dashboard，可追蹤歷史趨勢
 
 #### 2. **`api/scripts/eval-semantic.ts`** — 語意 + Reranker 對比評估
@@ -1197,7 +1197,7 @@ eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboar
 
 ### Laminar Evaluators（v2.13，4 層架構）
 
-#### Layer 2 — retrieval-eval group（8 evaluators）
+#### Layer 2 — keyword-retrieval group（8 evaluators）
 
 | 評估器 | 計算方式 | 學術依據 |
 |--------|---------|---------|

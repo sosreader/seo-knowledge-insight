@@ -30,14 +30,14 @@
 
 | 指標 | 學術依據 | Laminar group |
 |------|---------|--------------|
-| `hit_rate` | TREC | retrieval-eval |
-| `mrr` | TREC（Voorhees）| retrieval-eval |
-| `precision_at_k` | IR 標準 | retrieval-eval |
-| `recall_at_k` | IR 標準 | retrieval-eval |
-| `f1_at_k` | IR 標準 | retrieval-eval |
-| `ndcg_at_k` | Jarvelin & Kekalainen (2002) | retrieval-eval（v2.13 新增）|
-| `top1_category_match` | 本專案 | retrieval-eval（v2.13 新增）|
-| `top5_category_coverage` | 本專案（≡ Recall@K）| retrieval-eval（v2.13 新增）|
+| `hit_rate` | TREC | keyword-retrieval |
+| `mrr` | TREC（Voorhees）| keyword-retrieval |
+| `precision_at_k` | IR 標準 | keyword-retrieval |
+| `recall_at_k` | IR 標準 | keyword-retrieval |
+| `f1_at_k` | IR 標準 | keyword-retrieval |
+| `ndcg_at_k` | Jarvelin & Kekalainen (2002) | keyword-retrieval（v2.13 新增）|
+| `top1_category_match` | 本專案 | keyword-retrieval（v2.13 新增）|
+| `top5_category_coverage` | 本專案（≡ Recall@K）| keyword-retrieval（v2.13 新增）|
 
 ### Layer 3 — Retrieval Enhancement（無 API 成本）
 

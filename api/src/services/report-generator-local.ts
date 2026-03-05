@@ -112,6 +112,63 @@ function kbLink(qa: QAItem): string {
     : `[知識庫 →](/admin/seoInsight/chunk/${qa.id})`;
 }
 
+// ── KB Citation formatter ─────────────────────────────────────────────
+
+/**
+ * Parse [What]/[Why]/[How]/[Evidence] structured QA answer into a readable blockquote.
+ *
+ * Structured output (when tags present):
+ *   > **現象** …
+ *   > **原因** …
+ *   > **行動** …
+ *   > **依據** …
+ *   >
+ *   > — SEO 1018、2023-10-18 ｜ [知識庫 →](link)
+ *
+ * Fallback (no tags): plain snippet in blockquote with attribution.
+ *
+ * Label map (based on RAGAS / NVIDIA 4-layer narrative):
+ *   [What] → 現象 (observation)
+ *   [Why]  → 原因 (mechanism)
+ *   [How]  → 行動 (action)
+ *   [Evidence] → 依據 (evidence)
+ */
+const TAG_LABEL_MAP: Record<string, string> = {
+  What: "現象",
+  Why: "原因",
+  How: "行動",
+  Evidence: "依據",
+};
+
+function formatKbCitation(qa: QAItem, snippetLimit = 350): string {
+  const segments = qa.answer.split(/\[(What|Why|How|Evidence)\]\s*/);
+  const source = [qa.source_title, qa.source_date].filter(Boolean).join("、");
+  const attribution = [source ? `— ${source}` : "", kbLink(qa)]
+    .filter(Boolean)
+    .join(" ｜ ");
+
+  // Structured path: segments alternates ["prefix?", "Tag", "text", "Tag", "text", ...]
+  if (segments.length > 1) {
+    const parts: string[] = [];
+    for (let i = 1; i < segments.length; i += 2) {
+      const tag = segments[i]!;
+      const text = (segments[i + 1] ?? "").trim();
+      if (!text) continue;
+      const label = TAG_LABEL_MAP[tag] ?? tag;
+      const truncated = text.slice(0, snippetLimit) + (text.length > snippetLimit ? "…" : "");
+      parts.push(`**${label}** ${truncated}`);
+    }
+    if (parts.length > 0) {
+      return [...parts, "", attribution].join("\n\n");
+    }
+  }
+
+  // Fallback: plain snippet with attribution
+  const snippet =
+    qa.answer.slice(0, snippetLimit) + (qa.answer.length > snippetLimit ? "…" : "");
+  return [snippet, "", attribution].join("\n\n");
+}
+
 // ── Health score ──────────────────────────────────────────────────────
 
 interface HealthScore {
@@ -193,26 +250,11 @@ function buildSituationSnapshot(
       );
       const related = qaMap.get(m.name) ?? [];
       if (related.length > 0) {
-        const qa = related[0]!;
-        const snippet = qa.answer.slice(0, 350) + (qa.answer.length > 350 ? "…" : "");
-        const source = [qa.source_title, qa.source_date].filter(Boolean).join("、");
-        lines.push(
-          `【知識庫佐證】${snippet}`,
-          source ? `來源：${source}` : "",
-          `${kbLink(qa)}`,
-          "",
-        );
-        // Second citation if available
+        lines.push("**知識庫佐證**\n");
+        lines.push(formatKbCitation(related[0]!, 350), "");
         if (related.length > 1) {
-          const qa2 = related[1]!;
-          const snippet2 = qa2.answer.slice(0, 200) + (qa2.answer.length > 200 ? "…" : "");
-          const source2 = [qa2.source_title, qa2.source_date].filter(Boolean).join("、");
-          lines.push(
-            `【延伸參考】${snippet2}`,
-            source2 ? `來源：${source2}` : "",
-            `${kbLink(qa2)}`,
-            "",
-          );
+          lines.push("**延伸參考**\n");
+          lines.push(formatKbCitation(related[1]!, 200), "");
         }
       } else {
         lines.push(
@@ -517,15 +559,8 @@ function buildKbCitations(topQas: readonly QAItem[]): string {
 
   const cited = topQas.slice(0, 6);
   for (const qa of cited) {
-    const snippet = qa.answer.slice(0, 400) + (qa.answer.length > 400 ? "…" : "");
-    const source = [qa.source_title, qa.source_date].filter(Boolean).join("、");
-    lines.push(
-      `**Q**：${qa.question}`,
-      `**A（節錄）**：${snippet}`,
-      source ? `**來源**：${source}` : "",
-      `**連結**：${kbLink(qa)}`,
-      "",
-    );
+    lines.push(`**Q**：${qa.question}`);
+    lines.push(formatKbCitation(qa, 400), "");
   }
 
   return lines.join("\n");

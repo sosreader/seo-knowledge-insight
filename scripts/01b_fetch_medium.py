@@ -173,16 +173,18 @@ def _strip_medium_ui_elements(soup: "BeautifulSoup", base_url: str) -> None:
         elif href.startswith("/") and not href.startswith("//"):
             tag["href"] = medium_base + href
 
-    # 2. Remove byline/author blocks: <a> tags with /?source= or /@author patterns
-    #    These appear in header and footer signature sections
-    _BYLINE_PATTERNS = re.compile(r'/\?source=|/@[a-zA-Z0-9_]+')
+    # 2. Remove byline/author blocks: links containing "byline" in /?source= pattern
+    #    Tightened to avoid removing author-curated "延伸閱讀" article links.
+    #    Byline hrefs look like: /?source=post_page---byline--<hash>
+    #    Stop list includes h1-h3 to avoid walking past headings into article content.
+    _BYLINE_PATTERNS = re.compile(r'/\?source=.*byline|/@[a-zA-Z0-9_]+\?source=')
+    _BLOCK_STOP = ("article", "section", "div", "header", "footer", "p", "h1", "h2", "h3")
     for a_tag in soup.find_all("a", href=True):
         if _BYLINE_PATTERNS.search(a_tag["href"]):
-            # Walk up to remove the enclosing block (div/section/p)
             parent = a_tag.parent
-            while parent and parent.name not in ("article", "section", "div", "header", "footer", "p"):
+            while parent and parent.name not in _BLOCK_STOP:
                 parent = parent.parent
-            if parent and parent.name in ("div", "section", "header", "footer"):
+            if parent and parent.name in ("div", "section", "header", "footer", "h1", "h2", "h3"):
                 parent.decompose()
             else:
                 a_tag.decompose()
@@ -199,11 +201,19 @@ def _strip_medium_ui_elements(soup: "BeautifulSoup", base_url: str) -> None:
     # 4. Remove subscription CTA blocks
     _CTA_PATTERNS = re.compile(
         r'Join Medium for free|stories in your inbox|Follow to never miss|Get unlimited access|'
-        r'Membership|Read every story from|Already a member',
+        r'Read every story from|Already a member',
         re.IGNORECASE,
     )
+    # 4a. Handle headings with mixed markup (e.g. <h2>Get <a>Author</a>'s stories in your inbox</h2>)
+    #     find_all(string=...) only matches leaf NavigableString nodes, missing cross-tag text.
+    #     Normalize whitespace (replace \xa0 non-breaking spaces) before matching.
+    for heading in list(soup.find_all(["h1", "h2", "h3"])):
+        normalized = heading.get_text().replace("\xa0", " ")
+        if _CTA_PATTERNS.search(normalized):
+            heading.decompose()
+
+    # 4b. Handle CTA in div/section/p containers via leaf text node matching
     for text_node in soup.find_all(string=_CTA_PATTERNS):
-        # Walk up to nearest block container
         parent = text_node.parent
         for _ in range(4):  # max 4 levels up
             if parent is None:

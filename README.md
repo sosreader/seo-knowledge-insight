@@ -1050,7 +1050,7 @@ python evals/eval_chat.py
 ```
 
 **Group 設計**：
-- 預設 `--group "retrieval-eval"` 讓所有 eval run 進同一 group
+- 預設 `--group "keyword-retrieval"` 讓所有 eval run 進同一 group
 - Laminar Dashboard 上可畫趨勢折線圖，追蹤 5 個指標變化
 - `concurrency_limit=1`：每次單個 run，避免並發上傳失敗
 

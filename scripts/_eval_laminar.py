@@ -7,7 +7,7 @@ _eval_laminar.py — Laminar 正式 Eval Run（v2.13，4 層評估框架）
 支援兩種模式（--mode）：
 
   retrieval（預設）— IR 標準指標評估，支援兩個 group：
-    retrieval-eval       — Layer 2 IR 標準指標（precision/recall/f1/hit_rate/mrr/ndcg/top1/top5）
+    keyword-retrieval    — Layer 2 IR 標準指標（precision/recall/f1/hit_rate/mrr/ndcg/top1/top5）
     retrieval-enhancement — Layer 3 同義詞增強指標（kw_hit_rate_with_synonyms/synonym_coverage/freshness_rank_quality）
 
   report — 報告品質評估（group: report-quality-eval）
@@ -53,7 +53,7 @@ QA_FINAL_PATH = ROOT / "output" / "qa_final.json"
 QA_ENRICHED_PATH = ROOT / "output" / "qa_enriched.json"
 REPORTS_DIR = ROOT / "output"
 
-DEFAULT_GROUP = "retrieval-eval"
+DEFAULT_GROUP = "keyword-retrieval"
 
 # ── Report quality constants (mirrors TypeScript report-evaluator.ts) ──────
 
@@ -361,10 +361,10 @@ def main() -> None:
     parser.add_argument(
         "--group",
         default=DEFAULT_GROUP,
-        choices=["retrieval-eval", "retrieval-enhancement"],
+        choices=["keyword-retrieval", "retrieval-enhancement"],
         help=(
             f"Laminar group name（預設 {DEFAULT_GROUP!r}，僅 retrieval 模式）。\n"
-            "retrieval-eval: Layer 2 IR 指標（8 個 evaluators）\n"
+            "keyword-retrieval: Layer 2 IR 指標（8 個 evaluators）\n"
             "retrieval-enhancement: Layer 3 synonym+freshness 指標（3 個 evaluators）"
         ),
     )
@@ -428,14 +428,6 @@ def main() -> None:
         {"data": {"query": c["query"], "top_k": top_k}, "target": c}
         for c in golden_cases
     ]
-    # Padding workaround — Laminar SDK span flush bug：
-    # 最後 2 筆 OTel span 有時在 shutdown() 前來不及 flush，
-    # 補 2 個虛擬 items 確保真正的 golden cases 不在末尾被截斷。
-    _padding_target = {"expected_categories": ["__padding__"], "expected_keywords": []}
-    eval_data.extend([
-        {"data": {"query": "__padding__", "top_k": top_k}, "target": _padding_target},
-        {"data": {"query": "__padding__", "top_k": top_k}, "target": _padding_target},
-    ])
 
     if args.group == "retrieval-enhancement":
         synonyms = _load_synonyms()
@@ -463,7 +455,7 @@ def main() -> None:
         )
 
     else:
-        # retrieval-eval（預設）— Layer 2 完整 IR 指標套件
+        # keyword-retrieval（預設）— Layer 2 完整 IR 指標套件
         def safe_executor(d: dict) -> list[dict]:
             try:
                 return _keyword_search(d["query"], qas, d["top_k"])
