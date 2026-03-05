@@ -7,7 +7,7 @@ _eval_laminar.py — Laminar 正式 Eval Run
 使用：
     python scripts/_eval_laminar.py
     python scripts/_eval_laminar.py --top-k 5
-    python scripts/_eval_laminar.py --dataset-name "retrieval-eval-20260302"
+    python scripts/_eval_laminar.py --group "retrieval-eval"
 """
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 # 確保 project root 在 import path
@@ -33,6 +32,9 @@ logger = logging.getLogger(__name__)
 GOLDEN_RETRIEVAL_PATH = ROOT / "output" / "evals" / "golden_retrieval.json"
 QA_FINAL_PATH = ROOT / "output" / "qa_final.json"
 QA_ENRICHED_PATH = ROOT / "output" / "qa_enriched.json"
+
+# 固定 group name，讓所有 run 都在同一組，方便折線圖比較趨勢
+DEFAULT_GROUP = "retrieval-eval"
 
 
 def _load_qas() -> list[dict]:
@@ -56,7 +58,16 @@ def _keyword_search(query: str, qas: list[dict], top_k: int) -> list[dict]:
         if score > 0:
             scored.append((score, qa))
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [qa for _, qa in scored[:top_k]]
+    results = [qa for _, qa in scored[:top_k]]
+    # 只回傳評估所需欄位，避免大型 payload 上傳失敗
+    return [
+        {
+            "id": qa.get("stable_id", qa.get("id", "")),
+            "category": qa.get("category", ""),
+            "question": qa.get("question", "")[:120],
+        }
+        for qa in results
+    ]
 
 
 def precision_evaluator(output: list[dict], target: dict) -> float:
@@ -83,11 +94,32 @@ def f1_evaluator(output: list[dict], target: dict) -> float:
     return 2 * p * r / (p + r)
 
 
+def hit_rate_evaluator(output: list[dict], target: dict) -> float:
+    """是否至少命中一筆期望分類（0 或 1）。"""
+    expected_cats = set(target.get("expected_categories", []))
+    for qa in output:
+        if qa.get("category", "") in expected_cats:
+            return 1.0
+    return 0.0
+
+
+def mrr_evaluator(output: list[dict], target: dict) -> float:
+    """第一筆命中的排名倒數（Mean Reciprocal Rank）。"""
+    expected_cats = set(target.get("expected_categories", []))
+    for rank, qa in enumerate(output, start=1):
+        if qa.get("category", "") in expected_cats:
+            return 1.0 / rank
+    return 0.0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Laminar 正式 Eval Run")
     parser.add_argument("--top-k", type=int, default=5, help="Retrieval top-K")
-    today = datetime.now(tz=timezone.utc).strftime("%Y%m%d")
-    parser.add_argument("--dataset-name", default=f"retrieval-eval-{today}", help="Laminar dataset name")
+    parser.add_argument(
+        "--group",
+        default=DEFAULT_GROUP,
+        help=f"Laminar group name（預設 {DEFAULT_GROUP!r}，同 group 可比較趨勢）",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -112,17 +144,30 @@ def main() -> None:
 
     init_laminar()
 
-    logger.info("開始 Laminar eval run，%d cases，top-k=%d", len(golden_cases), top_k)
+    logger.info(
+        "開始 Laminar eval run，%d cases，top-k=%d，group=%r",
+        len(golden_cases), top_k, args.group,
+    )
+
+    def safe_executor(d: dict) -> list[dict]:
+        try:
+            return _keyword_search(d["query"], qas, d["top_k"])
+        except Exception as exc:
+            logger.error("executor 失敗 query=%r: %s", d.get("query"), exc)
+            return []
 
     evaluate(
         data=[{"data": {"query": c["query"], "top_k": top_k}, "target": c} for c in golden_cases],
-        executor=lambda d: _keyword_search(d["query"], qas, d["top_k"]),
+        executor=safe_executor,
         evaluators={
             "precision": precision_evaluator,
             "recall": recall_evaluator,
             "f1": f1_evaluator,
+            "hit_rate": hit_rate_evaluator,
+            "mrr": mrr_evaluator,
         },
-        group_name=args.dataset_name,
+        group_name=args.group,
+        concurrency_limit=1,
     )
 
     logger.info("Eval run 完成，請至 Laminar Dashboard 查看結果")

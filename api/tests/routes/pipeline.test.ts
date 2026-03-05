@@ -19,6 +19,7 @@ const ithelpMdDir = join(rawDataDir, "ithelp_markdown");
 const googleCasesMdDir = join(rawDataDir, "google_cases_markdown");
 const qaPerMeetingDir = join(outputDir, "qa_per_meeting");
 const qaPerArticleDir = join(outputDir, "qa_per_article");
+const metricsSnapshotsDir = join(outputDir, "metrics_snapshots");
 
 vi.mock("../../src/store/qa-store.js", () => ({
   qaStore: { loaded: false, count: 0 },
@@ -48,6 +49,7 @@ vi.mock("../../src/config.js", () => ({
     sessionsDir: join(outputDir, "sessions"),
     scriptsDir: join(tmpDir, "scripts"),
     accessLogsDir: join(outputDir, "access_logs"),
+    metricsSnapshotsDir,
   },
 }));
 
@@ -98,6 +100,7 @@ function setupTestData() {
   mkdirSync(qaPerMeetingDir, { recursive: true });
   mkdirSync(qaPerArticleDir, { recursive: true });
   mkdirSync(join(outputDir, "sessions"), { recursive: true });
+  mkdirSync(metricsSnapshotsDir, { recursive: true });
 
   // meetings_index.json
   writeFileSync(
@@ -759,5 +762,145 @@ describe("POST /api/v1/pipeline/dedupe-classify", () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(500);
+  });
+});
+
+// --- POST /pipeline/metrics/save ---
+
+describe("POST /api/v1/pipeline/metrics/save", () => {
+  const validPayload = {
+    metrics: { "曝光": { latest: 100, monthly: 0.05, latest_date: "3/1/2026" } },
+    source: "https://docs.google.com/spreadsheets/d/abc123",
+    tab: "vocus",
+    label: "3/1/2026",
+    weeks: 2,
+  };
+
+  it("saves a snapshot and returns id + created_at + label", async () => {
+    const res = await app.request("/api/v1/pipeline/metrics/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(validPayload),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.data.id).toMatch(/^[0-9]{8}-[0-9]{6}$/);
+    expect(body.data.label).toBe("3/1/2026");
+    expect(body.data.created_at).toBeTruthy();
+  });
+
+  it("rejects missing required fields", async () => {
+    const res = await app.request("/api/v1/pipeline/metrics/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metrics: {}, source: "too-short" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects tab with invalid characters", async () => {
+    const res = await app.request("/api/v1/pipeline/metrics/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...validPayload, tab: "bad tab!" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects weeks out of range", async () => {
+    const res = await app.request("/api/v1/pipeline/metrics/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...validPayload, weeks: 100 }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+// --- GET /pipeline/metrics/snapshots ---
+
+describe("GET /api/v1/pipeline/metrics/snapshots", () => {
+  it("returns saved snapshots list", async () => {
+    // Save one snapshot first
+    await app.request("/api/v1/pipeline/metrics/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        metrics: { "點擊": { latest: 50 } },
+        source: "https://docs.google.com/spreadsheets/d/xyz789",
+        tab: "vocus",
+        label: "Test Snapshot",
+        weeks: 1,
+      }),
+    });
+
+    const res = await app.request("/api/v1/pipeline/metrics/snapshots");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.data.items)).toBe(true);
+    expect(body.data.total).toBeGreaterThan(0);
+    const item = body.data.items[0];
+    expect(item).toHaveProperty("id");
+    expect(item).toHaveProperty("label");
+    expect(item).toHaveProperty("created_at");
+    expect(item).toHaveProperty("source");
+    expect(item).toHaveProperty("tab");
+    expect(item).toHaveProperty("weeks");
+    // metrics body should NOT be in the list response
+    expect(item).not.toHaveProperty("metrics");
+  });
+
+  it("returns list with items and total", async () => {
+    const res = await app.request("/api/v1/pipeline/metrics/snapshots");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data).toHaveProperty("items");
+    expect(body.data).toHaveProperty("total");
+  });
+});
+
+// --- DELETE /pipeline/metrics/snapshots/:id ---
+
+describe("DELETE /api/v1/pipeline/metrics/snapshots/:id", () => {
+  it("deletes an existing snapshot", async () => {
+    // Save first
+    const saveRes = await app.request("/api/v1/pipeline/metrics/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        metrics: {},
+        source: "https://docs.google.com/spreadsheets/d/del123",
+        tab: "vocus",
+        label: "To Delete",
+        weeks: 1,
+      }),
+    });
+    const saveBody = await saveRes.json();
+    const id = saveBody.data.id as string;
+
+    const delRes = await app.request(
+      `/api/v1/pipeline/metrics/snapshots/${id}`,
+      { method: "DELETE" }
+    );
+    expect(delRes.status).toBe(200);
+    const delBody = await delRes.json();
+    expect(delBody.data.deleted).toBe(true);
+    expect(delBody.data.id).toBe(id);
+  });
+
+  it("returns 404 for non-existent snapshot", async () => {
+    const res = await app.request(
+      "/api/v1/pipeline/metrics/snapshots/20990101-000000",
+      { method: "DELETE" }
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 for invalid snapshot id format", async () => {
+    const res = await app.request(
+      "/api/v1/pipeline/metrics/snapshots/invalid-id",
+      { method: "DELETE" }
+    );
+    expect(res.status).toBe(400);
   });
 });

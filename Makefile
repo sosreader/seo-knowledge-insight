@@ -119,6 +119,18 @@ evaluate-qa: ## 品質評估（預設抽樣 30 筆）
 evaluate-qa-full: ## 品質評估（完整：100 筆 + 來源驗證 + Retrieval 評估）
 	$(PYTHON) $(SCRIPT) --step evaluate-qa --sample 100 --with-source --eval-retrieval
 
+.PHONY: eval-semantic
+eval-semantic: ## Semantic + Reranker Retrieval Eval（比較 keyword/hybrid/rerank 三種模式）
+	cd api && npx tsx scripts/eval-semantic.ts
+
+.PHONY: eval-semantic-k3
+eval-semantic-k3: ## 同上，top-k=3
+	cd api && npx tsx scripts/eval-semantic.ts --top-k 3
+
+.PHONY: eval-laminar
+eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboard）
+	$(PYTHON) scripts/_eval_laminar.py
+
 # ── 測試 ─────────────────────────────────────────────
 
 .PHONY: test

@@ -593,9 +593,11 @@ cd api && npx tsx scripts/eval-semantic.ts --top-k 3 # 改變 top-K 參數
 
 | 模式 | Precision | Recall | F1 | Hit Rate | MRR | 說明 |
 |------|-----------|--------|-----|----------|-----|------|
-| **Keyword（baseline）** | 0.810 | 0.800 | 0.768 | 1.0 | 0.938 | 純關鍵字搜尋，無語意評估 |
-| **Keyword + Claude Rerank** | **0.950** | **0.825** | **0.861** | 1.0 | **1.0** | Reranker 大幅提升精準度 |
+| **Keyword（baseline）** | 0.810 | 0.800 | 0.768 | 1.0 | 0.938 | Python keyword 手動實驗 baseline（非 TS eval-semantic.ts）|
+| **Keyword + Claude Rerank** | **0.950** | **0.825** | **0.861** | 1.0 | **1.0** | Claude Code 直接語意選取 top-5 |
 | **Delta** | **+0.140** | **+0.025** | **+0.093** | ±0.0 | **+0.062** | Precision +14pp，MRR 達到完美 |
+
+> **Baseline 版本說明**：Precision 0.810 為 Python keyword 手動實驗結果；TypeScript `eval-semantic.ts` keyword mode 為 0.700（不同 BM25 實作）；`_eval_laminar.py` Python keyword 為 0.76。
 
 **主要發現**：
 - **Precision 大幅提升（+14%）**：Reranker 有效過濾噪音（keyword 命中但語意不相關的結果）

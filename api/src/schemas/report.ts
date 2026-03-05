@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const generateRequestSchema = z.object({
   metrics_url: z.string().url().optional(),
+  snapshot_id: z.string().regex(/^[0-9]{8}-[0-9]{6}$/).optional(),
+  weeks: z.number().int().min(1).max(12).optional(),
 });
 
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;

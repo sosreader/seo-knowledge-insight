@@ -5,9 +5,16 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "reports-test-"));
+const tmpSnapshotsDir = join(tmpDir, "metrics_snapshots");
+mkdirSync(tmpSnapshotsDir, { recursive: true });
 
 vi.mock("../../src/store/qa-store.js", () => ({
-  qaStore: { loaded: false, count: 0 },
+  qaStore: {
+    loaded: false,
+    count: 0,
+    getAll: () => [],
+    keywordSearch: () => [],
+  },
 }));
 
 vi.mock("../../src/config.js", () => ({
@@ -24,7 +31,12 @@ vi.mock("../../src/config.js", () => ({
     sessionsDir: join(tmpDir, "sessions"),
     scriptsDir: "/tmp/scripts",
     rootDir: "/tmp",
+    metricsSnapshotsDir: tmpSnapshotsDir,
   },
+}));
+
+vi.mock("../../src/utils/mode-detect.js", () => ({
+  hasOpenAI: vi.fn(() => false),
 }));
 
 let app: Hono;
@@ -72,5 +84,60 @@ describe("GET /api/v1/reports/:date", () => {
   it("returns 404 for non-existent report", async () => {
     const res = await app.request("/api/v1/reports/99990101");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /api/v1/reports/generate (local mode — no OpenAI)", () => {
+  const SNAPSHOT_ID = "20260305-120000";
+  const snapshotData = {
+    id: SNAPSHOT_ID,
+    created_at: "2026-03-05T12:00:00.000Z",
+    label: "2026/03/05",
+    source: "https://docs.google.com/spreadsheets/d/test",
+    tab: "vocus",
+    weeks: 2,
+    metrics: {
+      CTR: { latest: 0.042, monthly: -0.12, weekly: -0.08 },
+      曝光: { latest: 120000, monthly: 0.05, weekly: 0.02 },
+    },
+  };
+
+  beforeEach(() => {
+    writeFileSync(
+      join(tmpSnapshotsDir, `${SNAPSHOT_ID}.json`),
+      JSON.stringify(snapshotData),
+      "utf-8"
+    );
+  });
+
+  it("generates report from snapshot in local mode", async () => {
+    const res = await app.request("/api/v1/reports/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ snapshot_id: SNAPSHOT_ID }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data).toHaveProperty("date");
+    expect(body.data).toHaveProperty("filename");
+    expect(body.data).toHaveProperty("size_bytes");
+  });
+
+  it("returns 404 when snapshot does not exist", async () => {
+    const res = await app.request("/api/v1/reports/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ snapshot_id: "20991231-235959" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 for invalid snapshot_id format", async () => {
+    const res = await app.request("/api/v1/reports/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ snapshot_id: "bad-id" }),
+    });
+    expect(res.status).toBe(400);
   });
 });

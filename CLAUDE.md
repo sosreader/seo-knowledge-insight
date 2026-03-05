@@ -162,9 +162,10 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
   - `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
   - `POST /api/v1/reports/generate` — 觸發週報生成
 
-#### TypeScript Hono（v2.11，port 8002）——當前主架構
+#### TypeScript Hono（v2.12，port 8002）——當前主架構
 
 開發環境（後端 API）：
+
 ```bash
 cd api
 pnpm install           # 首次安裝依賴
@@ -172,6 +173,7 @@ pnpm dev               # 啟動開發伺服器（tsx watch，port 8002）
 ```
 
 前端開發環境（vocus-admin-dev）：
+
 ```bash
 cd ../vocus-admin-dev
 git checkout feat/admin-seo-insight  # 切換到前端開發分支
@@ -180,6 +182,7 @@ pnpm dev               # 啟動前端伺服器（http://localhost:3000）
 ```
 
 測試：
+
 ```bash
 cd api
 pnpm test              # 執行所有 vitest 測試
@@ -188,6 +191,7 @@ pnpm test:coverage    # 生成測試覆蓋率報告
 ```
 
 打包 / 部署：
+
 ```bash
 cd api
 pnpm build             # 編譯 TypeScript 至 dist/
@@ -195,24 +199,28 @@ pnpm start             # 執行 build 版本（node dist/index.js，port 8002）
 ```
 
 Docker 執行（包含 Python API）：
+
 ```bash
 docker-compose up      # 同時啟動 Python (8001) 和 TypeScript (8002) API
 docker-compose logs seo-api-ts  # 監看 Hono 日誌
 ```
 
 API 端點（與 Python 相同）：
+
 - `GET /health` — 健康檢查
 - 10 個路由器：qa、search、chat、reports、sessions、feedback、pipeline、eval、synonyms、health
 - 認證：`X-API-Key` header
 - 詳見 `api/README.md`
 
 QA API 端點（v2.6 多來源擴充）：
+
 - `GET /api/v1/qa` — 列表查詢（新增 `source_type`、`source_collection` filter）
 - `GET /api/v1/qa/categories` — 所有分類
 - `GET /api/v1/qa/collections` — 所有 collection 清單（含 source_type + count）
 - `GET /api/v1/qa/{id}` — 單筆 Q&A（hex stable_id 或 integer seq）
 
 Pipeline API 端點：
+
 - `GET /api/v1/pipeline/status` — 各步驟完成狀態（6 步驟：fetch-notion/fetch-medium/fetch-ithelp/fetch-google/extract-qa/dedupe-classify）
 - `GET /api/v1/pipeline/meetings` — 會議列表（含 metadata）
 - `GET /api/v1/pipeline/meetings/:id/preview` — Markdown 預覽
@@ -225,18 +233,21 @@ Pipeline API 端點：
 - `POST /api/v1/pipeline/metrics` — 取得 Pipeline metrics
 
 Eval API 端點：
+
 - `POST /api/v1/eval/sample` — 隨機抽樣 Q&A 供評估（支援 seed + golden subset）
 - `POST /api/v1/eval/retrieval` — 計算 Retrieval 評估指標（hit rate、MRR）
 - `GET /api/v1/eval/compare` — 跨 LLM Provider 品質對比（Delta 報告）
 - `POST /api/v1/eval/save` — 儲存評估結果至 evals/ 目錄（含 path traversal 防護）
 
 Synonyms API 端點（v2.11 新增）：
+
 - `GET /api/v1/synonyms` — 列出所有同義詞（靜態 + 自訂，含 source 標記）
 - `POST /api/v1/synonyms` — 新增自訂同義詞
 - `PUT /api/v1/synonyms/:term` — 更新自訂同義詞
 - `DELETE /api/v1/synonyms/:term` — 刪除自訂同義詞
 
 環境變數（v2.11 新增，均可選）：
+
 ```env
 ANTHROPIC_API_KEY=sk-ant-...     # Reranker（實驗性，auto 模式下自動偵測）
 CONTEXT_EMBEDDING_WEIGHT=0.6     # Contextual embedding 加權（預設 0.6）
@@ -245,11 +256,11 @@ RERANKER_ENABLED=auto            # "auto"/"true"/"false"，預設 auto
 
 ### Observability（v2.7 三路整合）
 
-| 路徑 | 追蹤方式 | 輸出 |
-|------|---------|------|
-| CLI 腳本（Python） | Laminar `@observe` + `init_laminar()` | Laminar Dashboard |
-| Claude Code 指令 | `utils/execution_log.py` → `output/execution_log.jsonl` | JSONL 本地日誌 |
-| REST API（Hono） | `@lmnr-ai/lmnr` JS SDK + `observe()` wrapper | Laminar Dashboard |
+| 路徑               | 追蹤方式                                                | 輸出              |
+| ------------------ | ------------------------------------------------------- | ----------------- |
+| CLI 腳本（Python） | Laminar `@observe` + `init_laminar()`                   | Laminar Dashboard |
+| Claude Code 指令   | `utils/execution_log.py` → `output/execution_log.jsonl` | JSONL 本地日誌    |
+| REST API（Hono）   | `@lmnr-ai/lmnr` JS SDK + `observe()` wrapper            | Laminar Dashboard |
 
 環境變數：`LMNR_PROJECT_API_KEY`（`.env`），未設定則靜默跳過。
 
@@ -263,17 +274,17 @@ RERANKER_ENABLED=auto            # "auto"/"true"/"false"，預設 auto
 
 ### Claude Code 模式 vs OpenAI 模式
 
-| 功能 | OpenAI 模式 | Claude Code 模式 |
-|------|------------|-----------------|
-| Q&A 萃取 | `gpt-5.2` API | Claude Code 直接讀 Markdown |
-| 去重 + 分類 | `text-embedding-3-small` + `gpt-5.2` | 語意理解取代向量 |
-| 指標解析 | `fetch_from_sheets()` | `qa_tools.py load-metrics` |
-| 知識庫搜尋 | `text-embedding-3-small` + cosine | `qa_tools.py search`（關鍵字加權）|
-| 週報生成 | `gpt-5.2` API | Claude Code 直接推理 |
-| Q&A 品質評估 | `gpt-5.2` + `gpt-5-mini` | `/evaluate-qa-local`（Claude Code 作為 Judge） |
-| Provider 品質評估 | 無對應 | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
-| API 伺服器 | `cd api && pnpm dev`（Hono, port 8002，需要 OPENAI_API_KEY） | `cd api && pnpm dev`（Hono, port 8002） |
-| 需要 API key | OPENAI_API_KEY | 不需要 |
+| 功能              | OpenAI 模式                                                  | Claude Code 模式                                                      |
+| ----------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| Q&A 萃取          | `gpt-5.2` API                                                | Claude Code 直接讀 Markdown                                           |
+| 去重 + 分類       | `text-embedding-3-small` + `gpt-5.2`                         | 語意理解取代向量                                                      |
+| 指標解析          | `fetch_from_sheets()`                                        | `qa_tools.py load-metrics`                                            |
+| 知識庫搜尋        | `text-embedding-3-small` + cosine                            | `qa_tools.py search`（關鍵字加權）                                    |
+| 週報生成          | `gpt-5.2` API                                                | Claude Code 直接推理                                                  |
+| Q&A 品質評估      | `gpt-5.2` + `gpt-5-mini`                                     | `/evaluate-qa-local`（Claude Code 作為 Judge）                        |
+| Provider 品質評估 | 無對應                                                       | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
+| API 伺服器        | `cd api && pnpm dev`（Hono, port 8002，需要 OPENAI_API_KEY） | `cd api && pnpm dev`（Hono, port 8002）                               |
+| 需要 API key      | OPENAI_API_KEY                                               | 不需要                                                                |
 
 ---
 
@@ -306,5 +317,5 @@ RERANKER_ENABLED=auto            # "auto"/"true"/"false"，預設 auto
 | 評估 / LLM-as-Judge / Reasoning Model / 評估維度設計               | `research/03-evaluation.md`           |
 | Prompt Engineering 進階 / 業界最佳實踐                             | `research/04-prompting.md`            |
 | 模型選擇決策 / Embedding 模型比較                                  | `research/05-models.md`               |
-| 專案架構 / 技術決策 / Changelog / Mermaid 圖 / Observability        | `research/06-project-architecture.md` |
+| 專案架構 / 技術決策 / Changelog / Mermaid 圖 / Observability       | `research/06-project-architecture.md` |
 | 部署 / FastAPI / ECR+App Runner / Docker / Supabase 遷移           | `research/07-deployment.md`           |

@@ -1153,20 +1153,24 @@ Completeness 仍未達標：`[補充]` Tag 機制已就緒，需更多含 How+Ev
 | freshness_rank_quality | 1.0 | 1.0 | 持平 |
 | synonym_coverage | 0% | **100%** | +100pp |
 
-## 21. Claude Code as LLM Reranker Judge（v2.12，2026-03-05）
+## 21. Claude Code as Semantic Reranker Judge（v2.12，2026-03-05）
 
-> 參考：`scripts/eval-semantic.ts`；評估 keyword baseline vs Claude haiku reranker 的品質提升。
+> 參考：`api/scripts/eval-semantic.ts`（三模式 CLI）；本節記錄手動實驗：Claude Code 直接作為語意判斷引擎。
+
+> **注意：Keyword Baseline 版本差異**
+> 本節 baseline（0.810）來自 **Python 手動實驗**（Claude Code 執行 Python keyword search，再手動語意選 top-5）。
+> TypeScript `eval-semantic.ts --mode keyword` 實際輸出為 **0.700**（不同的 BM25 實作）。
+> Python `_eval_laminar.py` 輸出為 **0.76**（又一版 Python keyword 實作）。
+> 三者使用不同 tokenizer + scoring，數值差異屬預期。
 
 ### 實驗設計
 
-**目標**：量化語意 reranking 對 keyword search 的改善幅度。
+**目標**：量化語意 reranking 對 keyword search 的改善幅度（無需 OpenAI API key）。
 
 **評估方式**：
 1. 使用 golden_retrieval.json（20 cases）
-2. 三種模式對比評估：
-   - Mode 1：keyword-only（baseline）
-   - Mode 2：hybrid search（embedding + keyword boost + synonym + freshness）
-   - Mode 3：hybrid × overRetrieveFactor=3 + Claude haiku reranker
+2. Python keyword search（over-retrieve top-15）→ Claude Code 直接語意選 top-5
+3. 對比 baseline（Python keyword top-5）vs Claude Code 語意選取後結果
 
 **評估指標**（category-level 語意相關性）：
 - Precision@K：top-K 中有幾個屬於期望分類
@@ -1176,14 +1180,14 @@ Completeness 仍未達標：`[補充]` Tag 機制已就緒，需更多含 How+Ev
 - MRR：第一筆相關結果的排名倒數
 
 **Claude Code 角色**：
-- 本地執行 `eval-semantic.ts` 腳本（不呼叫 API）
-- 作為 embedding + keyword search 引擎（TypeScript）
-- 作為語意判斷器（Claude Haiku reranker，若有 ANTHROPIC_API_KEY）
+- 直接作為語意判斷引擎（不呼叫任何外部 API）
+- 讀取 Python keyword over-retrieve 結果（top-15）
+- 依語意選出最佳 top-5，不依賴 embedding 向量
 
-### 實驗結果（v2.12，2026-03-05）
+### 實驗結果（v2.12，2026-03-05，Python keyword 手動實驗）
 
 ```
-三模式對比（20 golden cases，top-k=5）
+兩模式對比（20 golden cases，top-k=5，Python keyword baseline）
 
                 Precision  Recall   F1     Hit Rate  MRR
 Keyword         0.810      0.800    0.768  1.0       0.938

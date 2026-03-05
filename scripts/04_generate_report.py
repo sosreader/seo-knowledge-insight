@@ -196,15 +196,18 @@ def _parse_value(raw: str) -> float | str | None:
         return v  # 保留原始字串（如日期）
 
 
-def parse_metrics_tsv(text: str) -> dict[str, dict]:
+def parse_metrics_tsv(text: str, weeks: int = 2) -> dict[str, dict]:
     """
     解析從 Google 試算表複製的 TSV。
 
     期望格式（第一行為 header，之後每行 metric_name + 數值）：
-        （空）\t月趨勢\t上週\tMax\tMin\tSparklines\t日期1\t日期2
+        （空）\t月趨勢\t上週\tMax\tMin\tSparklines\t日期1\t日期2\t日期3...
         曝光\t-3.61%\t-26.09%\t65,358,724\t48,305,965\t\t48,305,965\t65,358,724
 
-    回傳 dict： metric_name → {monthly, weekly, max, min, latest, previous, latest_date, previous_date}
+    回傳 dict： metric_name → {monthly, weekly, max, min, latest, previous,
+                               latest_date, previous_date,
+                               history: [週N值, 週N-1值, ...]}
+    weeks 參數控制讀取幾週資料（1=只取 latest，2=latest+previous，依此類推）。
     """
     lines = [line for line in text.splitlines() if line.strip()]
     if not lines:
@@ -218,14 +221,18 @@ def parse_metrics_tsv(text: str) -> dict[str, dict]:
             break
 
     header_cols = lines[header_idx].split("\t")
-    # 找日期欄（通常是 col 5, 6，即 header_cols[5], header_cols[6]）
+    # 找日期欄（通常從 col 6 開始）
     date_cols = [c.strip() for c in header_cols if re.match(r"\d+/\d+/\d+", c.strip())]
+    # 第一個日期欄的 index（用於找歷史欄起始位置）
+    data_start_col = 6  # G 欄（0-indexed）
     latest_date = date_cols[0] if date_cols else ""
     previous_date = date_cols[1] if len(date_cols) > 1 else ""
+    history_dates = date_cols[:max(1, weeks)]
 
     def _safe_col(cols: list[str], idx: int):
         return _parse_value(cols[idx]) if idx < len(cols) else None
 
+    weeks_clamped = max(1, weeks)
     metrics: dict[str, dict] = {}
     for line in lines[header_idx + 1:]:
         cols = line.split("\t")
@@ -235,15 +242,23 @@ def parse_metrics_tsv(text: str) -> dict[str, dict]:
         if name in SKIP_METRICS:
             continue
 
+        # history: 從 G 欄（index 6）起，讀 weeks_clamped 欄
+        history = [
+            _safe_col(cols, data_start_col + i)
+            for i in range(weeks_clamped)
+        ]
+
         metrics[name] = {
-            "monthly":      _safe_col(cols, 1),
-            "weekly":       _safe_col(cols, 2),
-            "max":          _safe_col(cols, 3),
-            "min":          _safe_col(cols, 4),
-            "latest":       _safe_col(cols, 6) if len(cols) > 6 else None,
-            "previous":     _safe_col(cols, 7) if len(cols) > 7 else None,
-            "latest_date":  latest_date,
+            "monthly":       _safe_col(cols, 1),
+            "weekly":        _safe_col(cols, 2),
+            "max":           _safe_col(cols, 3),
+            "min":           _safe_col(cols, 4),
+            "latest":        _safe_col(cols, 6) if len(cols) > 6 else None,
+            "previous":      _safe_col(cols, 7) if len(cols) > 7 else None,
+            "latest_date":   latest_date,
             "previous_date": previous_date,
+            "history":       history,
+            "history_dates": history_dates,
         }
 
     return metrics
@@ -676,6 +691,12 @@ def main() -> None:
         help="從知識庫最多取幾個相關 Q&A（預設 15）",
     )
     parser.add_argument(
+        "--weeks",
+        type=int,
+        default=2,
+        help="讀取最新 N 週的欄位資料（1=只有最新週，2=最新+前一週，依此類推，預設 2）",
+    )
+    parser.add_argument(
         "--no-qa",
         action="store_true",
         help="不使用 Q&A 知識庫（單純分析指標）",
@@ -740,8 +761,8 @@ def main() -> None:
         sys.exit(1)
 
     # 解析
-    logger.info("\n🔍 解析指標資料 ...")
-    metrics = parse_metrics_tsv(tsv_text)
+    logger.info("\n🔍 解析指標資料（weeks=%d）...", args.weeks)
+    metrics = parse_metrics_tsv(tsv_text, weeks=args.weeks)
     if not metrics:
         logger.error("❌ 無法解析指標，請確認格式是從 Google 試算表直接複製的 TSV")
         sys.exit(1)

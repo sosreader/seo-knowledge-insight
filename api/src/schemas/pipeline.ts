@@ -30,6 +30,31 @@ export const metricsRequestSchema = z.object({
   tab: z.string().min(1).max(50).regex(/^[a-zA-Z0-9_-]+$/, "tab must be alphanumeric").default("vocus"),
 });
 
+export const metricsSaveSchema = z.object({
+  metrics: z.any(),
+  source: z.string().max(500),
+  tab: z.string().min(1).max(50).regex(/^[a-zA-Z0-9_-]+$/, "tab must be alphanumeric"),
+  label: z.string().max(60),
+  weeks: z.number().int().min(1).max(12),
+});
+
+export const snapshotIdSchema = z.string().regex(/^[0-9]{8}-[0-9]{6}$/, "snapshot id must be YYYYMMDD-HHmmss");
+
+// --- Snapshot Types ---
+
+export interface MetricsSnapshotMeta {
+  readonly id: string;
+  readonly created_at: string;
+  readonly label: string;
+  readonly source: string;
+  readonly tab: string;
+  readonly weeks: number;
+}
+
+export interface MetricsSnapshot extends MetricsSnapshotMeta {
+  readonly metrics: Record<string, unknown>;
+}
+
 // --- Response types ---
 
 export interface PipelineStepStatus {

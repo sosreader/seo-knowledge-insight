@@ -79,4 +79,5 @@ export const paths = {
   accessLogsDir: resolve(ROOT_DIR, "output/access_logs"),
   evalsDir: resolve(ROOT_DIR, "output/evals"),
   synonymCustomJsonPath: resolve(ROOT_DIR, "output/synonym_custom.json"),
+  metricsSnapshotsDir: resolve(ROOT_DIR, "output/metrics_snapshots"),
 } as const;

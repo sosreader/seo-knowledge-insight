@@ -2,10 +2,13 @@ import { Hono } from "hono";
 import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
 import { generateRequestSchema, type ReportSummary } from "../schemas/report.js";
 import { paths } from "../config.js";
+import { hasOpenAI } from "../utils/mode-detect.js";
+import { generateReportLocal, saveReport } from "../services/report-generator-local.js";
+import { qaStore } from "../store/qa-store.js";
 
 const execFileAsync = promisify(execFile);
 const REPORT_PATTERN = /^report_(\d{8})\.md$/;
@@ -59,12 +62,70 @@ reportsRoute.get("/:date", (c) => {
   return c.json(ok({ date, filename, content, size_bytes }));
 });
 
+const SNAPSHOT_ID_RE = /^[0-9]{8}-[0-9]{6}$/;
+
 reportsRoute.post("/generate", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parsed = generateRequestSchema.safeParse(body);
 
   if (!parsed.success) {
     return c.json(fail("Invalid request body"), 400);
+  }
+
+  // ── Local mode: snapshot_id provided → use stored metrics directly ─
+  // Always prefer local template when a snapshot is available,
+  // regardless of OPENAI_API_KEY (metrics are already in the snapshot).
+  if (parsed.data.snapshot_id) {
+    const snapshotId = parsed.data.snapshot_id;
+    if (!SNAPSHOT_ID_RE.test(snapshotId)) {
+      return c.json(fail("Invalid snapshot_id format"), 400);
+    }
+    const snapshotPath = resolve(paths.metricsSnapshotsDir, `${snapshotId}.json`);
+    if (!snapshotPath.startsWith(paths.metricsSnapshotsDir)) {
+      return c.json(fail("Invalid snapshot path"), 400);
+    }
+    if (!existsSync(snapshotPath)) {
+      return c.json(fail("Snapshot not found"), 404);
+    }
+
+    let snapshot: Record<string, unknown>;
+    try {
+      snapshot = JSON.parse(readFileSync(snapshotPath, "utf-8")) as Record<string, unknown>;
+    } catch {
+      return c.json(fail("Failed to read snapshot"), 500);
+    }
+
+    const snapshotMetrics = snapshot.metrics as Record<string, unknown> | undefined;
+    if (!snapshotMetrics || typeof snapshotMetrics !== "object") {
+      return c.json(fail("Snapshot has no metrics data"), 400);
+    }
+
+    const reportDate = new Date().toLocaleDateString("zh-TW", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+    }).replace(/\//g, "/");
+
+    try {
+      const qaCount = qaStore.count;
+      const reportContent = await generateReportLocal(snapshotMetrics, reportDate, qaCount);
+      const dateKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      saveReport(reportContent, dateKey);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error("Local report generation failed:", msg);
+      return c.json(fail("Local report generation failed"), 500);
+    }
+
+    const reports = listReportFiles();
+    if (reports.length === 0) {
+      return c.json(fail("No report found after generation"), 500);
+    }
+    const latest = reports[0]!;
+    return c.json(ok({ date: latest.date, filename: latest.filename, size_bytes: latest.size_bytes }));
+  }
+
+  // ── OpenAI mode: spawn Python script with metrics_url ────────────
+  if (!hasOpenAI()) {
+    return c.json(fail("OPENAI_API_KEY not set. Use snapshot_id for local generation."), 400);
   }
 
   const cmd = ["python3", join(paths.scriptsDir, "04_generate_report.py")];
@@ -82,6 +143,9 @@ reportsRoute.post("/generate", async (c) => {
       return c.json(fail("Invalid metrics_url"), 400);
     }
     cmd.push("--input", parsed.data.metrics_url);
+    if (parsed.data.weeks) {
+      cmd.push("--weeks", String(parsed.data.weeks));
+    }
   }
 
   try {

@@ -1219,9 +1219,10 @@ eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboar
 
 | 模式 | Precision | Recall | F1 | Hit Rate | MRR |
 |------|-----------|--------|-----|----------|-----|
-| Keyword | 0.810 | 0.800 | 0.768 | 1.0 | 0.938 |
-| Keyword + Rerank | **0.950** | **0.825** | **0.861** | 1.0 | **1.0** |
-| Delta | **+14pp** | **+2.5pp** | **+9.3pp** | — | **+6.2pp** |
+| Keyword（Python 手動）| 0.810 | 0.800 | 0.768 | 1.0 | 0.938 |
+| Keyword（TS eval-semantic.ts）| 0.700 | — | — | — | — |
+| Keyword + Claude Rerank | **0.950** | **0.825** | **0.861** | 1.0 | **1.0** |
+| Delta vs Python baseline | **+14pp** | **+2.5pp** | **+9.3pp** | — | **+6.2pp** |
 
 **主要發現**：
 - Precision +14pp：Reranker 有效過濾語意不相關的結果

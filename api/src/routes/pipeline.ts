@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
 import { z } from "zod";
@@ -8,6 +8,8 @@ import {
   extractQARequestSchema,
   dedupeClassifyRequestSchema,
   metricsRequestSchema,
+  metricsSaveSchema,
+  snapshotIdSchema,
   sourceDocsQuerySchema,
   type MeetingEntry,
   type MeetingsResponse,
@@ -21,6 +23,8 @@ import {
   type SourceDocEntry,
   type SourceDocsResponse,
   type SourceDocPreviewResponse,
+  type MetricsSnapshotMeta,
+  type MetricsSnapshot,
 } from "../schemas/pipeline.js";
 
 const meetingEntrySchema = z.object({
@@ -302,6 +306,68 @@ function buildSourceDocs(): readonly SourceDocEntry[] {
   return results;
 }
 
+// --- Snapshot helpers ---
+
+const SNAPSHOT_ID_RE = /^[0-9]{8}-[0-9]{6}$/;
+
+function generateSnapshotId(): string {
+  const now = new Date();
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const date =
+    String(now.getFullYear()) +
+    pad2(now.getMonth() + 1) +
+    pad2(now.getDate());
+  const time =
+    pad2(now.getHours()) +
+    pad2(now.getMinutes()) +
+    pad2(now.getSeconds());
+  return `${date}-${time}`;
+}
+
+function listSnapshots(): readonly MetricsSnapshotMeta[] {
+  const dir = paths.metricsSnapshotsDir;
+  if (!existsSync(dir)) return [];
+
+  const files = readdirSync(dir)
+    .filter((f) => /^[0-9]{8}-[0-9]{6}\.json$/.test(f))
+    .sort()
+    .reverse();
+
+  const results: MetricsSnapshotMeta[] = [];
+  for (const file of files) {
+    try {
+      const raw = readFileSync(join(dir, file), "utf-8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      results.push({
+        id: String(parsed.id ?? ""),
+        created_at: String(parsed.created_at ?? ""),
+        label: String(parsed.label ?? ""),
+        source: String(parsed.source ?? ""),
+        tab: String(parsed.tab ?? ""),
+        weeks: Number(parsed.weeks ?? 2),
+      });
+    } catch {
+      // skip malformed snapshot files
+    }
+  }
+  return results;
+}
+
+function readSnapshot(id: string): MetricsSnapshot | null {
+  if (!SNAPSHOT_ID_RE.test(id)) return null;
+  const dir = paths.metricsSnapshotsDir;
+  const filePath = resolve(dir, `${id}.json`);
+  // Path traversal guard
+  if (!filePath.startsWith(dir)) return null;
+  if (!existsSync(filePath)) return null;
+  try {
+    const raw = readFileSync(filePath, "utf-8");
+    return JSON.parse(raw) as MetricsSnapshot;
+  } catch {
+    return null;
+  }
+}
+
 // --- Route ---
 
 export const pipelineRoute = new Hono();
@@ -577,6 +643,83 @@ pipelineRoute.post("/fetch-articles", async (c) => {
   );
 });
 
+// POST /metrics/save — save a metrics snapshot
+pipelineRoute.post("/metrics/save", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = metricsSaveSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(fail("Invalid request body"), 400);
+  }
+
+  const { metrics, source, tab, label, weeks } = parsed.data;
+  const id = generateSnapshotId();
+  const created_at = new Date().toISOString();
+
+  const snapshot: MetricsSnapshot = {
+    id,
+    created_at,
+    label,
+    source,
+    tab,
+    weeks,
+    metrics,
+  };
+
+  const dir = paths.metricsSnapshotsDir;
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  const filePath = resolve(dir, `${id}.json`);
+  // Path traversal guard
+  if (!filePath.startsWith(dir)) {
+    return c.json(fail("Invalid snapshot path"), 400);
+  }
+
+  try {
+    writeFileSync(filePath, JSON.stringify(snapshot, null, 2), "utf-8");
+  } catch {
+    return c.json(fail("Failed to save snapshot"), 500);
+  }
+
+  return c.json(ok({ id, created_at, label }), 201);
+});
+
+// GET /metrics/snapshots — list saved snapshots (metadata only)
+pipelineRoute.get("/metrics/snapshots", (c) => {
+  const snapshots = listSnapshots();
+  return c.json(ok({ items: snapshots, total: snapshots.length }));
+});
+
+// DELETE /metrics/snapshots/:id — delete a snapshot
+pipelineRoute.delete("/metrics/snapshots/:id", (c) => {
+  const id = c.req.param("id");
+  const parsed = snapshotIdSchema.safeParse(id);
+  if (!parsed.success) {
+    return c.json(fail("Invalid snapshot ID format"), 400);
+  }
+
+  const dir = paths.metricsSnapshotsDir;
+  const filePath = resolve(dir, `${id}.json`);
+  // Path traversal guard
+  if (!filePath.startsWith(dir)) {
+    return c.json(fail("Invalid snapshot path"), 400);
+  }
+
+  if (!existsSync(filePath)) {
+    return c.json(fail("Snapshot not found"), 404);
+  }
+
+  try {
+    unlinkSync(filePath);
+  } catch {
+    return c.json(fail("Failed to delete snapshot"), 500);
+  }
+
+  return c.json(ok({ deleted: true, id }));
+});
+
 // POST /metrics — parse SEO metrics from source
 pipelineRoute.post("/metrics", async (c) => {
   const body = await c.req.json().catch(() => ({}));
@@ -596,8 +739,14 @@ pipelineRoute.post("/metrics", async (c) => {
     return c.json(fail("Metrics loading failed"), 500);
   }
 
+  // Python output may contain log lines before/after the JSON block — extract between first `{` and last `}`
+  const jsonStart = result.output.indexOf("{");
+  const jsonEnd = result.output.lastIndexOf("}");
+  const jsonStr = jsonStart >= 0 && jsonEnd > jsonStart
+    ? result.output.slice(jsonStart, jsonEnd + 1)
+    : result.output;
   try {
-    return c.json(ok(JSON.parse(result.output)));
+    return c.json(ok(JSON.parse(jsonStr)));
   } catch {
     return c.json(ok({ raw: result.output }));
   }
