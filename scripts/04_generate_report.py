@@ -534,34 +534,83 @@ def _build_metrics_summary(alerts: list[dict]) -> str:
 # ──────────────────────────────────────────────────────
 
 REPORT_SYSTEM_PROMPT = """\
-你是資深 SEO 分析師，任務是把本週的指標變化「翻譯成意義」，並用過去顧問會議累積的 Q&A 知識庫作為佐證。
+你是資深 SEO 分析師，任務是把本週指標變化「翻譯成意義」，用 Q&A 知識庫作為佐證。
 
-重要原則：
-- 用戶可以直接看 Google Sheets，**不需要你重複數字**。
-- 每一個觀察必須說明「這代表什麼」「為什麼發生」「應該怎麼做」。
-- 每個 insight 都應盡量引用【Q&A 知識庫】的具體內容作為依據，格式：（參考：「{Q&A 的關鍵句}」）
-- 如果知識庫沒有直接對應，請根據 SEO 原理推論，並標明「（推論）」。
-- 避免泛泛的 SEO 建議；結合本週資料的具體變化給出針對性意見。
-- 引用知識庫時，請同時標註原始會議來源（標題+日期）。若來源附有 Notion 連結，保留 Markdown 超連結格式，方便讀者一鍵回到原始頁面。
+## 核心原則
+- 用戶可以直接看 Google Sheets，**不要重複數字**——聚焦「代表什麼」「為什麼」「怎麼做」。
+- 每個 insight 盡量引用 Q&A 知識庫，格式：「（參考：「{關鍵句}」— {source_title}、{source_date}）」
+- 知識庫沒有直接對應時，根據 SEO 原理推論，標明「（推論）」。
+- 避免泛泛 SEO 建議；結合本週具體變化給出針對性分析。
 
-報告格式（Markdown，用繁體中文，技術術語保留英文）：
+## Health Score 演算法
+```
+score = 100 - (ALERT_DOWN 數量 × 10)
+若所有 CORE 指標同時下滑，額外扣 20
+≥80 良好 / ≥60 需關注 / <60 警示
+```
 
-## 本週核心訊號
-（3-4 點，每點說明一個重要的「現象 → 意義 → 知識庫怎麼說」，不提數字）
+## 異常閾值
+- ALERT_DOWN：月趨勢 < -15% 或週趨勢 < -20%
+- ALERT_UP：月趨勢 > +15% 或週趨勢 > +20%
+- CORE：曝光、點擊、CTR、有效(Coverage)、檢索未索引、工作階段總數、Organic Search、Discover、AMP(non-Rich)、AMP Article、Google News、News(new)、Image
 
-## 異常指標解讀
-（針對顯著上升 / 下滑的指標，逐一解釋可能的因果機制，重點引用知識庫）
+## 業界研究（推理時引用）
+- CTR 基準：Backlinko 2024（67K 關鍵字）Position 1 平均 CTR 27.6%，Position 2 降至 15.8%
+- SERP Features：arxiv 2306.01785 Knowledge Panel 使 CTR 降低 ~8pp；Featured Snippet 可提升 ~20%
+- NavBoost：Google 排名洩露（2024）以 13 個月滾動視窗聚合用戶點擊
+- E-E-A-T：Google 2024 Experience = 作者署名 + About 頁 + 可查核外部聲譽
+- Discover：First Page Sage 2025 高品質內容為首要因素；參與度為第 5 大信號
+- 搜尋意圖：Semrush 2025 Awareness / Consideration / Conversion 漏斗
 
-## 本週行動清單
-（3 條具體 Todo，每條注明依據是哪個 Q&A 的建議或觀察）
+## 報告格式（Markdown，繁體中文，術語保留英文）
 
-## 直接引用知識庫
-（原文引用 1-2 個本週最相關的 Q&A 問答，格式：**Q**：… / **A（節錄）**：… / **來源**：…）
+### 一、本週 SEO 情勢快照
+- Health Score 與標籤（良好/需關注/警示），列出扣分明細表
+- **5 大現象**：down 前 3（🔴 高）+ up 前 2（🟢 低），每個說明月/週趨勢 + 意義
+- **異常指標逐項解讀**：每個 ALERT_DOWN 的推理（結合 KB 知識庫佐證）
+- 跨指標關聯分析：不只描述，要有推理鏈（「我看到 X → 判斷 Y，因為 Z」）
+
+### 二、流量信號解讀
+根據 CTR / 曝光 / 點擊 / Discover / Organic Search 判斷屬於哪個象限：
+- 高曝光 / 低 CTR → Title 吸引力問題或 SERP Feature 搶走點擊
+- 低曝光 / 高 CTR → 排名後退，觸及縮小
+- 雙低（曝光 + 點擊同降）→ NavBoost 惡化循環
+- 雙穩或雙升 → 正常，找驅動因素
+Discover 單獨分析，引用 First Page Sage 2025。
+
+### 三、技術 SEO 健康度
+- Coverage 有效率趨勢
+- 檢索未索引增加是爬蟲預算問題還是內容品質問題？
+- AMP Article vs AMP (non-Rich) 差異分析
+- 結合 KB 技術相關 QA
+
+### 四、搜尋意圖對映
+- 意圖漏斗對映表（Awareness / Consideration / Conversion / Discovery 各對應指標與本期狀況）
+- E-E-A-T 信號觀察
+
+### 五、本週優先行動清單
+三級行動，基於實際 down 指標和推理：
+- 🔴 高優先（需立即處理）：每個 ALERT_DOWN 一條具體行動 + KB 連結
+- 🟡 中優先（本週內）：CTR 優化 / 上升指標延伸
+- 🟢 低優先（下週規劃）：E-E-A-T 強化 / 內容行事曆
+解釋行動優先序的推理（為什麼某項比其他更緊急，考慮絕對流量影響）
+
+### 六、來源
+列出最相關的 KB Q&A（max 8），格式：
+```
+[知識庫N →](/admin/seoInsight/{id}) **{source_title}、{source_date}** — {answer 前 80 字}…
+```
+
+## Citation 規則（Perplexity 風格）
+body text 引用 KB 後，句末加 `[N]`（同一 QA 重複引用用同一 N）。
+QA 答案若含 [What]/[Why]/[How]/[Evidence] 標籤，以 blockquote 輸出：
+> **現象** {What} / **原因** {Why} / **行動** {How}
+— {source_title}、{source_date}  [知識庫N →](/admin/seoInsight/{id})
 """
 
 
 @observe(name="generate_report")
-def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date: str) -> str:
+def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date: str, weeks: int = 1) -> str:
     client = OpenAI(api_key=config.OPENAI_API_KEY)
     
     # ─ Meta 前置（動態取出 KB 大小）─
@@ -573,9 +622,10 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
     except Exception as e:
         logger.warning("無法讀取 qa_final.json 以取得 KB 大小：%s", e)
     _kb_label = f"{_total_qa} Q&A" if _total_qa else "知識庫"
+    _model_name = config.OPENAI_MODEL
     meta_block = f"""---
 **Meta 資訊**
-- **生成方式**：Claude Code 本地推理（不需要 OpenAI API）
+- **生成方式**：OpenAI {_model_name} 生成
 - **知識庫支撐**：{_kb_label}（來自過去 SEO 顧問會議記錄）
 - **生成日期**：{metrics_date}
 - **特性**：零捏造數字、知識庫驗證、具體行動步驟
@@ -639,8 +689,16 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
             logger.error(f"   ❌ refusal={getattr(msg, 'refusal', None)}")
             logger.error(f"   ❌ msg fields: {getattr(msg, 'model_fields_set', None)}")
 
-    # 將 meta_block 加入報告開頭
-    full_report = meta_block + (content or "（報告產生失敗）")
+    # 將 meta_block 加入報告開頭，report_meta JSON 加入尾端
+    _generated_at = datetime.now().isoformat()
+    _report_meta = json.dumps({
+        "weeks": weeks,
+        "generated_at": _generated_at,
+        "generation_mode": "openai",
+        "generation_label": f"OpenAI {_model_name} 生成",
+        "model": _model_name,
+    }, ensure_ascii=False)
+    full_report = meta_block + (content or "（報告產生失敗）") + f"\n<!-- report_meta {_report_meta} -->"
     
     # ─ Laminar metadata 記錄 ─
     try:
@@ -708,6 +766,11 @@ def main() -> None:
         type=str,
         default=None,
         help="指標快照 JSON 路徑（已解析的 metrics dict，跳過 TSV 解析）",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="跳過報告快取，強制重新生成（API 呼叫時使用）",
     )
     parser.add_argument(
         "--check",
@@ -876,12 +939,12 @@ def main() -> None:
     qa_ver = get_latest_version(3)
     qa_version_id = qa_ver["version_id"] if qa_ver else "no-qa"
     report_cache_key = f"{metrics_summary}\n---QA_VER={qa_version_id}---"
-    cached_report = cache_get("report", report_cache_key)
+    cached_report = None if args.no_cache else cache_get("report", report_cache_key)
     if cached_report is not None:
         report_md = cached_report["report_text"]
         logger.info("   [cache hit] 直接使用緩存報告")
     else:
-        report_md = generate_report(metrics_summary, relevant_qas, report_date)
+        report_md = generate_report(metrics_summary, relevant_qas, report_date, weeks=args.weeks)
         cache_set("report", report_cache_key, {"report_text": report_md})
 
     # 輸出

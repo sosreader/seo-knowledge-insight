@@ -147,7 +147,7 @@ reportsRoute.post("/generate", async (c) => {
 
   // ── OpenAI mode: snapshot_id + use_openai + OPENAI_API_KEY ─────
   if (parsed.data.use_openai && snapshotPath && hasOpenAI()) {
-    const cmd = ["python3", join(paths.scriptsDir, "04_generate_report.py"), "--snapshot", snapshotPath];
+    const cmd = ["python3", join(paths.scriptsDir, "04_generate_report.py"), "--snapshot", snapshotPath, "--no-cache"];
     const weeks = parsed.data.weeks
       ?? (snapshot && typeof snapshot.weeks === "number" ? snapshot.weeks : undefined);
     if (weeks) {

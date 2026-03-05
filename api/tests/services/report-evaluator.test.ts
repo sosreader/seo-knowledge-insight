@@ -101,9 +101,9 @@ describe("evaluateReport()", () => {
     expect(result.alert_coverage).toBe(0);
   });
 
-  it("computes alert_coverage: 0 when alertNames is empty", () => {
+  it("computes alert_coverage: 1 (full credit) when alertNames is empty", () => {
     const result = evaluateReport(FULL_SIX_SECTION_REPORT, []);
-    expect(result.alert_coverage).toBe(0);
+    expect(result.alert_coverage).toBe(1);
   });
 
   it("overall is average of all 5 dimension scores", () => {

@@ -245,12 +245,12 @@ describe("POST /api/v1/reports/generate (local mode — no OpenAI)", () => {
     });
     expect(res.status).toBe(200);
 
-    const { readFileSync, readdirSync, statSync: statSyncFs } = await import("node:fs");
+    const json = await res.json();
+    const filename = json.data.filename as string;
+
+    const { readFileSync } = await import("node:fs");
     const { join: pathJoin } = await import("node:path");
-    const files = readdirSync(tmpDir)
-      .filter((f: string) => f.startsWith("report_") && f.endsWith(".md"))
-      .sort((a: string, b: string) => statSyncFs(pathJoin(tmpDir, b)).mtimeMs - statSyncFs(pathJoin(tmpDir, a)).mtimeMs);
-    const content = readFileSync(pathJoin(tmpDir, files[0]!), "utf-8");
+    const content = readFileSync(pathJoin(tmpDir, filename), "utf-8");
 
     expect(content).not.toContain("AI 輔助");
     expect(content).not.toContain("AI 解讀");
