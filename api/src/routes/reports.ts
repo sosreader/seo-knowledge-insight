@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
-import { generateRequestSchema, type ReportSummary } from "../schemas/report.js";
+import { generateRequestSchema, type ReportSummary, type ReportMeta } from "../schemas/report.js";
 import { paths } from "../config.js";
 import { hasOpenAI } from "../utils/mode-detect.js";
 import { generateReportLocal, saveReport } from "../services/report-generator-local.js";
@@ -17,8 +17,25 @@ const execFileAsync = promisify(execFile);
 // Matches report_YYYYMMDD.md (legacy) and report_YYYYMMDD_<sha1-8>.md (content-addressed)
 const REPORT_PATTERN = /^report_(\d{8}(?:_[0-9a-f]{8})?)\.md$/;
 const DATE_RE = /^\d{8}(?:_[0-9a-f]{8})?$/;
+const REPORT_META_RE = /<!-- report_meta ({[\s\S]*?}) -->/;
 const ALLOWED_URL_SCHEMES = new Set(["https:", "http:"]);
 const ALLOWED_URL_HOSTS = new Set(["docs.google.com", "sheets.google.com"]);
+
+function parseReportMeta(content: string): ReportMeta | undefined {
+  const m = content.match(REPORT_META_RE);
+  if (!m) return undefined;
+  try {
+    const raw = JSON.parse(m[1]) as Record<string, unknown>;
+    return {
+      weeks: typeof raw.weeks === "number" ? raw.weeks : 1,
+      generated_at: typeof raw.generated_at === "string" ? raw.generated_at : "",
+      generation_mode: typeof raw.generation_mode === "string" ? raw.generation_mode : "template",
+      generation_label: typeof raw.generation_label === "string" ? raw.generation_label : "",
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 function listReportFiles(): readonly ReportSummary[] {
   const dir = paths.outputDir;
@@ -62,8 +79,9 @@ reportsRoute.get("/:date", (c) => {
 
   const content = readFileSync(filepath, "utf-8");
   const size_bytes = statSync(filepath).size;
+  const meta = parseReportMeta(content);
 
-  return c.json(ok({ date, filename, content, size_bytes }));
+  return c.json(ok({ date, filename, content, size_bytes, meta }));
 });
 
 const SNAPSHOT_ID_RE = /^[0-9]{8}-[0-9]{6}$/;
@@ -111,12 +129,14 @@ reportsRoute.post("/generate", async (c) => {
     let reportContent: string;
     try {
       const qaCount = qaStore.count;
+      const snapshotWeeks = typeof snapshot.weeks === "number" ? snapshot.weeks : null;
       reportContent = await generateReportLocal(
         snapshotMetrics,
         reportDate,
         qaCount,
         parsed.data.situation_analysis,
         parsed.data.traffic_analysis,
+        snapshotWeeks,
       );
       const dateOnly = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const hash8 = createHash("sha1").update(reportContent).digest("hex").slice(0, 8);

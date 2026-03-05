@@ -16,6 +16,14 @@ export interface ReportSummary {
   readonly size_bytes: number;
 }
 
+export interface ReportMeta {
+  readonly weeks: number;
+  readonly generated_at: string;
+  readonly generation_mode: string;
+  readonly generation_label: string;
+}
+
 export interface ReportDetail extends ReportSummary {
   readonly content: string;
+  readonly meta?: ReportMeta;
 }

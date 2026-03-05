@@ -672,6 +672,7 @@ export async function generateReportLocal(
   qaCount: number,
   situationAnalysis?: string | null,
   trafficAnalysis?: string | null,
+  weeks?: number | null,
 ): Promise<string> {
   const typedMetrics = metrics as Record<string, MetricData>;
   const alerts = detectAlerts(typedMetrics);
@@ -739,6 +740,7 @@ export async function generateReportLocal(
   const generationMode = llmUsed
     ? "Hybrid Mode（本地模板 + Claude Code 語意輔助）"
     : "Template Mode（本地模板引擎，不呼叫任何 LLM API）";
+  const generatedAt = new Date().toISOString();
   const metaBlock = `---
 **報告資訊**
 - 生成方式：${generationMode}
@@ -749,7 +751,16 @@ export async function generateReportLocal(
 ---
 `;
 
-  return [metaBlock, s1, s2, s3, s4, s5, s6].join("\n") + tracker.toBlock();
+  // Structured metadata block (machine-readable, appended after citations)
+  const reportMeta = {
+    weeks: weeks ?? 1,
+    generated_at: generatedAt,
+    generation_mode: llmUsed ? "hybrid" : "template",
+    generation_label: generationMode,
+  };
+  const metaComment = `\n<!-- report_meta ${JSON.stringify(reportMeta)} -->`;
+
+  return [metaBlock, s1, s2, s3, s4, s5, s6].join("\n") + tracker.toBlock() + metaComment;
 }
 
 /**
