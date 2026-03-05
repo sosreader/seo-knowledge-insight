@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import re
@@ -867,7 +868,8 @@ def main() -> None:
     if args.output:
         out_path = Path(args.output)
     else:
-        out_path = config.OUTPUT_DIR / f"report_{date_str}.md"
+        hash8 = hashlib.sha1(report_md.encode()).hexdigest()[:8]
+        out_path = config.OUTPUT_DIR / f"report_{date_str}_{hash8}.md"
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report_md, encoding="utf-8")

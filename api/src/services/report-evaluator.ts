@@ -14,7 +14,7 @@ export interface ReportEvalResult {
   kb_citation_count: number;
   /** 1 if report contains industry research references, else 0 */
   has_research_citations: number;
-  /** 1 if report contains /admin/seoInsight/chunk/ links, else 0 */
+  /** 1 if report contains /admin/seoInsight/{id} links, else 0 */
   has_kb_links: number;
   /** Proportion of alert metric names mentioned in section 五 (0–1) */
   alert_coverage: number;
@@ -45,7 +45,8 @@ const RESEARCH_KEYWORDS = [
   "arxiv",
 ] as const;
 
-const KB_LINK_RE = /\/admin\/seoInsight\/chunk\/[0-9a-f]+/g;
+// Matches /admin/seoInsight/{hex16} (stable_id) or /admin/seoInsight/{digits} (seq)
+const KB_LINK_RE = /\/admin\/seoInsight\/(?:[0-9a-f]{16}|\d+)/g;
 
 // ── Evaluator ─────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ export function evaluateReport(
   ).length;
   const section_coverage = sectionsFound / SECTION_MARKERS.length;
 
-  // 2. kb_citation_count: count unique /admin/seoInsight/chunk/{id} links
+  // 2. kb_citation_count: count unique /admin/seoInsight/{id} links
   const kbMatches = content.match(KB_LINK_RE) ?? [];
   const uniqueKbLinks = new Set(kbMatches).size;
   // Also count http/https external links in 知識庫引用 section
@@ -94,7 +95,7 @@ export function evaluateReport(
     ? 1
     : 0;
 
-  // 4. has_kb_links: /admin/seoInsight/chunk/ pattern anywhere
+  // 4. has_kb_links: /admin/seoInsight/{id} pattern anywhere
   const has_kb_links = KB_LINK_RE.test(content) ? 1 : 0;
 
   // 5. alert_coverage: alert names appearing in 五、本週優先行動清單

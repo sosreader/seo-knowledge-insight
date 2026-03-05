@@ -13,7 +13,6 @@ import { reportsRoute } from "./routes/reports.js";
 import { sessionsRoute } from "./routes/sessions.js";
 import { feedbackRoute } from "./routes/feedback.js";
 import { pipelineRoute } from "./routes/pipeline.js";
-import { evalRoute } from "./routes/eval.js";
 import { synonymsRoute } from "./routes/synonyms.js";
 import { qaStore } from "./store/qa-store.js";
 import { synonymsStore } from "./store/synonyms-store.js";
@@ -45,8 +44,6 @@ api.use("/sessions", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/sessions/*", rateLimit(config.RATE_LIMIT_CHAT));
 api.use("/pipeline", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/pipeline/*", rateLimit(config.RATE_LIMIT_DEFAULT));
-api.use("/eval", rateLimit(config.RATE_LIMIT_DEFAULT));
-api.use("/eval/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/synonyms", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/synonyms/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 
@@ -58,7 +55,6 @@ api.route("/reports", reportsRoute);
 api.route("/sessions", sessionsRoute);
 api.route("/feedback", feedbackRoute);
 api.route("/pipeline", pipelineRoute);
-api.route("/eval", evalRoute);
 api.route("/synonyms", synonymsRoute);
 
 app.route("/api/v1", api);

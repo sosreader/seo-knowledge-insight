@@ -39,7 +39,6 @@
 - **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）
 - **對話管理** — `GET/POST/DELETE /api/v1/sessions/*`（CRUD、訊息歷史）
 - **Pipeline 管理** — `/api/v1/pipeline/*`（14 endpoints：狀態、會議、來源文件、指標、快照、觸發 fetch/fetch-articles/extract/dedupe）
-- **Eval 評估** — `/api/v1/eval/*`（6 endpoints：抽樣、Retrieval 評估、Reranking 評估、Context Relevance、跨 provider 比較、儲存結果）
 - **同義詞管理** — `/api/v1/synonyms/*`（4 endpoints：列表、新增、更新、刪除；雙層設計：靜態+自訂）
 - **API 安全** — API Key 認證（`X-API-Key` header）、Rate Limit（chat 20/min、search/qa 60/min）、Zod schema validation
 
@@ -163,18 +162,17 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | 週報列表                    | 無獨立指令 — 掃描 `output/report_*.md`            | 無對應                                              | `GET /api/v1/reports`                       |
 | 單篇週報詳情                | 無獨立指令 — 讀 `output/report_YYYYMMDD.md`       | 無對應                                              | `GET /api/v1/reports/{date}`                |
 
-### 評估 API
+### 離線評估工具（v2.18 eval route 移除）
 
-| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
+| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | 說明                                    |
 | --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| 抽樣 Q&A                    | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/eval/sample`                  |
-| Retrieval 指標               | `make evaluate-qa`（含 `--eval-retrieval`）        | `/evaluate-qa-local`（含 Retrieval）                 | `POST /api/v1/eval/retrieval`               |
-| 語意 + Reranker 對比         | `make eval-semantic`（三模式）、`make eval-semantic-k3`（top-k=3）| 無獨立指令 | 無對應 — 屬 CLI 快速評估     |
-| Reranking 評估              | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/eval/reranking`               |
-| Laminar 正式 Eval Run       | `make eval-laminar`（推送 Dashboard）             | 無獨立指令                                          | 無對應 — 屬離線 Laminar dataset |
-| Context Relevance 評估      | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/eval/context-relevance`       |
-| 跨 Provider 比較             | 無獨立指令                                        | `/evaluate-provider`                                 | `GET /api/v1/eval/compare`                  |
-| 儲存評估結果                | 無獨立指令 — 直接寫 `output/eval_report.json`      | 無獨立指令                                          | `POST /api/v1/eval/save`                    |
+| Q&A Retrieval 評估          | `make evaluate-qa`（含 `--eval-retrieval`）        | `/evaluate-qa-local`（含 Retrieval）                 | Keyword Hit Rate、MRR、Precision@K、Recall@K、F1 — 離線評估 |
+| 語意 + Reranker 對比         | `make eval-semantic`（三模式）、`make eval-semantic-k3`（top-k=3）| 無獨立指令 | 三種檢索模式（keyword/hybrid/hybrid+rerank）的品質對比     |
+| Laminar 正式 Eval Run       | `make eval-laminar`（推送 Dashboard）             | 無獨立指令                                          | 離線 Laminar dataset，5 指標推送儀表板 |
+| 週報品質評估                | `python scripts/_eval_report.py <report_path>`   | 無獨立指令                                          | 7 維度規則式評分 — section_coverage、kb_citations、...；推送 Laminar |
+| 跨 Provider 評估             | 無獨立指令                                        | `/evaluate-provider <目錄>`（不需要 OpenAI）        | LLM Provider SEO 洞察品質評估（Grounding、Actionability、Relevance、Topic Coverage） |
+| Faithfulness 評估           | 無獨立指令                                        | `/evaluate-faithfulness-local`                      | RAGAS：Answer 是否有幻覺（Claude Code as Judge）|
+| Context Precision 評估      | 無獨立指令                                        | `/evaluate-context-precision-local`                 | RAGAS：Retrieved contexts 相關性評估 |
 
 ### 系統
 

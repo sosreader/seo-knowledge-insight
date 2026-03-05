@@ -189,7 +189,7 @@ Notion 會議紀錄（87 份，2023–2026）
   速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min・eval 60/min）
   QA ID：stable_id（SHA256[:16] hex），與 Python 相同驗證規則
   Local Mode：無 OpenAI API key 時自動降級（search→keyword-only，chat→context-only）
-  endpoint（10 個 router，37 端點，v2.12）：
+  endpoint（9 個 router，31 端點，v2.12～v2.18）：
     - routes/qa.ts        — GET /qa, /qa/categories, /qa/{id}（hex+int）
     - routes/search.ts    — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；v2.11 over-retrieve + rerank）
     - routes/chat.ts      — POST /chat（mode: full|context-only，無 OpenAI 時回傳 sources + answer:null；v2.11 rerank 可啟用）
@@ -197,7 +197,6 @@ Notion 會議紀錄（87 份，2023–2026）
     - routes/sessions.ts  — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages（context-only fallback）, DELETE /sessions/{id}
     - routes/feedback.ts  — POST /feedback
     - routes/pipeline.ts  — GET /status, /source-docs, /source-docs/:collection/:file/preview, /unprocessed, /logs, POST /fetch, /fetch-articles, /extract-qa, /dedupe-classify, /metrics
-    - routes/eval.ts      — POST /eval/sample, /eval/retrieval, /eval/reranking（v2.11 新增）, /eval/context-relevance（v2.12 新增）, /eval/save, GET /eval/compare
     - routes/synonyms.ts  — GET /synonyms, POST /synonyms, PUT /synonyms/{term}, DELETE /synonyms/{term}（雙層設計：28 靜態術語 + 32 新增（v2.11）+ custom JSON）
   核心模組：
     - store/qa-store.ts：QAStore（讀 qa_final.json + embedding 向量，embedding optional）
@@ -215,11 +214,13 @@ Notion 會議紀錄（87 份，2023–2026）
     - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
     - services/context-relevance.ts：Context Relevance 評估（v2.12 新增，Claude haiku judge；per-context 細分；escapeXml() 防 prompt injection）
     - services/report-generator-local.ts：本地週報生成（v2.13 新增；6 維度 ECC 分析；無需 OpenAI API；含 RESEARCH_CITATIONS 業界研究引用庫；v2.14 加入 CitationTracker — `[N]` 標記 + `<!-- citations [...] -->` block）
-    - services/report-evaluator.ts：報告品質規則式評估（v2.13 新增；5 維度 section_coverage/kb_citation/research/kb_links/alert_coverage；online scoring）
-    - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools）
+    - services/report-evaluator.ts：報告品質規則式評估（v2.13 新增；5 維度 section_coverage/kb_citation/research/kb_links/alert_coverage；online scoring；v2.18 修正 KB_LINK_RE 格式）
+    - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools；v2.18 stdout/stderr 分離，修復 Laminar log 混入 JSON parse bug）
+  評估工具：
+    - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port，複製 report-evaluator.ts 邏輯；7 維度推送 Laminar `report-quality` group；供 `/generate-report` 存檔後呼叫）
   schemas：
-    - qa / search / chat / feedback / report / session / pipeline / eval / synonyms / api-response
-  測試：Vitest（25 個 test files，216 tests passing）
+    - qa / search / chat / feedback / report / session / pipeline / synonyms / api-response
+  測試：Vitest（24 個 test files，223 tests passing）— v2.18 移除 eval route
   部署：docker-compose（port 8002），未來支援 ECR + App Runner
   與 Python 並行運作（遷移期間）
             ↓ http://localhost:8002 (開發) 或 https://<service-v2>.awsapprunner.com (未來)

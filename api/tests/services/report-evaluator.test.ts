@@ -35,7 +35,7 @@ E-E-A-T 信號觀察。
 
 **Q**：如何改善 CTR？
 **A（節錄）**：優化 Title 與 Description…
-**連結**：[知識庫 →](/admin/seoInsight/chunk/abc1234567890abc)
+**連結**：[知識庫 →](/admin/seoInsight/abc1234567890abc)
 `;
 
 const EMPTY_REPORT = "";
@@ -47,8 +47,8 @@ const REPORT_WITH_LINKS = `## 一、本週 SEO 情勢快照
 ## 五、本週優先行動清單
 CTR 出現下滑
 ## 六、知識庫引用
-[知識庫 →](/admin/seoInsight/chunk/aabbccdd11223344)
-[知識庫 →](/admin/seoInsight/chunk/1122334455667788)
+[知識庫 →](/admin/seoInsight/aabbccdd11223344)
+[知識庫 →](/admin/seoInsight/1122334455667788)
 `;
 
 // ── Tests ──────────────────────────────────────────────────────────────

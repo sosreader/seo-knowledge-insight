@@ -28,7 +28,12 @@ export async function execPython(
       }
     );
 
-    const output = (stdout + (stderr ? `\n${stderr}` : "")).trim();
+    // stdout is structured output (JSON/text); stderr carries logging only.
+    // Keep them separate so JSON.parse on output works correctly.
+    const output = stdout.trim();
+    if (stderr.trim()) {
+      console.debug("[pipeline-runner] stderr:", stderr.trim());
+    }
     return {
       success: true,
       output,
