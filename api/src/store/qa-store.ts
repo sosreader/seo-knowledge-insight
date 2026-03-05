@@ -36,6 +36,7 @@ export interface QAItem {
   readonly source_type: string; // "meeting" | "article" | "paper" | "transcript"
   readonly source_collection: string; // "seo-meetings" | "genehong-medium" | "ithelp-sc-kpi"
   readonly source_url: string; // canonical URL to original content
+  readonly extraction_model?: string; // model used to extract this QA
 }
 
 interface RawQAData {
@@ -55,6 +56,7 @@ interface RawQAData {
     source_type?: string;
     source_collection?: string;
     source_url?: string;
+    extraction_model?: string;
     _enrichment?: {
       synonyms?: string[];
       freshness_score?: number;
@@ -132,6 +134,7 @@ export class QAStore {
       source_type: qa.source_type ?? "meeting",
       source_collection: qa.source_collection ?? "seo-meetings",
       source_url: qa.source_url ?? qa._enrichment?.source_url ?? qa._enrichment?.notion_url ?? "",
+      extraction_model: qa.extraction_model,
     }));
 
     // Build ID index

@@ -115,7 +115,7 @@ export async function ragChat(
 
   // 5. Call GPT
   const resp = await getOpenAI().chat.completions.create({
-    model: config.OPENAI_MODEL,
+    model: config.CHAT_MODEL,
     messages,
     temperature: 0.3,
   });

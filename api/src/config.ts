@@ -16,6 +16,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().default(""),
   OPENAI_MODEL: z.string().default("gpt-5.2"),
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
+  CHAT_MODEL: z.string().default("gpt-5.2"),
 
   SEO_API_KEY: z.string().default(""),
 

@@ -154,6 +154,7 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
                         "source_collection": collection,
                         "source_url": group_qas[0].get("source_url", ""),
                         "stable_id": compute_stable_id_from_sources(source_ids),
+                        "extraction_model": config.OPENAI_MODEL,
                     })
                 except Exception as e:
                     logger.warning("merge_similar_qas failed for group %d: %s", group_i + 1, e, exc_info=True)

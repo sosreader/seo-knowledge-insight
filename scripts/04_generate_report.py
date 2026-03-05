@@ -650,6 +650,7 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
             span.set_metadata({
                 "step": "generate_report",
                 "execution_mode": "openai_api",
+                "model": config.OPENAI_MODEL,
                 "knowledge_base_size": _total_qa,
                 "generation_timestamp": metrics_date,
                 "character_count": len(full_report),
