@@ -504,33 +504,75 @@ Phase 3（4 週後）：下線 Python API (port 8001)
    - 404 if not found
    - 用途：前端「週報詳情」頁面展示 Markdown 內容
 
-3. **POST /api/v1/reports/generate** — 觸發週報生成
+3. **POST /api/v1/reports/generate** — 觸發週報生成（4 種模式）
+
+   **Request Schema** 支援 3 種路由模式：
    ```json
    {
-     "metrics_url": "https://sheets.google.com/...SHEET_ID..."  # optional
+     "snapshot_id": "20260306-103000",  // 本地/OpenAI 模式：指標快照 ID
+     "use_openai": true,               // OpenAI 模式開關
+     "metrics_url": "...",             // Legacy URL 模式
+     "weeks": 4,                       // Legacy URL 模式參數
+     "situation_analysis": "...",      // hybrid 模式：5 維度 LLM 分析注入
+     "traffic_analysis": "...",
+     "technical_analysis": "...",
+     "intent_analysis": "...",
+     "action_analysis": "..."
    }
    ```
+
    回應：
    ```json
    {
      "data": {
-       "date": "20260304",
-       "filename": "report_20260304.md",
-       "size_bytes": 12345
+       "date": "20260304_a1b2c3d4",
+       "filename": "report_20260304_a1b2c3d4.md",
+       "size_bytes": 12345,
+       "cache_hit": false
      }
    }
    ```
+   > 注意：`generation_mode` 不在 API response 中，而是記錄在報告檔案內的 `<!-- report_meta -->` HTML comment。
 
    - 速率限制：5/minute（計算密集）
    - Timeout：120 秒
-   - 流程：執行 `scripts/04_generate_report.py` 並回傳最新生成的報告檔案
+   - 快取機制：基於 frontmatter + metrics 內容 hash，避免時間戳造成 cache miss
+
+   **4 種 Report Generation Mode**：
+
+   | 模式 | 驅動引擎 | 使用場景 | 參數 | 需要 API Key |
+   |------|--------|--------|------|-----------|
+   | `template` | 本地模板（Markdown render） | 靜態內容展示 | 無 | 否 |
+   | `hybrid` | 本地模板 + LLM 5 維度分析 | 結合固定內容與 AI 洞見 | 無 | 否 |
+   | `openai` | Python `04_generate_report.py --snapshot` + OpenAI API | 高品質 6 維度 ECC 分析 | `snapshot_id` + `use_openai: true` | 是 |
+   | `claude-code` | Claude Code 語意推理（Interactive 模式） | 開發/本地驗證 | `/generate-report` 指令 | 否 |
+
+   **OpenAI 模式詳解**（v2.23+）：
+   - 前端提交 `snapshot_id` + `use_openai: true`
+   - API 代理 `scripts/04_generate_report.py --snapshot {snapshot_id}`
+   - Python 層讀取儲存的指標快照（無需再次擷取 Google Sheets）
+   - System prompt：ECC 6 維度框架（Situation Snapshot + Health Score + CTR 四象限分析 + 研究引用 + KB 連結 + 行動建議）
+   - 回傳 markdown + `report_meta` JSON comment（`<!-- report_meta {"generation_mode":"openai","model":"gpt-5.2",...} -->`）
+   - 前端 `cache_hit` 欄位：指示是否命中快取
+
+   **Report Metadata 格式**（附加於報告尾部）：
+   ```html
+   <!-- report_meta {
+     "weeks": 1,
+     "generated_at": "2026-03-06T10:30:00Z",
+     "generation_mode": "openai",
+     "generation_label": "OpenAI gpt-5.2 生成",
+     "model": "gpt-5.2"
+   } -->
+   ```
 
 **架構決策**：
 
 - 週報儲存位置：`config.OUTPUT_DIR`（預設 `./output/`）
 - 檔案格式：`report_YYYYMMDD.md`（immutable）
-- API 層零邏輯：只提供讀取 + 觸發，實際生成邏輯在 CLI script
-- 無狀態性：多次 POST 同一 metrics_url 會覆寫，符合冪等性原則
+- API 層路由邏輯：區分 OpenAI / 本地 / Legacy URL 三路，3 路均落地同一檔案（檔名基於生成日期）
+- `generation_mode` metadata：記錄於 HTML comment，便於前端顯示和快取策略
+- Frontmatter strip：hash 計算前清除 `---...\n`，避免時間戳造成快取失效
 
 **測試覆蓋**：
 

@@ -81,7 +81,7 @@ pnpm start                   # 執行 build 版本（node dist/index.js，port 8
 |------|------|------|------|-----------|
 | GET | `/api/v1/reports` | 列出所有週報 | ✓ | 60/min |
 | GET | `/api/v1/reports/{date}` | 取得單篇週報（date: YYYYMMDD） | ✓ | 60/min |
-| POST | `/api/v1/reports/generate` | 觸發週報生成（同步，120s timeout） | ✓ | 5/min |
+| POST | `/api/v1/reports/generate` | 觸發週報生成（同步，120s timeout；v2.23 新增 `cache_hit` 欄位） | ✓ | 5/min |
 
 ### 6. 對話管理 (sessions) — 5 個 endpoints
 
@@ -122,6 +122,36 @@ pnpm start                   # 執行 build 版本（node dist/index.js，port 8
 | POST | `/api/v1/eval/retrieval` | Retrieval 評估指標（hit rate、MRR） | ✓ | 60/min |
 | GET | `/api/v1/eval/compare` | 跨 Provider 品質對比 | ✓ | 60/min |
 | POST | `/api/v1/eval/save` | 儲存評估結果 | ✓ | 60/min |
+
+---
+
+## Reports API — 回應格式（v2.23 新增）
+
+### POST /api/v1/reports/generate
+
+**Response body**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "date": "20260306",
+    "report": "...",
+    "cache_hit": true
+  }
+}
+```
+
+**欄位說明**：
+
+- `cache_hit: boolean` — 是否命中快取。若 `true` 表示該報告已存在（相同 metrics hash），直接回傳既有內容；若 `false` 表示新生成報告
+- `date: string` — 報告日期（YYYYMMDD 格式）
+- `report: string` — 週報 Markdown 內容
+
+**快取機制**：
+
+- Hash 計算移除 frontmatter 和 meta comment，避免 `generated_at` 時間戳導致 cache miss
+- 質量評估（quality eval）改用 async，並包裝在 Laminar trace 內以便追蹤
 
 ---
 

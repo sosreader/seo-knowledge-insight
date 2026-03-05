@@ -104,6 +104,15 @@ function detectAlerts(metrics: Record<string, MetricData>): AlertMetric[] {
   return alerts;
 }
 
+/**
+ * Return metric names that qualify as alerts (CORE + significant change).
+ * Used by the online evaluator to compute alert_coverage correctly.
+ */
+export function getAlertMetricNames(metrics: Record<string, unknown>): string[] {
+  const typed = metrics as Record<string, MetricData>;
+  return detectAlerts(typed).map((a) => a.name);
+}
+
 // ── KB Link helper ────────────────────────────────────────────────────
 
 function kbLink(qa: QAItem): string {
@@ -864,6 +873,7 @@ export async function generateReportLocal(
     generated_at: generatedAt,
     generation_mode: llmUsed ? "hybrid" : "template",
     generation_label: generationMode,
+    model: llmUsed ? "claude-code" : "none",
   };
   const metaComment = `\n<!-- report_meta ${JSON.stringify(reportMeta)} -->`;
 

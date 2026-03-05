@@ -35,9 +35,10 @@ const SECTION_MARKERS = [
   "## 六、",
 ] as const;
 
+// "GSC" is intentionally excluded — it appears in every SEO report and would
+// cause this metric to be always 1, defeating its purpose.
 const RESEARCH_KEYWORDS = [
   "Semrush",
-  "GSC",
   "Backlinko",
   "First Page Sage",
   "NavBoost",
@@ -45,8 +46,11 @@ const RESEARCH_KEYWORDS = [
   "arxiv",
 ] as const;
 
-// Matches /admin/seoInsight/{hex16} (stable_id) or /admin/seoInsight/{digits} (seq)
-const KB_LINK_RE = /\/admin\/seoInsight\/(?:[0-9a-f]{16}|\d+)/g;
+// Factory to avoid shared lastIndex state across calls (global flag regex).
+const kbLinkRe = (): RegExp => /\/admin\/seoInsight\/(?:[0-9a-f]{16}|\d+)/g;
+
+// Strip trailing HTML comment blocks so they don't pollute section extraction.
+const TRAILING_COMMENTS_RE = /\n<!--[\s\S]*?-->\s*$/g;
 
 // ── Evaluator ─────────────────────────────────────────────────────────
 
@@ -72,36 +76,44 @@ export function evaluateReport(
     };
   }
 
+  // Strip trailing HTML comment blocks (<!-- citations [...] -->, <!-- report_meta {...} -->)
+  // so they don't inflate link counts or pollute section extraction.
+  const body = content.replace(TRAILING_COMMENTS_RE, "");
+
   // 1. section_coverage: count ## 一、 through ## 六、
   const sectionsFound = SECTION_MARKERS.filter((marker) =>
-    content.includes(marker),
+    body.includes(marker),
   ).length;
   const section_coverage = sectionsFound / SECTION_MARKERS.length;
 
-  // 2. kb_citation_count: count unique /admin/seoInsight/{id} links
-  const kbMatches = content.match(KB_LINK_RE) ?? [];
+  // 2. kb_citation_count: count unique /admin/seoInsight/{id} links in body
+  const kbMatches = body.match(kbLinkRe()) ?? [];
   const uniqueKbLinks = new Set(kbMatches).size;
-  // Also count http/https external links in 知識庫引用 section
+  // Also count http/https external links in 知識庫引用 section (body only, no comments)
   const externalLinkRe = /https?:\/\/[^\s)>]+/g;
-  const kbSection = extractSection(content, "## 六、");
+  const kbSection = extractSection(body, "## 六、");
   const externalLinks = kbSection.match(externalLinkRe) ?? [];
   const totalCitations = uniqueKbLinks + externalLinks.length;
   const kb_citation_count = Math.min(totalCitations / 6, 1);
 
   // 3. has_research_citations: any known research keyword present
   const has_research_citations = RESEARCH_KEYWORDS.some((kw) =>
-    content.includes(kw),
+    body.includes(kw),
   )
     ? 1
     : 0;
 
-  // 4. has_kb_links: /admin/seoInsight/{id} pattern anywhere
-  const has_kb_links = KB_LINK_RE.test(content) ? 1 : 0;
+  // 4. has_kb_links: /admin/seoInsight/{id} pattern anywhere in body
+  const has_kb_links = kbLinkRe().test(body) ? 1 : 0;
 
   // 5. alert_coverage: alert names appearing in 五、本週優先行動清單
-  const actionSection = extractSection(content, "## 五、");
+  // alertNames should be only the metrics that triggered alerts (CORE + threshold breach),
+  // not all metric keys. When no alerts exist, coverage defaults to 1 (nothing to cover).
+  const actionSection = extractSection(body, "## 五、");
   let alert_coverage = 0;
-  if (alertNames.length > 0) {
+  if (alertNames.length === 0) {
+    alert_coverage = 1; // No alerts → nothing to cover → full credit
+  } else {
     const mentioned = alertNames.filter((name) =>
       actionSection.includes(name),
     ).length;
@@ -117,7 +129,7 @@ export function evaluateReport(
     5;
 
   const llm_augmented =
-    content.includes("AI 輔助") || content.includes("AI 解讀") ? 1 : 0;
+    body.includes("AI 輔助") || body.includes("AI 解讀") ? 1 : 0;
 
   return {
     section_coverage,
