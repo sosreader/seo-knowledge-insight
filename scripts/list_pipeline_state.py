@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -24,6 +25,87 @@ try:
 except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import config
+
+
+def _find_source_markdown(source_file: str) -> Path | None:
+    """根據 per-meeting QA 的 source_file 找到對應的 Markdown 原文。"""
+    # source_file 可能是完整相對路徑或純檔名
+    full_path = config.ROOT_DIR / source_file
+    if full_path.exists():
+        return full_path
+
+    basename = Path(source_file).name
+    for d in [
+        config.RAW_MD_DIR,
+        config.RAW_MEDIUM_MD_DIR,
+        config.RAW_ITHELP_MD_DIR,
+        config.RAW_GOOGLE_CASES_MD_DIR,
+    ]:
+        candidate = d / basename
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _read_source_metadata(md_path: Path) -> dict:
+    """從 Markdown 原文讀取 source_title、source_url、source_type、source_collection。"""
+    content = md_path.read_text(encoding="utf-8")
+    dir_name = md_path.parent.name
+    source_type, source_collection = config.DIR_COLLECTION_MAP.get(
+        dir_name, ("article", dir_name)
+    )
+
+    title = md_path.stem
+    title_match = re.match(r'^# (.+)', content)
+    if title_match:
+        title = title_match.group(1).strip()
+
+    source_url = ""
+    url_match = re.search(r'\*\*來源 URL\*\*:\s*(.+)', content)
+    if url_match:
+        source_url = url_match.group(1).strip()
+
+    # Notion meetings: notion_url from metadata
+    notion_url = ""
+    notion_match = re.search(r'\*\*Notion URL\*\*:\s*(.+)', content)
+    if notion_match:
+        notion_url = notion_match.group(1).strip()
+
+    return {
+        "source_title": title,
+        "source_url": source_url or notion_url,
+        "source_type": source_type,
+        "source_collection": source_collection,
+    }
+
+
+def _enrich_qa_metadata(qa: dict) -> dict:
+    """為缺少 metadata 的 QA 從原始 Markdown 補充欄位（回傳新 dict）。"""
+    source_file = qa.get("source_file", "")
+    if not source_file:
+        return qa
+
+    # 只補充缺失的欄位
+    needs_enrichment = (
+        not qa.get("source_url")
+        or not qa.get("source_type")
+        or not qa.get("source_title")
+    )
+    if not needs_enrichment:
+        return qa
+
+    md_path = _find_source_markdown(source_file)
+    if not md_path:
+        return qa
+
+    meta = _read_source_metadata(md_path)
+    return {
+        **qa,
+        "source_title": qa.get("source_title") or meta["source_title"],
+        "source_url": qa.get("source_url") or meta["source_url"],
+        "source_type": qa.get("source_type") or meta["source_type"],
+        "source_collection": qa.get("source_collection") or meta["source_collection"],
+    }
 
 
 def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
@@ -150,7 +232,11 @@ def merge_per_meeting_jsons() -> None:
             if not pairs and "處理失敗" in data.get("meeting_summary", ""):
                 error_count += 1
                 continue
-            all_qa.extend(pairs)
+            # 從 per-meeting JSON 檔名推導 source_file
+            inferred_source = data.get("source_file") or (f.stem.replace("_qa", "") + ".md")
+            for qa in pairs:
+                enriched = {**qa} if qa.get("source_file") else {**qa, "source_file": inferred_source}
+                all_qa.append(_enrich_qa_metadata(enriched))
             summary.append({
                 "file": f.stem.replace("_qa", "") + ".md",
                 "qa_count": len(pairs),

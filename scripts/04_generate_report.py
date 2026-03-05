@@ -704,6 +704,12 @@ def main() -> None:
         help="不使用 Q&A 知識庫（單純分析指標）",
     )
     parser.add_argument(
+        "--snapshot",
+        type=str,
+        default=None,
+        help="指標快照 JSON 路徑（已解析的 metrics dict，跳過 TSV 解析）",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="只檢查依賴是否就緒，不實際執行",
@@ -741,34 +747,47 @@ def main() -> None:
     logger.info("📊 SEO 週報產生器")
     logger.info("=" * 60)
 
-    # 決定資料來源（優先順序：--input > .env SHEETS_URL > 預設 URL）
-    source = args.input or getattr(config, "SHEETS_URL", "") or DEFAULT_SHEETS_URL
-
-    if source.startswith("http"):
-        logger.info(f"\n📥 從 Google Sheets 擷取（tab: {args.tab}）...")
-        try:
-            tsv_text = fetch_from_sheets(source, tab=args.tab)
-        except Exception as e:
-            logger.error(f"❌ 下載失敗：{e}")
-            logger.info("💡 請確認該試算表權限為「任何知道連結者可檢視」")
+    # ── Snapshot JSON 模式：已解析的 metrics，跳過 TSV ────────
+    if args.snapshot:
+        snapshot_path = Path(args.snapshot)
+        if not snapshot_path.exists():
+            logger.error("❌ 快照檔案不存在：%s", args.snapshot)
             sys.exit(1)
-    elif source:
-        tsv_text = Path(source).read_text(encoding="utf-8")
+        snapshot_data = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        metrics = snapshot_data.get("metrics", snapshot_data)
+        if not metrics or not isinstance(metrics, dict):
+            logger.error("❌ 快照 JSON 無有效 metrics")
+            sys.exit(1)
+        logger.info("📸 從快照載入 %d 個指標", len(metrics))
     else:
-        logger.info("📋 請貼上試算表資料（完成後按 Ctrl+D）：")
-        tsv_text = sys.stdin.read()
+        # 決定資料來源（優先順序：--input > .env SHEETS_URL > 預設 URL）
+        source = args.input or getattr(config, "SHEETS_URL", "") or DEFAULT_SHEETS_URL
 
-    if not tsv_text.strip():
-        logger.error("❌ 沒有收到資料")
-        sys.exit(1)
+        if source.startswith("http"):
+            logger.info(f"\n📥 從 Google Sheets 擷取（tab: {args.tab}）...")
+            try:
+                tsv_text = fetch_from_sheets(source, tab=args.tab)
+            except Exception as e:
+                logger.error(f"❌ 下載失敗：{e}")
+                logger.info("💡 請確認該試算表權限為「任何知道連結者可檢視」")
+                sys.exit(1)
+        elif source:
+            tsv_text = Path(source).read_text(encoding="utf-8")
+        else:
+            logger.info("📋 請貼上試算表資料（完成後按 Ctrl+D）：")
+            tsv_text = sys.stdin.read()
 
-    # 解析
-    logger.info("\n🔍 解析指標資料（weeks=%d）...", args.weeks)
-    metrics = parse_metrics_tsv(tsv_text, weeks=args.weeks)
-    if not metrics:
-        logger.error("❌ 無法解析指標，請確認格式是從 Google 試算表直接複製的 TSV")
-        sys.exit(1)
-    logger.info(f"   解析到 {len(metrics)} 個指標")
+        if not tsv_text.strip():
+            logger.error("❌ 沒有收到資料")
+            sys.exit(1)
+
+        # 解析
+        logger.info("\n🔍 解析指標資料（weeks=%d）...", args.weeks)
+        metrics = parse_metrics_tsv(tsv_text, weeks=args.weeks)
+        if not metrics:
+            logger.error("❌ 無法解析指標，請確認格式是從 Google 試算表直接複製的 TSV")
+            sys.exit(1)
+        logger.info(f"   解析到 {len(metrics)} 個指標")
 
     # 異常偵測
     alerts = detect_anomalies(metrics)
