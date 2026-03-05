@@ -100,19 +100,34 @@ done
 
 ---
 
-#### Step C1：語意推理生成 Section 1 & 2（儲存為變數，稍後傳入 API）
+#### Step C1：語意推理生成 5 段分析（儲存為變數，稍後傳入 API）
 
-生成以下兩段分析文字，**儲存備用**，不直接輸出為最終報告：
+生成以下 5 段分析文字，**儲存備用**，不直接輸出為最終報告。
+每段都要展示你的**思考過程**——不只是描述數字，而是「我看到 X，所以判斷 Y，因為 Z」的推理鏈。
 
-**`situation_analysis`**（Section 1 語意分析，2-3 句）：
+**`situation_analysis`**（Section 1 跨指標關聯，2-3 句）：
 - 針對本週 ALERT_DOWN + ALERT_UP 指標組合，分析最重要的**跨指標因果關聯**
-- 例：「AMP Article 崩跌（-35% MoM）同時 /salon/ 路徑曝光暴漲（+28%），兩者可能反映 Google 將此網站的新聞版位流量重新分配至長尾頁面，而非整體搜尋需求萎縮。」
 - 不要重複 Health Score 數字（模板已有），聚焦在你觀察到的**非顯而易見關聯**
+- 範例推理鏈：「AMP Article 崩跌同時 /salon/ 暴漲 → 判斷：新聞版位流量重新分配至長尾頁，而非整體需求萎縮」
 
-**`traffic_analysis`**（Section 2 流量信號解讀，2-3 句 + 1 個行動建議）：
-- 根據 CTR / 曝光 / 點擊組合，判斷最可能的流量信號故事
-- 明確說明這是哪個象限（高曝光低CTR / 雙低 / 雙升等），**解釋為什麼**，不只是描述數字
+**`traffic_analysis`**（Section 2 流量象限判讀，2-3 句 + 1 個行動建議）：
+- 判斷本週屬於哪個象限（高曝光低CTR / 雙低 / 雙升等），**解釋為什麼**
 - 結尾給出 1 個最具體的行動建議（「應優先做 X，因為 Y」）
+
+**`technical_analysis`**（Section 3 技術面判讀，2-3 句）：
+- 根據 Coverage / 檢索未索引 / AMP 類指標的實際數值，判斷技術健康度
+- 重點：檢索未索引上升是爬蟲預算問題還是內容品質問題？AMP Article vs AMP (non-Rich) 背離代表什麼？
+- 結合 qaMap 中技術相關 QA 的 [How] 建議
+
+**`intent_analysis`**（Section 4 意圖位移判讀，2-3 句）：
+- 根據路徑指標（/salon/、/tags/、/article/）和關鍵字（影評、電影、評價、攻略）的升降
+- 判斷 Google 如何重新定位這個網站（娛樂媒體？UGC 平台？）
+- 哪些意圖層（Awareness / Consideration / Conversion）正在成長或萎縮？
+
+**`action_analysis`**（Section 5 行動優先序判讀，2-3 句）：
+- 解釋你為什麼認為某些行動比其他行動更緊急
+- 例：「雖然 AMP Article 跌幅最大（-166%），但其絕對流量僅 187，對總流量影響 < 0.01%。Organic Search 雖僅 -15%，但代表 164 萬 sessions 的基數，應優先處理。」
+- 點出模板行動清單中**最值得投入時間的 1 項**
 
 ---
 
@@ -124,13 +139,16 @@ done
 # 取得 snapshot_id（格式 YYYYMMDD-HHMMSS）
 SNAPSHOT_ID=$(basename <snapshot_path> .json)
 
-# 呼叫 API 組裝報告（API 處理 Section 3-6 模板 + 儲存 + eval）
+# 呼叫 API 組裝報告（API 處理模板 + LLM 分析注入 + 儲存 + eval）
 curl -s -X POST http://localhost:8002/api/v1/reports/generate \
   -H "Content-Type: application/json" \
   -d "{
     \"snapshot_id\": \"$SNAPSHOT_ID\",
-    \"situation_analysis\": \"<step_c1_situation_analysis>\",
-    \"traffic_analysis\": \"<step_c1_traffic_analysis>\"
+    \"situation_analysis\": \"<step_c1_situation>\",
+    \"traffic_analysis\": \"<step_c1_traffic>\",
+    \"technical_analysis\": \"<step_c1_technical>\",
+    \"intent_analysis\": \"<step_c1_intent>\",
+    \"action_analysis\": \"<step_c1_action>\"
   }"
 ```
 
