@@ -733,7 +733,8 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
                 "chunk_url": f"/admin/seoInsight/{qa_id}",
                 "source_url": qa.get("source_url"),
             })
-        _citations_block = f"\n<!-- citations {json.dumps(_citation_items, ensure_ascii=False)} -->"
+        _citations_json = json.dumps(_citation_items, ensure_ascii=False).replace("-->", "--\u200B>")
+        _citations_block = f"\n<!-- citations {_citations_json} -->"
 
     full_report = meta_block + (content or "（報告產生失敗）") + _citations_block + f"\n<!-- report_meta {_report_meta} -->"
     
