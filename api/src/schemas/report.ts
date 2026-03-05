@@ -6,6 +6,9 @@ export const generateRequestSchema = z.object({
   weeks: z.number().int().min(1).max(12).optional(),
   situation_analysis: z.string().max(2000).optional(),
   traffic_analysis: z.string().max(2000).optional(),
+  technical_analysis: z.string().max(2000).optional(),
+  intent_analysis: z.string().max(2000).optional(),
+  action_analysis: z.string().max(2000).optional(),
 });
 
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;

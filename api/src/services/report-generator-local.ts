@@ -469,8 +469,13 @@ function buildTechnicalHealth(
   metrics: Record<string, MetricData>,
   down: readonly AlertMetric[],
   qaMap: Map<string, readonly QAItem[]>,
+  llmAnalysis?: string | null,
 ): string {
   const lines: string[] = [`${SECTION_HEADINGS[2]}技術 SEO 健康度\n`];
+
+  if (llmAnalysis) {
+    lines.push("### 技術面 AI 判讀\n", llmAnalysis, "");
+  }
 
   const coverage = (metrics["有效 (Coverage)"] ?? {}) as MetricData;
   const unindexed = (metrics["檢索未索引"] ?? {}) as MetricData;
@@ -529,8 +534,13 @@ function buildIntentMapping(
   core: readonly AlertMetric[],
   down: readonly AlertMetric[],
   qaMap: Map<string, readonly QAItem[]>,
+  llmAnalysis?: string | null,
 ): string {
   const lines: string[] = [`${SECTION_HEADINGS[3]}搜尋意圖對映\n`];
+
+  if (llmAnalysis) {
+    lines.push("### 意圖位移 AI 判讀\n", llmAnalysis, "");
+  }
 
   lines.push(
     `> ${RESEARCH_CITATIONS.intent_framework}\n`,
@@ -588,11 +598,45 @@ function buildIntentMapping(
   return lines.join("\n");
 }
 
+// Metric-specific action templates keyed by substring match
+const ACTION_TEMPLATES: ReadonlyArray<{
+  readonly match: string;
+  readonly action: string;
+}> = [
+  { match: "AMP Article", action: "在 GSC → AMP 報告檢查驗證錯誤數量；排查 CSS `!important` 違規；確認 AMP 版頁面的 canonical 指向正確" },
+  { match: "Google News", action: "在 Google News Publisher Center 確認出版品狀態正常；檢查近 7 天新聞類文章發佈頻率是否下降；評估是否依主題拆分出版品" },
+  { match: "News(new)", action: "檢查近 7 天文章是否有跟上熱門時事話題；確認新聞類文章的 datePublished 結構化資料正確" },
+  { match: "Organic Search", action: "在 GSC → 成效 → 查詢，篩選近 28 天點擊下降 > 20% 的查詢詞，找出流失最多的 Top 10 關鍵字" },
+  { match: "工作階段", action: "在 GA4 → 流量獲取 → 工作階段預設管道分群，比對 Organic/Direct/Social 各管道增減，定位流量流失管道" },
+  { match: "Discover", action: "檢查 GSC Discover 報告的每日展示次數趨勢；確認近期文章是否有大圖（1200px+）及吸引點擊的標題" },
+  { match: "CTR", action: "在 GSC 篩選曝光 > 1,000 但 CTR < 1% 的查詢，針對 Top 10 改寫 Title/Description" },
+  { match: "檢索未索引", action: "在 GSC → 索引 → 網頁，匯出「已檢索 — 目前未建立索引」的 URL 清單，按目錄分群找出問題集中區" },
+  { match: "曝光", action: "在 GSC 按查詢篩選新增曝光來源，確認是否為品牌相關查詢或泛流量長尾字段" },
+  { match: "點擊", action: "交叉比對 GSC 點擊與 GA4 工作階段，確認數據一致性；若差距擴大，檢查追蹤碼是否遺漏" },
+  { match: "Image", action: "檢查圖片 alt 屬性與檔名是否包含目標關鍵字；確認圖片 sitemap 已提交" },
+  { match: "有效", action: "在 GSC → 索引 → 網頁，監控「有效」頁面數量趨勢；若下降，檢查是否有頁面被意外加入 noindex" },
+];
+
+function getActionForMetric(name: string): string {
+  const template = ACTION_TEMPLATES.find((t) => name.includes(t.match));
+  return template?.action ?? `在 GSC 對應報告中檢查 ${name} 的細項數據，找出下滑集中的頁面或查詢`;
+}
+
+function extractHowFromQa(qa: QAItem): string | null {
+  const howMatch = qa.answer.match(/\[How\]\s*([^[]+)/);
+  if (howMatch?.[1]) {
+    const text = howMatch[1].trim();
+    return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+  }
+  return null;
+}
+
 /** 五、本週優先行動清單 */
 function buildPriorityActions(
   down: readonly AlertMetric[],
   up: readonly AlertMetric[],
   topQas: readonly QAItem[],
+  llmAnalysis?: string | null,
 ): string {
   const lines: string[] = [`${SECTION_HEADINGS[4]}本週優先行動清單\n`];
 
@@ -600,39 +644,43 @@ function buildPriorityActions(
   const midPriority: string[] = [];
   const lowPriority: string[] = [];
 
-  // High priority: all down alerts (max 3)
+  // High priority: down alerts with specific actions (max 3)
   for (const m of down.slice(0, 3)) {
+    const action = getActionForMetric(m.name);
     const relatedQa = topQas.find(
       (q) => q.question.includes(m.name) || q.answer.includes(m.name),
     );
+    const howTip = relatedQa ? extractHowFromQa(relatedQa) : null;
     const linkPart = relatedQa ? ` ${kbLink(relatedQa)}` : "";
-    highPriority.push(
-      `**${m.name} 下滑 ${fmtPct(m.monthly)}**：立即審查近期相關頁面內容品質，確認 Meta 標記與 Schema 正確。${linkPart}`,
-    );
+    let item = `**${m.name} 下滑 ${fmtPct(m.monthly)}**：${action}。${linkPart}`;
+    if (howTip) {
+      item += `\n  > KB 建議：${howTip}`;
+    }
+    highPriority.push(item);
   }
 
   // Always include a core technical check if no high priority items
   if (highPriority.length === 0) {
     highPriority.push(
-      "**定期技術健康確認**：使用 GSC 確認 Coverage 錯誤未增加、Sitemap 已更新、Core Web Vitals 無退步。",
+      "**定期技術健康確認**：在 GSC 確認 Coverage 錯誤未增加、Sitemap 已更新、Core Web Vitals 無退步。",
     );
   }
 
   // Mid priority: CTR optimization + up metrics follow-through
   midPriority.push(
-    "**CTR 優化**：針對曝光 Top 20 但 CTR < 5% 的頁面，A/B 測試 Title 加入數字或年份後綴。",
+    "**CTR 優化**：在 GSC 篩選曝光 Top 20 但 CTR < 5% 的頁面，A/B 測試 Title 加入數字、年份或括號重點。",
   );
 
   for (const m of up.slice(0, 1)) {
     midPriority.push(
-      `**${m.name} 上升 ${fmtPct(m.monthly)} 延伸**：分析表現較佳頁面，複製成功策略至同類頁面。`,
+      `**${m.name} 上升 ${fmtPct(m.monthly)}**：分析表現成長的頁面或查詢，找出驅動因素並複製策略至同類頁面。`,
     );
   }
 
   // Low priority: E-E-A-T + content calendar
   lowPriority.push(
-    "**E-E-A-T 強化**：確認作者署名頁與 About 頁資訊完整，補充結構化資料（Person Schema）。",
-    "**內容行事曆**：規劃下週發佈 1-2 篇高意圖關鍵字長文，目標 Consideration 漏斗。",
+    "**E-E-A-T 強化**：確認作者署名頁有完整經歷與外部可查核連結；補充 Person Schema 結構化資料。",
+    "**內容行事曆**：根據本週上升的關鍵字主題，規劃 1-2 篇延伸長文，鎖定 Consideration 漏斗。",
   );
 
   const redItems = highPriority.map((s) => `- 🔴 ${s}`).join("\n");
@@ -650,6 +698,10 @@ function buildPriorityActions(
     greenItems,
     "",
   );
+
+  if (llmAnalysis) {
+    lines.push("### 行動優先序 AI 判讀\n", llmAnalysis, "");
+  }
 
   return lines.join("\n");
 }
@@ -713,12 +765,19 @@ function buildSearchQueries(metrics: Record<string, MetricData>): string[] {
  * Generate a 6-section SEO report using template + keyword search.
  * No LLM API required.
  */
+export interface LlmAnalyses {
+  readonly situation?: string | null;
+  readonly traffic?: string | null;
+  readonly technical?: string | null;
+  readonly intent?: string | null;
+  readonly action?: string | null;
+}
+
 export async function generateReportLocal(
   metrics: Record<string, unknown>,
   reportDate: string,
   qaCount: number,
-  situationAnalysis?: string | null,
-  trafficAnalysis?: string | null,
+  llmAnalyses?: LlmAnalyses | null,
   weeks?: number | null,
 ): Promise<string> {
   const typedMetrics = metrics as Record<string, MetricData>;
@@ -773,17 +832,18 @@ export async function generateReportLocal(
 
   // Build all 6 sections
   const tracker = new CitationTracker();
-  const s1 = buildSituationSnapshot(alerts, core, down, qaMap, tracker, situationAnalysis);
-  const s2 = buildTrafficSignals(core, down, qaMap, trafficAnalysis);
-  const s3 = buildTechnicalHealth(typedMetrics, down, qaMap);
-  const s4 = buildIntentMapping(core, down, qaMap);
-  const s5 = buildPriorityActions(down, up, topQas);
+  const analyses = llmAnalyses ?? {};
+  const s1 = buildSituationSnapshot(alerts, core, down, qaMap, tracker, analyses.situation);
+  const s2 = buildTrafficSignals(core, down, qaMap, analyses.traffic);
+  const s3 = buildTechnicalHealth(typedMetrics, down, qaMap, analyses.technical);
+  const s4 = buildIntentMapping(core, down, qaMap, analyses.intent);
+  const s5 = buildPriorityActions(down, up, topQas, analyses.action);
   const s6 = buildKbCitations(topQas, tracker);
 
   // Meta block
   const kbVersion = getKbVersion();
   const kbLabel = qaCount > 0 ? `${qaCount} Q&A` : "知識庫";
-  const llmUsed = !!situationAnalysis || !!trafficAnalysis;
+  const llmUsed = Object.values(analyses).some((v) => !!v);
   const generationMode = llmUsed
     ? "Hybrid Mode（本地模板 + Claude Code 語意輔助）"
     : "Template Mode（本地模板引擎，不呼叫任何 LLM API）";

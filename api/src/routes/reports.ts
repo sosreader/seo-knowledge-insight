@@ -154,8 +154,13 @@ reportsRoute.post("/generate", async (c) => {
         snapshotMetrics,
         reportDate,
         qaCount,
-        parsed.data.situation_analysis,
-        parsed.data.traffic_analysis,
+        {
+          situation: parsed.data.situation_analysis,
+          traffic: parsed.data.traffic_analysis,
+          technical: parsed.data.technical_analysis,
+          intent: parsed.data.intent_analysis,
+          action: parsed.data.action_analysis,
+        },
         snapshotWeeks,
       );
       const dateOnly = new Date().toISOString().slice(0, 10).replace(/-/g, "");
