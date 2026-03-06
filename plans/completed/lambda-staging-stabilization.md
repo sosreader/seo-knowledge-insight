@@ -1,13 +1,16 @@
 # Lambda Staging 穩定化 + 後續計畫
 
 > 建立時間：2026-03-06
-> 狀態：active
+> 完成時間：2026-03-06
+> 狀態：completed（P2-2 Model A/B deferred，P4 由獨立 plan 追蹤）
 
 ---
 
 ## 背景
 
 v2.24–v2.25 完成 Lambda + Supabase 遷移後，staging 環境（`staging-v2.vocus.cc/admin/seoInsight/*`）的核心功能已可運作。本計畫整理當前狀態、未 commit 的修復、以及後續優先級。
+
+> **前端備註**：`vocus-web-ui` 的變更一律以 worktree 形式操作（原 `vocus-admin-dev` worktree 已合併回 `vocus-web-ui` 主 repo），不直接在 `seo-knowledge-insight` repo 中修改前端程式碼。
 
 ---
 
@@ -129,7 +132,7 @@ Lambda 上回傳 404。前端應：
 | ~~**P1-2**~~ | ~~meetings tab 空狀態~~ | ✅ MeetingTable 未被使用，非問題 |
 | ~~**P1-3**~~ | ~~同義詞確認~~ | ✅ 靜態同義詞正常，custom=0 預期行為 |
 | ~~**P2-1**~~ | ~~同義詞擴充（+10 組）~~ | ✅ Category Hit 100%, Precision@5 89% |
-| **P2-2** | Model 升級 A/B 測試 | 1-2 sessions |
+| **P2-2** | Model 升級 A/B 測試 | ⏭️ deferred |
 | ~~**P3-1**~~ | ~~API Key 前端安全~~ | ✅ proxy 架構已正確，無暴露 |
 | ~~**P3-2**~~ | ~~Supabase RLS 強化~~ | ✅ 完成 |
 | ~~**P3-3**~~ | ~~Observability 修復~~ | ✅ graceful skip（低優先） |
