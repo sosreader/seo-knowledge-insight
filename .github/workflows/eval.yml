@@ -26,14 +26,14 @@ jobs:
       - name: Run retrieval eval
         env:
           LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
-        # eval_retrieval.py 需要 output/qa_final.json（CI 沒有本地 output）
-        continue-on-error: true
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        # CI 無本地 qa_final.json，自動 fallback 到 Supabase REST API
         run: lmnr eval evals/eval_retrieval.py
 
       - name: Run extraction eval
         env:
           LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        # eval_extraction.py 需要 output/qa_per_meeting/（CI 沒有本地 output）
-        continue-on-error: true
+        # extraction eval 需要本地 output/qa_per_meeting/，CI 無此資料，graceful skip (exit 0)
         run: lmnr eval evals/eval_extraction.py

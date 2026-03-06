@@ -5,7 +5,8 @@ Tests whether the keyword-hybrid search engine returns results containing
 the expected SEO keywords and categories for known real-world scenarios.
 
 Dataset:  eval/golden_retrieval.json
-Requires: LMNR_PROJECT_API_KEY, output/qa_final.json
+Requires: LMNR_PROJECT_API_KEY
+Data source: output/qa_final.json (local) or Supabase qa_items (CI fallback)
 
 Run:
     python evals/eval_retrieval.py
@@ -14,11 +15,21 @@ Run:
 from __future__ import annotations
 
 import json
+import logging
+import os
 import sys
 from pathlib import Path
 
+import requests
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(PROJECT_ROOT / ".env")
+
+logger = logging.getLogger(__name__)
 
 from lmnr import evaluate  # type: ignore[import]
 
@@ -48,12 +59,51 @@ _dataset = [
 
 # ── Executor ──────────────────────────────────────────────────────────────────
 
-def retrieval_executor(data: dict) -> dict:
-    """Keyword-based search over qa_final.json (no embedding / no OpenAI)."""
-    from scripts.qa_tools import _load_qa_final  # type: ignore[import]
+def _load_qa_items() -> list[dict]:
+    """Load QA items from local file first, fallback to Supabase REST API."""
+    qa_final_path = PROJECT_ROOT / "output" / "qa_final.json"
 
+    # 1. Try local file
+    if qa_final_path.exists():
+        try:
+            data = json.loads(qa_final_path.read_text(encoding="utf-8"))
+            items = data.get("qa_database", [])
+            if items:
+                logger.info("[eval_retrieval] Loaded %d QA items from local file", len(items))
+                return items
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("[eval_retrieval] Local file read failed: %s", e)
+
+    # 2. Fallback to Supabase
+    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    anon_key = os.environ.get("SUPABASE_ANON_KEY", "")
+
+    if not supabase_url or not anon_key:
+        logger.error("[eval_retrieval] No local qa_final.json and no SUPABASE_URL/SUPABASE_ANON_KEY set")
+        return []
+
+    logger.info("[eval_retrieval] Local file not found, loading from Supabase...")
+    resp = requests.get(
+        f"{supabase_url}/rest/v1/qa_items"
+        "?select=id,question,answer,keywords,category,confidence,difficulty,evergreen,"
+        "source_title,source_type,source_collection,source_url",
+        headers={"apikey": anon_key, "Authorization": f"Bearer {anon_key}"},
+        timeout=30,
+    )
+
+    if resp.status_code != 200:
+        logger.error("[eval_retrieval] Supabase fetch failed: %s %s", resp.status_code, resp.text[:200])
+        return []
+
+    items = resp.json()
+    logger.info("[eval_retrieval] Loaded %d QA items from Supabase", len(items))
+    return items
+
+
+def retrieval_executor(data: dict) -> dict:
+    """Keyword-based search over QA items (local file or Supabase fallback)."""
     query: str = data["query"]
-    qa_items = _load_qa_final()
+    qa_items = _load_qa_items()
 
     query_tokens = set(query.lower().split())
     scored: list[tuple[float, dict]] = []
