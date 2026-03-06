@@ -38,11 +38,11 @@ export async function executeTool(
       result,
       durationMs: Date.now() - startMs,
     };
-  } catch (err) {
+  } catch {
     return {
       toolName: name,
       args: rawArgs,
-      result: JSON.stringify({ error: (err as Error).message }),
+      result: JSON.stringify({ error: "Tool execution failed" }),
       durationMs: Date.now() - startMs,
     };
   }
@@ -75,7 +75,7 @@ async function executeToolImpl(
     case "get_qa_detail": {
       const args = getQaDetailSchema.parse(rawArgs);
       const item = deps.getQaDetail(args.id);
-      if (!item) return JSON.stringify({ error: `QA item '${args.id}' not found` });
+      if (!item) return JSON.stringify({ error: "QA item not found" });
       return JSON.stringify(item);
     }
     case "list_categories": {

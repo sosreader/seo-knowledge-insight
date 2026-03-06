@@ -33,9 +33,14 @@ describe("tool-definitions", () => {
   });
 
   describe("getQaDetailSchema", () => {
-    it("parses valid id", () => {
-      const result = getQaDetailSchema.parse({ id: "abc123def456" });
-      expect(result.id).toBe("abc123def456");
+    it("parses valid hex stable_id", () => {
+      const result = getQaDetailSchema.parse({ id: "abc123def4560000" });
+      expect(result.id).toBe("abc123def4560000");
+    });
+
+    it("parses valid numeric seq", () => {
+      const result = getQaDetailSchema.parse({ id: "123" });
+      expect(result.id).toBe("123");
     });
 
     it("rejects empty id", () => {

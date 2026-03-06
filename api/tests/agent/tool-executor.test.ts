@@ -7,7 +7,7 @@ function mockDeps(overrides?: Partial<AgentDeps>): AgentDeps {
     searchKnowledgeBase: vi.fn().mockResolvedValue([
       {
         item: {
-          id: "abc123",
+          id: "abc123def4560000",
           question: "What is SEO?",
           answer: "SEO is Search Engine Optimization",
           category: "基礎",
@@ -18,7 +18,7 @@ function mockDeps(overrides?: Partial<AgentDeps>): AgentDeps {
       },
     ]),
     getQaDetail: vi.fn().mockReturnValue({
-      id: "abc123",
+      id: "abc123def4560000",
       question: "What is SEO?",
       answer: "SEO is Search Engine Optimization",
     }),
@@ -39,7 +39,7 @@ describe("tool-executor", () => {
 
       const parsed = JSON.parse(result.result);
       expect(parsed).toHaveLength(1);
-      expect(parsed[0].id).toBe("abc123");
+      expect(parsed[0].id).toBe("abc123def4560000");
       expect(parsed[0].score).toBe(0.85);
     });
 
@@ -73,7 +73,7 @@ describe("tool-executor", () => {
   describe("get_qa_detail", () => {
     it("returns QA detail", async () => {
       const deps = mockDeps();
-      const result = await executeTool("get_qa_detail", { id: "abc123" }, deps);
+      const result = await executeTool("get_qa_detail", { id: "abc123def4560000" }, deps);
 
       const parsed = JSON.parse(result.result);
       expect(parsed.question).toBe("What is SEO?");
@@ -81,10 +81,10 @@ describe("tool-executor", () => {
 
     it("returns error for missing item", async () => {
       const deps = mockDeps({ getQaDetail: vi.fn().mockReturnValue(null) });
-      const result = await executeTool("get_qa_detail", { id: "missing" }, deps);
+      const result = await executeTool("get_qa_detail", { id: "0000000000000000" }, deps);
 
       const parsed = JSON.parse(result.result);
-      expect(parsed.error).toContain("not found");
+      expect(parsed.error).toBe("QA item not found");
     });
   });
 

@@ -3,19 +3,12 @@ import { chatRequestSchema, itemToSource } from "../schemas/chat.js";
 import { ok, fail } from "../schemas/api-response.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
 import { qaStore } from "../store/qa-store.js";
-import { hasOpenAI } from "../utils/mode-detect.js";
+import { hasOpenAI, isAgentEnabled } from "../utils/mode-detect.js";
 import { config } from "../config.js";
 import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
 import { createAgentDeps } from "../agent/agent-deps.js";
 
 export const chatRoute = new Hono();
-
-function isAgentEnabled(): boolean {
-  if (config.AGENT_ENABLED === true) return true;
-  if (config.AGENT_ENABLED === false) return false;
-  // "auto": enable when OpenAI key is available
-  return hasOpenAI();
-}
 
 function contextOnlyResponse(message: string) {
   const startMs = Date.now();
@@ -57,7 +50,6 @@ chatRoute.post("/", async (c) => {
         sources: result.sources,
         mode: result.mode,
         metadata: result.metadata,
-        tool_calls_count: result.metadata.tool_calls_count,
       }));
     }
 

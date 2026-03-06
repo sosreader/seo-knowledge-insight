@@ -9,11 +9,11 @@ import { z } from "zod";
 export const searchKnowledgeBaseSchema = z.object({
   query: z.string().min(1).max(500).describe("搜尋查詢（中文或英文皆可）"),
   top_k: z.number().int().min(1).max(10).default(5).describe("回傳筆數"),
-  category: z.string().optional().describe("限定分類（如「技術SEO」「Core Web Vitals」）"),
+  category: z.string().max(100).optional().describe("限定分類（如「技術SEO」「Core Web Vitals」）"),
 });
 
 export const getQaDetailSchema = z.object({
-  id: z.string().min(1).describe("Q&A 的 stable_id（16-char hex）或 seq number"),
+  id: z.string().min(1).max(16).regex(/^([0-9a-f]{16}|\d{1,6})$/).describe("Q&A 的 stable_id（16-char hex）或 seq number"),
 });
 
 export const listCategoriesSchema = z.object({});

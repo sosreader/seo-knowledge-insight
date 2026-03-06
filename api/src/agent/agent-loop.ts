@@ -7,6 +7,13 @@
 import OpenAI from "openai";
 import { config } from "../config.js";
 import { getOpenAITools, type ToolName } from "./tool-definitions.js";
+
+const ALLOWED_TOOLS: ReadonlySet<string> = new Set<ToolName>([
+  "search_knowledge_base",
+  "get_qa_detail",
+  "list_categories",
+  "get_stats",
+]);
 import { executeTool } from "./tool-executor.js";
 import type { AgentConfig, AgentDeps, AgentResponse, ToolResult } from "./types.js";
 import { itemToSource, type SourceItem, type MessageMetadata } from "../schemas/chat.js";
@@ -40,6 +47,31 @@ function getOpenAI(): OpenAI {
     openaiClient = new OpenAI({ apiKey: config.OPENAI_API_KEY });
   }
   return openaiClient;
+}
+
+function buildMetadata(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  startMs: number,
+  retrievalCount: number,
+  toolCallsCount: number,
+  agentTurns: number,
+): AgentResponse["metadata"] {
+  return {
+    model,
+    provider: "openai",
+    mode: "agent",
+    embedding_model: config.OPENAI_EMBEDDING_MODEL,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    total_tokens: inputTokens + outputTokens,
+    duration_ms: Date.now() - startMs,
+    retrieval_count: retrievalCount,
+    reranker_used: false,
+    tool_calls_count: toolCallsCount,
+    agent_turns: agentTurns,
+  };
 }
 
 /** Detect repeated tool calls (same name + same args). */
@@ -140,33 +172,44 @@ export async function agentChat(
       const answer = choice.message.content ?? "";
       const sources = collectSources(allToolCalls);
 
-      const metadata: AgentResponse["metadata"] = {
-        model: resp.model ?? cfg.model,
-        provider: "openai",
+      return {
+        answer,
+        sources,
         mode: "agent",
-        embedding_model: config.OPENAI_EMBEDDING_MODEL,
-        input_tokens: totalInputTokens,
-        output_tokens: totalOutputTokens,
-        total_tokens: totalInputTokens + totalOutputTokens,
-        duration_ms: Date.now() - startMs,
-        retrieval_count: sources.length,
-        reranker_used: false,
-        tool_calls_count: allToolCalls.length,
-        agent_turns: turns,
-        tool_calls: allToolCalls,
+        metadata: buildMetadata(resp.model ?? cfg.model, totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
       };
-
-      return { answer, sources, mode: "agent", metadata };
     }
 
     // Process tool calls
     messages.push(choice.message);
 
     for (const toolCall of choice.message.tool_calls) {
-      const name = toolCall.function.name as ToolName;
-      const args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+      const name = toolCall.function.name;
 
-      const toolResult = await executeTool(name, args, deps);
+      // Runtime whitelist — reject unknown tool names from LLM
+      if (!ALLOWED_TOOLS.has(name)) {
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: "Unknown tool" }),
+        });
+        continue;
+      }
+
+      // Safe JSON.parse — LLM may return malformed arguments
+      let args: Record<string, unknown>;
+      try {
+        args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+      } catch {
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: "Invalid tool arguments" }),
+        });
+        continue;
+      }
+
+      const toolResult = await executeTool(name as ToolName, args, deps);
       allToolCalls.push(toolResult);
 
       messages.push({
@@ -181,40 +224,38 @@ export async function agentChat(
   }
 
   // Fell through max turns or timeout — make one final call without tools
-  const finalResp = await getOpenAI().chat.completions.create({
-    model: cfg.model,
-    messages: [
-      ...messages,
-      { role: "system", content: "你已收集到足夠的資訊。請根據已有的搜尋結果直接回答使用者的問題。" },
-    ],
-    temperature: cfg.temperature,
-    max_completion_tokens: 2000,
-  });
+  let finalAnswer = "";
+  let finalModel = cfg.model;
 
-  const finalUsage = finalResp.usage;
-  totalInputTokens += finalUsage?.prompt_tokens ?? 0;
-  totalOutputTokens += finalUsage?.completion_tokens ?? 0;
+  try {
+    const finalResp = await getOpenAI().chat.completions.create({
+      model: cfg.model,
+      messages: [
+        ...messages,
+        { role: "system", content: "你已收集到足夠的資訊。請根據已有的搜尋結果直接回答使用者的問題。" },
+      ],
+      temperature: cfg.temperature,
+      max_completion_tokens: 2000,
+    });
 
-  const answer = finalResp.choices[0]?.message?.content ?? "";
+    const finalUsage = finalResp.usage;
+    totalInputTokens += finalUsage?.prompt_tokens ?? 0;
+    totalOutputTokens += finalUsage?.completion_tokens ?? 0;
+    finalAnswer = finalResp.choices[0]?.message?.content ?? "";
+    finalModel = finalResp.model ?? cfg.model;
+  } catch {
+    // Final synthesis failed — return with already-collected sources
+    finalAnswer = "";
+  }
+
   const sources = collectSources(allToolCalls);
 
-  const metadata: AgentResponse["metadata"] = {
-    model: finalResp.model ?? cfg.model,
-    provider: "openai",
+  return {
+    answer: finalAnswer,
+    sources,
     mode: "agent",
-    embedding_model: config.OPENAI_EMBEDDING_MODEL,
-    input_tokens: totalInputTokens,
-    output_tokens: totalOutputTokens,
-    total_tokens: totalInputTokens + totalOutputTokens,
-    duration_ms: Date.now() - startMs,
-    retrieval_count: sources.length,
-    reranker_used: false,
-    tool_calls_count: allToolCalls.length,
-    agent_turns: turns,
-    tool_calls: allToolCalls,
+    metadata: buildMetadata(finalModel, totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
   };
-
-  return { answer, sources, mode: "agent", metadata };
 }
 
 /** Observed version — wraps agentChat as a Laminar span. */

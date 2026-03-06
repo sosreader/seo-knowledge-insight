@@ -43,7 +43,6 @@ export interface ChatResponse {
   readonly sources: readonly SourceItem[];
   readonly mode: "full" | "context-only" | "agent";
   readonly metadata?: MessageMetadata;
-  readonly tool_calls_count?: number;
 }
 
 export function itemToSource(

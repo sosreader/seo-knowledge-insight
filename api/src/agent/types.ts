@@ -25,7 +25,6 @@ export interface AgentResponse {
   readonly metadata: MessageMetadata & {
     readonly tool_calls_count: number;
     readonly agent_turns: number;
-    readonly tool_calls: readonly ToolResult[];
   };
 }
 

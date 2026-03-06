@@ -304,7 +304,7 @@ describe("POST /api/v1/chat", () => {
       const body = await res.json();
       expect(body.data.mode).toBe("agent");
       expect(body.data.answer).toBe("Agent mode answer");
-      expect(body.data.tool_calls_count).toBe(2);
+      expect(body.data.metadata.tool_calls_count).toBe(2);
       expect(mockAgentChat).toHaveBeenCalled();
       expect(mockRagChat).not.toHaveBeenCalled();
     } finally {

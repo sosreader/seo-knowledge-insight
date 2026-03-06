@@ -11,7 +11,7 @@ import { ok, fail } from "../schemas/api-response.js";
 import { sessionStore } from "../store/session-store.js";
 import type { Session } from "../store/session-store.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
-import { hasOpenAI } from "../utils/mode-detect.js";
+import { hasOpenAI, isAgentEnabled } from "../utils/mode-detect.js";
 import { qaStore } from "../store/qa-store.js";
 import { config } from "../config.js";
 import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
@@ -130,8 +130,10 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     return c.json(fail("Failed to add message (session full or conflict)"), 409);
   }
 
-  // 2. Build history from existing messages (exclude the just-added user msg)
-  const history = session.messages.slice(0, -1).map((m) => ({
+  // 2. Build history from existing messages (exclude the just-added user msg, cap at 20)
+  const MAX_HISTORY = 20;
+  const allPrior = session.messages.slice(0, -1);
+  const history = allPrior.slice(-MAX_HISTORY).map((m) => ({
     role: m.role,
     content: m.content,
   }));
@@ -140,11 +142,9 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
   let result: { answer: string | null; sources: Record<string, unknown>[]; mode: string; metadata?: Record<string, unknown> };
   const ragStartMs = Date.now();
 
-  const agentEnabled = config.AGENT_ENABLED === true || (config.AGENT_ENABLED === "auto" && hasOpenAI());
-
   if (hasOpenAI()) {
     try {
-      if (agentEnabled) {
+      if (isAgentEnabled()) {
         const deps = createAgentDeps();
         const agentResult = await agentChat(
           parsed.data.message,
