@@ -122,7 +122,7 @@ export async function ragChat(
   const metadata: MessageMetadata = {
     model: resp.model ?? config.CHAT_MODEL,
     provider: "openai",
-    mode: "full",
+    mode: "rag",
     embedding_model: config.OPENAI_EMBEDDING_MODEL,
     input_tokens: usage?.prompt_tokens,
     output_tokens: usage?.completion_tokens,
@@ -135,7 +135,7 @@ export async function ragChat(
     reranker_used: rerankerUsed,
   };
 
-  return { answer, sources, mode: "full", metadata };
+  return { answer, sources, mode: "rag", metadata };
 }
 
 /** Observed version — wraps ragChat as a Laminar span. */

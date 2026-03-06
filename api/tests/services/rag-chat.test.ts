@@ -79,7 +79,7 @@ describe("ragChat", () => {
     const result = await ragChat("What is LCP?");
     expect(result.answer).toBe("LCP measures loading performance.");
     expect(result.sources.length).toBe(2);
-    expect(result.mode).toBe("full");
+    expect(result.mode).toBe("rag");
   });
 
   it("passes history to GPT when provided", async () => {

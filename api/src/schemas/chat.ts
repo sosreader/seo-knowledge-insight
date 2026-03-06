@@ -8,6 +8,7 @@ export const historyMessageSchema = z.object({
 export const chatRequestSchema = z.object({
   message: z.string().min(1).max(2000),
   history: z.array(historyMessageSchema).max(20).default([]),
+  mode: z.enum(["agent", "rag"]).optional(),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
@@ -41,7 +42,7 @@ export interface MessageMetadata {
 export interface ChatResponse {
   readonly answer: string | null;
   readonly sources: readonly SourceItem[];
-  readonly mode: "full" | "context-only" | "agent";
+  readonly mode: "rag" | "context-only" | "agent";
   readonly metadata?: MessageMetadata;
 }
 

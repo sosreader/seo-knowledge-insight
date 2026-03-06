@@ -73,11 +73,11 @@ const mockRagChat = vi.fn().mockResolvedValue({
       score: 0.85,
     },
   ],
-  mode: "full",
+  mode: "rag",
   metadata: {
     model: "gpt-5.2",
     provider: "openai",
-    mode: "full",
+    mode: "rag",
     embedding_model: "text-embedding-3-small",
     input_tokens: 150,
     output_tokens: 80,
@@ -140,7 +140,7 @@ describe("POST /api/v1/chat", () => {
     expect(mockKeywordSearch).toHaveBeenCalledWith("What is SEO?", 5);
   });
 
-  it("returns full mode when OpenAI key is set", async () => {
+  it("returns rag mode when OpenAI key is set", async () => {
     const original = config.OPENAI_API_KEY;
     (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
 
@@ -153,7 +153,7 @@ describe("POST /api/v1/chat", () => {
       });
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.data.mode).toBe("full");
+      expect(body.data.mode).toBe("rag");
       expect(body.data.answer).toBe("SEO is important for visibility");
       expect(mockRagChat).toHaveBeenCalled();
     } finally {
@@ -311,5 +311,86 @@ describe("POST /api/v1/chat", () => {
       (config as Record<string, unknown>).OPENAI_API_KEY = originalKey;
       (config as Record<string, unknown>).AGENT_ENABLED = originalAgent;
     }
+  });
+
+  it("request mode: agent overrides server-level AGENT_ENABLED=false", async () => {
+    const originalKey = config.OPENAI_API_KEY;
+    const originalAgent = config.AGENT_ENABLED;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+    (config as Record<string, unknown>).AGENT_ENABLED = false;
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "What is SEO?", mode: "agent" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.mode).toBe("agent");
+      expect(mockAgentChat).toHaveBeenCalled();
+      expect(mockRagChat).not.toHaveBeenCalled();
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = originalKey;
+      (config as Record<string, unknown>).AGENT_ENABLED = originalAgent;
+    }
+  });
+
+  it("request mode: rag overrides server-level AGENT_ENABLED=true", async () => {
+    const originalKey = config.OPENAI_API_KEY;
+    const originalAgent = config.AGENT_ENABLED;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+    (config as Record<string, unknown>).AGENT_ENABLED = true;
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "What is SEO?", mode: "rag" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.mode).toBe("rag");
+      expect(mockRagChat).toHaveBeenCalled();
+      expect(mockAgentChat).not.toHaveBeenCalled();
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = originalKey;
+      (config as Record<string, unknown>).AGENT_ENABLED = originalAgent;
+    }
+  });
+
+  it("no mode in request falls back to server default", async () => {
+    const originalKey = config.OPENAI_API_KEY;
+    const originalAgent = config.AGENT_ENABLED;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+    (config as Record<string, unknown>).AGENT_ENABLED = false;
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "What is SEO?" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.mode).toBe("rag");
+      expect(mockRagChat).toHaveBeenCalled();
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = originalKey;
+      (config as Record<string, unknown>).AGENT_ENABLED = originalAgent;
+    }
+  });
+
+  it("returns 400 for invalid mode value", async () => {
+    const app = buildApp();
+    const res = await app.request("/api/v1/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "What is SEO?", mode: "invalid" }),
+    });
+    expect(res.status).toBe(400);
   });
 });

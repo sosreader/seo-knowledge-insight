@@ -11,7 +11,7 @@ import { ok, fail } from "../schemas/api-response.js";
 import { sessionStore } from "../store/session-store.js";
 import type { Session } from "../store/session-store.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
-import { hasOpenAI, isAgentEnabled } from "../utils/mode-detect.js";
+import { hasOpenAI, resolveMode } from "../utils/mode-detect.js";
 import { qaStore } from "../store/qa-store.js";
 import { config } from "../config.js";
 import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
@@ -117,10 +117,12 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     return c.json(fail("Session not found"), 404);
   }
 
+  const { message: userMessage, mode: requestMode } = parsed.data;
+
   // 1. Save user message
   const userMsg = {
     role: "user" as const,
-    content: parsed.data.message,
+    content: userMessage,
     sources: [] as Record<string, unknown>[],
     created_at: new Date().toISOString().replace(/(\.\d{3})\d*Z$/, "$1Z"),
   };
@@ -143,11 +145,12 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
   const ragStartMs = Date.now();
 
   if (hasOpenAI()) {
+    const effectiveMode = resolveMode(requestMode);
     try {
-      if (isAgentEnabled()) {
+      if (effectiveMode === "agent") {
         const deps = createAgentDeps();
         const agentResult = await agentChat(
-          parsed.data.message,
+          userMessage,
           history.length > 0 ? history : null,
           deps,
           { maxTurns: config.AGENT_MAX_TURNS, timeoutMs: config.AGENT_TIMEOUT_MS },
@@ -159,18 +162,18 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
           metadata: agentResult.metadata as unknown as Record<string, unknown>,
         };
       } else {
-        const ragResult = await ragChat(parsed.data.message, history.length > 0 ? history : null);
+        const ragResult = await ragChat(userMessage, history.length > 0 ? history : null);
         result = {
           answer: ragResult.answer,
           sources: ragResult.sources as unknown as Record<string, unknown>[],
-          mode: ragResult.mode ?? "full",
+          mode: ragResult.mode ?? "rag",
           metadata: ragResult.metadata as unknown as Record<string, unknown>,
         };
       }
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
       if (status === 401 || status === 403 || status === 429) {
-        const sources = keywordHitsToSources(parsed.data.message, config.CHAT_CONTEXT_K);
+        const sources = keywordHitsToSources(userMessage, config.CHAT_CONTEXT_K);
         result = {
           answer: null, sources, mode: "context-only",
           metadata: { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - ragStartMs },
@@ -180,7 +183,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
       }
     }
   } else {
-    const sources = keywordHitsToSources(parsed.data.message, config.CHAT_CONTEXT_K);
+    const sources = keywordHitsToSources(userMessage, config.CHAT_CONTEXT_K);
     result = {
       answer: null, sources, mode: "context-only",
       metadata: { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - ragStartMs },

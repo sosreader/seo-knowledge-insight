@@ -3,7 +3,7 @@ import { chatRequestSchema, itemToSource } from "../schemas/chat.js";
 import { ok, fail } from "../schemas/api-response.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
 import { qaStore } from "../store/qa-store.js";
-import { hasOpenAI, isAgentEnabled } from "../utils/mode-detect.js";
+import { hasOpenAI, resolveMode } from "../utils/mode-detect.js";
 import { config } from "../config.js";
 import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
 import { createAgentDeps } from "../agent/agent-deps.js";
@@ -26,7 +26,7 @@ chatRoute.post("/", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  const { message, history } = parsed.data;
+  const { message, history, mode: requestMode } = parsed.data;
 
   if (!hasOpenAI()) {
     const result = contextOnlyResponse(message);
@@ -34,10 +34,11 @@ chatRoute.post("/", async (c) => {
   }
 
   const historyDicts = history.map((h) => ({ role: h.role, content: h.content }));
+  const effectiveMode = resolveMode(requestMode);
 
   try {
     // Agent mode: LLM autonomously decides when to search
-    if (isAgentEnabled()) {
+    if (effectiveMode === "agent") {
       const deps = createAgentDeps();
       const result = await agentChat(
         message,

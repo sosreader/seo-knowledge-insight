@@ -84,7 +84,7 @@ Claude Code 分析問題 -> 決定搜尋策略
 
 ---
 
-## Phase 2：TypeScript API Agent Loop（待實作）
+## Phase 2：TypeScript API Agent Loop（已完成）
 
 ### 目標
 
@@ -93,13 +93,22 @@ Claude Code 分析問題 -> 決定搜尋策略
 ### 設計要點
 
 - OpenAI function calling + while-loop
-- 4 tools：`search_knowledge_base`、`get_qa_detail`、`list_categories`、`get_knowledge_base_stats`
-- Feature flag `AGENT_ENABLED`（預設 false）
+- 4 tools：`search_knowledge_base`、`get_qa_detail`、`list_categories`、`get_stats`
+- Feature flag `AGENT_ENABLED`（預設 auto，有 OpenAI key 就啟用）
 - 終止條件：`finish_reason === "stop"` / MAX_TURNS(5) / TIMEOUT(90s) / loop detection
 - Response 新增 `mode: "agent"` + `tool_calls_count`
 - 詳細設計見下方「Phase 2 詳細設計」
 
-### 檔案變更（7 新增 + 5 修改）
+### Security Hardening（Phase 2 完成後執行）
+
+- `getQaDetailSchema` id regex 收緊為 `/^([0-9a-f]{16}|\d{1,6})$/`
+- `ALLOWED_TOOLS` runtime whitelist + `JSON.parse` guard
+- 錯誤訊息 sanitization（統一 "Tool execution failed"）
+- `tool_calls` array 不暴露到 wire response（只回傳 count）
+- `isAgentEnabled()` 抽取至 shared `utils/mode-detect.ts`
+- Session history depth cap `MAX_HISTORY=20`
+
+### 檔案變更（7 新增 + 6 修改）
 
 **新增**：
 | 檔案 | 行數 | 職責 |
@@ -117,13 +126,43 @@ Claude Code 分析問題 -> 決定搜尋策略
 |------|------|
 | `api/src/config.ts` | envSchema 新增 `AGENT_ENABLED`、`AGENT_MAX_TURNS`、`AGENT_TIMEOUT_MS` |
 | `api/src/schemas/chat.ts` | mode 加 `"agent"`、新增 `tool_calls_count?` |
-| `api/src/services/rag-chat.ts` | 新增 `ragChatAgent()` |
-| `api/src/routes/chat.ts` | Feature flag 分流 |
-| `api/src/routes/sessions.ts` | 同步 agent 分流 |
+| `api/src/routes/chat.ts` | Feature flag 分流（`isAgentEnabled()`） |
+| `api/src/routes/sessions.ts` | 同步 agent 分流（shared `isAgentEnabled()`） |
+| `api/src/utils/mode-detect.ts` | 新增 `isAgentEnabled()` 共用函式 |
 
 ---
 
-## Phase 3：Streaming + Session 整合（待實作）
+## Phase 3：Request-Level Mode（已完成）
+
+### 目標
+
+讓前端在每次請求中選擇 `mode: "agent" | "rag"`，不再完全依賴 server-level `AGENT_ENABLED`。
+
+### 設計
+
+三層優先順序：`Request mode` > `AGENT_ENABLED` > `auto fallback`
+
+- `resolveMode(requestMode?)` — 封裝優先順序邏輯
+- `chatRequestSchema` / `sendMessageSchema` 新增 `mode: z.enum(["agent","rag"]).optional()`
+- Response `mode` 統一為 `"rag" | "context-only" | "agent"`（breaking: `"full"` → `"rag"`）
+
+### 檔案變更
+
+| 檔案 | 變更 |
+|------|------|
+| `api/src/utils/mode-detect.ts` | 新增 `resolveMode()` + `RequestMode` type |
+| `api/src/schemas/chat.ts` | schema + response type |
+| `api/src/schemas/session.ts` | schema |
+| `api/src/services/rag-chat.ts` | `"full"` → `"rag"` |
+| `api/src/routes/chat.ts` | `resolveMode(requestMode)` |
+| `api/src/routes/sessions.ts` | 同上 |
+| `api/tests/utils/mode-detect.test.ts` | 新增 9 tests |
+| `api/tests/routes/chat.test.ts` | +5 tests |
+| `api/tests/routes/sessions.test.ts` | +4 tests |
+
+---
+
+## Phase 4：Streaming + Session 整合（待實作）
 
 - Lambda Response Streaming + 前端即時顯示 tool 呼叫進度
 - Session metadata 存 tool_calls 細節
@@ -138,7 +177,8 @@ Claude Code 分析問題 -> 決定搜尋策略
 |-------|------|----------|-------------|------|
 | **Phase 1** | Skill + Command + 混合工具 | Claude Code | 不需要 | 已完成 |
 | **Phase 2** | TypeScript API agent loop | OpenAI gpt-5.2 function calling | OPENAI_API_KEY | 已完成 |
-| Phase 3 | Streaming + Session 整合 | 同 Phase 2 | 同 Phase 2 | 待實作 |
+| **Phase 3** | Request-level mode parameter | 同 Phase 2 | 同 Phase 2 | 已完成 |
+| Phase 4 | Streaming + Session 整合 | 同 Phase 2 | 同 Phase 2 | 待實作 |
 
 ---
 
