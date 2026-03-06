@@ -19,8 +19,10 @@ import {
 } from "../schemas/pipeline.js";
 import { execPython, execQaTools } from "../services/pipeline-runner.js";
 import { paths } from "../config.js";
+import { qaStore } from "../store/qa-store.js";
 import { hasSupabase } from "../store/supabase-client.js";
 import { SupabaseSnapshotStore } from "../store/supabase-snapshot-store.js";
+import type { SourceDocEntry } from "../schemas/pipeline.js";
 import {
   UUID_RE,
   SAFE_FILENAME_RE,
@@ -36,6 +38,41 @@ import {
 } from "./pipeline-fs.js";
 
 const supabaseSnapshotStore = hasSupabase() ? new SupabaseSnapshotStore() : null;
+
+/**
+ * Derive source docs from qaStore items (Lambda fallback).
+ * Groups QA items by (source_collection, source_title, source_date) to reconstruct
+ * the list of source documents without file-system access.
+ */
+function buildSourceDocsFromStore(): readonly SourceDocEntry[] {
+  const groups = new Map<string, { title: string; source_type: string; source_collection: string; source_url: string; source_date: string }>();
+
+  for (const item of qaStore.allItems) {
+    const key = `${item.source_collection}::${item.source_title}::${item.source_date}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        title: item.source_title,
+        source_type: item.source_type,
+        source_collection: item.source_collection,
+        source_url: item.source_url,
+        source_date: item.source_date,
+      });
+    }
+  }
+
+  return Array.from(groups.values())
+    .sort((a, b) => (b.source_date || "").localeCompare(a.source_date || ""))
+    .map((g) => ({
+      file: `${g.title.replace(/\s+/g, "_")}.md`,
+      title: g.title,
+      source_type: (g.source_type === "meeting" ? "meeting" : "article") as "meeting" | "article",
+      source_collection: g.source_collection,
+      source_url: g.source_url,
+      created_time: g.source_date ? `${g.source_date}T00:00:00.000Z` : "",
+      size_bytes: 0,
+      is_processed: true,
+    }));
+}
 
 // --- Route ---
 
@@ -99,6 +136,10 @@ pipelineRoute.get("/source-docs", (c) => {
   const { source_type, source_collection, keyword, is_processed, limit, offset } = parsed.data;
 
   let docs = buildSourceDocs();
+  // Fallback: derive from qaStore when file-system returns empty (Lambda)
+  if (docs.length === 0 && qaStore.count > 0) {
+    docs = buildSourceDocsFromStore();
+  }
 
   if (source_type) {
     docs = docs.filter((d) => d.source_type === source_type);

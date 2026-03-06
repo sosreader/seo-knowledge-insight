@@ -1,0 +1,138 @@
+# Lambda Staging 穩定化 + 後續計畫
+
+> 建立時間：2026-03-06
+> 狀態：active
+
+---
+
+## 背景
+
+v2.24–v2.25 完成 Lambda + Supabase 遷移後，staging 環境（`staging-v2.vocus.cc/admin/seoInsight/*`）的核心功能已可運作。本計畫整理當前狀態、未 commit 的修復、以及後續優先級。
+
+---
+
+## Phase 0：收尾本次修復（立即）
+
+### 待 commit 的變更
+
+| 檔案 | 變更 | 狀態 |
+|------|------|------|
+| `api/src/store/supabase-client.ts` | `supabaseSelect()` 新增 `timeoutMs` 參數 | 已部署 |
+| `api/src/store/supabase-qa-store.ts` | `LOAD_TIMEOUT_MS=25s` + `allItems` getter | 已部署 |
+| `api/src/store/qa-store.ts` | `allItems` getter | 已部署 |
+| `api/src/routes/pipeline.ts` | `buildSourceDocsFromStore()` + fallback | 已部署 |
+| `research/07-deployment.md` | cold start timeout + RPC gotchas + 端點完整性表格 | 文件 |
+| Supabase `match_qa_items` RPC | VOLATILE + extensions + ::real cast | DB side |
+
+### Supabase migration 記錄
+
+RPC 函數修復需記錄為 migration：
+```sql
+-- 20260306_fix_match_qa_items.sql
+-- STABLE→VOLATILE（SET LOCAL 需要）
+-- search_path 加 extensions（pgvector schema）
+-- similarity cast ::real（double precision→real）
+```
+
+---
+
+## Phase 1：前端體驗優化（短期，1-2 sessions）
+
+### P1-1：source-docs preview 在 Lambda 上不可用
+
+`GET /source-docs/:collection/:file/preview` 需要讀取本地 markdown 檔案。
+Lambda 上回傳 404。前端應：
+- 偵測 `size_bytes === 0` 時隱藏「預覽」按鈕
+- 或改為連結至 `source_url`（已有資料）
+
+### P1-2：meetings 頁面空狀態
+
+前端 rawData 頁面顯示「會議」tab 但回傳 0 筆。選項：
+- 隱藏 meetings tab（Lambda 模式下）
+- 或從 source-docs 中 filter `source_type=meeting` 顯示（資料已有）
+
+### P1-3：同義詞 Supabase 初始資料
+
+`GET /synonyms` 回傳 0 custom entries。靜態同義詞已內建但自訂同義詞未遷移。
+- 確認靜態同義詞在 Lambda 上是否正常載入
+- 若需遷移自訂同義詞，建 Supabase `synonyms` table
+
+---
+
+## Phase 2：搜尋品質提升（中期，2-3 sessions）
+
+### P2-1：同義詞擴充
+
+目標：KW Hit Rate 74% → 78%+（中間目標），最終 ≥ 85%
+
+- 分析搜尋 miss 案例，找出缺失的同義詞
+- 擴充 `synonym_custom.json`（或 Supabase synonyms table）
+- 執行 `/evaluate-context-precision-local` 驗證改善
+
+### P2-2：Model 升級 A/B 測試
+
+- 執行 `/evaluate-model-ab` 比較 gpt-5.2 vs 新模型
+- 評估 RAG 回答品質、Faithfulness、Context Precision
+- 決定是否升級 `CHAT_MODEL` / `OPENAI_MODEL`
+
+---
+
+## Phase 3：安全與架構（中長期）
+
+### P3-1：API Key 前端安全
+
+**優先級：HIGH**
+
+前端 `SEO_INSIGHT_API_KEY` 內嵌在 client bundle 中，任何人可從 DevTools 取得。
+應改為 Next.js API routes proxy（server-side），前端不直接持有 API key。
+
+- 前端已有 `/api/seo-insight/[...path].ts` proxy
+- 確認所有前端呼叫都走 proxy（不直接呼叫 Lambda URL）
+- 移除前端 bundle 中的 API key 引用
+
+### P3-2：Supabase RLS 強化
+
+目前 `SUPABASE_ANON_KEY` 用於讀取，`SUPABASE_SERVICE_KEY` 用於寫入。
+確認 RLS policies 足夠嚴格：
+- `qa_items`: SELECT only（anon key）
+- `reports`, `sessions`, `metrics_snapshots`: SELECT + INSERT（service key only for write）
+
+### P3-3：Observability 修復
+
+Lambda 上 Laminar 初始化失敗（缺 `@opentelemetry/resources` module）：
+```
+Laminar.initialize() failed: Failed to create Resource: Cannot find module '@opentelemetry/resources'
+```
+tsup bundle 未包含此 dependency。需要：
+- 確認 `@opentelemetry/resources` 是否被 tree-shaken
+- 或 tsup config 加入 external/noExternal 調整
+
+---
+
+## Phase 4：功能擴展（長期）
+
+### P4-1：Cache Redis
+
+`plans/active/cache-redis.md` — 搜尋結果快取，減少 Supabase RPC 呼叫
+
+### P4-2：Multi-Domain Analysis
+
+`plans/active/multi-domain-analysis.md` — 支援多網站 SEO 分析
+
+### P4-3：Learning Query（Phase 2）
+
+`plans/active/phase2-learning-query.md` — 從使用者互動學習搜尋模式
+
+---
+
+## 優先級總覽
+
+| 優先級 | 項目 | 預估 effort |
+|--------|------|-------------|
+| **P0** | commit 本次修復 + Supabase migration 記錄 | 1 session |
+| **P1** | 前端體驗（preview/meetings/synonyms） | 1-2 sessions |
+| **P2** | 搜尋品質（同義詞 + model A/B） | 2-3 sessions |
+| **P3-1** | API Key 前端安全 | 1 session |
+| **P3-2** | Supabase RLS 強化 | 0.5 session |
+| **P3-3** | Observability 修復 | 0.5 session |
+| **P4** | 功能擴展（cache/multi-domain/learning） | 各 3+ sessions |
