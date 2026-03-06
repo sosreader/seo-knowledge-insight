@@ -268,6 +268,57 @@ export const handler: typeof honoHandler = async (event, context) => {
 - **`hono/aws-lambda`**：`handle()` 將 Hono app 轉為 Lambda handler
 - **Laminar flush**：每次 invocation 結束前 flush traces，避免 Lambda freeze 遺失
 
+#### Cold Start Timeout 考量
+
+Lambda cold start 時 `initStores()` 需從 Supabase 載入 QA metadata（1,323 rows，3 pages）。
+當 Supabase 本身也冷時（PostgREST connection pool 重建），預設 10 秒 timeout 可能不夠。
+
+```typescript
+// api/src/store/supabase-client.ts
+export const SUPABASE_TIMEOUT_MS = 10_000;  // 一般 API 請求
+
+// supabaseSelect() 接受 timeoutMs 參數覆蓋預設值
+export async function supabaseSelect<T>(
+  table: string, queryString?: string, timeoutMs?: number
+): Promise<T[]> { ... }
+
+// api/src/store/supabase-qa-store.ts
+const LOAD_TIMEOUT_MS = 25_000;  // 啟動載入用較長 timeout
+```
+
+**實測數據**：
+- Supabase 暖時：load 1,323 items ≈ 1.5-2 秒
+- Supabase 冷時：可能超過 10 秒 → 改用 25 秒 timeout
+
+#### Supabase RPC 函數注意事項
+
+`match_qa_items()` RPC 需注意：
+- **VOLATILE**（非 STABLE）：因為使用 `SET LOCAL ivfflat.probes = 5`
+- **search_path** 必須含 `extensions`：pgvector operators 在 extensions schema
+- **型別精確匹配**：`<=>` 回傳 `double precision`，function return type 若為 `real` 須 cast
+
+#### Lambda 端點資料完整性
+
+Lambda 無檔案系統，部分端點透過 Supabase fallback 提供資料：
+
+| 端點 | Lambda 資料來源 | 資料量 | 說明 |
+|------|----------------|--------|------|
+| `GET /qa` | SupabaseQAStore | 1,323 | pgvector + in-memory metadata |
+| `POST /search` | Supabase RPC `match_qa_items` | hybrid | pgvector + TS re-rank |
+| `POST /sessions/*/messages` | Supabase + OpenAI | RAG 回答 | 完整 RAG pipeline |
+| `GET /reports` | SupabaseReportStore | 31 | 完整 markdown content |
+| `GET /sessions` | SupabaseSessionStore | 8 | CRUD 完整 |
+| `GET /pipeline/status` | qaStore.collections | 6 步驟 | 從 QA metadata 計算 |
+| `GET /pipeline/source-docs` | **qaStore fallback** | 230 | `buildSourceDocsFromStore()` 從 QA metadata group by 反推 |
+| `GET /pipeline/metrics/snapshots` | SupabaseSnapshotStore | 2 | CRUD 完整 |
+| `GET /synonyms` | SupabaseSynonymsStore | 0 custom | 讀寫完整 |
+| `GET /pipeline/meetings` | 無（回傳空） | 0 | Notion JSON 為本地產物 |
+| `GET /pipeline/unprocessed` | 無（回傳空） | 0 | 待處理 markdown 為本地產物 |
+| `GET /pipeline/logs` | 無（回傳空） | 0 | fetch 日誌為本地產物 |
+
+**source-docs fallback 設計**：當 `buildSourceDocs()`（檔案掃描）回傳空且 `qaStore.count > 0` 時，
+自動切換至 `buildSourceDocsFromStore()`，從 `qaStore.allItems` 按 `(source_collection, source_title, source_date)` group by 反推來源文件清單。`is_processed` 恆為 true、`size_bytes` 為 0。
+
 #### tsup 雙重 Build 設定
 
 ```typescript

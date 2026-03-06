@@ -1,15 +1,15 @@
-# Hono TypeScript API (v2.24)
+# Hono TypeScript API (v2.25)
 
 REST API 伺服器，主要架構採用 Hono 框架。
 
 **特點：**
-- 9 個路由器（Routers）
-- 32 個 API endpoints
-- Rate limiting + API Key 認證
+- 9 個路由器（Routers）、32 個 API endpoints
+- Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation
 - Local Mode graceful degradation（無 OpenAI 時自動降級）
 - Supabase pgvector hybrid search（自動偵測，fallback 檔案模式）
 - Lambda + Function URL 部署（arm64，~$0/月）
+- 安全加固：SSRF whitelist (pipeline schema)、auth fail-fast (production 503)、HTTP security headers middleware、session UUID validation
 
 ---
 
@@ -53,9 +53,9 @@ pnpm start                   # node dist/index.js，port 8002
 
 ### 1. 健康檢查 (health)
 
-| 方法 | 路由 | 說明 |
-|------|------|------|
-| GET | `/health` | 伺服器健康檢查 |
+| 方法 | 路由 | 說明 | 認證 | Rate Limit |
+|------|------|------|------|-----------|
+| GET | `/health` | 伺服器健康檢查 | ✗ | — |
 
 ### 2. Q&A 知識庫 (qa) — 4 個 endpoints
 
@@ -216,18 +216,24 @@ api/
 │   │   ├── pipeline.ts
 │   │   └── synonyms.ts
 │   ├── middleware/
-│   │   ├── auth.ts           # API Key 驗證（timingSafeEqual）
-│   │   ├── rate-limit.ts     # Sliding window 速率限制（Lambda 自動 bypass）
-│   │   ├── cors.ts           # CORS 設定
-│   │   └── error-handler.ts  # 錯誤處理
+│   │   ├── auth.ts              # API Key 驗證（timingSafeEqual）
+│   │   ├── rate-limit.ts        # Sliding window 速率限制（Lambda 自動 bypass）
+│   │   ├── cors.ts              # CORS 設定
+│   │   ├── security-headers.ts  # HTTP security headers（X-Content-Type-Options 等）
+│   │   └── error-handler.ts     # 錯誤處理
 │   ├── store/
-│   │   ├── qa-store.ts       # QAStore singleton + loadQaStore() factory
-│   │   ├── supabase-client.ts # Supabase REST thin client（no SDK）
-│   │   ├── supabase-qa-store.ts # SupabaseQAStore（pgvector hybrid search）
-│   │   ├── search-engine.ts  # 搜尋引擎（hybrid + keyword）
-│   │   ├── session-store.ts  # 對話歷史儲存
-│   │   ├── learning-store.ts # 失敗記憶（JSONL）
-│   │   └── synonyms-store.ts # 同義詞（雙層：靜態 + custom JSON）
+│   │   ├── qa-store.ts              # QAStore singleton + loadQaStore() factory
+│   │   ├── supabase-client.ts       # Supabase REST thin client（no SDK）
+│   │   ├── supabase-qa-store.ts     # SupabaseQAStore（pgvector hybrid search）
+│   │   ├── supabase-session-store.ts # SupabaseSessionStore
+│   │   ├── supabase-report-store.ts  # SupabaseReportStore
+│   │   ├── supabase-snapshot-store.ts # SupabaseSnapshotStore
+│   │   ├── supabase-synonyms-store.ts # SupabaseSynonymsStore
+│   │   ├── supabase-learning-store.ts # SupabaseLearningStore
+│   │   ├── search-engine.ts         # 搜尋引擎（hybrid + keyword）
+│   │   ├── session-store.ts         # 對話歷史儲存（file fallback）
+│   │   ├── learning-store.ts        # 失敗記憶（JSONL fallback）
+│   │   └── synonyms-store.ts       # 同義詞（雙層：靜態 + custom JSON）
 │   ├── services/
 │   │   ├── embedding.ts      # OpenAI embedding 服務
 │   │   ├── rag-chat.ts       # RAG 問答邏輯
@@ -255,8 +261,9 @@ api/
 │       ├── sanitize.ts       # HTML escape 防 XSS
 │       ├── mode-detect.ts    # hasOpenAI() / hasSupabase() 偵測
 │       ├── observability.ts  # Laminar tracing
-│       └── laminar-scoring.ts # Online scoring
-├── tests/                    # 25 個測試檔案，224 tests
+│       ├── qa-filter.ts        # 共用 QA filter 邏輯
+│       └── laminar-scoring.ts  # Online scoring
+├── tests/                      # 38 個測試檔案，353 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
@@ -328,7 +335,7 @@ LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 
 ## 部署架構
 
-### Lambda + Function URL（生產環境，v2.24）
+### Lambda + Function URL（生產環境，v2.25）
 
 ```
 pnpm build → tsup dual build
@@ -392,10 +399,10 @@ pnpm test:watch               # 監視模式
 pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
-**測試套件統計（v2.24）：**
-- 總測試數：224 個（25 個測試檔案）
-- 通過：224/224 (100%)
-- 覆蓋率：80%+
+**測試套件統計（v2.25）：**
+- 總測試數：353 個（38 個測試檔案）
+- 通過：353/353 (100%)
+- 覆蓋率：80%
 
 ---
 

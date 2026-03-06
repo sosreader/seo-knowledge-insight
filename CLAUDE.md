@@ -159,15 +159,6 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 
 ### API 伺服器命令
 
-#### Python FastAPI（port 8001）——Legacy，預計下線
-
-- 啟動：`uvicorn app.main:app --port 8001`
-- 健康檢查：`GET /health`
-- 週報管理：
-  - `GET /api/v1/reports` — 列出所有週報
-  - `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
-  - `POST /api/v1/reports/generate` — 觸發週報生成
-
 #### TypeScript Hono（v2.12+，port 8002）——當前主架構
 
 開發環境（後端 API）：
@@ -187,11 +178,11 @@ pnpm install
 pnpm dev               # 啟動前端伺服器（http://localhost:3000）
 ```
 
-測試：
+測試（353 個測試，80% 覆蓋率）：
 
 ```bash
 cd api
-pnpm test              # 執行所有 vitest 測試
+pnpm test              # 執行所有 vitest 測試（353 tests, 38 files）
 pnpm test:watch       # 監視模式下執行測試
 pnpm test:coverage    # 生成測試覆蓋率報告
 ```
@@ -217,16 +208,16 @@ aws lambda update-function-code --function-name seo-insight-api \
 Docker 執行（本地驗證用）：
 
 ```bash
-docker-compose up      # 同時啟動 Python (8001) 和 TypeScript (8002) API
+docker-compose up      # 啟動 TypeScript (8002) API
 docker-compose logs seo-api-ts  # 監看 Hono 日誌
 ```
 
-API 端點（與 Python 相同）：
+API 端點特性：
 
 - `GET /health` — 健康檢查
 - 9 個路由器：qa、search、chat、reports、sessions、feedback、pipeline、synonyms、health
 - Pipeline 端點：15 個（狀態、會議、來源文件、指標、快照等）
-- 認證：`X-API-Key` header
+- 認證：`X-API-Key` header + 安全層（SSRF whitelist、auth fail-fast、HTTP security headers、session UUID validation）
 - 詳見 `api/README.md`
 
 QA API 端點（v2.6 多來源擴充）：

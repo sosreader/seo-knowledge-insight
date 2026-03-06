@@ -1342,3 +1342,18 @@ Laminar dashboard ←─── Laminar.flush() ←─── Laminar.event()
 - ✅ 測試隔離（LMNR_PROJECT_API_KEY 未設定）
 - ✅ score_event 失敗不中斷業務（try-except + logger.debug）
 - ✅ requirements.txt pinned version 確保相容性
+
+---
+
+## v2.25（2026-03-06）— Architecture & Security Hardening
+
+**核心亮點**：
+- Security: SSRF whitelist、auth fail-fast (production 503)、HTTP security headers、session UUID validation
+- Refactor: qa-filter.ts 共用模組（消除 200+ 行重複）、itemToSource 共用化
+- Fix: SupabaseQAStore.listQa mutation bug（immutable sort）
+- Cleanup: 刪除 legacy Python FastAPI（app/ 17 files + Dockerfile + 8 tests + CI workflow）
+- Supabase: Migrations 004-007 補齊 + IVFFlat probes=5 tuning
+- Test: 224→353 tests, 25→38 files, 63%→80% coverage
+- Python: 65 處 print→logging 替換（3 files）
+
+**詳細 Changelog**：見 [06a-architecture-changelog.md](./06a-architecture-changelog.md)
