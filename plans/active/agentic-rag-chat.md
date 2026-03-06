@@ -1,6 +1,6 @@
 # Agentic RAG Chat — 多階段實作計畫
 
-> 狀態：Phase 1 已完成 | 建立日期：2026-03-06 | 更新：2026-03-07 | 參考：FM AI Agents v2 課程
+> 狀態：Phase 1+2 已完成 | 建立日期：2026-03-06 | 更新：2026-03-07 | 參考：FM AI Agents v2 課程
 
 ## Context
 
@@ -137,7 +137,7 @@ Claude Code 分析問題 -> 決定搜尋策略
 | Phase | 內容 | LLM 引擎 | 需要 API key | 狀態 |
 |-------|------|----------|-------------|------|
 | **Phase 1** | Skill + Command + 混合工具 | Claude Code | 不需要 | 已完成 |
-| Phase 2 | TypeScript API agent loop | OpenAI gpt-5.2 function calling | OPENAI_API_KEY | 待實作 |
+| **Phase 2** | TypeScript API agent loop | OpenAI gpt-5.2 function calling | OPENAI_API_KEY | 已完成 |
 | Phase 3 | Streaming + Session 整合 | 同 Phase 2 | 同 Phase 2 | 待實作 |
 
 ---
