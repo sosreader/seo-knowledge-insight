@@ -13,7 +13,7 @@
 - **Collection-Scoped 去重合併** — 各 collection 內部獨立去重，跨 collection 保留（支援多來源知識不互相覆蓋）
 - **智能分類標籤** — 10 個分類（技術 SEO、內容策略、連結建設等），用 `gpt-5-mini` 自動標記難度與時效性
 - **雙層 metadata** — `source_type`（meeting/article）+ `source_collection`（seo-meetings/genehong-medium/ithelp-sc-kpi/google-case-studies）
-- **目前規模** — 1,317 筆 Q&A（4 個 collection：notion-seo-meetings 584、medium-genehong 505、ithelp-gsc-kpi 185、google-case-studies 43）
+- **目前規模** — 1,323 筆 Q&A（4 個 collection：notion-seo-meetings 584、medium-genehong 511、ithelp-gsc-kpi 185、google-case-studies 43）
 
 ### 2. 每週 SEO 週報生成（步驟 4）
 
@@ -33,7 +33,7 @@
 ### 3. Q&A 品質評估（步驟 5）
 
 - **五維度 LLM-as-Judge** — Relevance、Accuracy、Completeness、Granularity、Faithfulness（各 1–5 分）
-- **Retrieval 品質指標** — Keyword Hit Rate（74% ✓）、MRR（0.87）、LLM Top-1 Precision（80% ✓）
+- **Retrieval 品質指標** — Hit Rate 100%、MRR 0.88、Recall@K 77.5%、NDCG@K 0.72（v2.12 基準，20 golden cases）
 - **分類準確度檢驗** — Category、Difficulty、Evergreen 標籤驗證
 - **對標基準線** — 自動與歷史 eval 比較進度（v2.0: Relevance 5.00、Accuracy 4.30、Completeness 3.95）
 
@@ -61,8 +61,7 @@
   - 用 XML 結構化 prompt 重排序、評分
   - 篩選 top-K 結果
   - 錯誤時自動 fallback 至原始排序
-- `POST /api/v1/eval/reranking` — 評估 reranker 品質提升
-- **預期效果**：Precision@K 提升 76% → 85%+、Top-1 Hit 達 90%+
+- **實際效果**：Hit Rate 100%、MRR 0.88（v2.12 基準）
 
 **Phase 4：Context Relevance 評估（v2.12 新增）**
 - `api/src/services/context-relevance.ts` — Claude Haiku LLM judge
@@ -70,7 +69,7 @@
   - 輸出 0–1 分（0 = 完全不相關，1 = 完全相關）+ per-context 細分評分
   - Dynamic import fallback：ANTHROPIC_API_KEY 缺失時，使用 freshness_score 啟發式評分
   - `escapeXml()` 防 XML prompt injection
-- `POST /api/v1/eval/context-relevance` — 評估檢索片段相關性
+- eval endpoints 已於 v2.18 移除（改用離線 Laminar eval + CI 自動化）
 
 **環境變數（v2.11）**：
 ```env
@@ -102,8 +101,9 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 - **完整對比報告** — 多個 Provider 並排評分，delta 對比前次結果
 - **無需 API key** — Claude Code 本身作為 Judge，評估任何 LLM Provider 的分析品質
 
-### 7. Laminar 離線評估（v1.10）
+### 7. Laminar 離線評估（v1.10 → v2.24 CI 整合）
 
+- **CI 自動化** — 每次 push main 自動執行 `eval.yml`：retrieval eval 從 Supabase 讀 QA 資料、extraction eval 本機跑（CI graceful skip）
 - **自動監控三環節** — Retrieval 品質、Q&A Extraction、RAG Chat 端到端表現
 - **無需額外 API** — 基於 Laminar SDK，純 Python/SQL 邏輯，不消耗 OpenAI tokens
 - **儀表板可視化** — 所有指標匯總至 Laminar 後台（laminar.sh/app/evals）
@@ -202,7 +202,7 @@ seo-knowledge-insight/
 │   ├── src/
 │   │   ├── index.ts             # 入口（middleware + route mount）
 │   │   ├── config.ts            # Zod 驗證環境變數
-│   │   ├── routes/              # 10 個路由（qa/search/chat/reports/sessions/feedback/pipeline/eval/health/synonyms）
+│   │   ├── routes/              # 9 個路由（qa/search/chat/reports/sessions/feedback/pipeline/health/synonyms）
 │   │   ├── middleware/           # auth / rate-limit / cors / error-handler
 │   │   ├── store/               # QAStore singleton + SearchEngine + SessionStore
 │   │   ├── services/            # embedding + rag-chat + pipeline-runner
@@ -966,16 +966,12 @@ api/src/
 | `POST` | `/api/v1/pipeline/dedupe-classify`       | 觸發去重 + 分類                  | 60/min     |
 | `POST` | `/api/v1/pipeline/metrics`               | 解析 SEO 指標（Google Sheets/TSV）| 60/min    |
 
-#### Eval 評估
+#### Eval 評估（v2.18 移除 REST endpoints，改用離線 CI）
 
-| Method | Path                     | 說明                                              | Rate Limit |
-| ------ | ------------------------ | ------------------------------------------------- | ---------- |
-| `POST` | `/api/v1/eval/sample`              | 抽樣 Q&A 供評估，body: `{size?, seed?, with_golden?}` | 60/min |
-| `POST` | `/api/v1/eval/retrieval`           | 本地 Retrieval 指標，body: `{top_k?, use_enriched?}`   | 60/min |
-| `POST` | `/api/v1/eval/reranking`           | Reranker 品質評估，body: `{query, candidates, top_k?}` | 60/min |
-| `POST` | `/api/v1/eval/context-relevance`   | NVIDIA Context Relevance，body: `{query, top_k?}`（max 30）| 60/min |
-| `GET`  | `/api/v1/eval/compare`             | 跨 provider 比較                                       | 60/min |
-| `POST` | `/api/v1/eval/save`                | 儲存 eval 結果，body: `{input, extraction_engine?, update_baseline?, extraction_model?, embedding_model?, classify_model?}` | 60/min |
+> Eval endpoints 已於 v2.18 移除。評估改為離線執行：
+> - **CI 自動化**：`eval.yml` 每次 push main 觸發 Laminar retrieval eval（Supabase fallback）
+> - **本機**：`make eval-laminar`、`make eval-semantic`
+> - **Claude Code**：`/evaluate-qa-local`、`/evaluate-faithfulness-local`
 
 #### 安全機制
 
@@ -1020,7 +1016,7 @@ git push origin main  # 觸發 GitHub Actions → 自動部署到 Lambda
 | `deploy-ts-api.yml` | push `api/**` 到 main | typecheck → test → build → deploy Lambda |
 | `etl-and-deploy.yml` | 每週一 09:00 UTC / 手動 | ETL → Supabase migrate → eval → quality gate → deploy |
 | `test-api-ts.yml` | push/PR `api/**` | typecheck → test → build（不部署） |
-| `eval.yml` | push/PR main | Laminar retrieval + extraction eval |
+| `eval.yml` | push/PR main | Laminar retrieval eval（Supabase fallback）+ extraction eval（CI graceful skip） |
 
 **手動部署（緊急用）：**
 

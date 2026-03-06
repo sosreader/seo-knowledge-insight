@@ -227,7 +227,7 @@ api/src/
 ```
 git push main
     |
-GitHub Actions (.github/workflows/deploy-ts-api.yml)  ← 待更新為 Lambda 部署
+GitHub Actions (.github/workflows/deploy-ts-api.yml)
     |
 pnpm build（tsup Lambda build → dist-lambda/lambda.js，~3.4MB self-contained）
     |
@@ -249,7 +249,9 @@ import { handle } from "hono/aws-lambda";
 import { app, initStores } from "./index.js";
 import { flushLaminar } from "./utils/observability.js";
 
-const ready = initStores();           // Cold start 初始化
+const ready = initStores().catch((err) => {  // Cold start 初始化
+  console.error("Lambda cold start initStores failed:", err);
+});
 const honoHandler = handle(app);
 
 export const handler: typeof honoHandler = async (event, context) => {
@@ -342,7 +344,7 @@ CMD ["node", "dist/index.js"]
 | ------------------------ | ------ | ---------------------- | ------------ |
 | 打包進 Docker image      | 最低   | 重建 image             | Phase 1 過渡 |
 | S3 啟動時下載            | 低     | 上傳 S3，重啟容器      | Phase 1      |
-| **Supabase (pgvector)**  | **中** | **API 即時寫入**       | **Phase 2（目標）** |
+| **Supabase (pgvector)**  | **中** | **API 即時寫入**       | **Phase 2（v2.24 完成）** |
 
 **Phase 2 Supabase 遷移計畫**：
 
@@ -403,19 +405,43 @@ CREATE INDEX ON qa_items USING ivfflat (embedding vector_cosine_ops) WITH (lists
 CREATE INDEX ON qa_items USING gin (to_tsvector('simple', question || ' ' || answer));
 ```
 
-### 21.5 GitHub Actions Secrets
+### 21.5 Eval CI（Supabase Fallback）
+
+`eval.yml` 在每次 push main 時自動執行兩個 Laminar eval：
+
+| Eval | CI 行為 | 資料來源 |
+|------|---------|---------|
+| `eval_retrieval.py` | 正常執行 | 本地 `qa_final.json` → 無則 fallback Supabase REST API |
+| `eval_extraction.py` | Graceful skip（exit 0） | 需要本地 `output/qa_per_meeting/`，CI 無此資料 |
+
+**Retrieval eval Supabase fallback**（`evals/eval_retrieval.py`）：
+
+```python
+def _load_qa_items() -> list[dict]:
+    # 1. Try local file
+    if qa_final_path.exists():
+        return json.loads(...)["qa_database"]
+    # 2. Fallback to Supabase REST API
+    resp = requests.get(f"{supabase_url}/rest/v1/qa_items?select=...",
+                        headers={"apikey": anon_key, ...})
+    return resp.json()
+```
+
+CI 環境需要 `SUPABASE_URL` + `SUPABASE_ANON_KEY` secrets。
+
+### 21.6 GitHub Actions Secrets
 
 | Secret                     | 用途                                         |
 | -------------------------- | -------------------------------------------- |
 | `AWS_ACCESS_KEY_ID`        | AWS IAM 認證（`seo-insight-deployer` user）  |
 | `AWS_SECRET_ACCESS_KEY`    | AWS IAM 認證                                 |
-| `AWS_REGION`               | `ap-northeast-1`                             |
+| `LMNR_PROJECT_API_KEY`     | Laminar eval + tracing                       |
 | `OPENAI_API_KEY`           | OpenAI API（RAG chat 需要）                  |
 | `SEO_API_KEY`              | API 認證金鑰                                 |
 | `SUPABASE_URL`             | Supabase REST API URL                        |
 | `SUPABASE_ANON_KEY`        | Supabase anon key（RLS SELECT）              |
 
-### 21.6 AWS 服務與 IAM 設定
+### 21.7 AWS 服務與 IAM 設定
 
 **需要開通的 AWS 服務**：
 
@@ -439,7 +465,7 @@ CREATE INDEX ON qa_items USING gin (to_tsvector('simple', question || ' ' || ans
 
 > **注意**：Lambda 架構建立後不可更改。需更換架構時必須刪除函式後重建。
 
-### 21.7 docker-compose 本地開發
+### 21.8 docker-compose 本地開發
 
 ```yaml
 services:
@@ -465,7 +491,7 @@ services:
 **注意**：本地開發建議直接用 `cd api && pnpm dev`（tsx watch），比 Docker 更快且支援 hot reload。
 Docker 主要用於驗證 production image 是否正常。生產環境使用 Lambda（不經 Docker）。
 
-### 21.8 歷史：ECR + App Runner（已淘汰）
+### 21.9 歷史：ECR + App Runner（已淘汰）
 
 <details>
 <summary>展開 App Runner 部署流程（已淘汰，v2.3--v2.23）</summary>
@@ -481,7 +507,7 @@ App Runner 月費 ~$5-7，已於 2026-03-06 遷移至 Lambda + Function URL（~$
 
 </details>
 
-### 21.9 歷史：ECR + EC2 SSM（已淘汰）
+### 21.10 歷史：ECR + EC2 SSM（已淘汰）
 
 <details>
 <summary>展開 EC2 SSM 部署流程（已淘汰，v0.3--v1.20）</summary>
