@@ -211,12 +211,14 @@ Notion 會議紀錄（87 份，2023–2026）
     - services/context-relevance.ts：Context Relevance 評估（v2.12 新增，Claude haiku judge；per-context 細分；escapeXml() 防 prompt injection）
     - services/report-generator-local.ts：本地週報生成（v2.13 新增；6 維度 ECC 分析；無需 OpenAI API；含 RESEARCH_CITATIONS 業界研究引用庫；v2.14 加入 CitationTracker — `[N]` 標記 + `<!-- citations [...] -->` block）
     - services/report-evaluator.ts：報告品質規則式評估（v2.13 新增；5 維度 section_coverage/kb_citation/research/kb_links/alert_coverage；online scoring；v2.18 修正 KB_LINK_RE 格式）
-    - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools；v2.18 stdout/stderr 分離，修復 Laminar log 混入 JSON parse bug）
+    - services/metrics-parser.ts：純 TS 指標解析（v2.26 新增；Google Sheets CSV fetch + TSV parse + anomaly detect；取代 Python qa_tools.py load-metrics）
+    - services/report-llm.ts：純 TS OpenAI 報告生成（v2.26 新增；同 Python 04_generate_report.py 的 system prompt + QA context 建構；取代 Python 依賴）
+    - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools；v2.18 stdout/stderr 分離，修復 Laminar log 混入 JSON parse bug；v2.26 metrics 端點已不再使用）
   評估工具：
     - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port，複製 report-evaluator.ts 邏輯；7 維度推送 Laminar `report-quality` group；供 `/generate-report` 存檔後呼叫）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / synonyms / api-response
-  測試：Vitest（25 個 test files，224 tests passing）
+  測試：Vitest（39 個 test files，367 tests passing）
   部署：Lambda + Function URL（arm64，~$0/月）/ docker-compose（本地開發）
             ↓ http://localhost:8002 (開發) 或 https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/ (生產)
 
@@ -554,13 +556,13 @@ Phase 3（4 週後）：下線 Python API (port 8001)
    |------|--------|--------|------|-----------|
    | `template` | 本地模板（Markdown render） | 靜態內容展示 | 無 | 否 |
    | `hybrid` | 本地模板 + LLM 5 維度分析 | 結合固定內容與 AI 洞見 | 無 | 否 |
-   | `openai` | Python `04_generate_report.py --snapshot` + OpenAI API | 高品質 6 維度 ECC 分析 | `snapshot_id` + `use_openai: true` | 是 |
+   | `openai` | TypeScript `report-llm.ts` + OpenAI API（v2.26 從 Python 移植） | 高品質 6 維度 ECC 分析 | `snapshot_id` + `use_openai: true` | 是 |
    | `claude-code` | Claude Code 語意推理（Interactive 模式） | 開發/本地驗證 | `/generate-report` 指令 | 否 |
 
-   **OpenAI 模式詳解**（v2.23+）：
+   **OpenAI 模式詳解**（v2.26+，純 TypeScript）：
    - 前端提交 `snapshot_id` + `use_openai: true`
-   - API 代理 `scripts/04_generate_report.py --snapshot {snapshot_id}`
-   - Python 層讀取儲存的指標快照（無需再次擷取 Google Sheets）
+   - API 呼叫 `generateReportLlm(snapshotMetrics, weeks)`（`services/report-llm.ts`）
+   - 純 TypeScript 實作：從 Supabase/本地讀取指標快照，建構 QA context，呼叫 OpenAI API
    - System prompt：ECC 6 維度框架（Situation Snapshot + Health Score + CTR 四象限分析 + 研究引用 + KB 連結 + 行動建議）
    - 回傳 markdown + `report_meta` JSON comment（`<!-- report_meta {"generation_mode":"openai","model":"gpt-5.2",...} -->`）
    - 前端 `cache_hit` 欄位：指示是否命中快取

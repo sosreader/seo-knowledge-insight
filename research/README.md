@@ -16,6 +16,7 @@
 | [06-project-architecture.md](./06-project-architecture.md)       | 本專案架構 / Pipeline 全景 / 技術決策學術支撐                               |
 | [06a-architecture-changelog.md](./06a-architecture-changelog.md) | 架構變更紀錄（Changelog），每次架構調整後新增一行                           |
 | [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.24，Lambda + Supabase pgvector）                            |
+| [06c-backend-onboarding.md](./06c-backend-onboarding.md)         | 後端 API 入門導讀 — 從零理解分層架構、請求流程、雙模式設計                  |
 | [07-deployment.md](./07-deployment.md)                           | Hono API 部署 / Lambda + Function URL / Supabase 遷移 / App Runner（已淘汰）|
 | [08-fetch-optimization.md](./08-fetch-optimization.md)           | Fetch 優化 / Notion 增量 / Medium Scrapling / 多來源爬取架構                |
 | [09-provider-comparison.md](./09-provider-comparison.md)         | AI Provider 輸出品質比較方法論與歷次跑分結果                                |
@@ -61,7 +62,7 @@
 | Context Relevance      | **0.32**（1 query）| NVIDIA style，keyword fallback（v2.12）          |
 | Faithfulness           | 待測       | RAGAS，v2.13 `/evaluate-faithfulness-local`（目標 ≥ 0.80）|
 | Context Precision      | 待測       | RAGAS，v2.13 `/evaluate-context-precision-local`（目標 ≥ 0.70）|
-| **Test 通過率**        | **224/224** | Hono TypeScript Vitest（25 test files，v2.24）           |
+| **Test 通過率**        | **368/368** | Hono TypeScript Vitest（39 test files，v2.25）           |
 | **API endpoints**      | **32 個**   | 9 routers：qa/search/chat/reports/sessions/feedback/pipeline(16)/synonyms/health |
 | **部署**               | **Lambda + Function URL** | arm64，~$0/月（free tier），ap-northeast-1       |
 | **Observability**      | **完備**    | Laminar traces + Audit logs + Scoring events（三柱）     |

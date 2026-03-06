@@ -29,6 +29,8 @@ laminar-*.png
 node_modules/
 api/dist/
 api/dist-lambda/
+api/coverage/
+api/lambda.zip
 
 # Supabase CLI temp files
 supabase/.temp/

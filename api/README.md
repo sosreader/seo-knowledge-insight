@@ -1,14 +1,15 @@
 # Hono TypeScript API (v2.25)
 
-REST API 伺服器，主要架構採用 Hono 框架。
+REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（Node.js server / AWS Lambda）。
 
 **特點：**
-- 9 個路由器（Routers）、32 個 API endpoints
+- 9 個路由器（Routers）、32 個 API endpoints、368 個測試（39 檔案，coverage 80%+）
 - Rate limiting + API Key 認證（timingSafeEqual）
-- Zod schema validation
+- Zod schema validation（環境變數 + 請求參數）
 - Local Mode graceful degradation（無 OpenAI 時自動降級）
 - Supabase pgvector hybrid search（自動偵測，fallback 檔案模式）
 - Lambda + Function URL 部署（arm64，~$0/月）
+- 純 TypeScript 架構——metrics-parser + report-llm 已消除 Lambda Python 依賴
 - 安全加固：SSRF whitelist (pipeline schema)、auth fail-fast (production 503)、HTTP security headers middleware、session UUID validation
 
 ---
@@ -46,6 +47,32 @@ aws lambda update-function-code --function-name seo-insight-api \
 pnpm build
 pnpm start                   # node dist/index.js，port 8002
 ```
+
+---
+
+## 架構概覽
+
+```
+Client → Function URL / localhost:8002
+  → CORS → Security Headers
+  → /health（直接回應，無 auth）
+  → /api/v1/* → Auth → Rate Limit → Route Handler → Service → Store → Supabase / File
+```
+
+**分層設計：**
+
+| 層 | 目錄 | 職責 |
+|----|------|------|
+| Middleware | `middleware/` | CORS、安全標頭、API Key 認證、Rate Limit、錯誤處理 |
+| Routes | `routes/` | 請求驗證（Zod schema）、回應格式化 |
+| Services | `services/` | 業務邏輯（RAG、embedding、週報生成、指標解析） |
+| Store | `store/` | 資料存取（Factory Pattern：Supabase pgvector vs 檔案模式） |
+| Schemas | `schemas/` | Zod 驗證 schema（請求參數、API 回應） |
+| Utils | `utils/` | 純函式工具（cosine、CJK 分詞、keyword boost、sanitize） |
+
+**雙模式資料層：** `hasSupabase()` 偵測環境變數，有設定走 `SupabaseQAStore`（pgvector hybrid search），否則 fallback 到檔案模式（JSON + `.npy` embedding）。
+
+**雙模式執行：** 同一份 `app` 物件由 `index.ts`（Node.js server）和 `lambda.ts`（AWS Lambda handler）共用，`initStores()` 為 idempotent singleton promise。
 
 ---
 
@@ -214,6 +241,7 @@ api/
 │   │   ├── sessions.ts
 │   │   ├── feedback.ts
 │   │   ├── pipeline.ts
+│   │   ├── pipeline-fs.ts      # Pipeline 檔案系統邏輯（source-docs 等）
 │   │   └── synonyms.ts
 │   ├── middleware/
 │   │   ├── auth.ts              # API Key 驗證（timingSafeEqual）
@@ -231,6 +259,7 @@ api/
 │   │   ├── supabase-synonyms-store.ts # SupabaseSynonymsStore
 │   │   ├── supabase-learning-store.ts # SupabaseLearningStore
 │   │   ├── search-engine.ts         # 搜尋引擎（hybrid + keyword）
+│   │   ├── qa-filter.ts             # 共用 QA filter 邏輯
 │   │   ├── session-store.ts         # 對話歷史儲存（file fallback）
 │   │   ├── learning-store.ts        # 失敗記憶（JSONL fallback）
 │   │   └── synonyms-store.ts       # 同義詞（雙層：靜態 + custom JSON）
@@ -239,7 +268,9 @@ api/
 │   │   ├── rag-chat.ts       # RAG 問答邏輯
 │   │   ├── reranker.ts       # Claude Haiku reranker
 │   │   ├── context-relevance.ts  # Context Relevance 評估
+│   │   ├── metrics-parser.ts # SEO 指標解析（純 TS，取代 Python）
 │   │   ├── report-generator-local.ts  # ECC 6 維度本地週報
+│   │   ├── report-llm.ts     # LLM 週報生成（純 TS，取代 Python）
 │   │   ├── report-evaluator.ts  # 5 維度品質評估
 │   │   └── pipeline-runner.ts # Python 腳本執行器
 │   ├── schemas/              # Zod schemas
@@ -251,7 +282,6 @@ api/
 │   │   ├── session.ts
 │   │   ├── feedback.ts
 │   │   ├── pipeline.ts
-│   │   ├── eval.ts
 │   │   └── synonyms.ts
 │   └── utils/
 │       ├── npy-reader.ts     # numpy 檔案讀取
@@ -261,9 +291,8 @@ api/
 │       ├── sanitize.ts       # HTML escape 防 XSS
 │       ├── mode-detect.ts    # hasOpenAI() / hasSupabase() 偵測
 │       ├── observability.ts  # Laminar tracing
-│       ├── qa-filter.ts        # 共用 QA filter 邏輯
 │       └── laminar-scoring.ts  # Online scoring
-├── tests/                      # 38 個測試檔案，353 tests
+├── tests/                      # 39 個測試檔案，368 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
@@ -400,9 +429,9 @@ pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
 **測試套件統計（v2.25）：**
-- 總測試數：353 個（38 個測試檔案）
-- 通過：353/353 (100%)
-- 覆蓋率：80%
+- 總測試數：368 個（39 個測試檔案）
+- 通過：368/368 (100%)
+- 覆蓋率：80%+
 
 ---
 
