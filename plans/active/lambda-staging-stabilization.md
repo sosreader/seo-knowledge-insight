@@ -128,9 +128,11 @@ Lambda 上回傳 404。前端應：
 | 優先級 | 項目 | 預估 effort |
 |--------|------|-------------|
 | ~~**P0**~~ | ~~commit 本次修復 + Supabase migration 記錄~~ | ✅ 完成 |
-| **P1** | 前端體驗（preview/meetings/synonyms） | 1-2 sessions |
-| **P2** | 搜尋品質（同義詞 + model A/B） | 2-3 sessions |
-| **P3-1** | API Key 前端安全 | 1 session |
-| **P3-2** | Supabase RLS 強化 | 0.5 session |
-| ~~**P3-3**~~ | ~~Observability 修復~~ | ✅ 完成 |
+| **P1-1/P1-2** | 前端體驗（preview/meetings）需前端 repo | 1-2 sessions |
+| ~~**P1-3**~~ | ~~同義詞確認~~ | ✅ 靜態同義詞正常，custom=0 預期行為 |
+| ~~**P2-1**~~ | ~~同義詞擴充（+10 組）~~ | ✅ Category Hit 100%, Precision@5 89% |
+| **P2-2** | Model 升級 A/B 測試 | 1-2 sessions |
+| **P3-1** | API Key 前端安全（需前端 repo） | 1 session |
+| ~~**P3-2**~~ | ~~Supabase RLS 強化~~ | ✅ 完成 |
+| ~~**P3-3**~~ | ~~Observability 修復~~ | ✅ graceful skip（低優先） |
 | **P4** | 功能擴展（cache/multi-domain/learning） | 各 3+ sessions |
