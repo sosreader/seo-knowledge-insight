@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import time
 from pathlib import Path
@@ -18,6 +19,8 @@ import httpx
 
 import config
 from utils import audit_logger
+
+logger = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────
@@ -44,7 +47,7 @@ async def _api_get(
             resp = await client.get(url, headers=_headers(), params=params)
             if resp.status_code == 429:
                 wait = float(resp.headers.get("Retry-After", 2))
-                print(f"  ⏳ Rate limited, waiting {wait}s ...")
+                logger.warning("Rate limited, waiting %ss ...", wait)
                 await asyncio.sleep(wait)
                 continue
             resp.raise_for_status()
@@ -52,7 +55,7 @@ async def _api_get(
         except httpx.HTTPStatusError as e:
             if attempt == retries - 1:
                 raise
-            print(f"  ⚠️  HTTP {e.response.status_code}, retrying ({attempt+1}/{retries}) ...")
+            logger.warning("HTTP %d, retrying (%d/%d) ...", e.response.status_code, attempt+1, retries)
             await asyncio.sleep(1.5 ** attempt)
     return {}
 
@@ -69,7 +72,7 @@ async def _api_post(
             resp = await client.post(url, headers=_headers(), json=body or {})
             if resp.status_code == 429:
                 wait = float(resp.headers.get("Retry-After", 2))
-                print(f"  ⏳ Rate limited, waiting {wait}s ...")
+                logger.warning("Rate limited, waiting %ss ...", wait)
                 await asyncio.sleep(wait)
                 continue
             resp.raise_for_status()
@@ -77,7 +80,7 @@ async def _api_post(
         except httpx.HTTPStatusError as e:
             if attempt == retries - 1:
                 raise
-            print(f"  ⚠️  HTTP {e.response.status_code}, retrying ({attempt+1}/{retries}) ...")
+            logger.warning("HTTP %d, retrying (%d/%d) ...", e.response.status_code, attempt+1, retries)
             await asyncio.sleep(1.5 ** attempt)
     return {}
 
@@ -101,10 +104,10 @@ async def list_child_pages(
     db_check = await _api_get(client, db_url)
 
     if db_check.get("object") == "database":
-        print("  📊 偵測到資料庫，使用 Database Query API ...")
+        logger.info("偵測到資料庫，使用 Database Query API ...")
         return await _list_database_pages(client, parent_page_id)
     else:
-        print("  📄 偵測到頁面，使用 Blocks Children API ...")
+        logger.info("偵測到頁面，使用 Blocks Children API ...")
         return await _list_page_children(client, parent_page_id)
 
 
@@ -209,7 +212,7 @@ async def fetch_blocks_recursive(
             data = await _api_get(client, url, params)
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                print(f"  ⚠️  跳過（無存取權）: {block_id}")
+                logger.warning("跳過（無存取權）: %s", block_id)
                 return []
             raise
 
@@ -303,7 +306,7 @@ async def download_image(
         filepath.write_bytes(resp.content)
         return filename
     except Exception as e:
-        print(f"  ⚠️  Failed to download image: {e}")
+        logger.warning("Failed to download image: %s", e)
         return f"[DOWNLOAD_FAILED: {image_url}]"
 
 
@@ -337,9 +340,9 @@ async def fetch_all_meetings(
     results: list[dict] = []
 
     async with httpx.AsyncClient(timeout=60.0) as client:
-        print("📋 正在列出子頁面 ...")
+        logger.info("正在列出子頁面 ...")
         child_pages = await list_child_pages(client, parent_id)
-        print(f"   找到 {len(child_pages)} 個子頁面")
+        logger.info("找到 %d 個子頁面", len(child_pages))
 
         # 篩選：關鍵字
         if filter_keyword:
@@ -347,19 +350,19 @@ async def fetch_all_meetings(
                 p for p in child_pages
                 if filter_keyword in p["title"]
             ]
-            print(f"   篩選後剩 {len(child_pages)} 個（含 '{filter_keyword}'）")
+            logger.info("篩選後剩 %d 個（含 '%s'）", len(child_pages), filter_keyword)
 
         # 篩選：時間戳（如果指定）
         # 此時需要查詢 meta 來比對 last_edited_time，所以預先做過濾
         if since_time:
-            print(f"   篩選：只抓 {since_time} 後更新的頁面 ...")
+            logger.info("篩選：只抓 %s 後更新的頁面 ...", since_time)
             filtered = []
             for page in child_pages:
                 meta = await fetch_page_meta(client, page["id"])
                 if meta.get("last_edited_time", "") >= since_time:
                     filtered.append((page, meta))  # 儲存 meta 以避免重複查詢
                 else:
-                    print(f"     ⏭️  跳過 {page['title']}（未更新）")
+                    logger.info("跳過 %s（未更新）", page['title'])
                     # 記錄跳過事件
                     if session_id:
                         audit_logger.log_fetch_skip(
@@ -370,7 +373,7 @@ async def fetch_all_meetings(
                             reason="since_time_filter",
                         )
             child_pages = filtered
-            print(f"   保留 {len(child_pages)} 份")
+            logger.info("保留 %d 份", len(child_pages))
         else:
             # 沒有 since_time 過濾時，頁面中只有 id 和 title，meta 稍後查
             child_pages = [(p, None) for p in child_pages]
@@ -378,7 +381,7 @@ async def fetch_all_meetings(
         for i, (page, cached_meta) in enumerate(child_pages, 1):
             page_id = page["id"]
             title = page["title"]
-            print(f"\n[{i}/{len(child_pages)}] 📄 {title}")
+            logger.info("[%d/%d] %s", i, len(child_pages), title)
 
             # 取得 meta（使用快取或新查詢）
             if cached_meta:
@@ -387,11 +390,11 @@ async def fetch_all_meetings(
                 meta = await fetch_page_meta(client, page_id)
 
             # 取得完整 blocks
-            print(f"  ↳ 正在讀取 blocks (max_depth={block_max_depth}) ...")
+            logger.info("  正在讀取 blocks (max_depth=%d) ...", block_max_depth)
             blocks = await fetch_blocks_recursive(
                 client, page_id, depth=0, max_depth=block_max_depth
             )
-            print(f"  ↳ 共 {len(blocks)} 個頂層 blocks")
+            logger.info("  共 %d 個頂層 blocks", len(blocks))
 
             record = {"meta": meta, "blocks": blocks}
             results.append(record)
@@ -404,7 +407,7 @@ async def fetch_all_meetings(
                 json.dumps(record, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
-            print(f"  ↳ 已存: {json_path.name}")
+            logger.info("  已存: %s", json_path.name)
 
             # 稽核日誌：記錄成功 fetch 頁面
             if session_id:

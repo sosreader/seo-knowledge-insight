@@ -68,11 +68,11 @@ def find_duplicate_groups(
     - groups: [[idx1, idx2, ...], ...] 需要合併的群組
     - unique: [idx, ...] 沒有重複的獨立 Q&A
     """
-    print("  📐 計算 embeddings ...")
+    logger.info("  計算 embeddings ...")
     texts = [f"{qa['question']} {qa['answer']}" for qa in qa_pairs]
     embeddings = get_embeddings(texts)
 
-    print("  🔍 計算相似度矩陣（向量化）...")
+    logger.info("  計算相似度矩陣（向量化）...")
     sim_matrix = _cosine_similarity_matrix(embeddings)
     n = len(qa_pairs)
     merged = set()  # 已被分到某個群組的 index
@@ -111,18 +111,18 @@ def _group_by_collection(qa_pairs: list[dict]) -> dict[str, list[dict]]:
 def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
     """Collection-scoped 去重：各 collection 內部獨立 dedup，跨 collection 不 dedup。"""
     threshold = config.SIMILARITY_THRESHOLD
-    print(f"\n📊 去重分析（相似度閾值: {threshold}）")
-    print(f"   原始 Q&A 數量: {len(qa_pairs)}")
+    logger.info("去重分析（相似度閾值: %s）", threshold)
+    logger.info("原始 Q&A 數量: %d", len(qa_pairs))
 
     by_collection = _group_by_collection(qa_pairs)
-    print(f"   Collections: {list(by_collection.keys())}")
+    logger.info("Collections: %s", list(by_collection.keys()))
 
     all_result: list[dict] = []
 
     for collection, items in by_collection.items():
-        print(f"\n   ── {collection}（{len(items)} 筆）──")
+        logger.info("── %s（%d 筆）──", collection, len(items))
         groups, unique_indices = find_duplicate_groups(items, threshold)
-        print(f"      找到 {len(groups)} 組重複，獨立 {len(unique_indices)} 個")
+        logger.info("找到 %d 組重複，獨立 %d 個", len(groups), len(unique_indices))
 
         result: list[dict] = []
 
@@ -132,7 +132,7 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
 
         # 重複的合併
         if groups:
-            print(f"      合併重複 Q&A ...")
+            logger.info("合併重複 Q&A ...")
             for group_i, group in enumerate(tqdm(groups, desc=f"  [{collection}] 合併中")):
                 group_qas = [items[idx] for idx in group]
 
@@ -167,17 +167,17 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
 
                 time.sleep(0.5)
 
-        print(f"      去重後: {len(result)} 筆")
+        logger.info("去重後: %d 筆", len(result))
         all_result.extend(result)
 
-    print(f"\n   去重後 Q&A 總數: {len(all_result)}")
+    logger.info("去重後 Q&A 總數: %d", len(all_result))
     return all_result
 
 
 @observe(name="classify_all_qas")
 def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
     """對每個 Q&A 加分類標籤（回傳新 list，不直接修改傳入的 list）"""
-    print(f"\n🏷️  分類標籤（共 {len(qa_pairs)} 個 Q&A）")
+    logger.info("分類標籤（共 %d 個 Q&A）", len(qa_pairs))
 
     result: list[dict] = []
     for qa in tqdm(qa_pairs, desc="  分類中"):
@@ -190,7 +190,7 @@ def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
                 "evergreen": labels.get("evergreen", True),
             }
         except Exception as e:
-            tqdm.write(f"  ⚠️  分類失敗: {e}")
+            logger.warning("分類失敗: %s", e)
             new_qa = {
                 **qa,
                 "category": "其他",
@@ -207,9 +207,9 @@ def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
         cat = qa.get("category", "其他")
         categories[cat] = categories.get(cat, 0) + 1
 
-    print("\n   分類統計：")
+    logger.info("分類統計：")
     for cat, count in sorted(categories.items(), key=lambda x: -x[1]):
-        print(f"   - {cat}: {count}")
+        logger.info("  - %s: %d", cat, count)
 
     return result
 
@@ -223,13 +223,13 @@ def _rebuild_embeddings_from_final() -> None:
     """
     final_path = config.OUTPUT_DIR / "qa_final.json"
     if not final_path.exists():
-        print("❌ qa_final.json 不存在，請先執行完整 Step 3")
+        logger.error("qa_final.json 不存在，請先執行完整 Step 3")
         return
 
     final_data = json.loads(final_path.read_text(encoding="utf-8"))
     qa_pairs = final_data.get("qa_database", [])
     if not qa_pairs:
-        print("❌ qa_final.json 中沒有 qa_database，格式異常")
+        logger.error("qa_final.json 中沒有 qa_database，格式異常")
         return
 
     # 先統計 cache 命中率（不呼叫 API）
@@ -237,13 +237,13 @@ def _rebuild_embeddings_from_final() -> None:
     texts = [f"{qa['question']} {qa['answer']}" for qa in qa_pairs]
     hits = sum(1 for t in texts if cache_get("embedding", t) is not None)
     misses = len(texts) - hits
-    print(f"\n💾 重建 embeddings（{len(texts)} 筆，cache hit {hits}，miss {misses}）")
+    logger.info("重建 embeddings（%d 筆，cache hit %d，miss %d）", len(texts), hits, misses)
     if misses:
-        print(f"   ⚠️  {misses} 筆 cache miss，將呼叫 embedding API 補齊")
+        logger.warning("%d 筆 cache miss，將呼叫 embedding API 補齊", misses)
 
     _persist_embeddings(qa_pairs)
-    print("\n✅ Embeddings 重建完成！")
-    print(f"   qa_embeddings.npy: {len(texts)} rows")
+    logger.info("Embeddings 重建完成")
+    logger.info("qa_embeddings.npy: %d rows", len(texts))
 
 
 def main(args: argparse.Namespace) -> None:
@@ -273,20 +273,18 @@ def main(args: argparse.Namespace) -> None:
     if getattr(args, "check", False):
         return
 
-    print("=" * 60)
-    print("🔧 步驟 3：去重、合併、分類")
-    print("=" * 60)
+    logger.info("步驟 3：去重、合併、分類")
 
     # 讀取原始 Q&A
     raw_path = config.OUTPUT_DIR / "qa_all_raw.json"
 
     raw_data = json.loads(raw_path.read_text(encoding="utf-8"))
     qa_pairs = raw_data.get("qa_pairs", [])
-    print(f"\n📥 讀取 {len(qa_pairs)} 個原始 Q&A")
+    logger.info("讀取 %d 個原始 Q&A", len(qa_pairs))
 
     if args.limit and args.limit < len(qa_pairs):
         qa_pairs = qa_pairs[: args.limit]
-        print(f"⚠️  測試模式：僅處理前 {args.limit} 個 Q&A")
+        logger.warning("測試模式：僅處理前 %d 個 Q&A", args.limit)
 
     # 預計算 stable_id（immutable — 建立新 list）
     qa_pairs = [
@@ -300,13 +298,13 @@ def main(args: argparse.Namespace) -> None:
     if not args.skip_dedup:
         qa_pairs = deduplicate_qas(qa_pairs)
     else:
-        print("\n⏭️  跳過去重")
+        logger.info("跳過去重")
 
     # 分類
     if not args.skip_classify:
         qa_pairs = classify_all_qas(qa_pairs)
     else:
-        print("\n⏭️  跳過分類")
+        logger.info("跳過分類")
 
     # 加上流水號 id（顯示用）和確認 stable_id（跨系統引用用）
     final_qa_pairs = [
@@ -346,7 +344,7 @@ def main(args: argparse.Namespace) -> None:
             "classify_model": config.CLASSIFY_MODEL,
         },
     )
-    print(f"\n版本記録: {version_entry['version_id']}")
+    logger.info("版本記録: %s", version_entry['version_id'])
 
     # QA DB 快照：複製到 output/snapshots/ 供版本比較
     snapshot_dir = config.OUTPUT_DIR / "snapshots"
@@ -364,15 +362,13 @@ def main(args: argparse.Namespace) -> None:
     # ── Laminar Dataset 快照：記錄本次知識庫版本 ──
     _push_laminar_kb_snapshot(final_qa_pairs)
 
-    print("\n" + "=" * 60)
-    print("✅ 步驟 3 完成！")
-    print(f"   最終 Q&A 數量: {len(final_qa_pairs)}")
-    print(f"   JSON: {final_path}")
-    print(f"   快照: {snap_path}")
-    print(f"   Embeddings: {config.OUTPUT_DIR / 'qa_embeddings.npy'}")
-    print(f"   Embedding Index: {config.OUTPUT_DIR / 'qa_embeddings_index.json'}")
-    print(f"   Markdown: {config.OUTPUT_DIR / 'qa_final.md'}")
-    print("=" * 60)
+    logger.info("步驟 3 完成")
+    logger.info("最終 Q&A 數量: %d", len(final_qa_pairs))
+    logger.info("JSON: %s", final_path)
+    logger.info("快照: %s", snap_path)
+    logger.info("Embeddings: %s", config.OUTPUT_DIR / "qa_embeddings.npy")
+    logger.info("Embedding Index: %s", config.OUTPUT_DIR / "qa_embeddings_index.json")
+    logger.info("Markdown: %s", config.OUTPUT_DIR / "qa_final.md")
 
     flush_laminar()
 
@@ -421,7 +417,7 @@ def _push_laminar_kb_snapshot(qa_pairs: list[dict]) -> None:
             name=f"snapshot_{datetime.now().strftime('%Y%m%d_%H%M')}",
             project_api_key=api_key,
         )
-        print(f"   Laminar 知識庫快照已推送（{len(sample)} 筆樣本 → group: qa_knowledge_base）")
+        logger.info("Laminar 知識庫快照已推送（%d 筆樣本，group: qa_knowledge_base）", len(sample))
     except Exception as exc:
         logger.warning(
             "Laminar KB snapshot push failed (non-fatal): %s", exc
@@ -433,13 +429,13 @@ def _persist_embeddings(qa_pairs: list[dict]) -> None:
     同時產生 qa_embeddings_index.json（{stable_id|id: row_index}），
     使增量更新不再依賴位置耦合。key 優先使用 stable_id，fallback 到 id（v2.0 格式）。
     """
-    print("\n💾 持久化 embedding 向量 ...")
+    logger.info("持久化 embedding 向量 ...")
     texts = [f"{qa['question']} {qa['answer']}" for qa in qa_pairs]
     embeddings = get_embeddings(texts)
     emb_array = np.array(embeddings)
     emb_path = config.OUTPUT_DIR / "qa_embeddings.npy"
     np.save(emb_path, emb_array)
-    print(f"   已儲存 {emb_array.shape} 至 {emb_path}")
+    logger.info("已儲存 %s 至 %s", emb_array.shape, emb_path)
 
     # 產生 id → row_index 映射，供增量更新使用
     # 優先使用 stable_id，fallback 到 id（v2.0 格式）
@@ -459,7 +455,7 @@ def _persist_embeddings(qa_pairs: list[dict]) -> None:
         json.dumps(index, ensure_ascii=False),
         encoding="utf-8",
     )
-    print(f"   已儲存 embedding index（{len(index)} 筆）至 {index_path}")
+    logger.info("已儲存 embedding index（%d 筆）至 %s", len(index), index_path)
 
 
 def _export_readable_md(qa_pairs: list[dict]) -> None:

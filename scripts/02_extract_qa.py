@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import sys
 import time
@@ -39,6 +40,8 @@ from scripts.extract_qa_helpers import (
     _extract_date_from_content,
     _split_content,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _detect_source_metadata(md_path: Path) -> dict:
@@ -84,8 +87,8 @@ def process_single_meeting(md_path: Path) -> dict:
     # 偵測來源 metadata（source_type, source_collection, source_url）
     source_meta = _detect_source_metadata(md_path)
 
-    print(f"  📄 {title}")
-    print(f"     字數: {len(content)}, 來源: {source_meta['source_collection']}")
+    logger.info("  %s", title)
+    logger.info("     字數: %d, 來源: %s", len(content), source_meta['source_collection'])
 
     # ── Layer 1 cache check ──────────────────────────────────
     # Key = markdown content（title/date 均由 content 衍生，deterministic）
@@ -93,7 +96,7 @@ def process_single_meeting(md_path: Path) -> dict:
     cached = cache_get("extraction", content, model=config.OPENAI_MODEL)
     if cached is not None:
         qa_count = len(cached.get("qa_pairs", []))
-        print(f"     [cache hit] {qa_count} Q&A")
+        logger.info("     [cache hit] %d Q&A", qa_count)
         # Immutable enrichment — no mutation of cached data
         cache_enriched = [
             {
@@ -115,11 +118,11 @@ def process_single_meeting(md_path: Path) -> dict:
     # 如果內容太長，分段處理
     max_chars = config.MAX_TOKENS_PER_CHUNK * 3  # 大約 3 chars per token
     if len(content) > max_chars:
-        print("     ⚠️  內容較長，分段處理 ...")
+        logger.warning("     內容較長，分段處理 ...")
         chunks = _split_content(content, max_chars)
         all_qa_pairs = []
         for chunk_i, chunk in enumerate(chunks, 1):
-            print(f"     段落 {chunk_i}/{len(chunks)} ...")
+            logger.info("     段落 %d/%d ...", chunk_i, len(chunks))
             result = extract_qa_from_text(chunk, title, date)
             all_qa_pairs.extend(result.get("qa_pairs", []))
             time.sleep(0.5)  # 避免 rate limit
@@ -153,7 +156,7 @@ def process_single_meeting(md_path: Path) -> dict:
     meeting_result = {**meeting_result, "qa_pairs": enriched_pairs}
 
     qa_count = len(enriched_pairs)
-    print(f"     ✅ 萃取 {qa_count} 個 Q&A")
+    logger.info("     萃取 %d 個 Q&A", qa_count)
 
     return meeting_result
 
@@ -218,14 +221,12 @@ def main(args: argparse.Namespace) -> None:
 
     force = args.force
 
-    print("=" * 60)
-    print("🤖 步驟 2：用 OpenAI 萃取 Q&A")
-    print(f"   模型: {config.OPENAI_MODEL}")
+    logger.info("步驟 2：用 OpenAI 萃取 Q&A")
+    logger.info("模型: %s", config.OPENAI_MODEL)
     if force:
-        print("   ⚡ 強制模式：重新處理所有檔案")
+        logger.info("強制模式：重新處理所有檔案")
     else:
-        print("   📦 增量模式：跳過已完成的檔案")
-    print("=" * 60)
+        logger.info("增量模式：跳過已完成的檔案")
 
     # 收集要處理的檔案（多來源目錄）
     source_dirs = [
@@ -244,7 +245,7 @@ def main(args: argparse.Namespace) -> None:
                 found = candidate
                 break
         if found is None:
-            print(f"❌ 找不到: {args.file}（已搜尋 {len(source_dirs)} 個目錄）")
+            logger.error("找不到: %s（已搜尋 %d 個目錄）", args.file, len(source_dirs))
             sys.exit(1)
         md_files = [found]
     else:
@@ -254,7 +255,7 @@ def main(args: argparse.Namespace) -> None:
                 md_files.extend(sorted(d.glob("*.md")))
 
     if not md_files:
-        print("❌ 所有來源目錄下沒有 .md 檔案，請先執行步驟 1")
+        logger.error("所有來源目錄下沒有 .md 檔案，請先執行步驟 1")
         sys.exit(1)
 
     if args.limit:
@@ -283,18 +284,18 @@ def main(args: argparse.Namespace) -> None:
             filtered.append(md_path)
 
         if skipped:
-            print(f"\n   ⏭️  跳過 {skipped} 份（已完成）")
+            logger.info("跳過 %d 份（已完成）", skipped)
         md_files = filtered
 
     if not md_files:
-        print("\n✅ 所有檔案已處理完畢，無需重跑。")
-        print("   💡 使用 --force 可強制全部重新處理")
+        logger.info("所有檔案已處理完畢，無需重跑。")
+        logger.info("使用 --force 可強制全部重新處理")
         # 確保合併檔存在
         merged = _rebuild_merged_from_per_meeting()
         merged_path = config.OUTPUT_DIR / "qa_all_raw.json"
         merged_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
         qa_count = merged["total_qa_count"]
-        print(f"   📊 合併結果已更新: {qa_count} 個 Q&A")
+        logger.info("合併結果已更新: %d 個 Q&A", qa_count)
         version_entry = record_artifact(
             step=2,
             data=merged,
@@ -304,22 +305,22 @@ def main(args: argparse.Namespace) -> None:
                 "extraction_model": config.OPENAI_MODEL,
             },
         )
-        print(f"   版本記録: {version_entry['version_id']}")
+        logger.info("版本記録: %s", version_entry['version_id'])
         return
 
     total_files = len(md_files)
-    print(f"\n📚 共 {total_files} 份待處理\n")
+    logger.info("共 %d 份待處理", total_files)
 
     # 逐一處理
     newly_processed = 0
 
     for i, md_path in enumerate(md_files, 1):
-        print(f"\n[{i}/{total_files}]")
+        logger.info("[%d/%d]", i, total_files)
 
         try:
             result = process_single_meeting(md_path)
         except Exception as e:
-            print(f"     ❌ 錯誤: {e}")
+            logger.error("     錯誤: %s", e)
             result = {"qa_pairs": [], "meeting_summary": f"處理失敗: {e}"}
 
         # 存單份結果（依來源目錄決定輸出位置）
@@ -359,15 +360,13 @@ def main(args: argparse.Namespace) -> None:
             "extraction_model": config.OPENAI_MODEL,
         },
     )
-    print(f"\n版本記録: {version_entry['version_id']}")
+    logger.info("版本記録: %s", version_entry['version_id'])
 
-    print("\n" + "=" * 60)
-    print("✅ 步驟 2 完成！")
-    print(f"   本次處理: {newly_processed} 份")
-    print(f"   總計 Q&A: {merged_output['total_qa_count']} 個")
-    print(f"   單份結果: {config.QA_PER_MEETING_DIR}")
-    print(f"   合併結果: {merged_path}")
-    print("=" * 60)
+    logger.info("步驟 2 完成")
+    logger.info("本次處理: %d 份", newly_processed)
+    logger.info("總計 Q&A: %d 個", merged_output['total_qa_count'])
+    logger.info("單份結果: %s", config.QA_PER_MEETING_DIR)
+    logger.info("合併結果: %s", merged_path)
 
     flush_laminar()
 
