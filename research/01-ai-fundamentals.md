@@ -72,10 +72,10 @@ MAX_TOKENS_PER_CHUNK = 6000   # 超過就切段，分批送給 AI
 
 | 步驟            | 模型       | 每次輸入       | 總成本估算      |
 | --------------- | ---------- | -------------- | --------------- |
-| Step 2 萃取 Q&A | gpt-5.2    | 每份文件 3K–8K | 87 份 × 平均 5K |
+| Step 2 萃取 Q&A | gpt-5.2    | 每份文件 3K–8K | 296 份 × 平均 5K |
 | Step 3 合併     | gpt-5.2    | 每對 200–500   | 依重複數量      |
-| Step 3 分類     | gpt-5-mini | 每筆 100–200   | 725 筆 × 150    |
-| Step 5 評估     | gpt-5.2    | 每筆 300–600   | 30 筆 × 450     |
+| Step 3 分類     | gpt-5-mini | 每筆 100–200   | 1,323 筆 × 150  |
+| 品質評估        | gpt-5.2    | 每筆 300–600   | 按需（`_eval_laminar.py` 或 `/evaluate-qa-local`） |
 
 ---
 
@@ -232,10 +232,11 @@ print(len(vector))  # 1536 個數字
 
 ### 本專案的使用
 
-**Step 3**：計算 725 筆 Q&A 的 embedding，儲存成 `qa_embeddings.npy`（numpy 陣列檔）。
+**Step 3**：計算 1,323 筆 Q&A 的 embedding。
 
+- **儲存**：Supabase pgvector（`qa_items.embedding` 欄位，vector(1536)）；本地備份 `qa_embeddings.npy`
 - 去重用：找相似 Q&A（cosine ≥ 0.88 就合併）
-- 搜尋用：Step 4 / Step 5 載入，做語意搜尋
+- 搜尋用：pgvector `<=>` 運算子做語意搜尋（IVFFlat index, lists=50）
 
 計算一次存起來，後續不重新計算（省成本）。
 
@@ -259,7 +260,8 @@ print(len(vector))  # 1536 個數字
 ```python
 import numpy as np
 
-# qa_embs shape: (725, 1536)，725 筆 Q&A 各有 1536 維向量
+# qa_embs shape: (1323, 1536)，1,323 筆 Q&A 各有 1536 維向量
+# v2.24+：生產環境改用 Supabase pgvector，本地仍可用 .npy
 qa_embs = np.load("output/qa_embeddings.npy")
 
 # 正規化（讓長度變成 1，方便算 cosine）

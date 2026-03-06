@@ -66,12 +66,13 @@ if "category_judgment" not in result:
 
 **現階段維持 text-embedding-3-small**，原因：
 
-- Retrieval MRR = 0.79，Top-1 Precision = 100%
-- 目前 KW Hit Rate 54% 的瓶頸不在 embedding 品質，而在搜尋策略（Reranking）
+- Retrieval MRR = 0.88，Hit Rate = 100%（v2.12 基準，20 golden cases，top-k=5）
+- v2.11 已實作 Reranker（Claude haiku，over-retrieve×3），KW Hit Rate 提升至 100%
+- 目前瓶頸已從 embedding 品質轉移至 Recall@K（77.5%）和 NDCG@K（0.72）
 
 **升級觸發條件**：
 
-1. 實作 Cross-encoder Reranking 後，KW Hit Rate 仍 < 60%
+1. Recall@K < 70% 或 NDCG@K < 0.65（品質退步）
 2. 新增非結構化資料來源（PDF、圖片）需要多模態 embedding
 3. 若要支援更精準的中英混合搜尋，考慮 Qwen3-Embedding
 
