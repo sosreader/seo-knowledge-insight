@@ -97,15 +97,13 @@ Lambda 上回傳 404。前端應：
 - `qa_items`: SELECT only（anon key）
 - `reports`, `sessions`, `metrics_snapshots`: SELECT + INSERT（service key only for write）
 
-### P3-3：Observability 修復
+### ~~P3-3：Observability 修復~~ ✅
 
-Lambda 上 Laminar 初始化失敗（缺 `@opentelemetry/resources` module）：
-```
-Laminar.initialize() failed: Failed to create Resource: Cannot find module '@opentelemetry/resources'
-```
-tsup bundle 未包含此 dependency。需要：
-- 確認 `@opentelemetry/resources` 是否被 tree-shaken
-- 或 tsup config 加入 external/noExternal 調整
+~~Lambda 上 Laminar 初始化失敗（缺 `@opentelemetry/resources` module）~~
+**修復方案**：Lambda 環境直接跳過 Laminar（`AWS_LAMBDA_FUNCTION_NAME` 偵測），tsup 排除 `@lmnr-ai/lmnr` + `@opentelemetry/*`。
+- `observability.ts`：Lambda 環境 early return
+- `tsup.config.ts`：`external: ["@lmnr-ai/lmnr", /^@opentelemetry\//]`
+- 本地開發仍正常使用 Laminar
 
 ---
 
@@ -129,10 +127,10 @@ tsup bundle 未包含此 dependency。需要：
 
 | 優先級 | 項目 | 預估 effort |
 |--------|------|-------------|
-| **P0** | commit 本次修復 + Supabase migration 記錄 | 1 session |
+| ~~**P0**~~ | ~~commit 本次修復 + Supabase migration 記錄~~ | ✅ 完成 |
 | **P1** | 前端體驗（preview/meetings/synonyms） | 1-2 sessions |
 | **P2** | 搜尋品質（同義詞 + model A/B） | 2-3 sessions |
 | **P3-1** | API Key 前端安全 | 1 session |
 | **P3-2** | Supabase RLS 強化 | 0.5 session |
-| **P3-3** | Observability 修復 | 0.5 session |
+| ~~**P3-3**~~ | ~~Observability 修復~~ | ✅ 完成 |
 | **P4** | 功能擴展（cache/multi-domain/learning） | 各 3+ sessions |

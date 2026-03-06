@@ -23,6 +23,10 @@ export default defineConfig([
     dts: false,
     splitting: false,
     noExternal: [/.*/],
+    // Exclude Laminar + OpenTelemetry from Lambda bundle — they can't be
+    // bundled (30+ transitive deps with CJS/dynamic-require issues).
+    // observability.ts skips init on Lambda via AWS_LAMBDA_FUNCTION_NAME check.
+    external: ["@lmnr-ai/lmnr", /^@opentelemetry\//],
     // Provide global `require` for CJS deps (e.g. dotenv) bundled in ESM
     banner: {
       js: [

@@ -16,6 +16,12 @@ let initialized = false;
 export async function initLaminar(): Promise<void> {
   if (initialized) return;
 
+  // Lambda bundles can't resolve @opentelemetry/resources (transitive dep of @lmnr-ai/lmnr).
+  // Skip Laminar entirely on Lambda to avoid confusing partial-init errors.
+  if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return;
+  }
+
   const apiKey = config.LMNR_PROJECT_API_KEY;
   if (!apiKey) {
     console.log(

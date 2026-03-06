@@ -68,4 +68,20 @@ describe("observability", () => {
   it("isLaminarInitialized returns false by default", () => {
     expect(isLaminarInitialized()).toBe(false);
   });
+
+  it("initLaminar skips on Lambda environment even with API key", async () => {
+    // Temporarily set Lambda env var
+    process.env.AWS_LAMBDA_FUNCTION_NAME = "seo-insight-api";
+    // Override the mocked config to have a key
+    const { config } = await import("../../src/config.js");
+    const original = config.LMNR_PROJECT_API_KEY;
+    (config as Record<string, unknown>).LMNR_PROJECT_API_KEY = "test-key";
+
+    await initLaminar();
+    expect(isLaminarInitialized()).toBe(false);
+
+    // Cleanup
+    delete process.env.AWS_LAMBDA_FUNCTION_NAME;
+    (config as Record<string, unknown>).LMNR_PROJECT_API_KEY = original;
+  });
 });
