@@ -9,7 +9,7 @@
 
 SEO Q&A 知識庫建構 Pipeline — 從 Notion 會議紀錄自動萃取結構化問答資料庫，支援去重、分類、語意搜尋與週報生成。
 
-資料來源為 4 個來源（Notion 會議紀錄、Medium 文章、iThome 鐵人賽、Google Case Studies），296 份文件，產出 1,428 筆原始 Q&A，去重後 1,323 筆（v2.23，2026-03-06）。
+資料來源為 4 個來源（Notion 會議紀錄、Medium 文章、iThome 鐵人賽、Google Case Studies），296 份文件，產出 1,428 筆原始 Q&A，去重後 1,323 筆（v2.24，2026-03-06）。
 
 ---
 

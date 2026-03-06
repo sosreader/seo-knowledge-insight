@@ -160,8 +160,8 @@ Notion 會議紀錄（87 份，2023–2026）
     GET  /api/v1/sessions/{id} → 取得 session 對話記錄
     POST /api/v1/sessions/{id}/messages → 新增訊息
     DELETE /api/v1/sessions/{id} → 刪除 session
-  部署：Docker image → ECR → App Runner（無伺服器容器）
-  資料層：QAStore 抽象（Phase 1 檔案 / Phase 2 Supabase pgvector）
+  部署：Lambda + Function URL（arm64，~$0/月）
+  資料層：SupabaseQAStore（pgvector hybrid search）/ QAStore（檔案模式 fallback）
   Session 儲存：output/sessions/{uuid}.json（Repository Pattern）
             ↓ https://<service>.awsapprunner.com
 
@@ -205,10 +205,9 @@ Notion 會議紀錄（87 份，2023–2026）
     - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port，複製 report-evaluator.ts 邏輯；7 維度推送 Laminar `report-quality` group；供 `/generate-report` 存檔後呼叫）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / synonyms / api-response
-  測試：Vitest（24 個 test files，207 tests passing）— v2.18 移除 eval route（-16 tests）
-  部署：docker-compose（port 8002），未來支援 ECR + App Runner
-  與 Python 並行運作（遷移期間）
-            ↓ http://localhost:8002 (開發) 或 https://<service-v2>.awsapprunner.com (未來)
+  測試：Vitest（25 個 test files，224 tests passing）
+  部署：Lambda + Function URL（arm64，~$0/月）/ docker-compose（本地開發）
+            ↓ http://localhost:8002 (開發) 或 https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/ (生產)
 
 ## v2.11 — RAG 迭代改進計畫：Synonym 擴充 + Contextual Embeddings + Reranker（2026-03-05）
 
@@ -363,7 +362,7 @@ Notion 會議紀錄（87 份，2023–2026）
 - ~44 個源碼檔案（routes 10、store 5、utils 5、middleware 4、schemas 10、services 4）
 - 25 個測試檔案（routes 10 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 3 + observability/laminar-scoring 2 + others 2）
 - 9 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、synonyms）+ health 檢查（v2.18 移除 eval router）
-- 207 tests passing（24 test files）
+- 224 tests passing（25 test files）
 - NumPy .npy 檔案解析引擎（向量相容）
 - 速率限制 middleware（同步 Python layer 配置）
 - Local Mode 降級（無 OpenAI 時 keyword-only search + context-only chat）

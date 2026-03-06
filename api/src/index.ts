@@ -18,6 +18,8 @@ import { qaStore, loadQaStore } from "./store/qa-store.js";
 import { synonymsStore } from "./store/synonyms-store.js";
 import { initLaminar, flushLaminar } from "./utils/observability.js";
 
+const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
+
 const app = new Hono();
 
 // Global middleware
@@ -62,13 +64,22 @@ app.route("/api/v1", api);
 // Server startup
 const port = config.PORT;
 
-if (process.env.NODE_ENV !== "test") {
-  // Initialize Laminar tracing before loading data
+/** Initialize stores (shared between Node.js server and Lambda cold start). Idempotent. */
+let _initPromise: Promise<void> | null = null;
+
+export function initStores(): Promise<void> {
+  if (!_initPromise) {
+    _initPromise = _doInitStores().catch((err) => {
+      _initPromise = null;
+      throw err;
+    });
+  }
+  return _initPromise;
+}
+
+async function _doInitStores(): Promise<void> {
   await initLaminar();
 
-  // Load QA store before starting server
-  // - Supabase mode: fetches metadata from Supabase (no .npy needed)
-  // - File mode: reads qa_final.json + qa_embeddings.npy from disk
   try {
     await loadQaStore();
     console.log(`QAStore loaded: ${qaStore.count} items`);
@@ -76,9 +87,6 @@ if (process.env.NODE_ENV !== "test") {
     console.warn("QAStore load failed (API will run without search):", err);
   }
 
-  // Load custom synonyms
-  // - Supabase mode: fetches from synonym_custom table
-  // - File mode: reads synonym_custom.json from disk
   try {
     if (synonymsStore.load) {
       await synonymsStore.load();
@@ -88,12 +96,15 @@ if (process.env.NODE_ENV !== "test") {
   } catch (err) {
     console.warn("SynonymsStore load failed:", err);
   }
+}
+
+if (process.env.NODE_ENV !== "test" && !isLambda) {
+  await initStores();
 
   serve({ fetch: app.fetch, port }, (info) => {
     console.log(`Server running on http://localhost:${info.port}`);
   });
 
-  // Graceful shutdown — flush Laminar spans
   const shutdown = async () => {
     await flushLaminar();
     process.exit(0);

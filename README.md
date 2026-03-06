@@ -982,32 +982,38 @@ curl 'http://localhost:8002/api/v1/qa/categories'
 cd api && pnpm test
 ```
 
-### 部署（ECR + App Runner）
+### 部署（Lambda + Function URL）
 
-GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workflows/deploy-seo-api.yaml)
+> v2.24 從 App Runner 遷移至 Lambda + Function URL（arm64，~$0/月）。
 
-**觸發條件**：push to `main`，且 `api/**` 或 `Dockerfile` 有變更。
+**Lambda 部署：**
+
+```bash
+cd api && pnpm build
+cd dist-lambda && echo '{"type":"module"}' > package.json
+zip -j ../lambda.zip lambda.js package.json
+aws lambda update-function-code --function-name seo-insight-api \
+  --zip-file fileb://../lambda.zip --region ap-northeast-1
+```
+
+**Lambda 設定**：
+- Function: `seo-insight-api`（arm64, Node.js 22, 512MB, 30s timeout）
+- Function URL: HTTPS auto（auth: NONE）
+- IAM user: `seo-insight-deployer`（lambda:UpdateFunctionCode + GetFunction）
 
 **所需 GitHub Secrets：**
 
 | Secret                                        | 說明                                                         |
 | --------------------------------------------- | ------------------------------------------------------------ |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user，需 ECR push + App Runner 更新權限                  |
-| `AWS_REGION`                                  | e.g. `ap-northeast-1`                                        |
-| `ECR_DOMAIN`                                  | e.g. `123456789.dkr.ecr.ap-northeast-1.amazonaws.com`        |
-| `APP_RUNNER_SERVICE_ARN`                      | App Runner 服務 ARN                                          |
-| `APP_RUNNER_ECR_ROLE_ARN`                     | App Runner 拉 ECR image 的 IAM Role ARN                      |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user `seo-insight-deployer`                              |
+| `AWS_REGION`                                  | `ap-northeast-1`                                             |
 | `OPENAI_API_KEY`                              | OpenAI API key                                               |
 | `SEO_API_KEY`                                 | API 認證金鑰                                                 |
+| `SUPABASE_URL`                                | Supabase REST API URL                                        |
+| `SUPABASE_ANON_KEY`                           | Supabase anon key（RLS SELECT）                              |
 | `LMNR_PROJECT_API_KEY`                        | Laminar 追蹤（選配）                                         |
 
-**App Runner 設定**：
-
-- Source: ECR private image，Port: 8002
-- Health check: `/health`
-- IAM Role（ECR Access）: Trust `build.apprunner.amazonaws.com` + `AmazonEC2ContainerRegistryReadOnly`
-
-**資料層遷移路徑**：當前為檔案載入（Phase 1），未來遷移至 Supabase pgvector（Phase 2）。詳見 `research/07-deployment.md` §21.4。
+**資料層**：Supabase pgvector（v2.24 遷移完成）。詳見 `research/07-deployment.md`。
 
 ### 環境變數（`api/`）
 
@@ -1023,6 +1029,10 @@ GitHub Actions workflow：[.github/workflows/deploy-seo-api.yaml](.github/workfl
 | `RATE_LIMIT_DEFAULT`     | `60`                     | 預設速率限制（/min）                                               |
 | `RATE_LIMIT_CHAT`        | `20`                     | 聊天速率限制（/min）                                               |
 | `RATE_LIMIT_GENERATE`    | `5`                      | 週報生成速率限制（/min）                                           |
+| `SUPABASE_URL`           | `""`（空字串）           | Supabase REST URL（設定後啟用 pgvector 模式）                      |
+| `SUPABASE_ANON_KEY`      | `""`（空字串）           | Supabase anon key（RLS SELECT）                                    |
+| `CHAT_MODEL`             | `gpt-5.2`                | RAG Chat 問答模型（獨立於 OPENAI_MODEL）                           |
+| `ANTHROPIC_API_KEY`      | `""`（空字串）           | Reranker + Context Relevance（auto 模式偵測）                       |
 
 ### Local Mode（無 OpenAI API Key）
 
@@ -1111,11 +1121,11 @@ https://laminar.sh/app/evals
   - `POST /api/v1/chat` — RAG 問答（知識庫 + GPT 對話）
 - [ ] 前端 `~/Documents/vocus-web-ui` 透過 API 讀取 Q&A 資料庫
 - [x] 加入 `pyproject.toml`，讓專案可以 `pip install -e .` 安裝
-- [x] Docker 化（`Dockerfile`），部署至 App Runner via ECR
+- [x] Docker 化（`Dockerfile`），部署至 Lambda + Function URL（v2.24，從 App Runner 遷移）
 
 ### Phase 3 — 進階功能（遠期）
 
-- [ ] **Supabase 遷移**：`QAStore` 從檔案載入切換至 Supabase（PostgreSQL + pgvector），支援 API 即時讀寫
+- [x] **Supabase 遷移**（v2.24 完成）：`SupabaseQAStore`（pgvector hybrid search），1,323 rows + embedding
 - [ ] **匯入 Notion**：把最終 Q&A 匯回 Notion Database，用欄位篩選查詢
 - [ ] **自動更新**：Notion webhook / 定時 cron 觸發 pipeline，增量處理新紀錄
 - [ ] **版本追蹤**：Q&A 修改歷程，保留「何時更新」「因哪次會議更新」

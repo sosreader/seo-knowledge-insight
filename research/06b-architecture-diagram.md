@@ -138,11 +138,12 @@ flowchart TD
         OS -->|attach to trace| LM
     end
 
-    subgraph Deploy["部署"]
-        HAPI --> HDK["Docker Image<br/>TypeScript Hono"]
-        HDK --> ECR[AWS ECR]
-        ECR --> AR["AWS App Runner<br/>HTTPS auto<br/>port 8002"]
-        API -.->|"legacy port 8001"| ECR
+    subgraph Deploy["部署（v2.24 Lambda）"]
+        HAPI --> LBUILD["tsup Lambda Build<br/>noExternal ESM bundle<br/>dist-lambda/lambda.js ~3.4MB"]
+        LBUILD --> LAMBDA["AWS Lambda<br/>seo-insight-api<br/>arm64 / Node.js 22 / 512MB"]
+        LAMBDA --> FURL["Function URL<br/>HTTPS auto<br/>~$0/月 free tier"]
+        HAPI --> LENTRY["api/src/lambda.ts<br/>hono/aws-lambda handle()<br/>cold start initStores()"]
+        LENTRY -.->|handler| LAMBDA
     end
 
     subgraph DataLayer["資料層（v2.24 Supabase pgvector 完成）"]

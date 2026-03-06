@@ -15,8 +15,8 @@
 | [05-models.md](./05-models.md)                                   | 模型選擇決策 / Embedding 模型比較                                           |
 | [06-project-architecture.md](./06-project-architecture.md)       | 本專案架構 / Pipeline 全景 / 技術決策學術支撐                               |
 | [06a-architecture-changelog.md](./06a-architecture-changelog.md) | 架構變更紀錄（Changelog），每次架構調整後新增一行                           |
-| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.23，Hono API + Reranker + Context Relevance + Report Cache）|
-| [07-deployment.md](./07-deployment.md)                           | Hono API 部署 / ECR + App Runner / Supabase 遷移路徑                        |
+| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.24，Lambda + Supabase pgvector）                            |
+| [07-deployment.md](./07-deployment.md)                           | Hono API 部署 / Lambda + Function URL / Supabase 遷移 / App Runner（已淘汰）|
 | [08-fetch-optimization.md](./08-fetch-optimization.md)           | Fetch 優化 / Notion 增量 / Medium Scrapling / 多來源爬取架構                |
 | [09-provider-comparison.md](./09-provider-comparison.md)         | AI Provider 輸出品質比較方法論與歷次跑分結果                                |
 | [10-multi-layer-context.md](./10-multi-layer-context.md)         | Multi-Layer Context / enrichment / 同義詞擴展 / 時效性衰減 / Learning Store |
@@ -38,7 +38,7 @@
 
 ---
 
-## 當前指標現況（2026-03-06，v2.23 — OpenAI 報告模式 + Report Cache Hit + Quality Eval 優化）
+## 當前指標現況（2026-03-06，v2.24 — Supabase pgvector + Lambda 部署）
 
 | 指標                   | 數值       | 說明                                                      |
 | ---------------------- | ---------- | --------------------------------------------------------- |
@@ -61,8 +61,9 @@
 | Context Relevance      | **0.32**（1 query）| NVIDIA style，keyword fallback（v2.12）          |
 | Faithfulness           | 待測       | RAGAS，v2.13 `/evaluate-faithfulness-local`（目標 ≥ 0.80）|
 | Context Precision      | 待測       | RAGAS，v2.13 `/evaluate-context-precision-local`（目標 ≥ 0.70）|
-| **Test 通過率**        | **207/207** | Hono TypeScript Vitest（24 test files，v2.23）           |
+| **Test 通過率**        | **224/224** | Hono TypeScript Vitest（25 test files，v2.24）           |
 | **API endpoints**      | **32 個**   | 9 routers：qa/search/chat/reports/sessions/feedback/pipeline(16)/synonyms/health |
+| **部署**               | **Lambda + Function URL** | arm64，~$0/月（free tier），ap-northeast-1       |
 | **Observability**      | **完備**    | Laminar traces + Audit logs + Scoring events（三柱）     |
 
 ---

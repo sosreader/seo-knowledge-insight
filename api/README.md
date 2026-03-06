@@ -1,4 +1,4 @@
-# Hono TypeScript API (v2.23)
+# Hono TypeScript API (v2.24)
 
 REST API 伺服器，主要架構採用 Hono 框架。
 
@@ -8,6 +8,8 @@ REST API 伺服器，主要架構採用 Hono 框架。
 - Rate limiting + API Key 認證
 - Zod schema validation
 - Local Mode graceful degradation（無 OpenAI 時自動降級）
+- Supabase pgvector hybrid search（自動偵測，fallback 檔案模式）
+- Lambda + Function URL 部署（arm64，~$0/月）
 
 ---
 
@@ -32,8 +34,17 @@ pnpm test:coverage          # 生成覆蓋率報告
 ### 部署
 
 ```bash
-pnpm build                   # 編譯 TypeScript 至 dist/
-pnpm start                   # 執行 build 版本（node dist/index.js，port 8002）
+# Lambda 部署（生產環境）
+pnpm build                   # 編譯至 dist/（server）+ dist-lambda/（Lambda bundle）
+cd dist-lambda
+echo '{"type":"module"}' > package.json
+zip -j ../lambda.zip lambda.js package.json
+aws lambda update-function-code --function-name seo-insight-api \
+  --zip-file fileb://../lambda.zip --region ap-northeast-1
+
+# 本地 server 模式
+pnpm build
+pnpm start                   # node dist/index.js，port 8002
 ```
 
 ---
@@ -81,7 +92,7 @@ pnpm start                   # 執行 build 版本（node dist/index.js，port 8
 |------|------|------|------|-----------|
 | GET | `/api/v1/reports` | 列出所有週報 | ✓ | 60/min |
 | GET | `/api/v1/reports/{date}` | 取得單篇週報（date: YYYYMMDD） | ✓ | 60/min |
-| POST | `/api/v1/reports/generate` | 觸發週報生成（同步，120s timeout；v2.23 新增 `cache_hit` 欄位） | ✓ | 5/min |
+| POST | `/api/v1/reports/generate` | 觸發週報生成（同步，120s timeout；`cache_hit` 欄位） | ✓ | 5/min |
 
 ### 6. 對話管理 (sessions) — 5 個 endpoints
 
@@ -128,11 +139,9 @@ pnpm start                   # 執行 build 版本（node dist/index.js，port 8
 | PUT | `/api/v1/synonyms/{term}` | 更新自訂同義詞 | ✓ | 60/min |
 | DELETE | `/api/v1/synonyms/{term}` | 刪除自訂同義詞 | ✓ | 60/min |
 
-> **Note**: Eval Router 已於 v2.18 移除。報告品質評估改由 `report-evaluator.ts` 在報告生成流程中自動執行。
-
 ---
 
-## Reports API — 回應格式（v2.23 新增）
+## Reports API — 回應格式
 
 ### POST /api/v1/reports/generate
 
@@ -184,6 +193,8 @@ curl -H "X-API-Key: your-api-key" http://localhost:8002/api/v1/qa
 
 超過限制時，伺服器回傳 429 Limit Exceeded。
 
+> **Lambda 環境**：in-memory rate limiting 無效（每個執行環境有獨立 Map），自動 bypass。需要限流時應使用 API Gateway throttling。
+
 ---
 
 ## 項目結構
@@ -191,9 +202,10 @@ curl -H "X-API-Key: your-api-key" http://localhost:8002/api/v1/qa
 ```
 api/
 ├── src/
-│   ├── index.ts              # 入口點（middleware + route mount）
+│   ├── index.ts              # 入口點（middleware + route mount + initStores()）
+│   ├── lambda.ts             # Lambda 入口（cold start + hono/aws-lambda handler）
 │   ├── config.ts             # Zod 驗證環境變數 + paths
-│   ├── routes/               # 9 個路由（eval 已於 v2.18 移除）
+│   ├── routes/               # 9 個路由
 │   │   ├── health.ts
 │   │   ├── qa.ts
 │   │   ├── search.ts
@@ -202,50 +214,50 @@ api/
 │   │   ├── sessions.ts
 │   │   ├── feedback.ts
 │   │   ├── pipeline.ts
-│   │   └── synonyms.ts       # v2.10 新增
+│   │   └── synonyms.ts
 │   ├── middleware/
-│   │   ├── auth.ts           # API Key 驗證
-│   │   ├── rate-limit.ts     # slowapi 速率限制
+│   │   ├── auth.ts           # API Key 驗證（timingSafeEqual）
+│   │   ├── rate-limit.ts     # Sliding window 速率限制（Lambda 自動 bypass）
 │   │   ├── cors.ts           # CORS 設定
 │   │   └── error-handler.ts  # 錯誤處理
 │   ├── store/
-│   │   ├── qa-store.ts       # Q&A 資料 singleton
+│   │   ├── qa-store.ts       # QAStore singleton + loadQaStore() factory
+│   │   ├── supabase-client.ts # Supabase REST thin client（no SDK）
+│   │   ├── supabase-qa-store.ts # SupabaseQAStore（pgvector hybrid search）
 │   │   ├── search-engine.ts  # 搜尋引擎（hybrid + keyword）
 │   │   ├── session-store.ts  # 對話歷史儲存
-│   │   └── learning-store.ts # 失敗記憶（JSONL）
+│   │   ├── learning-store.ts # 失敗記憶（JSONL）
+│   │   └── synonyms-store.ts # 同義詞（雙層：靜態 + custom JSON）
 │   ├── services/
 │   │   ├── embedding.ts      # OpenAI embedding 服務
 │   │   ├── rag-chat.ts       # RAG 問答邏輯
-│   │   ├── reranker.ts       # v2.11 新增：Claude Haiku reranker
-│   │   ├── context-relevance.ts  # v2.12 新增：Context Relevance 評估
-│   │   ├── report-generator-local.ts  # v2.13 新增：ECC 6 維度本地週報
-│   │   ├── report-evaluator.ts  # v2.13 新增：5 維度品質評估
+│   │   ├── reranker.ts       # Claude Haiku reranker
+│   │   ├── context-relevance.ts  # Context Relevance 評估
+│   │   ├── report-generator-local.ts  # ECC 6 維度本地週報
+│   │   ├── report-evaluator.ts  # 5 維度品質評估
 │   │   └── pipeline-runner.ts # Python 腳本執行器
 │   ├── schemas/              # Zod schemas
 │   │   ├── api-response.ts   # 統一回應格式
 │   │   ├── qa.ts
 │   │   ├── search.ts
 │   │   ├── chat.ts
-│   │   ├── eval.ts           # v2.3 新增
-│   │   └── ...
+│   │   ├── report.ts
+│   │   ├── session.ts
+│   │   ├── feedback.ts
+│   │   ├── pipeline.ts
+│   │   ├── eval.ts
+│   │   └── synonyms.ts
 │   └── utils/
 │       ├── npy-reader.ts     # numpy 檔案讀取
-│       ├── cosine-similarity.ts
-│       ├── cjk-tokenizer.ts  # v2.3 新增：CJK 分詞
-│       ├── mode-detect.ts    # v2.3 新增：hasOpenAI() 檢測
-│       ├── observability.ts  # v2.7 新增：Laminar tracing
-│       ├── laminar-scoring.ts # v2.7 新增：Online scoring
-│       └── ...
-├── tests/
-│   ├── routes/
-│   │   ├── qa.test.ts
-│   │   ├── search.test.ts
-│   │   ├── chat.test.ts      # v2.3 新增
-│   │   ├── eval.test.ts      # v2.3 新增
-│   │   └── ...
-│   └── utils/
-│       ├── cjk-tokenizer.test.ts  # v2.3 新增
-│       └── ...
+│       ├── cosine-similarity.ts  # Float32Array 矩陣運算
+│       ├── keyword-boost.ts  # 4 層關鍵字加權
+│       ├── cjk-tokenizer.ts  # CJK 分詞 2-gram
+│       ├── sanitize.ts       # HTML escape 防 XSS
+│       ├── mode-detect.ts    # hasOpenAI() / hasSupabase() 偵測
+│       ├── observability.ts  # Laminar tracing
+│       └── laminar-scoring.ts # Online scoring
+├── tests/                    # 25 個測試檔案，224 tests
+├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
 ├── tsconfig.json
@@ -263,20 +275,38 @@ api/
 SEO_API_KEY=your-secret-api-key
 PORT=8002
 
+# Supabase（設定後自動切換至 pgvector 模式）
+SUPABASE_URL=https://eqrlomuujichshkbtoat.supabase.co
+SUPABASE_ANON_KEY=your_anon_key
+
 # Optional
 OPENAI_API_KEY=sk-...          # 若無，則 search/chat 自動降級
 OPENAI_MODEL=gpt-5.2
-CHAT_MODEL=gpt-5.2             # RAG Chat 問答模型（v2.22，獨立於 OPENAI_MODEL）
-ANTHROPIC_API_KEY=sk-ant-...   # Reranker + Context Relevance（v2.11+）
-CONTEXT_EMBEDDING_WEIGHT=0.6   # Contextual embedding 加權（v2.11+）
+CHAT_MODEL=gpt-5.2             # RAG Chat 問答模型（獨立於 OPENAI_MODEL）
+ANTHROPIC_API_KEY=sk-ant-...   # Reranker + Context Relevance
+CONTEXT_EMBEDDING_WEIGHT=0.6   # Contextual embedding 加權
 RERANKER_ENABLED=auto          # Reranker 開關（auto/true/false）
 LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
-
-# 資料路徑
-QA_STORE_PATH=../output/qa_final.json
-EMBEDDINGS_PATH=../output/qa_embeddings.npy
-ENRICHED_PATH=../output/qa_enriched.json
 ```
+
+---
+
+## 資料層
+
+### Supabase pgvector 模式（預設）
+
+設定 `SUPABASE_URL` + `SUPABASE_ANON_KEY` 後自動啟用：
+
+- 啟動時 paginated fetch 所有 QA metadata（不含 embedding）
+- `hybridSearch()` 透過 pgvector RPC over-retrieve → TS re-rank
+- `keywordSearch()` / `listQa()` / `getById()` 為 sync in-memory
+
+### 檔案模式（fallback）
+
+無 Supabase 設定時自動退回：
+
+- 從 `qa_final.json` + `qa_embeddings.npy` 載入
+- 全量 in-memory cosine similarity
 
 ---
 
@@ -294,13 +324,34 @@ ENRICHED_PATH=../output/qa_enriched.json
 
 **無 OpenAI：** Context-only（僅回傳相關 Q&A，不生成回答）
 
-### 切換機制
+---
 
-```typescript
-// api/src/utils/mode-detect.ts
-export function hasOpenAI(): boolean {
-  return config.OPENAI_API_KEY.length > 0;
-}
+## 部署架構
+
+### Lambda + Function URL（生產環境，v2.24）
+
+```
+pnpm build → tsup dual build
+  ├── dist/           # Server build（開發/Docker 用）
+  └── dist-lambda/    # Lambda build（self-contained ESM ~3.4MB）
+      └── lambda.js   # noExternal bundle + createRequire shim
+
+zip lambda.js + package.json → aws lambda update-function-code
+  → Lambda Function URL（HTTPS auto，arm64，~$0/月）
+```
+
+**Lambda 設定**：
+- Function: `seo-insight-api`
+- Architecture: arm64（便宜 20%）
+- Runtime: Node.js 22
+- Memory: 512 MB / Timeout: 30s
+- Function URL: `https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/`
+
+### Docker（本地驗證用）
+
+```bash
+docker-compose up              # 啟動所有服務
+docker-compose logs seo-api-ts # 監看 Hono API 日誌
 ```
 
 ---
@@ -329,21 +380,6 @@ API 伺服器透過 `@lmnr-ai/lmnr` JS SDK 整合 Laminar tracing。
 - `top_source_score` — 最佳來源的相似度分數
 - `source_count` — 來源數量 / 5（上限 1.0）
 
-### 架構
-
-```
-initLaminar()          # index.ts 啟動時呼叫
-  |
-  +-- instrumentModules: { OpenAI }  # 自動追蹤 OpenAI API 呼叫
-  |
-  +-- observe("rag_chat", ...)       # 手動 span
-  +-- observe("get_embedding", ...)  # 手動 span
-  |
-  +-- scoreRagResponse(...)          # span 內附加評分
-  |
-flushLaminar()         # SIGTERM/SIGINT 時 flush
-```
-
 ---
 
 ## 測試
@@ -354,27 +390,12 @@ flushLaminar()         # SIGTERM/SIGINT 時 flush
 pnpm test                      # 執行所有測試
 pnpm test:watch               # 監視模式
 pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
-
-# 特定測試檔案
-pnpm test api/tests/routes/eval.test.ts
-pnpm test api/tests/utils/cjk-tokenizer.test.ts
 ```
 
-**測試套件統計（v2.23）：**
-- 總測試數：207 個（24 個測試檔案）
-- 通過：207/207 (100%)
+**測試套件統計（v2.24）：**
+- 總測試數：224 個（25 個測試檔案）
+- 通過：224/224 (100%)
 - 覆蓋率：80%+
-
----
-
-## Docker 部署
-
-整個系統可以透過 docker-compose 運行，包含 Python API（port 8001）和 TypeScript API（port 8002）：
-
-```bash
-docker-compose up              # 啟動所有服務
-docker-compose logs seo-api-ts # 監看 Hono API 日誌
-```
 
 ---
 
@@ -402,9 +423,9 @@ curl -H "X-API-Key: your-api-key" http://localhost:8002/api/v1/qa
 
 ### 4. Search / Chat 回傳空結果
 
-1. 確認 `qa_final.json` 和 `qa_embeddings.npy` 存在於 output/ 目錄
+1. 確認 Supabase 環境變數已設定（或 `qa_final.json` 存在於 output/）
 2. 若無 OpenAI Key，search 會自動降級至 keyword（可能會失準）
-3. 檢查 config 中 `QA_STORE_PATH` 設定是否正確
+3. 檢查 Lambda logs 或本地 console 確認 QAStore 載入狀態
 
 ---
 

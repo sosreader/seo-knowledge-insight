@@ -5,6 +5,8 @@ interface RateLimitEntry {
   timestamps: number[];
 }
 
+const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
+
 const store = new Map<string, RateLimitEntry>();
 
 // Cleanup stale entries every 5 minutes
@@ -39,6 +41,12 @@ export function rateLimit(maxRequests: number, windowMs: number = 60_000) {
   startCleanup(windowMs);
 
   return createMiddleware(async (c, next) => {
+    // In Lambda, each execution environment has its own Map — rate limiting is ineffective.
+    // Use API Gateway throttling or an external store for Lambda rate limiting.
+    if (isLambda) {
+      await next();
+      return;
+    }
     const ip =
       c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
       c.req.header("x-real-ip") ??

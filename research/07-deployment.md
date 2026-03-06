@@ -1,8 +1,8 @@
 # 部署架構
 
-> 屬於 [research/](./README.md)。涵蓋 Hono TypeScript API 架構、ECR + App Runner 部署、資料層遷移路徑。
+> 屬於 [research/](./README.md)。涵蓋 Hono TypeScript API 架構、Lambda + Function URL 部署、Supabase 資料層。
 >
-> **v2.3**（2026-03-04）：以 Hono + TypeScript 為主架構重寫。FastAPI 內容移至 Legacy 區段。
+> **v2.24**（2026-03-06）：Lambda + Function URL 部署。v2.3 從 FastAPI 遷移至 Hono TypeScript。
 
 ---
 
@@ -33,21 +33,33 @@ Route 層零修改，只有 `hybridSearch()` 從 sync 改為 async。
 
 ```typescript
 // api/src/index.ts
-if (process.env.NODE_ENV !== "test") {
-  try {
-    qaStore.load();
-    console.log(`QAStore loaded: ${qaStore.count} items`);
-  } catch (err) {
-    console.warn("QAStore load failed (API will run without search):", err);
-  }
+const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
 
+let _initPromise: Promise<void> | null = null;
+
+export function initStores(): Promise<void> {
+  if (!_initPromise) {
+    _initPromise = _doInitStores().catch((err) => {
+      _initPromise = null;  // 失敗時 reset，下次 retry
+      throw err;
+    });
+  }
+  return _initPromise;
+}
+
+if (process.env.NODE_ENV !== "test" && !isLambda) {
+  await initStores();
   serve({ fetch: app.fetch, port }, (info) => {
     console.log(`Server running on http://localhost:${info.port}`);
   });
 }
 ```
 
-**與 FastAPI lifespan 的對比**：Hono 沒有 async context manager，改用同步 `qaStore.load()` 在 server 啟動前呼叫。測試環境（`NODE_ENV=test`）跳過載入，由各測試自行控制。
+**雙模式啟動**：
+- **Node.js 直接執行**：`initStores()` + `serve()`
+- **Lambda**：由 `lambda.ts` 呼叫 `initStores()`（cold start），不啟動 HTTP server
+- **Idempotency**：`_initPromise` 保證只初始化一次；失敗 reset 允許 retry
+- **測試**：`NODE_ENV=test` 跳過載入，由各測試自行控制
 
 ### TypeScript cosine similarity（取代 numpy）
 
@@ -119,9 +131,10 @@ async function ragChat(message: string, history: ChatMessage[]): Promise<RagResu
 
 ```
 api/src/
-├── index.ts              # 入口：全域 middleware + route mounting
+├── index.ts              # 入口：全域 middleware + route mounting + initStores()
+├── lambda.ts             # Lambda 入口：cold start + hono/aws-lambda handler
 ├── config.ts             # Zod 驗證環境變數 + 資料路徑
-├── routes/               # 9 個路由（v2.23）
+├── routes/               # 9 個路由（v2.24）
 │   ├── health.ts         # GET /health（不需認證）
 │   ├── qa.ts             # GET /qa, /qa/categories, /qa/collections, /qa/{id}
 │   ├── search.ts         # POST /search（hybrid + keyword fallback）
@@ -142,7 +155,7 @@ api/src/
 │   ├── session-store.ts  # 檔案式對話儲存（Repository Pattern）
 │   ├── learning-store.ts # Learning Store（失敗記憶庫）
 │   └── synonyms-store.ts # 同義詞（雙層：靜態 + custom JSON）
-├── services/             # 7 個服務（v2.23）
+├── services/             # 7 個服務（v2.24）
 │   ├── embedding.ts      # OpenAI Embedding API
 │   ├── rag-chat.ts       # RAG 問答 + context 組裝
 │   ├── reranker.ts       # Claude Haiku reranker（v2.11）
@@ -150,7 +163,7 @@ api/src/
 │   ├── report-generator-local.ts  # ECC 6 維度本地週報（v2.13）
 │   ├── report-evaluator.ts  # 5 維度品質評估（v2.13）
 │   └── pipeline-runner.ts # Python CLI 代理
-├── schemas/              # 10 個 Zod schema（v2.23）
+├── schemas/              # 10 個 Zod schema（v2.24）
 │   ├── api-response.ts   # ApiResponse<T> envelope（ok/fail）
 │   ├── qa.ts
 │   ├── search.ts
@@ -161,7 +174,7 @@ api/src/
 │   ├── pipeline.ts
 │   ├── eval.ts
 │   └── synonyms.ts
-└── utils/                # 8 個工具（v2.23）
+└── utils/                # 8 個工具（v2.24）
     ├── npy-reader.ts     # 解析 .npy 二進制格式
     ├── cosine-similarity.ts  # L2 正規化 + 矩陣點積
     ├── keyword-boost.ts  # CJK n-gram 關鍵字加權
@@ -190,43 +203,107 @@ api/src/
 
 ---
 
-## 21. ECR + App Runner 部署模式
+## 21. AWS 部署模式
 
-> 2026-03-03 從 ECR + EC2 SSM 遷移至 ECR + App Runner（無伺服器容器）。
+> 2026-03-06 從 App Runner 遷移至 Lambda + Function URL（成本 ~$0/月）。
 
 ### 21.1 部署選項演進
 
 | 方案                              | 複雜度 | 月費估算    | 適合場景                      |
 | --------------------------------- | ------ | ----------- | ----------------------------- |
 | ~~ECR + EC2 SSM~~（v0.3--v1.20） | 中     | ~$5-10      | 已淘汰（需管主機）            |
-| **ECR + App Runner（當前選擇）**  | **低** | **~$5-7**   | **無伺服器，push image 即部署** |
+| ~~ECR + App Runner~~（v2.3--v2.23）| 低    | ~$5-7       | 已淘汰（改用 Lambda 更便宜）  |
 | ECR + ECS Fargate                 | 高     | ~$20-30     | 需要 auto-scaling + ALB       |
+| **Lambda + Function URL（當前）** | **低** | **~$0**     | **Free tier 足夠低流量場景**  |
 
-**遷移理由**：
-- 不需要管 EC2 主機（OS 更新、Docker 安裝、SSM Agent）
-- Push image 到 ECR 後，App Runner 自動部署
-- 內建 HTTPS、health check、auto-scaling
-- 成本與最小 EC2 相當
+**Lambda 遷移理由**：
+- **成本最優**：Free tier 含 100 萬次/月 + 400,000 GB-seconds，低流量場景月費 ~$0
+- **arm64**：比 x86_64 便宜 20%（Lambda 建立後不可更改架構，需刪除重建）
+- **Function URL**：免費內建 HTTPS endpoint，不需 API Gateway
+- **Zero ops**：無伺服器管理、自動 scaling、自動 patch
 
-### 21.2 ECR + App Runner 流程
+### 21.2 Lambda + Function URL 部署流程
 
 ```
 git push main
     |
-GitHub Actions (.github/workflows/deploy-seo-api.yaml)
+GitHub Actions (.github/workflows/deploy-ts-api.yml)  ← 待更新為 Lambda 部署
     |
-docker build -t seo-insight-api:$TAG ./api  <-- 注意 context 是 api/
+pnpm build（tsup Lambda build → dist-lambda/lambda.js，~3.4MB self-contained）
     |
-ECR push（AWS 私有 registry）
+zip dist-lambda/lambda.js + package.json（type:module）
     |
-aws apprunner update-service
+aws lambda update-function-code --function-name seo-insight-api
     |
-App Runner 拉取新 image -> 啟動容器 -> health check -> 切換流量
+Lambda Function URL（自動 HTTPS）
     |
-https://<random>.awsapprunner.com（自動 HTTPS）
+https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/
 ```
 
-### 21.3 Dockerfile 設計（Multi-Stage Build）
+### 21.3 Lambda 架構設計
+
+#### 入口檔案（`api/src/lambda.ts`）
+
+```typescript
+import { handle } from "hono/aws-lambda";
+import { app, initStores } from "./index.js";
+import { flushLaminar } from "./utils/observability.js";
+
+const ready = initStores();           // Cold start 初始化
+const honoHandler = handle(app);
+
+export const handler: typeof honoHandler = async (event, context) => {
+  await ready;                         // 確保 stores 載入完成
+  const response = await honoHandler(event, context);
+  await flushLaminar().catch((err) => console.warn("Laminar flush failed:", err));
+  return response;
+};
+```
+
+**設計重點**：
+- **Cold start pattern**：module-level `initStores()` promise，每次 invocation `await ready`
+- **Idempotency guard**（`index.ts`）：`_initPromise` 失敗時 reset 為 null，下次 retry
+- **`hono/aws-lambda`**：`handle()` 將 Hono app 轉為 Lambda handler
+- **Laminar flush**：每次 invocation 結束前 flush traces，避免 Lambda freeze 遺失
+
+#### tsup 雙重 Build 設定
+
+```typescript
+// api/tsup.config.ts
+export default defineConfig([
+  // Node.js server build（開發用，external node_modules）
+  { entry: { index: "src/index.ts" }, outDir: "dist", ... },
+  // Lambda build（self-contained ESM bundle，~3.4MB）
+  {
+    entry: { lambda: "src/lambda.ts" },
+    outDir: "dist-lambda",
+    noExternal: [/.*/],          // 所有 npm packages 打包進 bundle
+    banner: {
+      js: "import { createRequire as __cr } from 'node:module';"
+        + "const require = __cr(import.meta.url);",  // CJS deps 需要 require
+    },
+  },
+]);
+```
+
+**ESM 注意事項**：
+- Lambda zip 內需含 `package.json` with `"type": "module"`，否則 `.js` 被當 CJS 載入
+- `noExternal: [/.*/]` 將所有 npm 依賴打入 bundle → zip 只需 `lambda.js` + `package.json`
+- CJS 依賴（如 `dotenv`）在 ESM bundle 中需要 `createRequire` shim 提供全域 `require`
+- Banner 用 alias `__cr` 避免與 tsup 內部的 `createRequire` 衝突
+
+#### Rate Limiter Lambda 處理
+
+```typescript
+// api/src/middleware/rate-limit.ts
+const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
+// Lambda 每個執行環境有獨立 Map → in-memory rate limit 無效
+if (isLambda) { await next(); return; }
+```
+
+> Lambda 環境不做 in-memory rate limiting。需要限流時應使用 API Gateway throttling 或外部 store。
+
+#### Dockerfile（Docker 本地開發 + 容器驗證用）
 
 ```dockerfile
 # Stage 1: Build
@@ -247,26 +324,19 @@ ENV NODE_ENV=production
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=builder /app/dist ./dist
-
-# Non-root user for security
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 appuser
 USER appuser
-
 EXPOSE 8002
 CMD ["node", "dist/index.js"]
 ```
 
-**設計重點**：
-- **Multi-stage**：builder 安裝全部依賴 + 編譯 TypeScript，runner 只裝 production 依賴，image 更小
-- **Layer cache**：先 COPY `package.json` + `pnpm-lock.yaml`，依賴不變時跳過 `pnpm install`
-- **Non-root user**：`appuser`（UID 1001），降低容器逃逸風險
-- **corepack enable pnpm**：Node.js 22 原生支援 pnpm，不需額外安裝
+> Dockerfile 保留給本地開發驗證。生產環境使用 Lambda（不需 Docker image）。
 
 ### 21.4 資料層遷移路徑
 
-> **當前（Phase 1）**：資料檔（qa_final.json / qa_enriched.json、qa_embeddings.npy）需透過某種方式提供給容器。
-> App Runner 不支援 volume mount，需選擇以下方案之一。
+> **已完成 Phase 2**：資料層已遷移至 Supabase pgvector，Lambda 不需要檔案。
+> 以下為歷史參考（Phase 1 過渡方案）。
 
 | 方案                     | 複雜度 | 資料更新方式           | 適用階段     |
 | ------------------------ | ------ | ---------------------- | ------------ |
@@ -335,16 +405,15 @@ CREATE INDEX ON qa_items USING gin (to_tsvector('simple', question || ' ' || ans
 
 ### 21.5 GitHub Actions Secrets
 
-| Secret                     | 用途                                         | 階段   |
-| -------------------------- | -------------------------------------------- | ------ |
-| `AWS_ACCESS_KEY_ID`        | AWS IAM 認證                                 | 所有   |
-| `AWS_SECRET_ACCESS_KEY`    | AWS IAM 認證                                 | 所有   |
-| `AWS_REGION`               | AWS 區域（如 `ap-northeast-1`）              | 所有   |
-| `ECR_DOMAIN`               | `xxxx.dkr.ecr.<region>.amazonaws.com`        | 所有   |
-| `APP_RUNNER_SERVICE_ARN`   | App Runner 服務 ARN                          | 所有   |
-| `APP_RUNNER_ECR_ROLE_ARN`  | App Runner 拉 ECR image 的 IAM Role          | 所有   |
-| `OPENAI_API_KEY`           | OpenAI API（RAG chat 需要）                  | 所有   |
-| `SEO_API_KEY`              | API 認證金鑰                                 | 所有   |
+| Secret                     | 用途                                         |
+| -------------------------- | -------------------------------------------- |
+| `AWS_ACCESS_KEY_ID`        | AWS IAM 認證（`seo-insight-deployer` user）  |
+| `AWS_SECRET_ACCESS_KEY`    | AWS IAM 認證                                 |
+| `AWS_REGION`               | `ap-northeast-1`                             |
+| `OPENAI_API_KEY`           | OpenAI API（RAG chat 需要）                  |
+| `SEO_API_KEY`              | API 認證金鑰                                 |
+| `SUPABASE_URL`             | Supabase REST API URL                        |
+| `SUPABASE_ANON_KEY`        | Supabase anon key（RLS SELECT）              |
 
 ### 21.6 AWS 服務與 IAM 設定
 
@@ -352,23 +421,23 @@ CREATE INDEX ON qa_items USING gin (to_tsvector('simple', question || ' ' || ans
 
 | 服務           | 用途                  | 費用         |
 | -------------- | --------------------- | ------------ |
-| **ECR**        | Docker image 倉庫     | ~$0.10/GB/月 |
-| **App Runner** | 無伺服器容器運行      | ~$5-7/月     |
+| **Lambda**     | 無伺服器函式運行      | ~$0/月（free tier） |
 
-**App Runner 服務設定**：
-- Source: ECR private image
-- Port: **8002**
-- Health check path: `/health`
-- Min instances: 1
-- Max instances: 1（低流量場景）
+**Lambda 函式設定**：
+- Function: `seo-insight-api`
+- Architecture: **arm64**（比 x86_64 便宜 20%）
+- Runtime: Node.js 22
+- Memory: 512 MB
+- Timeout: 30 秒
+- Handler: `lambda.handler`
+- Function URL: 啟用（auth type: NONE）
+- Region: ap-northeast-1
 
-**IAM Role -- App Runner ECR Access**：
-- Trust: `build.apprunner.amazonaws.com`
-- Policy: `AmazonEC2ContainerRegistryReadOnly`
+**IAM User -- `seo-insight-deployer`（GitHub Actions 用）**：
+- `lambda:UpdateFunctionCode`
+- `lambda:GetFunction`
 
-**IAM User -- GitHub Actions**：
-- `ecr:GetAuthorizationToken` + `ecr:BatchCheckLayerAvailability` + `ecr:PutImage` + `ecr:InitiateLayerUpload` + `ecr:UploadLayerPart` + `ecr:CompleteLayerUpload`
-- `apprunner:UpdateService` + `apprunner:DescribeService`
+> **注意**：Lambda 架構建立後不可更改。需更換架構時必須刪除函式後重建。
 
 ### 21.7 docker-compose 本地開發
 
@@ -381,20 +450,38 @@ services:
     ports:
       - "8002:8002"
     volumes:
-      - ./output:/app/output:ro      # Q&A 資料 + embeddings
+      - ./output:/app/output:ro      # Q&A 資料 + embeddings（檔案模式）
       - ./scripts:/app/scripts:ro    # 週報生成腳本
     environment:
       - PORT=8002
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
       - SEO_API_KEY=
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
     restart: unless-stopped
 ```
 
 **注意**：本地開發建議直接用 `cd api && pnpm dev`（tsx watch），比 Docker 更快且支援 hot reload。
-Docker 主要用於驗證 production image 是否正常。
+Docker 主要用於驗證 production image 是否正常。生產環境使用 Lambda（不經 Docker）。
 
-### 21.8 歷史：ECR + EC2 SSM（已淘汰）
+### 21.8 歷史：ECR + App Runner（已淘汰）
+
+<details>
+<summary>展開 App Runner 部署流程（已淘汰，v2.3--v2.23）</summary>
+
+```
+git push main → GitHub Actions → docker build → ECR push
+    → aws apprunner update-service
+    → App Runner 拉取新 image → 啟動容器 → health check → 切換流量
+    → https://<random>.awsapprunner.com（自動 HTTPS）
+```
+
+App Runner 月費 ~$5-7，已於 2026-03-06 遷移至 Lambda + Function URL（~$0/月）。
+
+</details>
+
+### 21.9 歷史：ECR + EC2 SSM（已淘汰）
 
 <details>
 <summary>展開 EC2 SSM 部署流程（已淘汰，v0.3--v1.20）</summary>
@@ -588,7 +675,7 @@ const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
         ?? "unknown";
 ```
 
-**注意**：App Runner 會設定 `X-Forwarded-For`，rate-limit middleware 和 audit logger 使用相同的 IP 取得邏輯。
+**注意**：Lambda Function URL 和 API Gateway 會設定 `X-Forwarded-For`，rate-limit middleware 和 audit logger 使用相同的 IP 取得邏輯。
 
 ### Log 格式（JSONL）
 
