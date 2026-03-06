@@ -1,23 +1,4 @@
 services:
-  seo-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./app:/app/app:ro
-      - ./output:/app/output:ro
-      - ./scripts:/app/scripts:ro
-      - ./utils:/app/utils:ro
-      - ./config.py:/app/config.py:ro
-    environment:
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
-      - SEO_API_KEY=
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - LMNR_PROJECT_API_KEY=${LMNR_PROJECT_API_KEY:-}
-    restart: unless-stopped
-
   seo-api-ts:
     build:
       context: ./api

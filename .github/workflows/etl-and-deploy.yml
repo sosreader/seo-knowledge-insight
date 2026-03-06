@@ -36,14 +36,14 @@ jobs:
 
       - name: Fetch from Notion (incremental)
         env:
-          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
         run: python scripts/01_fetch_notion.py
 
       - name: Fetch external articles (Medium + iThome + Google Cases)
         run: python scripts/run_pipeline.py --step fetch-articles
         env:
-          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
 
       - name: Extract Q&A (OpenAI)
         env:
