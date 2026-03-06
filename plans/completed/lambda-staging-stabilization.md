@@ -132,7 +132,7 @@ Lambda 上回傳 404。前端應：
 | ~~**P1-2**~~ | ~~meetings tab 空狀態~~ | ✅ MeetingTable 未被使用，非問題 |
 | ~~**P1-3**~~ | ~~同義詞確認~~ | ✅ 靜態同義詞正常，custom=0 預期行為 |
 | ~~**P2-1**~~ | ~~同義詞擴充（+10 組）~~ | ✅ Category Hit 100%, Precision@5 89% |
-| **P2-2** | Model 升級 A/B 測試 | ⏭️ deferred |
+| ~~**P2-2**~~ | ~~Model A/B：gpt-5.2 (4.43) > gpt-4.1 (4.30)~~ | ✅ 維持 gpt-5.2 + prompt 精簡化 |
 | ~~**P3-1**~~ | ~~API Key 前端安全~~ | ✅ proxy 架構已正確，無暴露 |
 | ~~**P3-2**~~ | ~~Supabase RLS 強化~~ | ✅ 完成 |
 | ~~**P3-3**~~ | ~~Observability 修復~~ | ✅ graceful skip（低優先） |
