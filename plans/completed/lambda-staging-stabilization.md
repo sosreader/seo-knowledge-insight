@@ -111,15 +111,59 @@ Lambda 上回傳 404。前端應：
 
 ### P4-1：Cache Redis
 
-`plans/active/cache-redis.md` — 搜尋結果快取，減少 Supabase RPC 呼叫
+`plans/active/cache-redis.md`
+
+**問題**：每次 RAG chat 都呼叫 OpenAI embedding + Supabase RPC，重複查詢浪費 token 費用和延遲。
+
+**分兩階段**：
+- **Phase 1（Disk Cache）**：用本地檔案快取 embedding 結果和搜尋結果，適合目前單 Lambda 實例的規模。Python 端已有 `openai_helper.py` cache 機制，TS 端尚未實作。
+- **Phase 2（Redis）**：當流量成長到需要多實例時，改用 Redis 做分散式快取。目前流量極低，不急。
+
+**預估效益**：重複查詢省 ~80% token 費用，回應延遲降低 200-500ms。
+
+**前提**：流量成長後才有明顯效益。
 
 ### P4-2：Multi-Domain Analysis
 
-`plans/active/multi-domain-analysis.md` — 支援多網站 SEO 分析
+`plans/active/multi-domain-analysis.md`
+
+**問題**：目前系統硬編碼為「SEO 知識庫」，prompt、分類、評估維度都綁死 SEO 領域。
+
+**方案**：引入 **Domain Profile YAML**，把領域知識抽象化：
+```yaml
+domain: seo
+display_name: "SEO 知識庫"
+categories: [技術SEO, 內容策略, ...]
+system_prompt: "你是一位資深 SEO 顧問..."
+eval_dimensions: [relevance, accuracy, ...]
+```
+
+換一份 YAML 就能支援不同知識領域（例如產品管理、行銷策略）。本質是「去耦合」，讓系統變成通用 RAG 平台。
+
+**前提**：需要有第二個領域的需求才值得做。
 
 ### P4-3：Learning Query（Phase 2）
 
-`plans/active/phase2-learning-query.md` — 從使用者互動學習搜尋模式
+`plans/active/phase2-learning-query.md`
+
+**問題**：目前 feedback/miss 只記錄不分析，無法自動改善搜尋品質。
+
+**三個子功能**：
+- **Usage Aggregator**：聚合 `learning_log.jsonl` 中的 feedback 和 miss，產出統計報告（熱門查詢、低分查詢、常見 miss pattern）
+- **Query Understanding**：分析使用者查詢意圖，自動建議新同義詞或知識庫缺口
+- **Access Analysis**：從存取日誌分析使用模式，找出高頻但低品質的回答
+
+**前提**：需要累積 2+ 週的實際使用紀錄才有分析價值。目前 staging 剛上線，資料量不足。
+
+### P4 急迫性評估
+
+| 計畫 | 急迫性 | 前提條件 |
+|------|--------|----------|
+| Cache | 低 | 流量成長後才有效益 |
+| Multi-Domain | 低 | 需要第二個領域需求 |
+| Learning Query | 中 | 需 2+ 週使用紀錄 |
+
+三個都不急，建議先讓 staging 穩定運行、累積使用資料，再依實際需求決定優先做哪個。
 
 ---
 
