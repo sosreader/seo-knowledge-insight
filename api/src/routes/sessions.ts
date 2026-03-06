@@ -11,9 +11,11 @@ import { ok, fail } from "../schemas/api-response.js";
 import { sessionStore } from "../store/session-store.js";
 import type { Session } from "../store/session-store.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
-import { hasOpenAI } from "../utils/mode-detect.js";
+import { hasOpenAI, resolveMode } from "../utils/mode-detect.js";
 import { qaStore } from "../store/qa-store.js";
 import { config } from "../config.js";
+import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
+import { createAgentDeps } from "../agent/agent-deps.js";
 
 export const sessionsRoute = new Hono();
 
@@ -46,6 +48,7 @@ function toDetail(s: Session): SessionDetailOut {
       content: m.content,
       sources: m.sources,
       created_at: m.created_at,
+      ...(m.metadata ? { metadata: m.metadata } : {}),
     })),
   };
 }
@@ -114,10 +117,12 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     return c.json(fail("Session not found"), 404);
   }
 
+  const { message: userMessage, mode: requestMode } = parsed.data;
+
   // 1. Save user message
   const userMsg = {
     role: "user" as const,
-    content: parsed.data.message,
+    content: userMessage,
     sources: [] as Record<string, unknown>[],
     created_at: new Date().toISOString().replace(/(\.\d{3})\d*Z$/, "$1Z"),
   };
@@ -127,35 +132,62 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     return c.json(fail("Failed to add message (session full or conflict)"), 409);
   }
 
-  // 2. Build history from existing messages (exclude the just-added user msg)
-  const history = session.messages.slice(0, -1).map((m) => ({
+  // 2. Build history from existing messages (exclude the just-added user msg, cap at 20)
+  const MAX_HISTORY = 20;
+  const allPrior = session.messages.slice(0, -1);
+  const history = allPrior.slice(-MAX_HISTORY).map((m) => ({
     role: m.role,
     content: m.content,
   }));
 
   // 3. Call RAG chat (with context-only fallback when no OpenAI)
-  let result: { answer: string | null; sources: Record<string, unknown>[]; mode: string };
+  let result: { answer: string | null; sources: Record<string, unknown>[]; mode: string; metadata?: Record<string, unknown> };
+  const ragStartMs = Date.now();
 
   if (hasOpenAI()) {
+    const effectiveMode = resolveMode(requestMode);
     try {
-      const ragResult = await ragChat(parsed.data.message, history.length > 0 ? history : null);
-      result = {
-        answer: ragResult.answer,
-        sources: ragResult.sources as unknown as Record<string, unknown>[],
-        mode: ragResult.mode ?? "full",
-      };
+      if (effectiveMode === "agent") {
+        const deps = createAgentDeps();
+        const agentResult = await agentChat(
+          userMessage,
+          history.length > 0 ? history : null,
+          deps,
+          { maxTurns: config.AGENT_MAX_TURNS, timeoutMs: config.AGENT_TIMEOUT_MS },
+        );
+        result = {
+          answer: agentResult.answer,
+          sources: agentResult.sources as unknown as Record<string, unknown>[],
+          mode: agentResult.mode,
+          metadata: agentResult.metadata as unknown as Record<string, unknown>,
+        };
+      } else {
+        const ragResult = await ragChat(userMessage, history.length > 0 ? history : null);
+        result = {
+          answer: ragResult.answer,
+          sources: ragResult.sources as unknown as Record<string, unknown>[],
+          mode: ragResult.mode ?? "rag",
+          metadata: ragResult.metadata as unknown as Record<string, unknown>,
+        };
+      }
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
       if (status === 401 || status === 403 || status === 429) {
-        const sources = keywordHitsToSources(parsed.data.message, config.CHAT_CONTEXT_K);
-        result = { answer: null, sources, mode: "context-only" };
+        const sources = keywordHitsToSources(userMessage, config.CHAT_CONTEXT_K);
+        result = {
+          answer: null, sources, mode: "context-only",
+          metadata: { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - ragStartMs },
+        };
       } else {
         throw err;
       }
     }
   } else {
-    const sources = keywordHitsToSources(parsed.data.message, config.CHAT_CONTEXT_K);
-    result = { answer: null, sources, mode: "context-only" };
+    const sources = keywordHitsToSources(userMessage, config.CHAT_CONTEXT_K);
+    result = {
+      answer: null, sources, mode: "context-only",
+      metadata: { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - ragStartMs },
+    };
   }
 
   // 4. Save assistant message
@@ -164,6 +196,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     content: result.answer ?? "",
     sources: result.sources,
     created_at: new Date().toISOString().replace(/(\.\d{3})\d*Z$/, "$1Z"),
+    ...(result.metadata ? { metadata: result.metadata } : {}),
   };
 
   session = await sessionStore.addMessage(sessionId, assistantMsg);

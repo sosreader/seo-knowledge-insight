@@ -670,6 +670,7 @@ const result = await contextRelevance(
 | Phase 2：Contextual Embeddings | 強化語意向量     | 尚無獨立指標（混入 hybrid score）               |
 | Phase 3：Re-ranking            | 改善排序順序     | `POST /eval/reranking`（rank order delta）      |
 | **Phase 4：Context Relevance** | **評估整體品質** | **`POST /eval/context-relevance`（0–1 score）** |
+| **Phase 5：Agentic RAG** | **LLM 自主多輪搜尋** | Agent mode `POST /chat`（tool_calls_count, agent_turns） |
 
 Context Relevance 作為**端到端指標**，可驗證 Phase 1–3 的累積效果。
 預期：`context_relevance_score > kw_hit_rate`（語意評估應高於純 keyword 判斷）。
@@ -687,5 +688,64 @@ POST /api/v1/eval/context-relevance
 { "query": "Discover 流量下降", "top_k": 5 }
 # 回傳: { score, reason, per_context[{ id, score }], query, total_contexts }
 ```
+
+---
+
+### Phase 5：Agentic RAG（`api/src/agent/`，v2.28）
+
+Phase 1–4 的 RAG 是**單輪固定流程**：embedding → hybrid search → GPT completion。LLM 無法決定：
+- 要不要搜尋、搜什麼關鍵字
+- 搜到的結果夠不夠、要不要再搜一次
+- 是否需要查詢特定 Q&A 的完整內容
+
+**Agentic RAG = LLM 自主決定 tool calling，多輪收集資訊後回答**。
+
+```
+使用者問題
+     ↓
+LLM 分析 → 決定呼叫哪個 tool
+     ↓
+┌── Agent Loop（最多 5 輪）──────────────────────┐
+│                                                 │
+│  LLM 選擇 tool：                                │
+│  ├─ search_knowledge_base（語意搜尋，含分類篩選）│
+│  ├─ get_qa_detail（取得完整 Q&A 內容）          │
+│  ├─ list_categories（了解知識庫覆蓋範圍）        │
+│  └─ get_stats（知識庫統計）                      │
+│                                                 │
+│  LLM 評估 → 資訊充足？                          │
+│  ├─ 是 → finish_reason="stop"，跳出 loop       │
+│  └─ 否 → 再呼叫 tool（換關鍵字/換分類/查詳情）  │
+│                                                 │
+│  安全防護：                                      │
+│  ├─ ALLOWED_TOOLS runtime whitelist             │
+│  ├─ JSON.parse guard + Zod validation           │
+│  ├─ Loop detection（連續相同 tool call 中斷）    │
+│  └─ Timeout（預設 90s）                          │
+│                                                 │
+└─────────────────────────────────────────────────┘
+     ↓
+LLM 生成最終回答（含 sources 引用）
+```
+
+**與 Phase 1–4 的差異**：
+
+| | Phase 1–4（Single-pass RAG） | Phase 5（Agentic RAG） |
+|---|---|---|
+| 搜尋次數 | 固定 1 次 | LLM 自主決定 1–N 次 |
+| 關鍵字選擇 | 直接用使用者問題 | LLM 拆解、重組 |
+| 結果評估 | 無（搜到就回答） | LLM 判斷是否充足 |
+| Tool 種類 | 只有 search | 4 種 tools |
+| 回應模式 | `mode: "full"` | `mode: "agent"` |
+
+**Feature Flag**：`AGENT_ENABLED=auto|true|false`（auto = 有 OpenAI key 就啟用）。
+
+**架構設計**：
+
+- `agent/types.ts` — `AgentDeps` interface（Dependency Injection，解耦 qaStore）
+- `agent/tool-definitions.ts` — 4 tool 的 Zod schema + OpenAI function calling format
+- `agent/tool-executor.ts` — Tool dispatch + validation + 15s timeout per tool
+- `agent/agent-loop.ts` — while-loop + 4 終止條件（stop / max_turns / timeout / loop_detection）
+- `agent/agent-deps.ts` — qaStore → AgentDeps 橋接
 
 ---

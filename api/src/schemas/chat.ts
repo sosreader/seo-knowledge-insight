@@ -8,6 +8,7 @@ export const historyMessageSchema = z.object({
 export const chatRequestSchema = z.object({
   message: z.string().min(1).max(2000),
   history: z.array(historyMessageSchema).max(20).default([]),
+  mode: z.enum(["agent", "rag"]).optional(),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
@@ -24,10 +25,25 @@ export interface SourceItem {
   readonly source_url: string;
 }
 
+export interface MessageMetadata {
+  readonly model?: string;
+  readonly provider?: string;
+  readonly mode?: string;
+  readonly embedding_model?: string;
+  readonly input_tokens?: number;
+  readonly output_tokens?: number;
+  readonly total_tokens?: number;
+  readonly reasoning_tokens?: number;
+  readonly duration_ms?: number;
+  readonly retrieval_count?: number;
+  readonly reranker_used?: boolean;
+}
+
 export interface ChatResponse {
   readonly answer: string | null;
   readonly sources: readonly SourceItem[];
-  readonly mode: "full" | "context-only";
+  readonly mode: "rag" | "context-only" | "agent";
+  readonly metadata?: MessageMetadata;
 }
 
 export function itemToSource(

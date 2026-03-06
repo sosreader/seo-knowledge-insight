@@ -10,6 +10,7 @@ export const createSessionSchema = z.object({
 
 export const sendMessageSchema = z.object({
   message: z.string().min(1).max(2000),
+  mode: z.enum(["agent", "rag"]).optional(),
 });
 
 export const sessionListParamsSchema = z.object({
@@ -22,6 +23,7 @@ export interface SessionMessageOut {
   readonly content: string;
   readonly sources: readonly Record<string, unknown>[];
   readonly created_at: string;
+  readonly metadata?: Record<string, unknown>;
 }
 
 export interface SessionSummaryOut {

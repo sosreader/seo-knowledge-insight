@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+import { apiReference } from "@scalar/hono-api-reference";
 import { config, paths } from "./config.js";
 import { corsMiddleware } from "./middleware/cors.js";
 import { securityHeaders } from "./middleware/security-headers.js";
+import { requestLogger } from "./middleware/request-logger.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { rateLimit } from "./middleware/rate-limit.js";
@@ -15,6 +17,7 @@ import { sessionsRoute } from "./routes/sessions.js";
 import { feedbackRoute } from "./routes/feedback.js";
 import { pipelineRoute } from "./routes/pipeline.js";
 import { synonymsRoute } from "./routes/synonyms.js";
+import { buildOpenAPISpec } from "./openapi.js";
 import { qaStore, loadQaStore } from "./store/qa-store.js";
 import { synonymsStore } from "./store/synonyms-store.js";
 import { initLaminar, flushLaminar } from "./utils/observability.js";
@@ -27,9 +30,20 @@ const app = new Hono();
 app.onError(errorHandler);
 app.use("*", corsMiddleware);
 app.use("*", securityHeaders);
+app.use("*", requestLogger);
 
 // Health check (no auth, no rate limit)
 app.route("/", healthRoute);
+
+// OpenAPI spec + Scalar docs (no auth, no rate limit)
+app.get("/openapi.json", (c) => c.json(buildOpenAPISpec()));
+app.get(
+  "/docs",
+  apiReference({
+    url: "/openapi.json",
+    pageTitle: "SEO Knowledge Insight API",
+  }),
+);
 
 // API routes (auth + rate limit)
 const api = new Hono();

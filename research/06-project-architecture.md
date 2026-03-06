@@ -73,7 +73,7 @@
 ```
                   chat.tsx
                     |
-        chatMode state ("full" | "context-only" | null)
+        chatMode state ("rag" | "agent" | "context-only" | null)
                     |
         ┌───────────┼───────────┐
         ↓           ↓           ↓
@@ -188,7 +188,7 @@ Notion 會議紀錄（87 份，2023–2026）
   endpoint（9 個 router，31 端點，v2.12～v2.18）：
     - routes/qa.ts        — GET /qa, /qa/categories, /qa/{id}（hex+int）
     - routes/search.ts    — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；v2.11 over-retrieve + rerank）
-    - routes/chat.ts      — POST /chat（mode: full|context-only，無 OpenAI 時回傳 sources + answer:null；v2.11 rerank 可啟用）
+    - routes/chat.ts      — POST /chat（mode: agent|rag|context-only；v2.29 request-level mode 參數，三層優先：Request > Server AGENT_ENABLED > auto；v2.11 rerank 可啟用）
     - routes/reports.ts   — GET /reports, /reports/{id}, POST /reports/generate
     - routes/sessions.ts  — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages（context-only fallback）, DELETE /sessions/{id}
     - routes/feedback.ts  — POST /feedback
@@ -204,7 +204,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - utils/cosine-similarity.ts：向量運算（Float32Array）
     - utils/keyword-boost.ts：4 層關鍵字匹配
     - utils/cjk-tokenizer.ts：CJK 分詞（2-gram + 單字，中文 keyword search 支援）
-    - utils/mode-detect.ts：hasOpenAI() helper（Local Mode 偵測）
+    - utils/mode-detect.ts：hasOpenAI() / hasSupabase() / isAgentEnabled() / resolveMode() helper（mode 偵測 + 三層優先順序解析）
     - services/embedding.ts：OpenAI embedding wrapper
     - services/rag-chat.ts：RAG 問答（需要 OpenAI API key；v2.11 支援 reranker）
     - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
@@ -214,6 +214,12 @@ Notion 會議紀錄（87 份，2023–2026）
     - services/metrics-parser.ts：純 TS 指標解析（v2.26 新增；Google Sheets CSV fetch + TSV parse + anomaly detect；取代 Python qa_tools.py load-metrics）
     - services/report-llm.ts：純 TS OpenAI 報告生成（v2.26 新增；同 Python 04_generate_report.py 的 system prompt + QA context 建構；取代 Python 依賴）
     - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools；v2.18 stdout/stderr 分離，修復 Laminar log 混入 JSON parse bug；v2.26 metrics 端點已不再使用）
+  Agent 模組（v2.28 新增）：
+    - agent/types.ts：AgentConfig, ToolResult, AgentResponse, AgentDeps interface
+    - agent/tool-definitions.ts：4 tool Zod schema + getOpenAITools()（OpenAI function calling format）
+    - agent/tool-executor.ts：Tool dispatch + Zod validation + 15s timeout + error sanitization
+    - agent/agent-loop.ts：while-loop + 4 終止條件（stop/max_turns/timeout/loop_detection）+ ALLOWED_TOOLS whitelist + JSON.parse guard
+    - agent/agent-deps.ts：qaStore → AgentDeps 橋接（Dependency Injection）
   評估工具：
     - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port，複製 report-evaluator.ts 邏輯；7 維度推送 Laminar `report-quality` group；供 `/generate-report` 存檔後呼叫）
   schemas：
@@ -1277,6 +1283,14 @@ eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboar
 由 Claude Code as Judge slash commands 執行後，用 `_push_laminar_score.py` 推送：
 - `faithfulness`（RAGAS Faithfulness，`/evaluate-faithfulness-local`）
 - `context_precision`（RAGAS Context Precision，`/evaluate-context-precision-local`）
+
+### API Documentation（v2.29）
+
+- **`src/openapi.ts`**：手工建構 OpenAPI 3.1 spec（29 paths, 32 endpoints, 15+ schemas）
+- **`GET /openapi.json`**：機器可讀規格（無需 auth，可匯入 Postman / Swagger Editor / SDK generator）
+- **`GET /docs`**：Scalar UI 互動式文件（`@scalar/hono-api-reference`）
+- **`api/docs/`**：Mintlify 結構化文件（mint.json + introduction.mdx + authentication.mdx）
+- 不使用 `hono-openapi` + `zod-openapi`——Zod v4 不相容，改用手動方案
 
 ### Observability 擴充（v2.12）
 

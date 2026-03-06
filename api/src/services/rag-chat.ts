@@ -8,7 +8,7 @@ import OpenAI from "openai";
 import { config } from "../config.js";
 import { getEmbedding } from "./embedding.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
-import { itemToSource, type ChatResponse } from "../schemas/chat.js";
+import { itemToSource, type ChatResponse, type MessageMetadata } from "../schemas/chat.js";
 import { observe } from "../utils/observability.js";
 import { scoreRagResponse } from "../utils/laminar-scoring.js";
 
@@ -62,6 +62,8 @@ export async function ragChat(
   message: string,
   history: ReadonlyArray<{ role: string; content: string }> | null = null,
 ): Promise<ChatResponse> {
+  const startMs = Date.now();
+
   // 1. Embed user question
   const queryVec = await getEmbedding(message);
 
@@ -71,7 +73,8 @@ export async function ragChat(
 
   // 2b. Re-ranking (Phase 3)
   const { rerank } = await import("./reranker.js");
-  const finalHits = config.ANTHROPIC_API_KEY
+  const rerankerUsed = !!config.ANTHROPIC_API_KEY;
+  const finalHits = rerankerUsed
     ? await rerank(message, hits as Array<{ item: QAItem; score: number }>, config.CHAT_CONTEXT_K)
     : hits.slice(0, config.CHAT_CONTEXT_K);
 
@@ -115,7 +118,24 @@ export async function ragChat(
   // Online scoring (safe no-op when Laminar not initialized)
   await scoreRagResponse(answer, sources);
 
-  return { answer, sources, mode: "full" };
+  const usage = resp.usage;
+  const metadata: MessageMetadata = {
+    model: resp.model ?? config.CHAT_MODEL,
+    provider: "openai",
+    mode: "rag",
+    embedding_model: config.OPENAI_EMBEDDING_MODEL,
+    input_tokens: usage?.prompt_tokens,
+    output_tokens: usage?.completion_tokens,
+    total_tokens: usage?.total_tokens,
+    reasoning_tokens: (usage as unknown as Record<string, unknown>)?.completion_tokens_details
+      ? ((usage as unknown as Record<string, unknown>).completion_tokens_details as Record<string, number>)?.reasoning_tokens
+      : undefined,
+    duration_ms: Date.now() - startMs,
+    retrieval_count: finalHits.length,
+    reranker_used: rerankerUsed,
+  };
+
+  return { answer, sources, mode: "rag", metadata };
 }
 
 /** Observed version — wraps ragChat as a Laminar span. */
