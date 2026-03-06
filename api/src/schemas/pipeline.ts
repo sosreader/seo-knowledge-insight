@@ -44,13 +44,13 @@ export const metricsRequestSchema = z.object({
       },
       { message: "source must be a Google Sheets URL (docs.google.com or sheets.google.com)" },
     ),
-  tab: z.string().min(1).max(50).regex(/^[a-zA-Z0-9_-]+$/, "tab must be alphanumeric").default("vocus"),
+  tab: z.string().min(1).max(50).regex(/^[\w\s\u4e00-\u9fff-]+$/u, "tab must be alphanumeric, CJK, or spaces").default("vocus"),
 });
 
 export const metricsSaveSchema = z.object({
   metrics: z.any(),
   source: z.string().max(500),
-  tab: z.string().min(1).max(50).regex(/^[a-zA-Z0-9_-]+$/, "tab must be alphanumeric"),
+  tab: z.string().min(1).max(50).regex(/^[\w\s\u4e00-\u9fff-]+$/u, "tab must be alphanumeric, CJK, or spaces"),
   label: z.string().max(60),
   weeks: z.number().int().min(1).max(12),
 });
