@@ -73,7 +73,7 @@
 ```
                   chat.tsx
                     |
-        chatMode state ("full" | "context-only" | null)
+        chatMode state ("rag" | "agent" | "context-only" | null)
                     |
         ┌───────────┼───────────┐
         ↓           ↓           ↓
@@ -188,7 +188,7 @@ Notion 會議紀錄（87 份，2023–2026）
   endpoint（9 個 router，31 端點，v2.12～v2.18）：
     - routes/qa.ts        — GET /qa, /qa/categories, /qa/{id}（hex+int）
     - routes/search.ts    — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；v2.11 over-retrieve + rerank）
-    - routes/chat.ts      — POST /chat（mode: agent|full|context-only；v2.28 agent mode 由 isAgentEnabled() 控制；v2.11 rerank 可啟用）
+    - routes/chat.ts      — POST /chat（mode: agent|rag|context-only；v2.29 request-level mode 參數，三層優先：Request > Server AGENT_ENABLED > auto；v2.11 rerank 可啟用）
     - routes/reports.ts   — GET /reports, /reports/{id}, POST /reports/generate
     - routes/sessions.ts  — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages（context-only fallback）, DELETE /sessions/{id}
     - routes/feedback.ts  — POST /feedback
@@ -204,7 +204,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - utils/cosine-similarity.ts：向量運算（Float32Array）
     - utils/keyword-boost.ts：4 層關鍵字匹配
     - utils/cjk-tokenizer.ts：CJK 分詞（2-gram + 單字，中文 keyword search 支援）
-    - utils/mode-detect.ts：hasOpenAI() / hasSupabase() / isAgentEnabled() helper（mode 偵測）
+    - utils/mode-detect.ts：hasOpenAI() / hasSupabase() / isAgentEnabled() / resolveMode() helper（mode 偵測 + 三層優先順序解析）
     - services/embedding.ts：OpenAI embedding wrapper
     - services/rag-chat.ts：RAG 問答（需要 OpenAI API key；v2.11 支援 reranker）
     - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
@@ -1283,6 +1283,14 @@ eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboar
 由 Claude Code as Judge slash commands 執行後，用 `_push_laminar_score.py` 推送：
 - `faithfulness`（RAGAS Faithfulness，`/evaluate-faithfulness-local`）
 - `context_precision`（RAGAS Context Precision，`/evaluate-context-precision-local`）
+
+### API Documentation（v2.29）
+
+- **`src/openapi.ts`**：手工建構 OpenAPI 3.1 spec（29 paths, 32 endpoints, 15+ schemas）
+- **`GET /openapi.json`**：機器可讀規格（無需 auth，可匯入 Postman / Swagger Editor / SDK generator）
+- **`GET /docs`**：Scalar UI 互動式文件（`@scalar/hono-api-reference`）
+- **`api/docs/`**：Mintlify 結構化文件（mint.json + introduction.mdx + authentication.mdx）
+- 不使用 `hono-openapi` + `zod-openapi`——Zod v4 不相容，改用手動方案
 
 ### Observability 擴充（v2.12）
 

@@ -1,9 +1,10 @@
-# Hono TypeScript API (v2.28)
+# Hono TypeScript API (v2.29)
 
 REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（Node.js server / AWS Lambda）。
 
 **特點：**
-- 9 個路由器（Routers）、32 個 API endpoints、396 個測試（42 檔案，coverage 80%+）
+- 9 個路由器（Routers）、32 個 API endpoints、428 個測試（45 檔案，coverage 80%+）
+- OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
 - Local Mode graceful degradation（無 OpenAI 時自動降級）
@@ -76,6 +77,20 @@ Client → Function URL / localhost:8002
 
 ---
 
+## API 文件
+
+啟動開發伺服器後即可存取：
+
+| 格式 | URL | 說明 |
+|------|-----|------|
+| OpenAPI JSON | `http://localhost:8002/openapi.json` | 機器可讀規格（可匯入 Postman / Swagger Editor） |
+| 互動式文件 | `http://localhost:8002/docs` | Scalar UI（可直接在瀏覽器測試 API） |
+| Mintlify 文件 | `api/docs/` 目錄 | 結構化文件（introduction + authentication） |
+
+> `/openapi.json` 和 `/docs` 不需要認證，也不受 rate limit 限制。
+
+---
+
 ## API 路由清單
 
 ### 1. 健康檢查 (health)
@@ -111,7 +126,7 @@ Client → Function URL / localhost:8002
 
 **三模式 Graceful Degradation:**
 - **Agent mode**（`AGENT_ENABLED=true` 或 `auto` + 有 OpenAI key）：LLM 自主決定 tool calling（search / get_qa_detail / list_categories / get_stats），多輪收集資訊後回答
-- **Full mode**（有 OpenAI key，agent 未啟用）：檢索相關 Q&A + GPT 生成回答
+- **RAG mode**（有 OpenAI key，agent 未啟用；或 request `mode: "rag"`）：單次檢索相關 Q&A + GPT 生成回答
 - **Context-only mode**（無 OpenAI key）：僅回傳相關 Q&A 內容
 
 **Response Metadata（v2.27）：** 每次回應附帶 `metadata` 欄位，記錄 model、provider、mode、embedding_model、input/output/total/reasoning tokens、duration_ms、retrieval_count、reranker_used。Agent mode 額外記錄 `tool_calls_count`、`agent_turns`。Session assistant message 同步記錄。
@@ -131,7 +146,7 @@ Client → Function URL / localhost:8002
 | GET | `/api/v1/sessions` | 列出所有對話 | ✓ | 60/min |
 | GET | `/api/v1/sessions/{id}` | 取得單個對話詳情 | ✓ | 60/min |
 | POST | `/api/v1/sessions` | 建立新對話 | ✓ | 20/min |
-| POST | `/api/v1/sessions/{id}/messages` | 新增訊息到對話（支援 context-only 降級） | ✓ | 20/min |
+| POST | `/api/v1/sessions/{id}/messages` | 新增訊息到對話（支援 `mode: "agent"\|"rag"` + context-only 降級） | ✓ | 20/min |
 | DELETE | `/api/v1/sessions/{id}` | 刪除對話 | ✓ | 60/min |
 
 ### 7. 回饋收集 (feedback) — 1 個 endpoint
@@ -232,7 +247,8 @@ curl -H "X-API-Key: your-api-key" http://localhost:8002/api/v1/qa
 ```
 api/
 ├── src/
-│   ├── index.ts              # 入口點（middleware + route mount + initStores()）
+│   ├── index.ts              # 入口點（middleware + route mount + OpenAPI/Scalar + initStores()）
+│   ├── openapi.ts            # OpenAPI 3.1 spec（29 paths, 32 endpoints）
 │   ├── lambda.ts             # Lambda 入口（cold start + hono/aws-lambda handler）
 │   ├── config.ts             # Zod 驗證環境變數 + paths
 │   ├── routes/               # 9 個路由
@@ -298,10 +314,14 @@ api/
 │       ├── keyword-boost.ts  # 4 層關鍵字加權
 │       ├── cjk-tokenizer.ts  # CJK 分詞 2-gram
 │       ├── sanitize.ts       # HTML escape 防 XSS
-│       ├── mode-detect.ts    # hasOpenAI() / hasSupabase() / isAgentEnabled() 偵測
+│       ├── mode-detect.ts    # hasOpenAI() / hasSupabase() / isAgentEnabled() / resolveMode() 偵測
 │       ├── observability.ts  # Laminar tracing
 │       └── laminar-scoring.ts  # Online scoring
-├── tests/                      # 42 個測試檔案，396 tests
+├── docs/                       # Mintlify API 文件
+│   ├── mint.json              # Mintlify 設定
+│   ├── introduction.mdx       # API 簡介
+│   └── authentication.mdx     # 認證說明
+├── tests/                      # 44 個測試檔案，421 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
@@ -440,9 +460,9 @@ pnpm test:watch               # 監視模式
 pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
-**測試套件統計（v2.28）：**
-- 總測試數：396 個（42 個測試檔案）
-- 通過：396/396 (100%)
+**測試套件統計（v2.29）：**
+- 總測試數：428 個（45 個測試檔案）
+- 通過：428/428 (100%)
 - 覆蓋率：80%+
 
 ---
@@ -483,4 +503,5 @@ curl -H "X-API-Key: your-api-key" http://localhost:8002/api/v1/qa
 - **架構圖**：[`/research/06b-architecture-diagram.md`](/research/06b-architecture-diagram.md)
 - **部署指南**：[`/research/07-deployment.md`](/research/07-deployment.md)
 - **專案說明**：[`/README.md`](/README.md)
+- **API 規格**：[`/openapi.json`](http://localhost:8002/openapi.json)（或 [`/docs`](http://localhost:8002/docs) 互動式探索）
 - **全域指令**：[`/CLAUDE.md`](/CLAUDE.md)
