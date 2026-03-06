@@ -180,6 +180,103 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | Faithfulness 評估           | 無獨立指令                                        | `/evaluate-faithfulness-local`                      | RAGAS：Answer 是否有幻覺（Claude Code as Judge）|
 | Context Precision 評估      | 無獨立指令                                        | `/evaluate-context-precision-local`                 | RAGAS：Retrieved contexts 相關性評估 |
 
+### Laminar Eval Groups ↔ 來源腳本 ↔ 評估對象
+
+```mermaid
+flowchart LR
+    subgraph Laminar["Laminar Dashboard Groups"]
+        G1["retrieval_quality"]
+        G2["report-quality"]
+        G3["keyword-retrieval"]
+        G4["retrieval-enhancement"]
+        G5["extraction_quality"]
+        G6["enrichment_quality"]
+        G7["chat_quality"]
+        G8["data-quality"]
+        G9["report-quality-eval"]
+    end
+
+    subgraph Scripts["來源腳本"]
+        S1["evals/eval_retrieval.py"]
+        S2["scripts/_eval_report.py"]
+        S3["scripts/_eval_laminar.py\n--group keyword-retrieval"]
+        S4["scripts/_eval_laminar.py\n--group retrieval-enhancement"]
+        S5["evals/eval_extraction.py"]
+        S6["evals/eval_enrichment.py"]
+        S7["evals/eval_chat.py"]
+        S8["scripts/_eval_data_quality.py"]
+        S9["scripts/_eval_laminar.py\n--mode report"]
+    end
+
+    subgraph Trigger["觸發方式"]
+        CI["eval.yml\n每次 push main"]
+        MAKE_EL["make eval-laminar"]
+        MAKE_ES["make eval-semantic"]
+        MANUAL["手動執行"]
+        ETL_CI["etl-and-deploy.yml\nquality gate"]
+    end
+
+    subgraph Target["評估什麼"]
+        T_SEARCH["POST /search\n關鍵字搜尋品質"]
+        T_REPORT["POST /reports/generate\n週報生成品質"]
+        T_ETL["Step 2 extract_qa.py\nQ&A 萃取品質"]
+        T_ENRICH["scripts/enrich_qa.py\n同義詞 + 時效性"]
+        T_CHAT["POST /chat\nRAG 問答品質"]
+        T_DATA["output/qa_final.json\n資料集整體品質"]
+    end
+
+    %% Scripts → Groups
+    S1 --> G1
+    S2 --> G2
+    S3 --> G3
+    S4 --> G4
+    S5 --> G5
+    S6 --> G6
+    S7 --> G7
+    S8 --> G8
+    S9 --> G9
+
+    %% Triggers → Scripts
+    CI --> S1
+    CI --> S5
+    MAKE_EL --> S3
+    MAKE_EL --> S4
+    MAKE_EL --> S9
+    MAKE_ES --> S3
+    MANUAL --> S2
+    MANUAL --> S6
+    MANUAL --> S7
+    MANUAL --> S8
+    ETL_CI --> S8
+
+    %% Scripts → What they evaluate
+    S1 --> T_SEARCH
+    S3 --> T_SEARCH
+    S4 --> T_SEARCH
+    S2 --> T_REPORT
+    S9 --> T_REPORT
+    S5 --> T_ETL
+    S6 --> T_ENRICH
+    S7 --> T_CHAT
+    S8 --> T_DATA
+```
+
+**Eval Groups 速查表**：
+
+| Laminar Group | 來源腳本 | 觸發方式 | 評估對象 | 指標 |
+|---------------|---------|---------|---------|------|
+| `retrieval_quality` | `evals/eval_retrieval.py` | CI 自動（每次 push） | 關鍵字搜尋 | keyword_hit_rate, top1_category, top5_coverage |
+| `keyword-retrieval` | `_eval_laminar.py` | `make eval-laminar` | 關鍵字搜尋 | hit_rate, mrr, precision, recall, f1, ndcg, top1_cat, top5_cov |
+| `retrieval-enhancement` | `_eval_laminar.py --group` | `make eval-laminar` | 同義詞增強搜尋 | synonym_coverage, kw_hit_with_synonyms, freshness_rank |
+| `report-quality` | `_eval_report.py` | 手動 | 週報生成 | section_coverage, kb_links, research_cited |
+| `report-quality-eval` | `_eval_laminar.py --mode report` | `make eval-laminar` | 週報生成 | section_coverage, kb_links, research_cited, overall |
+| `extraction_quality` | `evals/eval_extraction.py` | CI 自動（graceful skip） | Q&A 萃取 | qa_count_in_range, keyword_coverage, no_admin, avg_confidence |
+| `enrichment_quality` | `evals/eval_enrichment.py` | 手動 | 離線 enrichment | kw_hit_with_synonyms, freshness_rank, synonym_coverage |
+| `chat_quality` | `evals/eval_chat.py` | 手動 | RAG 問答 | answer_keyword_coverage, top_source_category |
+| `data-quality` | `_eval_data_quality.py` | ETL CI / 手動 | 資料集整體 | qa_count, avg_confidence, category_distribution |
+
+> **注意**：Dashboard 中的 `v2.12-fixed`、`v2.12-1317items`、`retrieval-eval-20...` 等為歷史一次性 run（測試或版本驗證），不是固定 group。
+
 ### 系統
 
 | 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
