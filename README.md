@@ -40,7 +40,7 @@
 ### 4. REST API 服務（Hono + TypeScript，`api/`）
 
 - **語意搜尋** — `POST /api/v1/search`（有 OpenAI: hybrid search，無 OpenAI: 原生 keyword search 自動降級）
-- **RAG 問答** — `POST /api/v1/chat`（有 OpenAI: RAG + GPT，無 OpenAI: context-only 自動降級）
+- **RAG 問答** — `POST /api/v1/chat`（三模式：Agent mode / Full RAG + GPT / Context-only 自動降級）
 - **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢，使用穩定的 16-char hex ID 或 seq number）
 - **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）
 - **對話管理** — `GET/POST/DELETE /api/v1/sessions/*`（CRUD、訊息歷史）
@@ -154,6 +154,7 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
 | 知識庫搜尋                  | `python scripts/qa_tools.py search --query "..."` | `/search <問題>`（不需要 OpenAI）                   | `POST /api/v1/search`                       |
 | RAG 問答                    | 無對應 — 需維護多輪歷史狀態                       | `/chat`（不需要 OpenAI）                            | `POST /api/v1/chat`                         |
+| Agentic RAG 問答            | 無對應                                            | `/chat-agent`（不需要 OpenAI，多輪自主搜尋）        | `POST /api/v1/chat`（`AGENT_ENABLED=true`） |
 | 對話管理（CRUD）            | 無對應                                            | 無對應                                              | `GET/POST/DELETE /api/v1/sessions/*`        |
 | 使用者回饋                  | 無對應                                            | 無對應                                              | `POST /api/v1/feedback`                     |
 
@@ -300,6 +301,7 @@ seo-knowledge-insight/
 │   │   ├── index.ts             # 入口（middleware + route mount）
 │   │   ├── config.ts            # Zod 驗證環境變數
 │   │   ├── routes/              # 9 個路由（qa/search/chat/reports/sessions/feedback/pipeline/health/synonyms）
+│   │   ├── agent/               # Agentic RAG（v2.28）— agent loop + tool definitions + executor + DI
 │   │   ├── middleware/           # auth / rate-limit / cors / error-handler
 │   │   ├── store/               # QAStore singleton + SearchEngine + SessionStore
 │   │   ├── services/            # embedding + rag-chat + pipeline-runner
@@ -308,8 +310,6 @@ seo-knowledge-insight/
 │   ├── Dockerfile               # Multi-stage Node.js build（node:22-slim）
 │   ├── package.json             # pnpm + tsup + vitest
 │   └── tsconfig.json
-├── app/                         # Python FastAPI（Legacy，port 8001，預計下線）
-│   └── ...
 ├── config.py                    # Pipeline 設定檔
 ├── pyproject.toml               # Package 定義（pip install -e . 用）
 ├── .env                         # 你的 API keys（從 .env.example 複製）
