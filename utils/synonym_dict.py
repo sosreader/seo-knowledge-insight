@@ -83,6 +83,13 @@ _SUPPLEMENTAL_SYNONYMS: dict[str, list[str]] = {
     "Position": ["排名", "平均排名", "搜尋位置", "average position"],
     "Clicks": ["點擊", "點擊數", "點擊量", "click count"],
     "分頁": ["pagination", "分頁器", "頁碼", "rel prev next"],
+    "Google News": ["Google 新聞", "焦點新聞", "News", "新聞流量", "Top Stories"],
+    "搜尋外觀": ["Search Appearance", "外觀", "SERP Feature", "搜尋結果外觀", "搜尋版位外觀"],
+    "GA4": ["Google Analytics 4", "GA", "分析工具", "事件追蹤", "GA4 事件"],
+    "Direct": ["直接流量", "Direct traffic", "直接造訪", "歸因 Direct"],
+    "圖片搜尋": ["Image Search", "Image SEO", "圖片 SEO", "Image", "alt 屬性", "alt text"],
+    "metadata": ["中繼資料", "meta tag", "meta 標籤", "頁面描述", "meta description"],
+    "路徑": ["URL 路徑", "頁面路徑", "path", "URL path", "網址路徑"],
 }
 
 

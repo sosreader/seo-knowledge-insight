@@ -51,6 +51,15 @@ export const STATIC_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
   "內容供給": ["當週文章", "文章數量", "文章頻率", "供給量"],
   "索引覆蓋率": ["Coverage", "有效 (Coverage)", "已索引頁面"],
   "版位": ["SERP 版位", "搜尋版位", "搜尋位置", "版位變化"],
+  "Google News": ["Google 新聞", "焦點新聞", "News", "新聞流量", "Top Stories"],
+  "搜尋外觀": ["Search Appearance", "外觀", "SERP Feature", "搜尋結果外觀", "搜尋版位外觀"],
+  "GA4": ["Google Analytics 4", "GA", "分析工具", "事件追蹤", "GA4 事件"],
+  "Direct": ["直接流量", "Direct traffic", "直接造訪", "歸因 Direct"],
+  "圖片搜尋": ["Image Search", "Image SEO", "圖片 SEO", "Image", "alt 屬性", "alt text"],
+  "行動版": ["手機版", "Mobile", "手機", "行動裝置", "mobile-friendly"],
+  "內部連結": ["Internal Link", "內部連結架構", "站內連結", "連結架構", "內連"],
+  "metadata": ["中繼資料", "meta tag", "meta 標籤", "頁面描述", "meta description"],
+  "路徑": ["URL 路徑", "頁面路徑", "path", "URL path", "網址路徑"],
 };
 
 class SynonymsStore {
