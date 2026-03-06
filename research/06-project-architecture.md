@@ -102,7 +102,18 @@ eval.tsx、useEvalDashboard.ts 及四個 Eval 組件（EvalMetricsCards/EvalProv
 
 ---
 
-### Pipeline 全景
+### Pipeline 全景（ETL 架構）
+
+本專案 pipeline 遵循經典 **ETL（Extract → Transform → Load）** 模式：
+
+| ETL 階段 | Pipeline 步驟 | 說明 |
+|----------|--------------|------|
+| **Extract** | Step 1：fetch | 從 Notion / Medium / iThome / Google Cases 擷取原始 Markdown |
+| **Transform** | Step 2：extract-qa | LLM 萃取 Q&A pairs |
+| | Step 3：dedupe-classify | 去重 + 分類 + embedding 向量化 |
+| **Load** | Step 3 產出 → Supabase | `qa_final.json` 寫入 pgvector，供 RAG 搜尋使用 |
+| （應用層） | Step 4：generate-report | RAG 週報生成（異常偵測 → Hybrid Search → LLM 生成） |
+| （評估層） | Step 5：evaluate | LLM-as-Judge 品質評估 |
 
 ```
 Notion 會議紀錄（87 份，2023–2026）
