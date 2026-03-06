@@ -254,7 +254,7 @@ Notion 會議紀錄（87 份，2023–2026）
 - `api/src/tests/services/reranker.test.ts`（新建）：4 個測試
   - 正常 rerank / 空結果 fallback / 錯誤恢復 / score 排序
 
-**前端更新**（vocus-admin-dev，branch: feat/admin-seo-insight）
+**前端更新**（vocus-web-ui，branch: feat/admin-seo-insight）
 - `apis/seoInsight.api.ts`：EvalRetrievalResponse 擴展
   - 新增欄位：`avg_precision_at_k`、`avg_recall_at_k`、`f1_score`
 - `components/admin/seoInsight/EvalMetricsCards.tsx`：從 3 欄擴展至 5 欄

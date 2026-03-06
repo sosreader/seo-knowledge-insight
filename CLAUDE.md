@@ -169,10 +169,10 @@ pnpm install           # 首次安裝依賴
 pnpm dev               # 啟動開發伺服器（tsx watch，port 8002）
 ```
 
-前端開發環境（vocus-admin-dev）：
+前端開發環境（vocus-web-ui）：
 
 ```bash
-cd ../vocus-admin-dev
+cd ../vocus-web-ui
 git checkout feat/admin-seo-insight  # 切換到前端開發分支
 pnpm install
 pnpm dev               # 啟動前端伺服器（http://localhost:3000）

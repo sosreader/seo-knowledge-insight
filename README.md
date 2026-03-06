@@ -580,7 +580,7 @@ flowchart TD
     end
 
     subgraph FE["前端開發（另一個 repo）"]
-        FE_DEV["cd vocus-admin-dev\npnpm dev\nport 3000"] -->|"seoFetch\nport 8002"| START
+        FE_DEV["cd vocus-web-ui\npnpm dev\nport 3000"] -->|"seoFetch\nport 8002"| START
     end
 
     QA_JSON --> MIGRATE["make migrate-supabase\n→ Supabase pgvector"]
@@ -611,7 +611,7 @@ flowchart TD
         LMN["Laminar\nEval Dashboard"]
     end
 
-    subgraph FE_Repo["前端（vocus-admin-dev）"]
+    subgraph FE_Repo["前端（vocus-web-ui）"]
         FRONTEND["Next.js\n6 頁 SPA"]
     end
 

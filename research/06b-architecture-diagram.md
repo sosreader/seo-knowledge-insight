@@ -50,7 +50,7 @@ flowchart TD
         S4 --> RPT[report_YYYYMMDD.md]
     end
 
-    subgraph Frontend["Frontend（vocus-admin-dev，Next.js，port 3000）"]
+    subgraph Frontend["Frontend（vocus-web-ui，Next.js，port 3000）"]
         FE["6 頁 SPA<br/>Q&A Chunk / QA 詳情 / RAG 問答<br/>SEO 週報 / Pipeline / 同義詞管理"]
         FE --> FEHOOK["Custom Hooks<br/>useQAFilters / useEvalDashboard"]
         FE --> FECOMP["Components<br/>ChatMessage（null content 支援）<br/>EvalMetricsCards / EvalProviderComparison<br/>EvalSampleTable / EvalSaveForm<br/>PipelineMetrics / QAFilterToolbar"]
