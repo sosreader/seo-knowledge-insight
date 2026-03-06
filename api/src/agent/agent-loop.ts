@@ -184,6 +184,9 @@ export async function agentChat(
     messages.push(choice.message);
 
     for (const toolCall of choice.message.tool_calls) {
+      // Skip non-function tool calls (e.g. custom tools)
+      if (toolCall.type !== "function") continue;
+
       const name = toolCall.function.name;
 
       // Runtime whitelist — reject unknown tool names from LLM

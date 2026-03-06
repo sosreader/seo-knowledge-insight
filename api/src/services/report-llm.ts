@@ -313,7 +313,7 @@ export async function generateReportLlm(
 
   // gpt-5 series may put content in reasoning_content
   if (!reportBody) {
-    const reasoning = (msg as Record<string, unknown>)?.reasoning_content;
+    const reasoning = (msg as unknown as Record<string, unknown>)?.reasoning_content;
     if (typeof reasoning === "string" && reasoning.length > 0) {
       reportBody = reasoning;
     }

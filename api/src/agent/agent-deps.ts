@@ -24,8 +24,7 @@ export function createAgentDeps(): AgentDeps {
     },
 
     listCategories: () => {
-      const cats = qaStore.categories();
-      return cats.map((c) => c.category);
+      return [...qaStore.categories()];
     },
 
     getStats: () => ({
