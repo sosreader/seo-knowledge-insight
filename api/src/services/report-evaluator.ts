@@ -109,14 +109,22 @@ export function evaluateReport(
   // 5. alert_coverage: alert names appearing in 五、本週優先行動清單
   // alertNames should be only the metrics that triggered alerts (CORE + threshold breach),
   // not all metric keys. When no alerts exist, coverage defaults to 1 (nothing to cover).
+  // Uses fuzzy matching: "AMP Article" matches "AMP Article Ratio", partial substring OK.
   const actionSection = extractSection(body, "## 五、");
   let alert_coverage = 0;
   if (alertNames.length === 0) {
     alert_coverage = 1; // No alerts → nothing to cover → full credit
   } else {
-    const mentioned = alertNames.filter((name) =>
-      actionSection.includes(name),
-    ).length;
+    const sectionLower = actionSection.toLowerCase();
+    const mentioned = alertNames.filter((name) => {
+      const nameLower = name.toLowerCase();
+      // Exact match or fuzzy: alert name is substring of section content
+      if (sectionLower.includes(nameLower)) return true;
+      // Reverse: section contains a word-level match (e.g. "News(new)" → "News")
+      const coreName = nameLower.replace(/\s*\(.*?\)\s*/g, "").trim();
+      if (coreName.length >= 2 && sectionLower.includes(coreName)) return true;
+      return false;
+    }).length;
     alert_coverage = mentioned / alertNames.length;
   }
 

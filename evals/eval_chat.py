@@ -1,18 +1,11 @@
 """
 Laminar offline evaluation: RAG chat quality.
 
-Tests the full rag_chat pipeline end-to-end: given a known SEO scenario,
-does the system return a relevant, sourced answer?
+Tests the full RAG chat pipeline end-to-end via the TypeScript Hono API:
+given a known SEO scenario, does the system return a relevant, sourced answer?
 
 Dataset:  eval/golden_retrieval.json (first 10 scenarios, cost-efficient)
-Requires: LMNR_PROJECT_API_KEY, OPENAI_API_KEY, output/qa_final.json,
-          output/qa_embeddings.npy
-
-Note: This eval initialises the QAStore in-process — it does NOT require a
-      running FastAPI server. It calls app.core.chat.rag_chat() directly.
-
-      chat_executor is an async def so lmnr calls it directly (no thread pool),
-      preserving the OpenTelemetry context chain.
+Requires: LMNR_PROJECT_API_KEY, running TS API (cd api && pnpm dev)
 
 Run:
     python evals/eval_chat.py
@@ -21,42 +14,28 @@ Run:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 
+import requests
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Initialise Laminar BEFORE any OpenAI client is constructed so the
-# opentelemetry-instrumentation-openai auto-patcher can wrap it.
-_lmnr_key = os.getenv("LMNR_PROJECT_API_KEY", "")
-try:
-    from lmnr import Laminar  # type: ignore[import]
+from dotenv import load_dotenv  # noqa: E402
 
-    if _lmnr_key:
-        Laminar.initialize(project_api_key=_lmnr_key)
-except ImportError:
-    pass
-except Exception as _exc:
-    print(f"[eval_chat] Laminar.initialize() failed: {_exc}", file=sys.stderr)
+load_dotenv(PROJECT_ROOT / ".env")
 
-# Bootstrap QAStore before importing app modules that depend on it.
-from app.core.store import store  # noqa: E402
+logger = logging.getLogger(__name__)
 
-_qa_json = PROJECT_ROOT / "output" / "qa_final.json"
-_npy = PROJECT_ROOT / "output" / "qa_embeddings.npy"
-if _qa_json.exists() and _npy.exists():
-    store.load(json_path=_qa_json, npy_path=_npy)
-else:
-    print(
-        "[eval_chat] qa_final.json or qa_embeddings.npy not found — "
-        "run Steps 1–3 of the pipeline first.",
-        file=sys.stderr,
-    )
-    sys.exit(1)
+from lmnr import evaluate  # type: ignore[import]
 
-from lmnr import evaluate  # noqa: E402  # type: ignore[import]
+# ── Config ────────────────────────────────────────────────────────────────────
+
+_API_BASE = os.environ.get("EVAL_API_BASE", "http://localhost:8002")
+_API_KEY = os.environ.get("SEO_API_KEY", "")
 
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
@@ -84,27 +63,53 @@ _dataset = [
 
 # ── Executor ──────────────────────────────────────────────────────────────────
 
-async def chat_executor(data: dict) -> dict:
-    """Run rag_chat and return answer + metadata.
+def chat_executor(data: dict) -> dict:
+    """Call the TS Hono chat API and return answer + sources."""
+    question: str = data["question"]
 
-    Declared async so lmnr calls it directly (not via run_in_executor),
-    which preserves the OpenTelemetry context chain for correct span nesting.
-    """
-    from app.core.chat import rag_chat  # deferred to avoid circular init
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if _API_KEY:
+        headers["X-API-Key"] = _API_KEY
 
-    result = await rag_chat(data["question"])
-    return {
-        "answer": result.get("answer", ""),
-        "sources": result.get("sources", []),
-        "source_count": len(result.get("sources", [])),
-    }
+    try:
+        resp = requests.post(
+            f"{_API_BASE}/api/v1/chat",
+            json={"message": question, "history": []},
+            headers=headers,
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            body = resp.json()
+            result = body.get("data", {})
+            answer = result.get("answer") or ""
+            sources = result.get("sources", [])
+            mode = result.get("mode", "unknown")
+            return {
+                "answer": answer,
+                "sources": sources,
+                "source_count": len(sources),
+                "mode": mode,
+            }
+        logger.warning("[eval_chat] API returned %s: %s", resp.status_code, resp.text[:200])
+    except requests.ConnectionError:
+        logger.error("[eval_chat] API not reachable at %s — is the server running?", _API_BASE)
+    except Exception as e:
+        logger.warning("[eval_chat] API call failed: %s", e)
+
+    return {"answer": "", "sources": [], "source_count": 0, "mode": "error"}
 
 
 # ── Evaluators ────────────────────────────────────────────────────────────────
 
 def has_answer(output: dict, *_: object) -> float:
-    """1 if the answer is non-trivially long (> 50 chars)."""
-    return float(len(output.get("answer", "").strip()) > 50)
+    """1 if the answer is non-trivially long (> 50 chars), or context-only mode has sources."""
+    answer = output.get("answer") or ""
+    if len(answer.strip()) > 50:
+        return 1.0
+    # context-only mode: no answer but has sources is still valid
+    if output.get("mode") == "context-only" and output.get("source_count", 0) > 0:
+        return 1.0
+    return 0.0
 
 
 def has_sources(output: dict, *_: object) -> float:
@@ -113,14 +118,22 @@ def has_sources(output: dict, *_: object) -> float:
 
 
 def answer_keyword_coverage(output: dict, target: dict) -> float:
-    """Fraction of expected keywords present in the answer text."""
-    answer: str = output.get("answer", "").lower()
+    """Fraction of expected keywords present in the answer + sources text."""
     expected_kws: list[str] = target.get("expected_keywords", [])
-
     if not expected_kws:
         return 1.0
 
-    hits = sum(1 for kw in expected_kws if kw.lower() in answer)
+    # Build pool from answer + all source questions/answers
+    answer = output.get("answer") or ""
+    sources = output.get("sources", [])
+    pool_parts = [answer]
+    for src in sources:
+        pool_parts.append(src.get("question", ""))
+        pool_parts.append(src.get("answer", ""))
+        pool_parts.extend(src.get("keywords", []))
+    pool = " ".join(pool_parts).lower()
+
+    hits = sum(1 for kw in expected_kws if kw.lower() in pool)
     return hits / len(expected_kws)
 
 

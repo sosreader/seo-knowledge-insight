@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import sys
 from pathlib import Path
@@ -59,6 +60,36 @@ _dataset = [
 
 # ── Executor ──────────────────────────────────────────────────────────────────
 
+_API_BASE = os.environ.get("EVAL_API_BASE", "http://localhost:8002")
+_API_KEY = os.environ.get("SEO_API_KEY", "")
+
+
+def _search_via_api(query: str, top_k: int = 5) -> list[dict] | None:
+    """Try calling the actual search API. Returns None if server unavailable."""
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if _API_KEY:
+        headers["X-API-Key"] = _API_KEY
+
+    try:
+        resp = requests.post(
+            f"{_API_BASE}/api/v1/search",
+            json={"query": query, "top_k": top_k},
+            headers=headers,
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            body = resp.json()
+            results = body.get("data", {}).get("results", [])
+            if results:
+                return results
+        logger.warning("[eval_retrieval] API returned %s", resp.status_code)
+    except requests.ConnectionError:
+        logger.info("[eval_retrieval] API not reachable, falling back to naive search")
+    except Exception as e:
+        logger.warning("[eval_retrieval] API call failed: %s", e)
+    return None
+
+
 def _load_qa_items() -> list[dict]:
     """Load QA items from local file first, fallback to Supabase REST API."""
     qa_final_path = PROJECT_ROOT / "output" / "qa_final.json"
@@ -100,11 +131,8 @@ def _load_qa_items() -> list[dict]:
     return items
 
 
-def retrieval_executor(data: dict) -> dict:
-    """Keyword-based search over QA items (local file or Supabase fallback)."""
-    query: str = data["query"]
-    qa_items = _load_qa_items()
-
+def _naive_search(query: str, qa_items: list[dict]) -> list[dict]:
+    """Fallback: naive token-based search when API is unavailable."""
     query_tokens = set(query.lower().split())
     scored: list[tuple[float, dict]] = []
 
@@ -119,9 +147,22 @@ def retrieval_executor(data: dict) -> dict:
             scored.append((hits, qa))
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    results = [qa for _, qa in scored[:5]]
+    return [qa for _, qa in scored[:5]]
 
-    return {"results": results, "query": query}
+
+def retrieval_executor(data: dict) -> dict:
+    """Search via actual API first, fallback to naive keyword search."""
+    query: str = data["query"]
+
+    # 1. Try the real search API (keyword + synonym + hybrid)
+    api_results = _search_via_api(query)
+    if api_results is not None:
+        return {"results": api_results[:5], "query": query, "source": "api"}
+
+    # 2. Fallback to naive search
+    qa_items = _load_qa_items()
+    results = _naive_search(query, qa_items)
+    return {"results": results, "query": query, "source": "naive"}
 
 
 # ── Evaluators ────────────────────────────────────────────────────────────────
@@ -174,6 +215,65 @@ def top5_category_coverage(output: dict, target: dict) -> float:
     return matches / len(results)
 
 
+def hit_rate(output: dict, target: dict) -> float:
+    """1 if at least one top-K result's category is in expected_categories."""
+    results: list[dict] = output.get("results", [])
+    expected_cats: set[str] = set(target.get("expected_categories", []))
+    return 1.0 if any(r.get("category", "") in expected_cats for r in results) else 0.0
+
+
+def mrr(output: dict, target: dict) -> float:
+    """Mean Reciprocal Rank: 1/rank of first category-matching result."""
+    results: list[dict] = output.get("results", [])
+    expected_cats: set[str] = set(target.get("expected_categories", []))
+    for rank, r in enumerate(results, start=1):
+        if r.get("category", "") in expected_cats:
+            return 1.0 / rank
+    return 0.0
+
+
+def precision_at_k(output: dict, target: dict) -> float:
+    """Precision@K: fraction of top-K results with matching category."""
+    results: list[dict] = output.get("results", [])
+    expected_cats: set[str] = set(target.get("expected_categories", []))
+    if not results:
+        return 0.0
+    relevant = sum(1 for r in results if r.get("category", "") in expected_cats)
+    return relevant / len(results)
+
+
+def recall_at_k(output: dict, target: dict) -> float:
+    """Recall@K: fraction of expected_categories covered by top-K results."""
+    results: list[dict] = output.get("results", [])
+    expected_cats: set[str] = set(target.get("expected_categories", []))
+    if not expected_cats:
+        return 1.0
+    retrieved_cats = {r.get("category", "") for r in results}
+    return len(retrieved_cats & expected_cats) / len(expected_cats)
+
+
+def ndcg_at_k(output: dict, target: dict) -> float:
+    """NDCG@K: normalized discounted cumulative gain (Jarvelin & Kekalainen, 2002)."""
+    results: list[dict] = output.get("results", [])
+    expected_cats: set[str] = set(target.get("expected_categories", []))
+    if not expected_cats:
+        return 1.0
+    if not results:
+        return 0.0
+
+    found_cats: set[str] = set()
+    dcg = 0.0
+    for rank, r in enumerate(results, start=1):
+        cat = r.get("category", "")
+        if cat in expected_cats and cat not in found_cats:
+            dcg += 1.0 / math.log2(rank + 1)
+            found_cats.add(cat)
+
+    n_perfect = min(len(expected_cats), len(results))
+    idcg = sum(1.0 / math.log2(i + 2) for i in range(n_perfect))
+    return dcg / idcg if idcg > 0 else 0.0
+
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 evaluate(
@@ -183,6 +283,11 @@ evaluate(
         "keyword_hit_rate": keyword_hit_rate,
         "top1_category_match": top1_category_match,
         "top5_category_coverage": top5_category_coverage,
+        "hit_rate": hit_rate,
+        "mrr": mrr,
+        "precision_at_k": precision_at_k,
+        "recall_at_k": recall_at_k,
+        "ndcg_at_k": ndcg_at_k,
     },
     group_name="retrieval_quality",
 )

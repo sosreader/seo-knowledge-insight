@@ -2,307 +2,246 @@
   {
     "scenario": "Discover 流量大幅下降",
     "query": "Discover 流量 大幅下降 探索演算法 內容策略",
-    "expected_keywords": [
-      "Discover",
-      "流量",
-      "AMP",
-      "探索"
-    ],
-    "expected_categories": [
-      "Discover與AMP",
-      "演算法與趨勢"
-    ],
+    "expected_keywords": ["Discover", "流量", "AMP", "探索"],
+    "expected_categories": ["Discover與AMP", "演算法與趨勢"],
     "description": "Discover 月趨勢異常下滑"
   },
   {
     "scenario": "CTR 持續下降",
     "query": "CTR 持續下降 原因解讀 如何改善搜尋外觀",
-    "expected_keywords": [
-      "CTR",
-      "點擊率",
-      "SERP",
-      "曝光"
-    ],
-    "expected_categories": [
-      "搜尋表現分析",
-      "內容策略"
-    ],
+    "expected_keywords": ["CTR", "點擊率", "SERP", "曝光"],
+    "expected_categories": ["搜尋表現分析", "內容策略"],
     "description": "CTR 持續惡化，區分曝光池縮小 vs 排名外觀問題"
   },
   {
     "scenario": "檢索未索引大幅增加",
     "query": "檢索未索引增加 WAF 封鎖 Googlebot 伺服器錯誤",
-    "expected_keywords": [
-      "索引",
-      "Coverage",
-      "Googlebot",
-      "canonical",
-      "WAF"
-    ],
-    "expected_categories": [
-      "索引與檢索",
-      "技術SEO"
-    ],
+    "expected_keywords": ["索引", "Coverage", "Googlebot", "canonical", "WAF"],
+    "expected_categories": ["索引與檢索", "技術SEO"],
     "description": "未索引頁面月趨勢 +80% 異常增加"
   },
   {
     "scenario": "Organic Search 工作階段下降",
     "query": "Organic Search 工作階段下降 GSC 點擊 vs GA 落差",
-    "expected_keywords": [
-      "Organic",
-      "工作階段",
-      "排名",
-      "GSC",
-      "GA"
-    ],
-    "expected_categories": [
-      "搜尋表現分析",
-      "GA與數據追蹤"
-    ],
+    "expected_keywords": ["Organic", "工作階段", "排名", "GSC", "GA"],
+    "expected_categories": ["搜尋表現分析", "GA與數據追蹤"],
     "description": "GA Organic Search session 下滑"
   },
   {
     "scenario": "AMP Article 幾乎歸零",
     "query": "AMP Article 流量下降 焦點新聞 索引問題 時效供給",
-    "expected_keywords": [
-      "AMP",
-      "Article",
-      "焦點新聞",
-      "Discover",
-      "News"
-    ],
-    "expected_categories": [
-      "Discover與AMP",
-      "技術SEO"
-    ],
+    "expected_keywords": ["AMP", "Article", "焦點新聞", "Discover", "News"],
+    "expected_categories": ["Discover與AMP", "技術SEO"],
     "description": "AMP Article 月趨勢 -114%"
   },
   {
     "scenario": "曝光大幅上升但點擊未同步",
     "query": "曝光上升點擊未同步 外觀型曝光 SERP 版位變化",
-    "expected_keywords": [
-      "曝光",
-      "點擊",
-      "CTR",
-      "SERP",
-      "外觀"
-    ],
-    "expected_categories": [
-      "搜尋表現分析"
-    ],
+    "expected_keywords": ["曝光", "點擊", "CTR", "SERP", "外觀"],
+    "expected_categories": ["搜尋表現分析"],
     "description": "曝光增加但 CTR 降低"
   },
   {
     "scenario": "內部連結架構優化",
     "query": "內部連結架構優化 每頁連結數 重要頁面分配",
-    "expected_keywords": [
-      "內部連結",
-      "連結",
-      "架構",
-      "權重"
-    ],
-    "expected_categories": [
-      "連結策略"
-    ],
+    "expected_keywords": ["內部連結", "連結", "架構", "權重"],
+    "expected_categories": ["連結策略"],
     "description": "每頁內部連結過少或分佈不均"
   },
   {
     "scenario": "結構化資料覆蓋率下降",
     "query": "結構化資料比例下降 AggregateRating FAQ VideoObject 如何補強",
-    "expected_keywords": [
-      "結構化資料",
-      "Schema",
-      "rich result",
-      "AMP"
-    ],
-    "expected_categories": [
-      "技術SEO"
-    ],
+    "expected_keywords": ["結構化資料", "Schema", "rich result", "AMP"],
+    "expected_categories": ["技術SEO"],
     "description": "結構化 Ratio 惡化"
   },
   {
     "scenario": "GA4 追蹤問題 unassigned 增加",
     "query": "GA4 unassigned 流量 追蹤設定問題 歸因錯誤",
-    "expected_keywords": [
-      "GA4",
-      "追蹤",
-      "事件",
-      "歸因",
-      "unassigned"
-    ],
-    "expected_categories": [
-      "GA與數據追蹤"
-    ],
+    "expected_keywords": ["GA4", "追蹤", "事件", "歸因", "unassigned"],
+    "expected_categories": ["GA與數據追蹤"],
     "description": "GA4 出現大量 unassigned 來源"
   },
   {
     "scenario": "Canonical 設定混亂 Google 選擇不同版本",
     "query": "canonical 重複頁面 Google 選擇不同版本 如何修正",
-    "expected_keywords": [
-      "canonical",
-      "重複",
-      "索引",
-      "URL"
-    ],
-    "expected_categories": [
-      "索引與檢索",
-      "技術SEO"
-    ],
+    "expected_keywords": ["canonical", "重複", "索引", "URL"],
+    "expected_categories": ["索引與檢索", "技術SEO"],
     "description": "重覆頁面 Google 選擇增加"
   },
   {
     "scenario": "Video Appearance 歸零",
     "query": "Video Appearance 消失 VideoObject 結構化資料 SERP 影片縮圖",
-    "expected_keywords": [
-      "Video",
-      "影片",
-      "結構化資料",
-      "SERP"
-    ],
-    "expected_categories": [
-      "技術SEO",
-      "搜尋表現分析"
-    ],
+    "expected_keywords": ["Video", "影片", "結構化資料", "SERP"],
+    "expected_categories": ["技術SEO", "搜尋表現分析"],
     "description": "Video Appearance 完全歸零"
   },
   {
     "scenario": "Google News 流量下降",
     "query": "Google News 流量下降 AMP 與 News 導頁關係 時效內容",
-    "expected_keywords": [
-      "Google News",
-      "AMP",
-      "News",
-      "時效"
-    ],
-    "expected_categories": [
-      "Discover與AMP",
-      "內容策略"
-    ],
+    "expected_keywords": ["Google News", "AMP", "News", "時效"],
+    "expected_categories": ["Discover與AMP", "內容策略"],
     "description": "Google News session 下滑"
   },
   {
     "scenario": "伺服器回應時間上升",
     "query": "伺服器回應時間 TTFB 影響 SEO 爬蟲抓取 索引頻率",
-    "expected_keywords": [
-      "伺服器",
-      "回應時間",
-      "爬蟲",
-      "索引",
-      "TTFB"
-    ],
-    "expected_categories": [
-      "技術SEO",
-      "索引與檢索"
-    ],
+    "expected_keywords": ["伺服器", "回應時間", "爬蟲", "索引", "TTFB"],
+    "expected_categories": ["技術SEO", "索引與檢索"],
     "description": "回應時間突然上升"
   },
   {
     "scenario": "/user 路徑流量大幅下降",
     "query": "/user 頁面流量下降 用戶頁面 noindex 是否應索引",
-    "expected_keywords": [
-      "user",
-      "noindex",
-      "索引",
-      "路徑"
-    ],
-    "expected_categories": [
-      "索引與檢索",
-      "平台策略"
-    ],
+    "expected_keywords": ["user", "noindex", "索引", "路徑"],
+    "expected_categories": ["索引與檢索", "平台策略"],
     "description": "/user 月趨勢 -34%"
   },
   {
     "scenario": "手機 Core Web Vitals 劣化",
     "query": "手機 Core Web Vitals 差 LCP CLS 如何改善 行動版體驗",
-    "expected_keywords": [
-      "Core Web Vitals",
-      "手機",
-      "LCP",
-      "行動版",
-      "體驗"
-    ],
-    "expected_categories": [
-      "技術SEO"
-    ],
+    "expected_keywords": ["Core Web Vitals", "手機", "LCP", "行動版", "體驗"],
+    "expected_categories": ["技術SEO"],
     "description": "手機差的頁面數增加"
   },
   {
     "scenario": "AI 來源流量佔比偏低",
     "query": "AI 流量佔比 ChatGPT Perplexity Gemini AI SEO 策略",
-    "expected_keywords": [
-      "AI",
-      "GPT",
-      "Gemini",
-      "Perplexity",
-      "來源"
-    ],
-    "expected_categories": [
-      "演算法與趨勢",
-      "GA與數據追蹤"
-    ],
+    "expected_keywords": ["AI", "GPT", "Gemini", "Perplexity", "來源"],
+    "expected_categories": ["演算法與趨勢", "GA與數據追蹤"],
     "description": "AI 占比極低，評估 AI-SEO 策略必要性"
   },
   {
     "scenario": "圖片搜尋流量下降",
     "query": "圖片搜尋流量下降 Image SEO alt metadata 優化",
-    "expected_keywords": [
-      "Image",
-      "圖片",
-      "alt",
-      "metadata"
-    ],
-    "expected_categories": [
-      "技術SEO",
-      "搜尋表現分析"
-    ],
+    "expected_keywords": ["Image", "圖片", "alt", "metadata"],
+    "expected_categories": ["技術SEO", "搜尋表現分析"],
     "description": "Image 月趨勢 -26%"
   },
   {
     "scenario": "GSC 探索流量被計入 GA Direct",
     "query": "GSC Discover 流量 GA Direct 歸因差異 AMP 流量計算",
-    "expected_keywords": [
-      "Discover",
-      "Direct",
-      "GA",
-      "GSC",
-      "AMP",
-      "歸因"
-    ],
-    "expected_categories": [
-      "GA與數據追蹤",
-      "Discover與AMP"
-    ],
+    "expected_keywords": ["Discover", "Direct", "GA", "GSC", "AMP", "歸因"],
+    "expected_categories": ["GA與數據追蹤", "Discover與AMP"],
     "description": "GSC Discover 與 GA Direct 差距擴大"
   },
   {
     "scenario": "有效頁面數持續下滑",
     "query": "有效頁面數下降 Coverage 有效頁減少 索引壓力",
-    "expected_keywords": [
-      "Coverage",
-      "有效",
-      "索引",
-      "頁面"
-    ],
-    "expected_categories": [
-      "索引與檢索",
-      "技術SEO"
-    ],
+    "expected_keywords": ["Coverage", "有效", "索引", "頁面"],
+    "expected_categories": ["索引與檢索", "技術SEO"],
     "description": "有效 Coverage 月趨勢 -5%"
   },
   {
     "scenario": "當週文章數銳減影響整體曝光",
     "query": "當週文章數減少 內容供給 SEO 流量 曝光池縮小",
-    "expected_keywords": [
-      "文章",
-      "內容",
-      "曝光",
-      "供給",
-      "Discover"
-    ],
-    "expected_categories": [
-      "內容策略",
-      "Discover與AMP"
-    ],
+    "expected_keywords": ["文章", "內容", "曝光", "供給", "Discover"],
+    "expected_categories": ["內容策略", "Discover與AMP"],
     "description": "content supply 下降導致曝光縮水"
+  },
+  {
+    "scenario": "Search Console 搜尋外觀 FAQ 結構化資料異常",
+    "query": "Search Console 搜尋外觀 結構化資料 FAQ 變動",
+    "expected_keywords": ["Search Console", "搜尋外觀", "結構化資料", "FAQ"],
+    "expected_categories": ["技術SEO", "搜尋表現分析"],
+    "description": "Medium 文章來源：GSC 搜尋外觀報表 FAQ 大幅變動分析"
+  },
+  {
+    "scenario": "AI 生成內容的 SEO 風險評估",
+    "query": "AI 生成內容 SEO 風險 E-E-A-T 品質",
+    "expected_keywords": ["AI", "E-E-A-T", "內容", "品質"],
+    "expected_categories": ["內容策略", "演算法與趨勢"],
+    "description": "Medium 文章來源：AI 內容品質與 E-E-A-T 風險"
+  },
+  {
+    "scenario": "AMP 退場後的技術替代方案",
+    "query": "AMP 退場 Core Web Vitals PageSpeed 替代",
+    "expected_keywords": ["AMP", "Core Web Vitals", "PageSpeed"],
+    "expected_categories": ["Discover與AMP", "技術SEO"],
+    "description": "Medium 文章來源：AMP 退場策略與 CWV 替代"
+  },
+  {
+    "scenario": "語意相關的連結建設策略",
+    "query": "語意相關 連結建設 錨點文字 內部連結優化",
+    "expected_keywords": ["連結", "錨點文字", "內部連結", "語意"],
+    "expected_categories": ["連結策略"],
+    "description": "Medium 文章來源：2020 年後連結策略質變分析"
+  },
+  {
+    "scenario": "GA 與 Search Console Discover 數據不一致",
+    "query": "GA Discover 流量數據 Search Console 歸因差異",
+    "expected_keywords": ["GA", "Discover", "Search Console", "歸因"],
+    "expected_categories": ["GA與數據追蹤"],
+    "description": "Medium 文章來源：數據不一致根因分析"
+  },
+  {
+    "scenario": "Search Console KPI 指標體系",
+    "query": "Search Console KPI 流量 曝光 點擊 指標分析",
+    "expected_keywords": ["Search Console", "KPI", "流量", "曝光", "點擊"],
+    "expected_categories": ["搜尋表現分析"],
+    "description": "iThome 文章來源：GSC 27 組 KPI 指標分析"
+  },
+  {
+    "scenario": "品牌關鍵字與非品牌流量評估",
+    "query": "品牌關鍵字 非品牌流量 SEO 成效評估",
+    "expected_keywords": ["品牌", "關鍵字", "流量", "排名"],
+    "expected_categories": ["搜尋表現分析"],
+    "description": "iThome 文章來源：品牌字排名不等於 SEO 做得好"
+  },
+  {
+    "scenario": "影片 SEO VideoObject 實作",
+    "query": "影片 SEO VideoObject 結構化資料 影片索引",
+    "expected_keywords": ["影片", "VideoObject", "結構化資料", "索引"],
+    "expected_categories": ["技術SEO"],
+    "description": "Google Case Study 來源：影片標記提升索引量"
+  },
+  {
+    "scenario": "Event 結構化資料提升搜尋流量",
+    "query": "Event 結構化資料 schema.org 活動搜尋 Rich Results",
+    "expected_keywords": ["Event", "結構化資料", "schema", "Rich Results"],
+    "expected_categories": ["技術SEO"],
+    "description": "Google Case Study 來源：Eventbrite 活動搜尋案例"
+  },
+  {
+    "scenario": "多語言影片 SEO 與 Key Moments",
+    "query": "多語言 SEO 影片 Key Moments 跨區域流量",
+    "expected_keywords": ["影片", "Key Moments", "多語言"],
+    "expected_categories": ["技術SEO"],
+    "description": "Google Case Study 來源：跨區域影片 SEO 最佳做法"
+  },
+  {
+    "scenario": "內部連結結構與爬取效率",
+    "query": "內部連結 六度分隔 爬取效率 網站架構",
+    "expected_keywords": ["內部連結", "連結", "爬取", "架構"],
+    "expected_categories": ["連結策略", "索引與檢索"],
+    "description": "iThome 文章來源：六度分隔理論評估連結結構"
+  },
+  {
+    "scenario": "Vocus 平台 SEO 經營策略",
+    "query": "vocus 創作者 SEO 平台經營 自訂網域",
+    "expected_keywords": ["創作者", "SEO", "平台", "自訂網域"],
+    "expected_categories": ["平台策略"],
+    "description": "平台策略：vocus 圖文 SEO 方案與創作者媒合"
+  },
+  {
+    "scenario": "Sitemap 提交與 CMS API 整合",
+    "query": "Sitemap 提交 URL Inspection API CMS 整合",
+    "expected_keywords": ["Sitemap", "API", "URL", "索引"],
+    "expected_categories": ["技術SEO", "索引與檢索"],
+    "description": "Google Case Study 來源：Wix CMS × Google API 整合"
+  },
+  {
+    "scenario": "Discover 大圖優化 max-image-preview",
+    "query": "圖片 max-image-preview Discover 大圖 CTR",
+    "expected_keywords": ["max-image-preview", "Discover", "CTR", "圖片"],
+    "expected_categories": ["Discover與AMP", "技術SEO"],
+    "description": "Google Case Study 來源：max-image-preview 提升 Discover CTR"
+  },
+  {
+    "scenario": "外部連結品質與交換連結風險",
+    "query": "外部連結 交換連結 風險偵測 連結品質",
+    "expected_keywords": ["外部連結", "交換連結", "連結", "風險"],
+    "expected_categories": ["連結策略"],
+    "description": "iThome 文章來源：Search Console 連結分布偵測交換連結"
   }
 ]

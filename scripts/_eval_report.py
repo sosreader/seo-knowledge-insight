@@ -77,13 +77,23 @@ def evaluate_report(content: str, alert_names: list[str]) -> dict[str, float]:
     # 4. has_kb_links
     has_kb_links = 1.0 if KB_LINK_RE.search(content) else 0.0
 
-    # 5. alert_coverage
+    # 5. alert_coverage (fuzzy: substring + core-name match)
     action_section = _extract_section(content, "## 五、")
     if alert_names:
-        mentioned = sum(1 for name in alert_names if name in action_section)
+        section_lower = action_section.lower()
+        mentioned = 0
+        for name in alert_names:
+            name_lower = name.lower()
+            if name_lower in section_lower:
+                mentioned += 1
+                continue
+            # Strip parenthetical suffix: "News(new)" → "News"
+            core_name = re.sub(r"\s*\(.*?\)\s*", "", name_lower).strip()
+            if len(core_name) >= 2 and core_name in section_lower:
+                mentioned += 1
         alert_coverage = mentioned / len(alert_names)
     else:
-        alert_coverage = 0.0
+        alert_coverage = 1.0  # No alerts → nothing to cover → full credit
 
     overall = (
         section_coverage + kb_citation_count + has_research + has_kb_links + alert_coverage

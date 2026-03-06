@@ -106,6 +106,23 @@ describe("evaluateReport()", () => {
     expect(result.alert_coverage).toBe(1);
   });
 
+  it("fuzzy matches alert names with parenthetical suffix", () => {
+    const report = `## 五、本週優先行動清單
+- AMP Article 修復
+- News 流量恢復策略
+- GPT 工作階段追蹤
+`;
+    const result = evaluateReport(report, [
+      "AMP Article",
+      "News(new)",
+      "GPT (工作階段)",
+      "週平均回應時間",
+    ]);
+    // AMP Article: exact match, News(new) → "News" fuzzy, GPT (工作階段) → "GPT" fuzzy
+    // 週平均回應時間: not found → 3/4
+    expect(result.alert_coverage).toBeCloseTo(0.75, 5);
+  });
+
   it("overall is average of all 5 dimension scores", () => {
     const result = evaluateReport(FULL_SIX_SECTION_REPORT, []);
     const expected =

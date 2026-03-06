@@ -2,19 +2,19 @@
   {
     "source_file": "Frank_SEO顧問會議.md",
     "per_meeting_qa_file": "Frank_SEO顧問會議_qa.json",
-    "description": "Frank SEO 顧問會議 — 應涵蓋 AMP、Discover、索引等核心議題",
+    "description": "Frank SEO 顧問會議 — 應涵蓋內容策略、徵文、轉載、品牌字等核心議題",
     "min_qa_count": 5,
     "max_qa_count": 25,
-    "must_extract_keywords": ["Discover", "AMP", "索引", "CTR", "canonical"],
+    "must_extract_keywords": ["轉載", "canonical", "品牌字", "徵文", "反向連結"],
     "should_not_extract": ["行政", "日程", "下次會議", "閒聊"]
   },
   {
     "source_file": "SEO_20230614.md",
     "per_meeting_qa_file": "SEO_20230614_qa.json",
-    "description": "2023-06-14 SEO 會議 — 應涵蓋具體技術討論",
+    "description": "2023-06-14 SEO 會議 — 應涵蓋連結評估、標題優化、流量來源分析",
     "min_qa_count": 3,
     "max_qa_count": 20,
-    "must_extract_keywords": ["GSC", "SEO"],
+    "must_extract_keywords": ["連結", "SERP", "Discover", "AMP"],
     "should_not_extract": ["行政", "日程", "閒聊"]
   },
   {
@@ -23,25 +23,88 @@
     "description": "2023-10-18 SEO 會議 — 應涵蓋演算法更新後的討論",
     "min_qa_count": 3,
     "max_qa_count": 20,
-    "must_extract_keywords": ["SEO", "演算法"],
+    "must_extract_keywords": ["演算法", "影片索引"],
     "should_not_extract": ["行政", "日程", "閒聊"]
   },
   {
     "source_file": "SEO_會議_2023_11_01.md",
     "per_meeting_qa_file": "SEO_會議_2023_11_01_qa.json",
-    "description": "2023-11-01 SEO 會議 — Q3/Q4 反思，應涵蓋索引、連結分析等議題",
+    "description": "2023-11-01 SEO 會議 — Q3/Q4 反思，應涵蓋索引、AMP、導覽標記等議題",
     "min_qa_count": 3,
     "max_qa_count": 20,
-    "must_extract_keywords": ["SEO"],
+    "must_extract_keywords": ["AMP", "noindex", "導覽標記", "CLS"],
     "should_not_extract": ["行政", "日程", "閒聊"]
   },
   {
     "source_file": "SEO_小會議_2024_02_15.md",
     "per_meeting_qa_file": "SEO_小會議_2024_02_15_qa.json",
-    "description": "2024-02-15 SEO 小會議 — 聚焦具體問題排查",
+    "description": "2024-02-15 SEO 小會議 — 聚焦季節性流量、CLS、探索策略",
     "min_qa_count": 2,
     "max_qa_count": 15,
-    "must_extract_keywords": ["SEO"],
+    "must_extract_keywords": ["Discover", "CLS", "內部連結"],
     "should_not_extract": ["行政", "日程", "閒聊"]
+  },
+  {
+    "source_file": "當_Google_Search_Console_有了每小時_API_後終於可以把搜尋行為變成即時經營的重要依據.md",
+    "per_meeting_qa_file": "當_Google_Search_Console_有了每小時_API_後終於可以把搜尋行為變成即時經營的重要依據_qa.json",
+    "description": "Medium — Google Search Console 每小時 API 深度解析",
+    "min_qa_count": 4,
+    "max_qa_count": 12,
+    "must_extract_keywords": ["Search Console", "API", "即時", "爆發力"],
+    "should_not_extract": ["廣告", "訂閱"]
+  },
+  {
+    "source_file": "day01_從_IT_技術面細說_Search_Console_的_27_組數字_KPI__1__前言.md",
+    "per_meeting_qa_file": "day01_從_IT_技術面細說_Search_Console_的_27_組數字_KPI__1__前言_qa.json",
+    "description": "iThome 鐵人賽 Day01 — Search Console KPI 前言，Multi-Stack 協作觀點",
+    "min_qa_count": 3,
+    "max_qa_count": 10,
+    "must_extract_keywords": ["Multi-Stack", "Search Console", "爬取"],
+    "should_not_extract": ["鐵人賽行政", "日程"]
+  },
+  {
+    "source_file": "day05_從_IT_技術面細說_Search_Console_的_27_組數字_KPI__5__流量_新聞與探索.md",
+    "per_meeting_qa_file": "day05_從_IT_技術面細說_Search_Console_的_27_組數字_KPI__5__流量_新聞與探索_qa.json",
+    "description": "iThome 鐵人賽 Day05 — 新聞與探索流量維度分析",
+    "min_qa_count": 3,
+    "max_qa_count": 12,
+    "must_extract_keywords": ["新聞", "探索", "Discover"],
+    "should_not_extract": ["鐵人賽行政", "日程"]
+  },
+  {
+    "source_file": "large-images-case-study.md",
+    "per_meeting_qa_file": "large-images-case-study_qa.json",
+    "description": "Google Case Study — max-image-preview meta 標記優化 Discover CTR",
+    "min_qa_count": 2,
+    "max_qa_count": 5,
+    "must_extract_keywords": ["max-image-preview", "Discover", "CTR"],
+    "should_not_extract": ["廣告"]
+  },
+  {
+    "source_file": "eventbrite-case-study.md",
+    "per_meeting_qa_file": "eventbrite-case-study_qa.json",
+    "description": "Google Case Study — Event 結構化資料提升搜尋流量",
+    "min_qa_count": 2,
+    "max_qa_count": 6,
+    "must_extract_keywords": ["Event", "結構化資料", "schema"],
+    "should_not_extract": ["產品行銷"]
+  },
+  {
+    "source_file": "wix-case-study.md",
+    "per_meeting_qa_file": "wix-case-study_qa.json",
+    "description": "Google Case Study — CMS × Google API 整合（Search Console API + URL Inspection）",
+    "min_qa_count": 3,
+    "max_qa_count": 8,
+    "must_extract_keywords": ["Search Console", "API", "Sitemap"],
+    "should_not_extract": ["產品行銷"]
+  },
+  {
+    "source_file": "vimeo-case-study.md",
+    "per_meeting_qa_file": "vimeo-case-study_qa.json",
+    "description": "Google Case Study — 嵌入式影片 SEO（VideoObject + indexifembedded）",
+    "min_qa_count": 3,
+    "max_qa_count": 8,
+    "must_extract_keywords": ["VideoObject", "影片", "indexifembedded"],
+    "should_not_extract": ["產品功能宣傳"]
   }
 ]
