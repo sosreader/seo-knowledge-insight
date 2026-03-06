@@ -18,6 +18,7 @@ import {
   type MetricsSnapshot,
 } from "../schemas/pipeline.js";
 import { execPython, execQaTools } from "../services/pipeline-runner.js";
+import { loadMetrics } from "../services/metrics-parser.js";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
 import { hasSupabase } from "../store/supabase-client.js";
@@ -455,23 +456,13 @@ pipelineRoute.post("/metrics", async (c) => {
   }
 
   const { source, tab } = parsed.data;
-  const args: string[] = ["--source", source, "--tab", tab, "--json"];
 
-  const result = await execQaTools("load-metrics", args);
-
-  if (!result.success) {
-    console.error("Pipeline load-metrics failed:", result.output);
-    return c.json(fail("Metrics loading failed"), 500);
-  }
-
-  const jsonStart = result.output.indexOf("{");
-  const jsonEnd = result.output.lastIndexOf("}");
-  const jsonStr = jsonStart >= 0 && jsonEnd > jsonStart
-    ? result.output.slice(jsonStart, jsonEnd + 1)
-    : result.output;
   try {
-    return c.json(ok(JSON.parse(jsonStr)));
-  } catch {
-    return c.json(ok({ raw: result.output }));
+    const result = await loadMetrics(source, tab);
+    return c.json(ok(result));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("Metrics loading failed:", msg);
+    return c.json(fail("Metrics loading failed"), 500);
   }
 });

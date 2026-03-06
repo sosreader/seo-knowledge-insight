@@ -9,6 +9,7 @@ import { generateRequestSchema, type ReportSummary, type ReportMeta } from "../s
 import { paths } from "../config.js";
 import { hasOpenAI } from "../utils/mode-detect.js";
 import { generateReportLocal, saveReport, getAlertMetricNames } from "../services/report-generator-local.js";
+import { generateReportLlm } from "../services/report-llm.js";
 import { evaluateReport } from "../services/report-evaluator.js";
 import { scoreEvent } from "../utils/laminar-scoring.js";
 import { qaStore } from "../store/qa-store.js";
@@ -176,42 +177,61 @@ reportsRoute.post("/generate", async (c) => {
   }
 
   // ── OpenAI mode: snapshot_id + use_openai + OPENAI_API_KEY ─────
-  if (parsed.data.use_openai && snapshotPath && hasOpenAI()) {
-    const cmd = ["python3", join(paths.scriptsDir, "04_generate_report.py"), "--snapshot", snapshotPath, "--no-cache"];
+  if (parsed.data.use_openai && !hasOpenAI()) {
+    return c.json(fail("OPENAI_API_KEY not set"), 400);
+  }
+  if (parsed.data.use_openai && !snapshotMetrics) {
+    return c.json(fail("snapshot_id is required for OpenAI mode"), 400);
+  }
+  if (parsed.data.use_openai && snapshotMetrics && hasOpenAI()) {
     const weeks = parsed.data.weeks
-      ?? (snapshot && typeof snapshot.weeks === "number" ? snapshot.weeks : undefined);
-    if (weeks) {
-      cmd.push("--weeks", String(weeks));
-    }
+      ?? (snapshot && typeof snapshot.weeks === "number" ? snapshot.weeks : 1);
 
     try {
-      await execFileAsync(cmd[0]!, cmd.slice(1), {
-        cwd: paths.rootDir,
-        timeout: 120_000,
-      });
+      const result = await generateReportLlm(
+        snapshotMetrics as Record<string, unknown>,
+        weeks,
+      );
+
+      const dateOnly = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const hash8 = createHash("sha1").update(result.content).digest("hex").slice(0, 8);
+      const dateKey = `${dateOnly}_${hash8}`;
+
+      if (supabaseReportStore) {
+        const exists = await supabaseReportStore.exists(dateKey);
+        if (!exists) {
+          const meta = parseReportMeta(result.content);
+          await supabaseReportStore.save(dateKey, result.content, meta);
+        }
+      } else {
+        const reportFilename = `report_${dateKey}.md`;
+        if (!existsSync(join(paths.outputDir, reportFilename))) {
+          saveReport(result.content, dateKey);
+        }
+      }
+
+      if (supabaseReportStore) {
+        const reports = await supabaseReportStore.list();
+        if (reports.length === 0) {
+          return c.json(fail("No report found after generation"), 500);
+        }
+        const latest = reports[0]!;
+        return c.json(ok({ date: latest.date, filename: latest.filename, size_bytes: latest.size_bytes }));
+      }
+      const reports = listReportFiles();
+      if (reports.length === 0) {
+        return c.json(fail("No report found after generation"), 500);
+      }
+      const latest = reports[0]!;
+      return c.json(ok({ date: latest.date, filename: latest.filename, size_bytes: latest.size_bytes }));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      if (msg.includes("TIMEOUT") || msg.includes("timed out")) {
+      if (msg.includes("timeout") || msg.includes("TIMEOUT")) {
         return c.json(fail("Report generation timed out"), 504);
       }
       console.error("OpenAI report generation failed:", msg);
       return c.json(fail("OpenAI report generation failed"), 500);
     }
-
-    const reports = listReportFiles();
-    if (reports.length === 0) {
-      return c.json(fail("No report found after generation"), 500);
-    }
-    const latest = reports[0]!;
-    return c.json(ok({ date: latest.date, filename: latest.filename, size_bytes: latest.size_bytes }));
-  }
-
-  // ── OpenAI mode: use_openai requested but missing prerequisites ─
-  if (parsed.data.use_openai && !hasOpenAI()) {
-    return c.json(fail("OPENAI_API_KEY not set"), 400);
-  }
-  if (parsed.data.use_openai && !snapshotPath) {
-    return c.json(fail("snapshot_id is required for OpenAI mode"), 400);
   }
 
   // ── Local mode: snapshot_id provided → use stored metrics directly ─
