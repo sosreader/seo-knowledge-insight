@@ -5,8 +5,25 @@ import { ragChatObserved as ragChat } from "../services/rag-chat.js";
 import { qaStore } from "../store/qa-store.js";
 import { hasOpenAI } from "../utils/mode-detect.js";
 import { config } from "../config.js";
+import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
+import { createAgentDeps } from "../agent/agent-deps.js";
 
 export const chatRoute = new Hono();
+
+function isAgentEnabled(): boolean {
+  if (config.AGENT_ENABLED === true) return true;
+  if (config.AGENT_ENABLED === false) return false;
+  // "auto": enable when OpenAI key is available
+  return hasOpenAI();
+}
+
+function contextOnlyResponse(message: string) {
+  const startMs = Date.now();
+  const hits = qaStore.keywordSearch(message, config.CHAT_CONTEXT_K);
+  const sources = hits.map(({ item, score }) => itemToSource(item, score));
+  const metadata = { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - startMs };
+  return { answer: null, sources, mode: "context-only" as const, metadata };
+}
 
 chatRoute.post("/", async (c) => {
   const body = await c.req.json().catch(() => ({}));
@@ -19,17 +36,32 @@ chatRoute.post("/", async (c) => {
   const { message, history } = parsed.data;
 
   if (!hasOpenAI()) {
-    // Context-only mode: keyword search + return sources, no GPT completion
-    const startMs = Date.now();
-    const hits = qaStore.keywordSearch(message, config.CHAT_CONTEXT_K);
-    const sources = hits.map(({ item, score }) => itemToSource(item, score));
-    const metadata = { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - startMs };
-    return c.json(ok({ answer: null, sources, mode: "context-only" as const, metadata }));
+    const result = contextOnlyResponse(message);
+    return c.json(ok(result));
   }
 
   const historyDicts = history.map((h) => ({ role: h.role, content: h.content }));
 
   try {
+    // Agent mode: LLM autonomously decides when to search
+    if (isAgentEnabled()) {
+      const deps = createAgentDeps();
+      const result = await agentChat(
+        message,
+        historyDicts.length > 0 ? historyDicts : null,
+        deps,
+        { maxTurns: config.AGENT_MAX_TURNS, timeoutMs: config.AGENT_TIMEOUT_MS },
+      );
+      return c.json(ok({
+        answer: result.answer,
+        sources: result.sources,
+        mode: result.mode,
+        metadata: result.metadata,
+        tool_calls_count: result.metadata.tool_calls_count,
+      }));
+    }
+
+    // Full mode: single-pass RAG
     const result = await ragChat(message, historyDicts.length > 0 ? historyDicts : null);
     return c.json(ok({ answer: result.answer, sources: result.sources, mode: result.mode, metadata: result.metadata }));
   } catch (err: unknown) {
@@ -37,11 +69,8 @@ chatRoute.post("/", async (c) => {
     const status = (err as { status?: number }).status;
     if (status === 401 || status === 403 || status === 429) {
       console.warn(`OpenAI API error (${status}), falling back to context-only mode`);
-      const startMs = Date.now();
-      const hits = qaStore.keywordSearch(message, config.CHAT_CONTEXT_K);
-      const sources = hits.map(({ item, score }) => itemToSource(item, score));
-      const metadata = { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - startMs };
-      return c.json(ok({ answer: null, sources, mode: "context-only" as const, metadata }));
+      const result = contextOnlyResponse(message);
+      return c.json(ok(result));
     }
     throw err;
   }

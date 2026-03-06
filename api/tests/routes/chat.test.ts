@@ -13,6 +13,9 @@ vi.mock("../../src/config.js", () => ({
     CHAT_CONTEXT_K: 5,
     OPENAI_MODEL: "gpt-5.2",
     OPENAI_EMBEDDING_MODEL: "text-embedding-3-small",
+    AGENT_ENABLED: false,
+    AGENT_MAX_TURNS: 5,
+    AGENT_TIMEOUT_MS: 90000,
   },
   paths: {
     rootDir: "/tmp",
@@ -88,6 +91,22 @@ const mockRagChat = vi.fn().mockResolvedValue({
 vi.mock("../../src/services/rag-chat.js", () => ({
   ragChat: (...args: unknown[]) => mockRagChat(...args),
   ragChatObserved: (...args: unknown[]) => mockRagChat(...args),
+}));
+
+const mockAgentChat = vi.fn().mockResolvedValue({
+  answer: "Agent mode answer",
+  sources: [{ id: "abc123", question: "What is SEO?", category: "basics", source_title: "Meeting 1", source_date: "2024-05-02", source_type: "meeting", source_collection: "seo-meetings", source_url: "", score: 0.85 }],
+  mode: "agent",
+  metadata: { model: "gpt-5.2", provider: "openai", mode: "agent", input_tokens: 200, output_tokens: 100, total_tokens: 300, duration_ms: 2000, retrieval_count: 1, reranker_used: false, tool_calls_count: 2, agent_turns: 2, tool_calls: [] },
+});
+
+vi.mock("../../src/agent/agent-loop.js", () => ({
+  agentChat: (...args: unknown[]) => mockAgentChat(...args),
+  agentChatObserved: (...args: unknown[]) => mockAgentChat(...args),
+}));
+
+vi.mock("../../src/agent/agent-deps.js", () => ({
+  createAgentDeps: () => ({}),
 }));
 
 import { Hono } from "hono";
@@ -266,5 +285,31 @@ describe("POST /api/v1/chat", () => {
     expect(source.source_type).toBe("meeting");
     expect(source.source_collection).toBe("seo-meetings");
     expect(source).toHaveProperty("source_url");
+  });
+
+  it("returns agent mode when AGENT_ENABLED is true", async () => {
+    const originalKey = config.OPENAI_API_KEY;
+    const originalAgent = config.AGENT_ENABLED;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+    (config as Record<string, unknown>).AGENT_ENABLED = true;
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "What is SEO?" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.mode).toBe("agent");
+      expect(body.data.answer).toBe("Agent mode answer");
+      expect(body.data.tool_calls_count).toBe(2);
+      expect(mockAgentChat).toHaveBeenCalled();
+      expect(mockRagChat).not.toHaveBeenCalled();
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = originalKey;
+      (config as Record<string, unknown>).AGENT_ENABLED = originalAgent;
+    }
   });
 });

@@ -49,6 +49,18 @@ const envSchema = z.object({
       return "auto" as const;
     }),
 
+  // Agent mode (Phase 2: agentic RAG)
+  AGENT_ENABLED: z
+    .string()
+    .default("auto")
+    .transform((v) => {
+      if (v === "true") return true;
+      if (v === "false") return false;
+      return "auto" as const;
+    }),
+  AGENT_MAX_TURNS: z.coerce.number().int().min(1).max(10).default(5),
+  AGENT_TIMEOUT_MS: z.coerce.number().int().min(5000).max(300000).default(90000),
+
   // Supabase (Phase 3: pgvector backend)
   SUPABASE_URL: z.string().default(""),
   SUPABASE_ANON_KEY: z.string().default(""),

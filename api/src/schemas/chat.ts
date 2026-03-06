@@ -41,8 +41,9 @@ export interface MessageMetadata {
 export interface ChatResponse {
   readonly answer: string | null;
   readonly sources: readonly SourceItem[];
-  readonly mode: "full" | "context-only";
+  readonly mode: "full" | "context-only" | "agent";
   readonly metadata?: MessageMetadata;
+  readonly tool_calls_count?: number;
 }
 
 export function itemToSource(

@@ -14,6 +14,8 @@ import { ragChatObserved as ragChat } from "../services/rag-chat.js";
 import { hasOpenAI } from "../utils/mode-detect.js";
 import { qaStore } from "../store/qa-store.js";
 import { config } from "../config.js";
+import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
+import { createAgentDeps } from "../agent/agent-deps.js";
 
 export const sessionsRoute = new Hono();
 
@@ -138,15 +140,33 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
   let result: { answer: string | null; sources: Record<string, unknown>[]; mode: string; metadata?: Record<string, unknown> };
   const ragStartMs = Date.now();
 
+  const agentEnabled = config.AGENT_ENABLED === true || (config.AGENT_ENABLED === "auto" && hasOpenAI());
+
   if (hasOpenAI()) {
     try {
-      const ragResult = await ragChat(parsed.data.message, history.length > 0 ? history : null);
-      result = {
-        answer: ragResult.answer,
-        sources: ragResult.sources as unknown as Record<string, unknown>[],
-        mode: ragResult.mode ?? "full",
-        metadata: ragResult.metadata as unknown as Record<string, unknown>,
-      };
+      if (agentEnabled) {
+        const deps = createAgentDeps();
+        const agentResult = await agentChat(
+          parsed.data.message,
+          history.length > 0 ? history : null,
+          deps,
+          { maxTurns: config.AGENT_MAX_TURNS, timeoutMs: config.AGENT_TIMEOUT_MS },
+        );
+        result = {
+          answer: agentResult.answer,
+          sources: agentResult.sources as unknown as Record<string, unknown>[],
+          mode: agentResult.mode,
+          metadata: agentResult.metadata as unknown as Record<string, unknown>,
+        };
+      } else {
+        const ragResult = await ragChat(parsed.data.message, history.length > 0 ? history : null);
+        result = {
+          answer: ragResult.answer,
+          sources: ragResult.sources as unknown as Record<string, unknown>[],
+          mode: ragResult.mode ?? "full",
+          metadata: ragResult.metadata as unknown as Record<string, unknown>,
+        };
+      }
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
       if (status === 401 || status === 403 || status === 429) {

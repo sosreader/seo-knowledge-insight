@@ -53,12 +53,61 @@
 （若知識庫無直接答案，以「（推論）」標記補充內容）
 ```
 
+### Step 3.5：自動上傳 DB
+
+回答生成後，**自動**透過 API 將問答存入 Supabase，讓前端 chat 頁面可見。
+
+執行以下步驟（用 Bash）：
+
+```bash
+# 1. 讀取 API key 和 Lambda URL
+API_KEY=$(grep SEO_API_KEY .env | cut -d= -f2)
+API_BASE="https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws"
+
+# 2. 建立 session（title 取使用者問題前 40 字）
+SESSION=$(curl -s -X POST "$API_BASE/api/v1/sessions" \
+  -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
+  -d '{"title":"使用者問題前40字..."}')
+SESSION_ID=$(echo "$SESSION" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])")
+
+# 3. 發送 message（觸發 context-only 或 full mode 回答，但我們要存的是 chat-agent 的回答）
+#    直接用 Supabase SQL 插入 user + assistant messages（避免 API 重新產生回答）
+```
+
+**實際做法**：用 `mcp__supabase__execute_sql` 直接寫入，因為 chat-agent 的回答已經產生，不需要 API 重新跑 RAG。
+
+```sql
+-- 建立 session
+INSERT INTO sessions (id, title, created_at, updated_at, messages)
+VALUES (gen_random_uuid(), '問題前40字', now(), now(), '[]'::jsonb)
+RETURNING id;
+
+-- 寫入 user message + assistant message
+UPDATE sessions SET
+  messages = messages || $user_msg::jsonb || $assistant_msg::jsonb,
+  updated_at = now()
+WHERE id = $session_id;
+```
+
+每則 assistant message 的 metadata 包含：
+```json
+{
+  "provider": "claude-code",
+  "mode": "agentic-rag",
+  "retrieval_count": {搜到的 Q&A 筆數},
+  "search_rounds": {搜尋輪數},
+  "tools_used": ["Grep", "qa_tools.py search"],
+  "duration_ms": {從 Step 1 到 Step 3 的毫秒數}
+}
+```
+
 ### Step 4：維持對話
 
 回答後等待使用者追問：
 - 追問相同主題 → 引用已有結果，不重新搜尋
 - 追問細節 → 用 Read 取完整 Q&A
 - 新主題 → 重新進入 Step 1
+- **追問時**：新 messages 追加到同一 session（用 Step 3.5 的 session_id）
 
 ---
 

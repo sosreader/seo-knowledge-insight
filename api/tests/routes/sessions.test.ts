@@ -13,6 +13,9 @@ vi.mock("../../src/config.js", () => ({
     CHAT_CONTEXT_K: 5,
     OPENAI_MODEL: "gpt-5.2",
     OPENAI_EMBEDDING_MODEL: "text-embedding-3-small",
+    AGENT_ENABLED: false,
+    AGENT_MAX_TURNS: 5,
+    AGENT_TIMEOUT_MS: 90000,
   },
   paths: {
     rootDir: "/tmp",
@@ -82,6 +85,15 @@ const mockRagChat = vi.fn().mockResolvedValue({
 vi.mock("../../src/services/rag-chat.js", () => ({
   ragChat: (...args: unknown[]) => mockRagChat(...args),
   ragChatObserved: (...args: unknown[]) => mockRagChat(...args),
+}));
+
+vi.mock("../../src/agent/agent-loop.js", () => ({
+  agentChat: vi.fn(),
+  agentChatObserved: vi.fn(),
+}));
+
+vi.mock("../../src/agent/agent-deps.js", () => ({
+  createAgentDeps: () => ({}),
 }));
 
 // Mock session-store with in-memory store
