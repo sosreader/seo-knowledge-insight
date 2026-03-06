@@ -52,6 +52,7 @@ const envSchema = z.object({
   // Supabase (Phase 3: pgvector backend)
   SUPABASE_URL: z.string().default(""),
   SUPABASE_ANON_KEY: z.string().default(""),
+  SUPABASE_SERVICE_KEY: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);

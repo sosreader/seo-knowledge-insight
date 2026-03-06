@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import {
   createSessionSchema,
   sendMessageSchema,
+  sessionIdSchema,
   sessionListParamsSchema,
   type SessionDetailOut,
   type SessionSummaryOut,
@@ -84,6 +85,9 @@ sessionsRoute.post("/", async (c) => {
 
 sessionsRoute.get("/:session_id", async (c) => {
   const sessionId = c.req.param("session_id");
+  if (!sessionIdSchema.safeParse(sessionId).success) {
+    return c.json(fail("Invalid session ID format"), 400);
+  }
   const session = await sessionStore.getSession(sessionId);
 
   if (!session) {
@@ -95,6 +99,9 @@ sessionsRoute.get("/:session_id", async (c) => {
 
 sessionsRoute.post("/:session_id/messages", async (c) => {
   const sessionId = c.req.param("session_id");
+  if (!sessionIdSchema.safeParse(sessionId).success) {
+    return c.json(fail("Invalid session ID format"), 400);
+  }
   const body = await c.req.json().catch(() => ({}));
   const parsed = sendMessageSchema.safeParse(body);
 
@@ -176,6 +183,9 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
 
 sessionsRoute.delete("/:session_id", async (c) => {
   const sessionId = c.req.param("session_id");
+  if (!sessionIdSchema.safeParse(sessionId).success) {
+    return c.json(fail("Invalid session ID format"), 400);
+  }
   const deleted = await sessionStore.deleteSession(sessionId);
 
   if (!deleted) {

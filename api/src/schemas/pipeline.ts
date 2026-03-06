@@ -26,7 +26,24 @@ export const dedupeClassifyRequestSchema = z.object({
 });
 
 export const metricsRequestSchema = z.object({
-  source: z.string().url("source must be a valid URL").max(500),
+  source: z
+    .string()
+    .url("source must be a valid URL")
+    .max(500)
+    .refine(
+      (url) => {
+        try {
+          const parsed = new URL(url);
+          return (
+            parsed.protocol === "https:" &&
+            (parsed.hostname === "docs.google.com" || parsed.hostname === "sheets.google.com")
+          );
+        } catch {
+          return false;
+        }
+      },
+      { message: "source must be a Google Sheets URL (docs.google.com or sheets.google.com)" },
+    ),
   tab: z.string().min(1).max(50).regex(/^[a-zA-Z0-9_-]+$/, "tab must be alphanumeric").default("vocus"),
 });
 

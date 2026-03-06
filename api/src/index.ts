@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { config, paths } from "./config.js";
 import { corsMiddleware } from "./middleware/cors.js";
+import { securityHeaders } from "./middleware/security-headers.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { rateLimit } from "./middleware/rate-limit.js";
@@ -25,6 +26,7 @@ const app = new Hono();
 // Global middleware
 app.onError(errorHandler);
 app.use("*", corsMiddleware);
+app.use("*", securityHeaders);
 
 // Health check (no auth, no rate limit)
 app.route("/", healthRoute);

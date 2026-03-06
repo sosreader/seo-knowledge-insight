@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const sessionIdSchema = z.string().regex(UUID_RE, "Invalid session ID format");
+
 export const createSessionSchema = z.object({
   title: z.string().max(100).optional(),
 });

@@ -13,8 +13,11 @@ export function createAuthMiddleware(getApiKey: () => string) {
     const expected = getApiKey();
 
   if (!expected) {
+    if (process.env.NODE_ENV === "production") {
+      return c.json(fail("Service unavailable: API key not configured"), 503);
+    }
     console.warn(
-      "SEO_API_KEY is not set -- API authentication is DISABLED. Set this variable in production.",
+      "SEO_API_KEY is not set -- API authentication is DISABLED (development only).",
     );
     await next();
     return;
