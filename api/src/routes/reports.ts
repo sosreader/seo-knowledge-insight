@@ -12,6 +12,12 @@ import { generateReportLocal, saveReport, getAlertMetricNames } from "../service
 import { evaluateReport } from "../services/report-evaluator.js";
 import { scoreEvent } from "../utils/laminar-scoring.js";
 import { qaStore } from "../store/qa-store.js";
+import { hasSupabase } from "../store/supabase-client.js";
+import { SupabaseReportStore } from "../store/supabase-report-store.js";
+import { SupabaseSnapshotStore } from "../store/supabase-snapshot-store.js";
+
+const supabaseReportStore = hasSupabase() ? new SupabaseReportStore() : null;
+const supabaseSnapshotStore = hasSupabase() ? new SupabaseSnapshotStore() : null;
 
 const execFileAsync = promisify(execFile);
 // Matches report_YYYYMMDD.md (legacy) and report_YYYYMMDD_<sha1-8>.md (content-addressed)
@@ -80,15 +86,28 @@ function listReportFiles(): readonly ReportSummary[] {
 
 export const reportsRoute = new Hono();
 
-reportsRoute.get("/", (c) => {
+reportsRoute.get("/", async (c) => {
+  if (supabaseReportStore) {
+    const items = await supabaseReportStore.list();
+    return c.json(ok({ items, total: items.length }));
+  }
   const items = listReportFiles();
   return c.json(ok({ items, total: items.length }));
 });
 
-reportsRoute.get("/:date", (c) => {
+reportsRoute.get("/:date", async (c) => {
   const date = c.req.param("date");
   if (!DATE_RE.test(date)) {
     return c.json(fail("Invalid date format, expected YYYYMMDD"), 400);
+  }
+
+  if (supabaseReportStore) {
+    const result = await supabaseReportStore.getByDate(date);
+    if (!result) {
+      return c.json(fail(`Report report_${date}.md not found`), 404);
+    }
+    const meta = parseReportMeta(result.content) ?? result.summary.meta;
+    return c.json(ok({ date, filename: result.summary.filename, content: result.content, size_bytes: result.summary.size_bytes, meta }));
   }
 
   const filename = `report_${date}.md`;
@@ -125,21 +144,32 @@ reportsRoute.post("/generate", async (c) => {
     if (!SNAPSHOT_ID_RE.test(snapshotId)) {
       return c.json(fail("Invalid snapshot_id format"), 400);
     }
-    snapshotPath = resolve(paths.metricsSnapshotsDir, `${snapshotId}.json`);
-    if (!snapshotPath.startsWith(paths.metricsSnapshotsDir)) {
-      return c.json(fail("Invalid snapshot path"), 400);
-    }
-    if (!existsSync(snapshotPath)) {
-      return c.json(fail("Snapshot not found"), 404);
+
+    // Try Supabase first, then fall back to file system
+    if (supabaseSnapshotStore) {
+      const found = await supabaseSnapshotStore.getById(snapshotId);
+      if (!found) {
+        return c.json(fail("Snapshot not found"), 404);
+      }
+      snapshot = found as unknown as Record<string, unknown>;
+      snapshotMetrics = found.metrics as Record<string, unknown> | undefined ?? null;
+    } else {
+      snapshotPath = resolve(paths.metricsSnapshotsDir, `${snapshotId}.json`);
+      if (!snapshotPath.startsWith(paths.metricsSnapshotsDir)) {
+        return c.json(fail("Invalid snapshot path"), 400);
+      }
+      if (!existsSync(snapshotPath)) {
+        return c.json(fail("Snapshot not found"), 404);
+      }
+
+      try {
+        snapshot = JSON.parse(readFileSync(snapshotPath, "utf-8")) as Record<string, unknown>;
+      } catch {
+        return c.json(fail("Failed to read snapshot"), 500);
+      }
+      snapshotMetrics = snapshot.metrics as Record<string, unknown> | undefined ?? null;
     }
 
-    try {
-      snapshot = JSON.parse(readFileSync(snapshotPath, "utf-8")) as Record<string, unknown>;
-    } catch {
-      return c.json(fail("Failed to read snapshot"), 500);
-    }
-
-    snapshotMetrics = snapshot.metrics as Record<string, unknown> | undefined ?? null;
     if (!snapshotMetrics || typeof snapshotMetrics !== "object") {
       return c.json(fail("Snapshot has no metrics data"), 400);
     }
@@ -211,10 +241,18 @@ reportsRoute.post("/generate", async (c) => {
       const dateOnly = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const hash8 = createHash("sha1").update(reportContent).digest("hex").slice(0, 8);
       const dateKey = `${dateOnly}_${hash8}`;
-      const reportFilename = `report_${dateKey}.md`;
-      cacheHit = existsSync(join(paths.outputDir, reportFilename));
-      if (!cacheHit) {
-        saveReport(reportContent, dateKey);
+      if (supabaseReportStore) {
+        cacheHit = await supabaseReportStore.exists(dateKey);
+        if (!cacheHit) {
+          const meta = parseReportMeta(reportContent);
+          await supabaseReportStore.save(dateKey, reportContent, meta);
+        }
+      } else {
+        const reportFilename = `report_${dateKey}.md`;
+        cacheHit = existsSync(join(paths.outputDir, reportFilename));
+        if (!cacheHit) {
+          saveReport(reportContent, dateKey);
+        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -248,6 +286,14 @@ reportsRoute.post("/generate", async (c) => {
       })();
     }
 
+    if (supabaseReportStore) {
+      const reports = await supabaseReportStore.list();
+      if (reports.length === 0) {
+        return c.json(fail("No report found after generation"), 500);
+      }
+      const latest = reports[0]!;
+      return c.json(ok({ date: latest.date, filename: latest.filename, size_bytes: latest.size_bytes, cache_hit: cacheHit }));
+    }
     const reports = listReportFiles();
     if (reports.length === 0) {
       return c.json(fail("No report found after generation"), 500);

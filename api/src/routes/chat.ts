@@ -1,6 +1,5 @@
 import { Hono } from "hono";
-import { chatRequestSchema } from "../schemas/chat.js";
-import type { SourceItem } from "../schemas/chat.js";
+import { chatRequestSchema, itemToSource } from "../schemas/chat.js";
 import { ok, fail } from "../schemas/api-response.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
 import { qaStore } from "../store/qa-store.js";
@@ -8,23 +7,6 @@ import { hasOpenAI } from "../utils/mode-detect.js";
 import { config } from "../config.js";
 
 export const chatRoute = new Hono();
-
-function itemToSource(
-  item: { id: string; question: string; category: string; source_title: string; source_date: string; source_type: string; source_collection: string; source_url: string },
-  score: number,
-): SourceItem {
-  return {
-    id: item.id,
-    question: item.question,
-    category: item.category,
-    source_title: item.source_title,
-    source_date: item.source_date,
-    source_type: item.source_type,
-    source_collection: item.source_collection,
-    source_url: item.source_url,
-    score: Math.round(score * 10000) / 10000,
-  };
-}
 
 chatRoute.post("/", async (c) => {
   const body = await c.req.json().catch(() => ({}));

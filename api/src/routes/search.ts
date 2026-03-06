@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { searchRequestSchema } from "../schemas/search.js";
 import { ok, fail } from "../schemas/api-response.js";
 import { getEmbedding } from "../services/embedding.js";
-import { qaStore } from "../store/qa-store.js";
+import { qaStore, type QAItem } from "../store/qa-store.js";
 import { hasOpenAI, type SearchMode } from "../utils/mode-detect.js";
 
 export const searchRoute = new Hono();
@@ -18,7 +18,7 @@ searchRoute.post("/", async (c) => {
   const { query, top_k, category } = parsed.data;
 
   const mapResults = (
-    hits: ReadonlyArray<{ item: { id: string; question: string; answer: string; keywords: readonly string[]; category: string; difficulty: string; evergreen: boolean; source_title: string; source_date: string; source_type: string; source_collection: string; source_url: string }; score: number }>,
+    hits: ReadonlyArray<{ item: QAItem; score: number }>,
   ) =>
     hits.map(({ item, score }) => ({
       id: item.id,

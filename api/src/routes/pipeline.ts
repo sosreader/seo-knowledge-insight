@@ -26,6 +26,13 @@ import {
   type MetricsSnapshotMeta,
   type MetricsSnapshot,
 } from "../schemas/pipeline.js";
+import { execPython, execQaTools } from "../services/pipeline-runner.js";
+import { paths } from "../config.js";
+import { qaStore } from "../store/qa-store.js";
+import { hasSupabase } from "../store/supabase-client.js";
+import { SupabaseSnapshotStore } from "../store/supabase-snapshot-store.js";
+
+const supabaseSnapshotStore = hasSupabase() ? new SupabaseSnapshotStore() : null;
 
 const meetingEntrySchema = z.object({
   title: z.string(),
@@ -37,8 +44,6 @@ const meetingEntrySchema = z.object({
   md_file: z.string(),
   status: z.string().optional(),
 });
-import { execPython, execQaTools } from "../services/pipeline-runner.js";
-import { paths } from "../config.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const FETCH_LOG_PATTERN = /^fetch_\d{4}-\d{2}-\d{2}\.jsonl$/;
@@ -73,12 +78,6 @@ function countQAPerMeeting(): number {
   return readdirSync(dir).filter((f) => f.endsWith("_qa.json")).length;
 }
 
-function countQAPerArticle(): number {
-  // Article QA files are also stored in qa_per_meeting/ (shared directory)
-  // This function is kept for API compatibility but returns 0 since
-  // countQAPerMeeting() already counts all QA files (meetings + articles)
-  return 0;
-}
 
 function countQAFinal(): number {
   if (!existsSync(paths.qaJsonPath)) return 0;
@@ -95,7 +94,64 @@ function countQAFinal(): number {
   }
 }
 
-function buildPipelineStatus(): PipelineStatusResponse {
+function buildPipelineStatusFromStore(): PipelineStatusResponse {
+  const collections = qaStore.collections();
+  const totalCount = qaStore.count;
+
+  const collectionCountMap = new Map(
+    collections.map((c) => [c.source_collection, c.count]),
+  );
+
+  const notionCount = collectionCountMap.get("notion-seo-meetings") ?? 0;
+  const mediumCount =
+    (collectionCountMap.get("medium-genehong") ?? 0) +
+    (collectionCountMap.get("genehong-medium") ?? 0);
+  const ithelpCount = collectionCountMap.get("ithelp-gsc-kpi") ?? 0;
+  const googleCount = collectionCountMap.get("google-case-studies") ?? 0;
+
+  const steps: PipelineStepStatus[] = [
+    {
+      name: "fetch-notion",
+      label: "Notion 擷取",
+      count: notionCount,
+      detail: `${notionCount} 筆 Q&A（來自 Notion 會議）`,
+    },
+    {
+      name: "fetch-medium",
+      label: "Medium 擷取",
+      count: mediumCount,
+      detail: `${mediumCount} 筆 Q&A（來自 Medium）`,
+    },
+    {
+      name: "fetch-ithelp",
+      label: "iThome 擷取",
+      count: ithelpCount,
+      detail: `${ithelpCount} 筆 Q&A（來自 iThome）`,
+    },
+    {
+      name: "fetch-google",
+      label: "Google 個案擷取",
+      count: googleCount,
+      detail: `${googleCount} 筆 Q&A（來自 Google Cases）`,
+    },
+    {
+      name: "extract-qa",
+      label: "Q&A 萃取",
+      count: totalCount,
+      detail: `共 ${totalCount} 筆 Q&A（已萃取）`,
+    },
+    {
+      name: "dedupe-classify",
+      label: "去重 + 分類",
+      count: totalCount,
+      detail: `${totalCount} 筆 Q&A（去重 + 分類後）`,
+    },
+  ];
+
+  return { steps };
+}
+
+function buildPipelineStatusFromFiles(): PipelineStatusResponse {
   const meetings = readMeetingsIndex();
   const mdDir = join(paths.rawDataDir, "markdown");
   const mdCount = countMdFiles(mdDir);
@@ -104,10 +160,8 @@ function buildPipelineStatus(): PipelineStatusResponse {
   const ithelpMdCount = countMdFiles(paths.rawIthelpMdDir);
   const googleMdCount = countMdFiles(paths.rawGoogleCasesMdDir);
 
-  const extractedMeetings = countQAPerMeeting();
-  const extractedArticles = countQAPerArticle();
+  const totalExtracted = countQAPerMeeting();
   const totalMd = mdCount + mediumMdCount + ithelpMdCount + googleMdCount;
-  const totalExtracted = extractedMeetings + extractedArticles;
   const finalCount = countQAFinal();
 
   const steps: PipelineStepStatus[] = [
@@ -150,6 +204,13 @@ function buildPipelineStatus(): PipelineStatusResponse {
   ];
 
   return { steps };
+}
+
+function buildPipelineStatus(): PipelineStatusResponse {
+  if (hasSupabase() && qaStore.loaded) {
+    return buildPipelineStatusFromStore();
+  }
+  return buildPipelineStatusFromFiles();
 }
 
 function findUnprocessed(): readonly UnprocessedItem[] {
@@ -395,8 +456,13 @@ function listSnapshots(): readonly MetricsSnapshotMeta[] {
   return results;
 }
 
-function readSnapshot(id: string): MetricsSnapshot | null {
+async function readSnapshot(id: string): Promise<MetricsSnapshot | null> {
   if (!SNAPSHOT_ID_RE.test(id)) return null;
+
+  if (supabaseSnapshotStore) {
+    return supabaseSnapshotStore.getById(id);
+  }
+
   const dir = paths.metricsSnapshotsDir;
   const filePath = resolve(dir, `${id}.json`);
   // Path traversal guard
@@ -711,6 +777,15 @@ pipelineRoute.post("/metrics/save", async (c) => {
     metrics,
   };
 
+  if (supabaseSnapshotStore) {
+    try {
+      await supabaseSnapshotStore.save(snapshot);
+    } catch {
+      return c.json(fail("Failed to save snapshot"), 500);
+    }
+    return c.json(ok({ id, created_at, label }), 201);
+  }
+
   const dir = paths.metricsSnapshotsDir;
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
@@ -732,17 +807,29 @@ pipelineRoute.post("/metrics/save", async (c) => {
 });
 
 // GET /metrics/snapshots — list saved snapshots (metadata only)
-pipelineRoute.get("/metrics/snapshots", (c) => {
+pipelineRoute.get("/metrics/snapshots", async (c) => {
+  if (supabaseSnapshotStore) {
+    const snapshots = await supabaseSnapshotStore.list();
+    return c.json(ok({ items: snapshots, total: snapshots.length }));
+  }
   const snapshots = listSnapshots();
   return c.json(ok({ items: snapshots, total: snapshots.length }));
 });
 
 // DELETE /metrics/snapshots/:id — delete a snapshot
-pipelineRoute.delete("/metrics/snapshots/:id", (c) => {
+pipelineRoute.delete("/metrics/snapshots/:id", async (c) => {
   const id = c.req.param("id");
   const parsed = snapshotIdSchema.safeParse(id);
   if (!parsed.success) {
     return c.json(fail("Invalid snapshot ID format"), 400);
+  }
+
+  if (supabaseSnapshotStore) {
+    const deleted = await supabaseSnapshotStore.delete(id);
+    if (!deleted) {
+      return c.json(fail("Snapshot not found"), 404);
+    }
+    return c.json(ok({ deleted: true, id }));
   }
 
   const dir = paths.metricsSnapshotsDir;

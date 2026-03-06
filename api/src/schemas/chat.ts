@@ -29,3 +29,29 @@ export interface ChatResponse {
   readonly sources: readonly SourceItem[];
   readonly mode: "full" | "context-only";
 }
+
+export function itemToSource(
+  item: {
+    id: string;
+    question: string;
+    category: string;
+    source_title: string;
+    source_date: string;
+    source_type: string;
+    source_collection: string;
+    source_url: string;
+  },
+  score: number,
+): SourceItem {
+  return {
+    id: item.id,
+    question: item.question,
+    category: item.category,
+    source_title: item.source_title,
+    source_date: item.source_date,
+    source_type: item.source_type,
+    source_collection: item.source_collection,
+    source_url: item.source_url,
+    score: Math.round(score * 10000) / 10000,
+  };
+}

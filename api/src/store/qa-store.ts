@@ -15,6 +15,7 @@ import { paths } from "../config.js";
 import { parseNpy } from "../utils/npy-reader.js";
 import { normalizeRows, normalizeL2, matrixDotVector } from "../utils/cosine-similarity.js";
 import { SearchEngine, type QADict, type SearchResult } from "./search-engine.js";
+import { filterAndPaginateQa, categoriesFromItems, collectionsFromItems, type ListQaParams } from "./qa-filter.js";
 import { hasSupabase } from "./supabase-client.js";
 import { SupabaseQAStore } from "./supabase-qa-store.js";
 
@@ -84,6 +85,7 @@ export class QAStore {
   private embNorm: Float32Array = new Float32Array(0); // flat [N x dim], L2-normalized
   private embDim: number = 1536;
   private idIndex: Map<string, QAItem> = new Map();
+  private seqIndex: Map<number, QAItem> = new Map();
   private engine: SearchEngine | null = null;
 
   get loaded(): boolean {
@@ -139,8 +141,9 @@ export class QAStore {
       extraction_model: qa.extraction_model,
     }));
 
-    // Build ID index
+    // Build indexes
     this.idIndex = new Map(this.items.map((item) => [item.id, item]));
+    this.seqIndex = new Map(this.items.map((item) => [item.seq, item]));
 
     // Build QADicts for SearchEngine (needed for both hybrid and keyword-only)
     const qaDicts: QADict[] = rawItems.map((qa) => ({
@@ -191,7 +194,7 @@ export class QAStore {
   }
 
   getBySeq(seq: number): QAItem | undefined {
-    return this.items.find((item) => item.seq === seq);
+    return this.seqIndex.get(seq);
   }
 
   /**
@@ -301,117 +304,16 @@ export class QAStore {
     return this.embNorm.length > 0 && this.engine !== null;
   }
 
-  /**
-   * Filtered listing with pagination.
-   */
-  listQa(params: {
-    category?: string | null;
-    keyword?: string | null;
-    difficulty?: string | null;
-    evergreen?: boolean | null;
-    source_type?: string | null;
-    source_collection?: string | null;
-    sort_by?: string | null;
-    sort_order?: string | null;
-    limit?: number;
-    offset?: number;
-  }): { items: readonly QAItem[]; total: number } {
-    const { category, keyword, difficulty, evergreen, source_type, source_collection, sort_by, sort_order, limit = 20, offset = 0 } = params;
-
-    let results: readonly QAItem[] = this.items;
-
-    if (category) {
-      const cats = category.includes(",") ? category.split(",") : [category];
-      const catSet = new Set(cats);
-      results = results.filter((i) => catSet.has(i.category));
-    }
-    if (keyword) {
-      const kwLower = keyword.toLowerCase();
-      results = results.filter(
-        (i) =>
-          i.question.toLowerCase().includes(kwLower) ||
-          i.answer.toLowerCase().includes(kwLower) ||
-          i.keywords.some((k) => k.toLowerCase().includes(kwLower)),
-      );
-    }
-    if (difficulty) {
-      const diffs = difficulty.includes(",") ? difficulty.split(",") : [difficulty];
-      const diffSet = new Set(diffs);
-      results = results.filter((i) => diffSet.has(i.difficulty));
-    }
-    if (evergreen !== null && evergreen !== undefined) {
-      results = results.filter((i) => i.evergreen === evergreen);
-    }
-    if (source_type) {
-      results = results.filter((i) => i.source_type === source_type);
-    }
-    if (source_collection) {
-      results = results.filter((i) => i.source_collection === source_collection);
-    }
-
-    // Sort if requested
-    if (sort_by === "source_date") {
-      const dir = sort_order === "asc" ? 1 : -1;
-      const sorted = [...results];
-      sorted.sort((a, b) => dir * a.source_date.localeCompare(b.source_date));
-      results = sorted;
-    } else if (sort_by === "confidence") {
-      const dir = sort_order === "asc" ? 1 : -1;
-      const sorted = [...results];
-      sorted.sort((a, b) => dir * (a.confidence - b.confidence));
-      results = sorted;
-    }
-
-    const total = results.length;
-    return {
-      items: results.slice(offset, offset + limit),
-      total,
-    };
+  listQa(params: ListQaParams): { items: readonly QAItem[]; total: number } {
+    return filterAndPaginateQa(this.items, params);
   }
 
-  /**
-   * Categories sorted by count descending.
-   */
   categories(): readonly string[] {
-    const counts = new Map<string, number>();
-    for (const item of this.items) {
-      counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([cat]) => cat);
+    return categoriesFromItems(this.items);
   }
 
-  /**
-   * Collections with counts, grouped by source_type.
-   */
-  collections(): ReadonlyArray<{
-    source_collection: string;
-    source_type: string;
-    count: number;
-  }> {
-    const counts = new Map<string, { source_type: string; count: number }>();
-    for (const item of this.items) {
-      const existing = counts.get(item.source_collection);
-      if (existing) {
-        counts.set(item.source_collection, {
-          source_type: existing.source_type,
-          count: existing.count + 1,
-        });
-      } else {
-        counts.set(item.source_collection, {
-          source_type: item.source_type,
-          count: 1,
-        });
-      }
-    }
-    return [...counts.entries()]
-      .sort((a, b) => b[1].count - a[1].count)
-      .map(([collection, { source_type, count }]) => ({
-        source_collection: collection,
-        source_type,
-        count,
-      }));
+  collections(): ReadonlyArray<{ source_collection: string; source_type: string; count: number }> {
+    return collectionsFromItems(this.items);
   }
 }
 

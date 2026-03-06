@@ -4,10 +4,8 @@
  * Drop-in replacement for file-based learning-store.ts when SUPABASE_URL is set.
  */
 
-import { supabaseHeaders } from "./supabase-client.js";
+import { supabaseHeaders, SUPABASE_TIMEOUT_MS } from "./supabase-client.js";
 import { config } from "../config.js";
-
-const SUPABASE_TIMEOUT_MS = 10_000;
 
 export async function recordFeedbackSupabase(params: {
   query: string;

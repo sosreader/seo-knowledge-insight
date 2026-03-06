@@ -5,13 +5,12 @@
  * Uses the same Session/SessionMessage interfaces.
  */
 
-import { supabaseSelect, supabaseHeaders } from "./supabase-client.js";
+import { supabaseSelect, supabaseHeaders, SUPABASE_TIMEOUT_MS } from "./supabase-client.js";
 import { config } from "../config.js";
 import { escapeHtml } from "../utils/sanitize.js";
 import type { Session, SessionMessage } from "./session-store.js";
 
 const MAX_MESSAGES_PER_SESSION = 100;
-const SUPABASE_TIMEOUT_MS = 10_000;
 
 function sanitizeTitle(raw: string): string {
   return escapeHtml(raw.slice(0, 50)).trim();

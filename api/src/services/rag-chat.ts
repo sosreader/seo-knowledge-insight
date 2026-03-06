@@ -8,7 +8,7 @@ import OpenAI from "openai";
 import { config } from "../config.js";
 import { getEmbedding } from "./embedding.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
-import type { SourceItem, ChatResponse } from "../schemas/chat.js";
+import { itemToSource, type ChatResponse } from "../schemas/chat.js";
 import { observe } from "../utils/observability.js";
 import { scoreRagResponse } from "../utils/laminar-scoring.js";
 
@@ -48,19 +48,6 @@ function formatContext(hits: ReadonlyArray<{ item: QAItem; score: number }>): st
     .join("\n\n");
 }
 
-function itemToSource(item: QAItem, score: number): SourceItem {
-  return {
-    id: item.id,
-    question: item.question,
-    category: item.category,
-    source_title: item.source_title,
-    source_date: item.source_date,
-    source_type: item.source_type,
-    source_collection: item.source_collection,
-    source_url: item.source_url,
-    score: Math.round(score * 10000) / 10000,
-  };
-}
 
 let openaiClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {

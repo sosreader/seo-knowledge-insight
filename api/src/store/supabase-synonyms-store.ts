@@ -6,12 +6,10 @@
  *   - custom: synonym_custom table in Supabase (CRUD)
  */
 
-import { supabaseSelect, supabaseHeaders } from "./supabase-client.js";
+import { supabaseSelect, supabaseHeaders, SUPABASE_TIMEOUT_MS } from "./supabase-client.js";
 import { config } from "../config.js";
 import { STATIC_SYNONYMS } from "./synonyms-store.js";
 import type { SynonymItem } from "./synonyms-store.js";
-
-const SUPABASE_TIMEOUT_MS = 10_000;
 
 interface SynonymRow {
   term: string;

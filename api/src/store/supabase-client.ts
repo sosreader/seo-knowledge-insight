@@ -6,7 +6,7 @@
 
 import { config } from "../config.js";
 
-const SUPABASE_TIMEOUT_MS = 10_000;
+export const SUPABASE_TIMEOUT_MS = 10_000;
 
 export interface SupabaseClientConfig {
   readonly url: string;
@@ -72,6 +72,62 @@ export async function supabaseSelect<T>(
   }
 
   return resp.json() as Promise<T[]>;
+}
+
+/**
+ * Insert or upsert rows into a Supabase table via REST API.
+ * Uses service key for write access (bypasses RLS).
+ */
+export async function supabaseInsert<T>(
+  table: string,
+  rows: readonly Record<string, unknown>[],
+  options: { upsert?: boolean; onConflict?: string } = {},
+): Promise<T[]> {
+  const url = `${config.SUPABASE_URL}/rest/v1/${table}`;
+  const prefer = options.upsert
+    ? "return=representation,resolution=merge-duplicates"
+    : "return=representation";
+  const headers: Record<string, string> = {
+    ...supabaseHeaders(config.SUPABASE_SERVICE_KEY || config.SUPABASE_ANON_KEY),
+    Prefer: prefer,
+  };
+  if (options.upsert && options.onConflict) {
+    headers["Prefer"] += `,on_conflict=${options.onConflict}`;
+  }
+  const resp = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(rows),
+    signal: AbortSignal.timeout(SUPABASE_TIMEOUT_MS),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Supabase INSERT ${table} failed (${resp.status}): ${body}`);
+  }
+
+  return resp.json() as Promise<T[]>;
+}
+
+/**
+ * Delete rows from a Supabase table via REST API.
+ * Uses service key for write access (bypasses RLS).
+ */
+export async function supabaseDelete(
+  table: string,
+  queryString: string,
+): Promise<void> {
+  const url = `${config.SUPABASE_URL}/rest/v1/${table}${queryString}`;
+  const resp = await fetch(url, {
+    method: "DELETE",
+    headers: supabaseHeaders(config.SUPABASE_SERVICE_KEY || config.SUPABASE_ANON_KEY),
+    signal: AbortSignal.timeout(SUPABASE_TIMEOUT_MS),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Supabase DELETE ${table} failed (${resp.status}): ${body}`);
+  }
 }
 
 /**
