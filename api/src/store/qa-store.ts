@@ -96,6 +96,11 @@ export class QAStore {
     return this.items.length;
   }
 
+  /** Expose items for read-only iteration (e.g., deriving source docs). */
+  get allItems(): readonly QAItem[] {
+    return this.items;
+  }
+
   load(
     jsonPath: string = paths.qaJsonPath,
     npyPath: string = paths.qaEmbeddingsPath,

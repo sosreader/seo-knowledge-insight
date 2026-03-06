@@ -18,6 +18,9 @@ import { computeKeywordBoostSingle } from "../utils/keyword-boost.js";
 import { filterAndPaginateQa, categoriesFromItems, collectionsFromItems, type ListQaParams } from "./qa-filter.js";
 import type { QAItem } from "./qa-store.js";
 
+/** Timeout for initial load — longer than default to handle cold Supabase. */
+const LOAD_TIMEOUT_MS = 25_000;
+
 /** Row returned by match_qa_items() RPC. */
 interface MatchRow {
   id: string;
@@ -104,6 +107,11 @@ export class SupabaseQAStore {
     return this.items.length;
   }
 
+  /** Expose items for read-only iteration (e.g., deriving source docs). */
+  get allItems(): readonly QAItem[] {
+    return this.items;
+  }
+
   /** hasEmbeddings is always true for Supabase (pgvector handles it). */
   get hasEmbeddings(): boolean {
     return true;
@@ -123,6 +131,7 @@ export class SupabaseQAStore {
       const rows = await supabaseSelect<QARow>(
         "qa_items",
         `?select=id,seq,question,answer,keywords,confidence,category,difficulty,evergreen,source_title,source_date,source_type,source_collection,source_url,is_merged,extraction_model,synonyms,freshness_score,search_hit_count&order=seq.asc&limit=${PAGE_SIZE}&offset=${offset}`,
+        LOAD_TIMEOUT_MS,
       );
 
       if (rows.length === 0) break;

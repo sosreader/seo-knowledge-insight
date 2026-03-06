@@ -59,12 +59,13 @@ export async function supabaseRpc<T>(
 export async function supabaseSelect<T>(
   table: string,
   queryString: string = "",
+  timeoutMs: number = SUPABASE_TIMEOUT_MS,
 ): Promise<T[]> {
   const url = `${config.SUPABASE_URL}/rest/v1/${table}${queryString}`;
   const resp = await fetch(url, {
     method: "GET",
     headers: supabaseHeaders(),
-    signal: AbortSignal.timeout(SUPABASE_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!resp.ok) {
