@@ -161,6 +161,46 @@ describe("POST /api/v1/chat", () => {
     expect(body.data.sources[0].score).toBe(0.5);
   });
 
+  it("falls back to context-only on OpenAI 429 error", async () => {
+    const original = config.OPENAI_API_KEY;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+    mockRagChat.mockRejectedValueOnce(Object.assign(new Error("rate limited"), { status: 429 }));
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "What is SEO?" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.mode).toBe("context-only");
+      expect(body.data.answer).toBeNull();
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = original;
+    }
+  });
+
+  it("falls back to context-only on OpenAI 401 error", async () => {
+    const original = config.OPENAI_API_KEY;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+    mockRagChat.mockRejectedValueOnce(Object.assign(new Error("unauthorized"), { status: 401 }));
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "test" }),
+      });
+      const body = await res.json();
+      expect(body.data.mode).toBe("context-only");
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = original;
+    }
+  });
+
   it("sources include source_type, source_collection, source_url", async () => {
     const app = buildApp();
     const res = await app.request("/api/v1/chat", {

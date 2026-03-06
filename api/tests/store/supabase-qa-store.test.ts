@@ -193,7 +193,7 @@ describe("SupabaseQAStore", () => {
     }));
   });
 
-  it("hybridSearch returns empty array on RPC error", async () => {
+  it("hybridSearch rethrows RPC error", async () => {
     mockSupabaseRpc.mockRejectedValueOnce(new Error("Network error"));
     await expect(
       store.hybridSearch("test", new Float32Array(1536), 5)

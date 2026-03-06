@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import { Hono } from "hono";
 import {
   mkdtempSync,
+  rmSync,
   writeFileSync,
   mkdirSync,
   existsSync,
@@ -211,6 +212,10 @@ beforeAll(async () => {
   setupTestData();
   const { app: mainApp } = await import("../../src/index.js");
   app = mainApp;
+});
+
+afterAll(() => {
+  rmSync(tmpDir, { recursive: true, force: true });
 });
 
 // --- GET /pipeline/status ---

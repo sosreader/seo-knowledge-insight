@@ -76,11 +76,13 @@ vi.mock("../../src/services/rag-chat.js", () => ({
 vi.mock("../../src/store/session-store.js", () => {
   const sessions = new Map<string, Record<string, unknown>>();
   let counter = 0;
+  const fakeUUID = (n: number) =>
+    `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
   return {
     sessionStore: {
       createSession: (title: string) => {
         counter++;
-        const id = `session-${counter}`;
+        const id = fakeUUID(counter);
         const session = {
           id,
           title: title || `Session ${counter}`,
@@ -270,10 +272,23 @@ describe("Sessions API", () => {
   });
 
   describe("POST /:session_id/messages — error handling", () => {
-    it("returns 404 for non-existent session", async () => {
+    it("returns 400 for invalid session ID format", async () => {
       const app = buildApp();
       const res = await app.request(
         "/api/v1/sessions/nonexistent/messages",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "Hello" }),
+        },
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 404 for non-existent session with valid UUID", async () => {
+      const app = buildApp();
+      const res = await app.request(
+        "/api/v1/sessions/00000000-0000-4000-8000-999999999999/messages",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -306,6 +321,23 @@ describe("Sessions API", () => {
   });
 
   describe("DELETE /api/v1/sessions/:id", () => {
+    it("returns 400 for invalid session ID format", async () => {
+      const app = buildApp();
+      const res = await app.request("/api/v1/sessions/invalid-id", {
+        method: "DELETE",
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 404 for non-existent session with valid UUID", async () => {
+      const app = buildApp();
+      const res = await app.request(
+        "/api/v1/sessions/00000000-0000-4000-8000-999999999999",
+        { method: "DELETE" },
+      );
+      expect(res.status).toBe(404);
+    });
+
     it("deletes a session", async () => {
       const app = buildApp();
 

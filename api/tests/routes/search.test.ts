@@ -174,6 +174,51 @@ describe("POST /api/v1/search", () => {
     expect(body.data.results[0].score).toBe(0.3);
   });
 
+  it("falls back to keyword when OpenAI returns 429", async () => {
+    const original = config.OPENAI_API_KEY;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+    const { getEmbedding } = await import("../../src/services/embedding.js");
+    vi.mocked(getEmbedding).mockRejectedValueOnce(
+      Object.assign(new Error("rate limited"), { status: 429 }),
+    );
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "SEO" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.mode).toBe("keyword");
+      expect(mockKeywordSearch).toHaveBeenCalled();
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = original;
+    }
+  });
+
+  it("rethrows non-auth OpenAI errors", async () => {
+    const original = config.OPENAI_API_KEY;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+    const { getEmbedding } = await import("../../src/services/embedding.js");
+    vi.mocked(getEmbedding).mockRejectedValueOnce(
+      Object.assign(new Error("server error"), { status: 500 }),
+    );
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "SEO" }),
+      });
+      expect(res.status).toBe(500);
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = original;
+    }
+  });
+
   it("includes source_type, source_collection, source_url in results", async () => {
     const app = buildApp();
     const res = await app.request("/api/v1/search", {
