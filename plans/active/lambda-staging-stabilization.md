@@ -79,16 +79,13 @@ Lambda 上回傳 404。前端應：
 
 ## Phase 3：安全與架構（中長期）
 
-### P3-1：API Key 前端安全
+### P3-1：API Key 前端安全 — ✅ 已確認安全
 
-**優先級：HIGH**
-
-前端 `SEO_INSIGHT_API_KEY` 內嵌在 client bundle 中，任何人可從 DevTools 取得。
-應改為 Next.js API routes proxy（server-side），前端不直接持有 API key。
-
-- 前端已有 `/api/seo-insight/[...path].ts` proxy
-- 確認所有前端呼叫都走 proxy（不直接呼叫 Lambda URL）
-- 移除前端 bundle 中的 API key 引用
+前端架構已正確實作 server-side proxy：
+- `seoFetch()` 只呼叫 `/api/seo-insight/*`（Next.js API route）
+- `[...path].ts` proxy 在 server-side 注入 `X-API-Key`
+- 前端 bundle 不含 `SEO_INSIGHT_API_KEY` 或 Lambda URL
+- grep 確認 components/pages 無直接 API key 引用
 
 ### P3-2：Supabase RLS 強化
 
@@ -128,11 +125,12 @@ Lambda 上回傳 404。前端應：
 | 優先級 | 項目 | 預估 effort |
 |--------|------|-------------|
 | ~~**P0**~~ | ~~commit 本次修復 + Supabase migration 記錄~~ | ✅ 完成 |
-| **P1-1/P1-2** | 前端體驗（preview/meetings）需前端 repo | 1-2 sessions |
+| ~~**P1-1**~~ | ~~source-docs preview → 原文連結~~ | ✅ size_bytes=0 時顯示「原文」 |
+| ~~**P1-2**~~ | ~~meetings tab 空狀態~~ | ✅ MeetingTable 未被使用，非問題 |
 | ~~**P1-3**~~ | ~~同義詞確認~~ | ✅ 靜態同義詞正常，custom=0 預期行為 |
 | ~~**P2-1**~~ | ~~同義詞擴充（+10 組）~~ | ✅ Category Hit 100%, Precision@5 89% |
 | **P2-2** | Model 升級 A/B 測試 | 1-2 sessions |
-| **P3-1** | API Key 前端安全（需前端 repo） | 1 session |
+| ~~**P3-1**~~ | ~~API Key 前端安全~~ | ✅ proxy 架構已正確，無暴露 |
 | ~~**P3-2**~~ | ~~Supabase RLS 強化~~ | ✅ 完成 |
 | ~~**P3-3**~~ | ~~Observability 修復~~ | ✅ graceful skip（低優先） |
 | **P4** | 功能擴展（cache/multi-domain/learning） | 各 3+ sessions |
