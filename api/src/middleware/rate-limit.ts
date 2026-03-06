@@ -7,6 +7,10 @@ interface RateLimitEntry {
 
 const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
 
+if (isLambda) {
+  console.warn("[rate-limit] In-process rate limiting is DISABLED in Lambda. Reserved concurrency=10 provides basic protection.");
+}
+
 const store = new Map<string, RateLimitEntry>();
 
 // Cleanup stale entries every 5 minutes

@@ -2,7 +2,9 @@ import { handle } from "hono/aws-lambda";
 import { app, initStores } from "./index.js";
 import { flushLaminar } from "./utils/observability.js";
 
-const ready = initStores();
+const ready = initStores().catch((err) => {
+  console.error("Lambda cold start initStores failed:", err);
+});
 
 const honoHandler = handle(app);
 
