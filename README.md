@@ -412,21 +412,43 @@ python scripts/run_pipeline.py --step evaluate-qa --sample 50 --with-source --ev
 
 ## 建議的工作流程
 
-1. **先跑步驟 1**，確認 Notion 資料都拉下來了。去 `raw_data/markdown/` 看幾份，確認內容完整。
+### 日常開發（API 功能修改）
 
-2. **步驟 2 先試跑 3-5 份**（`--limit 3`），看萃取出的 Q&A 格式和粒度是不是你要的。如果不滿意，可以調整 `utils/openai_helper.py` 裡的 prompt。
+```
+本機開發 → pnpm test → git push main → GitHub Actions 自動部署 → Lambda 上線
+```
 
----
+1. `cd api && pnpm dev` 啟動本地開發伺服器
+2. 修改程式碼（tsx watch 自動 reload）
+3. `pnpm test` 確認測試通過
+4. `git push origin main` → `deploy-ts-api.yml` 自動部署到 Lambda
 
-3. **確認後跑完全部步驟 2**。
+### 知識庫更新（ETL Pipeline）
 
-4. **跑步驟 3** 去重和分類。
+```
+自動（每週一）或手動觸發 → Notion + 文章擷取 → QA 萃取 → 去重 → Supabase 遷移 → 品質門檻 → 部署
+```
 
-5. **每週產生週報**：直接執行 `python scripts/run_pipeline.py --step generate-report`，腳本自動從 Google Sheets 下載最新資料並產生報告，無需手動複製貼上。
+- **自動**：`etl-and-deploy.yml` 每週一 09:00 UTC 自動執行完整 pipeline
+- **手動**：GitHub Actions → Run workflow → `etl-and-deploy.yml`
+- **本地測試**：
 
-6. **評估品質**：執行 `python scripts/run_pipeline.py --step evaluate-qa --sample 50`，用 LLM-as-Judge 檢查萃取品質。
+```bash
+make pipeline          # 完整 ETL（需要 OpenAI API key）
+make extract-qa-test   # 小量驗證（--limit 3）
+```
 
-7. **人工審核**：看 `output/qa_final.md`，標記需要更新或修正的內容。
+### 週報生成
+
+- **前端操作**：週報頁面 → 選擇快照 → 點「生成」（支援 template / openai / claude-code 模式）
+- **CLI**：`python scripts/run_pipeline.py --step generate-report`
+
+### 品質評估
+
+```bash
+make eval-laminar              # 推送到 Laminar Dashboard
+python scripts/quality_gate.py # 品質門檻檢查（ETL workflow 自動執行）
+```
 
 ---
 
@@ -963,30 +985,44 @@ api/src/
 - **HTML Escape** — 防 XSS（sanitize.ts）
 - **Error Handler** — 全域捕捉，不洩漏 stack trace
 
-### 本機測試
+### 開發流程
 
 ```bash
-# 方式 1：直接啟動（開發模式）
+# 1. 本機開發（tsx watch, hot reload）
 cd api
 pnpm install
-pnpm dev   # tsx watch，port 8002
+pnpm dev              # port 8002，自動連 Supabase
 
-# 方式 2：Docker Compose（含 legacy Python API）
-docker-compose up
+# 2. 驗證
+pnpm test             # 224 tests
+pnpm typecheck        # TypeScript 型別檢查
 
-# 測試
+# 3. 測試 API
 curl http://localhost:8002/health
 curl 'http://localhost:8002/api/v1/qa/categories'
 
-# 執行測試（144 tests）
-cd api && pnpm test
+# 4. 提交 → 自動部署
+git add . && git commit -m "feat: ..."
+git push origin main  # 觸發 GitHub Actions → 自動部署到 Lambda
 ```
 
-### 部署（Lambda + Function URL）
+> **不需要手動部署。** Push 到 `main` 後，`deploy-ts-api.yml` 自動執行：
+> typecheck → test → tsup build → zip → `aws lambda update-function-code` → health check。
+
+### 部署架構（Lambda + Function URL）
 
 > v2.24 從 App Runner 遷移至 Lambda + Function URL（arm64，~$0/月）。
 
-**Lambda 部署：**
+**GitHub Actions 自動化流程：**
+
+| Workflow | 觸發條件 | 做什麼 |
+|----------|---------|--------|
+| `deploy-ts-api.yml` | push `api/**` 到 main | typecheck → test → build → deploy Lambda |
+| `etl-and-deploy.yml` | 每週一 09:00 UTC / 手動 | ETL → Supabase migrate → eval → quality gate → deploy |
+| `test-api-ts.yml` | push/PR `api/**` | typecheck → test → build（不部署） |
+| `eval.yml` | push/PR main | Laminar retrieval + extraction eval |
+
+**手動部署（緊急用）：**
 
 ```bash
 cd api && pnpm build

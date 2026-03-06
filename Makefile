@@ -148,8 +148,12 @@ test-api: ## 執行 API 測試
 # ── API 伺服器（開發用） ──────────────────────────────
 
 .PHONY: api
-api: ## 啟動 FastAPI 開發伺服器（port 8000）
-	$(PYTHON) -m uvicorn app.main:app --reload --port 8000
+api: ## 啟動 TypeScript API 開發伺服器（port 8002）
+	cd api && pnpm dev
+
+.PHONY: api-test
+api-test: ## 執行 TypeScript API 測試（224 tests）
+	cd api && pnpm test
 
 # ── Pipeline 狀態（AI 工具輔助） ──────────────────────
 

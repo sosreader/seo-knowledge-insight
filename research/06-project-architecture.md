@@ -163,7 +163,7 @@ Notion 會議紀錄（87 份，2023–2026）
   部署：Lambda + Function URL（arm64，~$0/月）
   資料層：SupabaseQAStore（pgvector hybrid search）/ QAStore（檔案模式 fallback）
   Session 儲存：output/sessions/{uuid}.json（Repository Pattern）
-            ↓ https://<service>.awsapprunner.com
+            ↓ Lambda Function URL（https://...lambda-url.ap-northeast-1.on.aws/）
 
 **TypeScript Hono（v2.12，port 8002，新架構）**——直接取代 Python API
 [SEO Insight API v2] api/src — Hono + TypeScript，完全移植 Python 功能 + Local Mode 降級
