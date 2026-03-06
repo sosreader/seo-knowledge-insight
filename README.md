@@ -997,21 +997,46 @@ aws lambda update-function-code --function-name seo-insight-api \
 ```
 
 **Lambda 設定**：
-- Function: `seo-insight-api`（arm64, Node.js 22, 512MB, 30s timeout）
-- Function URL: HTTPS auto（auth: NONE）
-- IAM user: `seo-insight-deployer`（lambda:UpdateFunctionCode + GetFunction）
+
+| 項目 | 值 | 說明 |
+|------|-----|------|
+| Function | `seo-insight-api` | arm64, Node.js 22 |
+| Memory | 512 MB | 冷啟動 ~3s，執行 ~50ms |
+| Timeout | 30s | RAG chat 需要較長回應時間 |
+| Reserved Concurrency | 10 | 基本限流（in-process rate limit 在 Lambda 無效） |
+| Function URL | HTTPS auto, auth: NONE | Hono 層 API Key 驗證 |
+| Tracing (X-Ray) | PassThrough | 未啟用（用 Laminar 替代） |
+| Provisioned Concurrency | 無 | 不需要（低流量，冷啟動可接受） |
+| Layers | 無 | tsup 全量打包，不依賴 Layer |
+| DLQ / VPC | 無 | 純 HTTP API，不需要 |
+| IAM | `seo-insight-deployer` | lambda:UpdateFunctionCode + GetFunction |
+
+**費用預估（~$0/月）：**
+
+| 資源 | 免費額度 | 預估用量 | 費用 |
+|------|---------|---------|------|
+| Lambda 請求 | 100 萬次/月 | < 1,000 次 | $0 |
+| Lambda 計算 | 40 萬 GB-秒/月 | < 500 GB-秒 | $0 |
+| Function URL | 無額外費用 | — | $0 |
+| CloudWatch Logs | 5 GB/月 | < 100 MB | $0 |
+| Supabase（Free Plan） | 500 MB DB + 1 GB 傳輸 | 1,323 rows | $0 |
+
+> 查看實際費用：[AWS Cost Explorer](https://console.aws.amazon.com/costmanagement/home#/cost-explorer)（Filter by Service: Lambda）
+> 查看免費額度用量：[AWS Free Tier](https://console.aws.amazon.com/billing/home#/freetier)
 
 **所需 GitHub Secrets：**
 
 | Secret                                        | 說明                                                         |
 | --------------------------------------------- | ------------------------------------------------------------ |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user `seo-insight-deployer`                              |
-| `AWS_REGION`                                  | `ap-northeast-1`                                             |
 | `OPENAI_API_KEY`                              | OpenAI API key                                               |
 | `SEO_API_KEY`                                 | API 認證金鑰                                                 |
-| `SUPABASE_URL`                                | Supabase REST API URL                                        |
-| `SUPABASE_ANON_KEY`                           | Supabase anon key（RLS SELECT）                              |
+| `SUPABASE_URL` / `SUPABASE_ANON_KEY`         | Supabase REST API                                            |
+| `SUPABASE_SERVICE_KEY`                        | Supabase service role（migration 用，bypass RLS）            |
+| `NOTION_API_KEY` / `NOTION_DATABASE_ID`      | Notion API（ETL pipeline 用）                                |
 | `LMNR_PROJECT_API_KEY`                        | Laminar 追蹤（選配）                                         |
+
+> GitHub Variable: `AWS_REGION` = `ap-northeast-1`（CI/CD 已 hardcode，此 variable 為備用）
 
 **資料層**：Supabase pgvector（v2.24 遷移完成）。詳見 `research/07-deployment.md`。
 
