@@ -148,6 +148,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/generate-report <URL 或路徑>` — 生成 SEO 週報（解析指標 + 知識庫搜尋，支援 `--snapshot <snapshot_id>` 參數）
 - `/search <問題>` — 搜尋知識庫（關鍵字加權，回傳 top-K Q&A）
 - `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
+- `/chat-agent` — Agentic RAG 問答（多輪自主搜尋，混合 Grep/Read/qa_tools.py，不需要 OpenAI）
 - `/evaluate-qa-local` — Q&A 品質評估（Claude Code 作為 Judge，不需要 OpenAI）
 - `/evaluate-provider <目錄路徑>` — 評估通用 LLM Provider 的 SEO 洞察品質（Claude Code 作為 Judge）
 - `/evaluate-faithfulness-local` — RAGAS Faithfulness 評估（Answer 是否有幻覺，Claude Code 作為 Judge，不需要 OpenAI）
