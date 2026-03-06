@@ -37,6 +37,7 @@ export interface SessionMessage {
   readonly content: string;
   readonly sources: readonly Record<string, unknown>[];
   readonly created_at: string;
+  readonly metadata?: Record<string, unknown>;
 }
 
 export interface Session {

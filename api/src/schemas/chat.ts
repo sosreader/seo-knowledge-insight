@@ -24,10 +24,25 @@ export interface SourceItem {
   readonly source_url: string;
 }
 
+export interface MessageMetadata {
+  readonly model?: string;
+  readonly provider?: string;
+  readonly mode?: string;
+  readonly embedding_model?: string;
+  readonly input_tokens?: number;
+  readonly output_tokens?: number;
+  readonly total_tokens?: number;
+  readonly reasoning_tokens?: number;
+  readonly duration_ms?: number;
+  readonly retrieval_count?: number;
+  readonly reranker_used?: boolean;
+}
+
 export interface ChatResponse {
   readonly answer: string | null;
   readonly sources: readonly SourceItem[];
   readonly mode: "full" | "context-only";
+  readonly metadata?: MessageMetadata;
 }
 
 export function itemToSource(

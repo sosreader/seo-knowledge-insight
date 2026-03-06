@@ -20,24 +20,28 @@ chatRoute.post("/", async (c) => {
 
   if (!hasOpenAI()) {
     // Context-only mode: keyword search + return sources, no GPT completion
+    const startMs = Date.now();
     const hits = qaStore.keywordSearch(message, config.CHAT_CONTEXT_K);
     const sources = hits.map(({ item, score }) => itemToSource(item, score));
-    return c.json(ok({ answer: null, sources, mode: "context-only" as const }));
+    const metadata = { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - startMs };
+    return c.json(ok({ answer: null, sources, mode: "context-only" as const, metadata }));
   }
 
   const historyDicts = history.map((h) => ({ role: h.role, content: h.content }));
 
   try {
     const result = await ragChat(message, historyDicts.length > 0 ? historyDicts : null);
-    return c.json(ok({ answer: result.answer, sources: result.sources, mode: result.mode }));
+    return c.json(ok({ answer: result.answer, sources: result.sources, mode: result.mode, metadata: result.metadata }));
   } catch (err: unknown) {
     // OpenAI auth/quota errors — fall back to context-only mode
     const status = (err as { status?: number }).status;
     if (status === 401 || status === 403 || status === 429) {
       console.warn(`OpenAI API error (${status}), falling back to context-only mode`);
+      const startMs = Date.now();
       const hits = qaStore.keywordSearch(message, config.CHAT_CONTEXT_K);
       const sources = hits.map(({ item, score }) => itemToSource(item, score));
-      return c.json(ok({ answer: null, sources, mode: "context-only" as const }));
+      const metadata = { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - startMs };
+      return c.json(ok({ answer: null, sources, mode: "context-only" as const, metadata }));
     }
     throw err;
   }

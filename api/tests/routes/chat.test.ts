@@ -71,6 +71,18 @@ const mockRagChat = vi.fn().mockResolvedValue({
     },
   ],
   mode: "full",
+  metadata: {
+    model: "gpt-5.2",
+    provider: "openai",
+    mode: "full",
+    embedding_model: "text-embedding-3-small",
+    input_tokens: 150,
+    output_tokens: 80,
+    total_tokens: 230,
+    duration_ms: 1200,
+    retrieval_count: 1,
+    reranker_used: false,
+  },
 });
 
 vi.mock("../../src/services/rag-chat.js", () => ({
@@ -196,6 +208,47 @@ describe("POST /api/v1/chat", () => {
       });
       const body = await res.json();
       expect(body.data.mode).toBe("context-only");
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = original;
+    }
+  });
+
+  it("context-only mode includes metadata with provider and retrieval_count", async () => {
+    const app = buildApp();
+    const res = await app.request("/api/v1/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "What is SEO?" }),
+    });
+    const body = await res.json();
+    expect(body.data.metadata).toBeDefined();
+    expect(body.data.metadata.provider).toBe("local");
+    expect(body.data.metadata.mode).toBe("context-only");
+    expect(body.data.metadata.retrieval_count).toBe(1);
+    expect(typeof body.data.metadata.duration_ms).toBe("number");
+  });
+
+  it("full mode includes metadata with model and tokens", async () => {
+    const original = config.OPENAI_API_KEY;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "What is SEO?" }),
+      });
+      const body = await res.json();
+      expect(body.data.metadata).toBeDefined();
+      expect(body.data.metadata.model).toBe("gpt-5.2");
+      expect(body.data.metadata.provider).toBe("openai");
+      expect(body.data.metadata.input_tokens).toBe(150);
+      expect(body.data.metadata.output_tokens).toBe(80);
+      expect(body.data.metadata.total_tokens).toBe(230);
+      expect(body.data.metadata.duration_ms).toBe(1200);
+      expect(body.data.metadata.retrieval_count).toBe(1);
+      expect(body.data.metadata.reranker_used).toBe(false);
     } finally {
       (config as Record<string, unknown>).OPENAI_API_KEY = original;
     }

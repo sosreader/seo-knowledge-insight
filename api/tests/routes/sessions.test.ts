@@ -65,6 +65,18 @@ const mockRagChat = vi.fn().mockResolvedValue({
     },
   ],
   mode: "full",
+  metadata: {
+    model: "gpt-5.2",
+    provider: "openai",
+    mode: "full",
+    embedding_model: "text-embedding-3-small",
+    input_tokens: 150,
+    output_tokens: 80,
+    total_tokens: 230,
+    duration_ms: 1200,
+    retrieval_count: 1,
+    reranker_used: false,
+  },
 });
 
 vi.mock("../../src/services/rag-chat.js", () => ({
@@ -265,6 +277,75 @@ describe("Sessions API", () => {
         expect(body.data.mode).toBe("full");
         expect(body.data.answer).toBe("SEO is important for visibility");
         expect(mockRagChat).toHaveBeenCalled();
+      } finally {
+        (config as Record<string, unknown>).OPENAI_API_KEY = original;
+      }
+    });
+  });
+
+  describe("POST /:session_id/messages — metadata", () => {
+    it("saves metadata on assistant message in context-only mode", async () => {
+      const app = buildApp();
+
+      const createRes = await app.request("/api/v1/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Meta Test" }),
+      });
+      const { data: session } = await createRes.json();
+
+      await app.request(`/api/v1/sessions/${session.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "What is SEO?" }),
+      });
+
+      const detailRes = await app.request(`/api/v1/sessions/${session.id}`);
+      const detail = await detailRes.json();
+      const msgs = detail.data.messages;
+
+      expect(msgs).toHaveLength(2);
+      // user message has no metadata
+      expect(msgs[0].metadata).toBeUndefined();
+      // assistant message has metadata
+      expect(msgs[1].metadata).toBeDefined();
+      expect(msgs[1].metadata.provider).toBe("local");
+      expect(msgs[1].metadata.mode).toBe("context-only");
+      expect(msgs[1].metadata.retrieval_count).toBe(1);
+      expect(typeof msgs[1].metadata.duration_ms).toBe("number");
+    });
+
+    it("saves metadata on assistant message in full mode", async () => {
+      const original = config.OPENAI_API_KEY;
+      (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+
+      try {
+        const app = buildApp();
+
+        const createRes = await app.request("/api/v1/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: "Full Meta Test" }),
+        });
+        const { data: session } = await createRes.json();
+
+        await app.request(`/api/v1/sessions/${session.id}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "What is SEO?" }),
+        });
+
+        const detailRes = await app.request(`/api/v1/sessions/${session.id}`);
+        const detail = await detailRes.json();
+        const assistantMsg = detail.data.messages[1];
+
+        expect(assistantMsg.metadata).toBeDefined();
+        expect(assistantMsg.metadata.model).toBe("gpt-5.2");
+        expect(assistantMsg.metadata.provider).toBe("openai");
+        expect(assistantMsg.metadata.input_tokens).toBe(150);
+        expect(assistantMsg.metadata.output_tokens).toBe(80);
+        expect(assistantMsg.metadata.total_tokens).toBe(230);
+        expect(assistantMsg.metadata.retrieval_count).toBe(1);
       } finally {
         (config as Record<string, unknown>).OPENAI_API_KEY = original;
       }

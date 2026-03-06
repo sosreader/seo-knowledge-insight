@@ -46,6 +46,7 @@ function toDetail(s: Session): SessionDetailOut {
       content: m.content,
       sources: m.sources,
       created_at: m.created_at,
+      ...(m.metadata ? { metadata: m.metadata } : {}),
     })),
   };
 }
@@ -134,7 +135,8 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
   }));
 
   // 3. Call RAG chat (with context-only fallback when no OpenAI)
-  let result: { answer: string | null; sources: Record<string, unknown>[]; mode: string };
+  let result: { answer: string | null; sources: Record<string, unknown>[]; mode: string; metadata?: Record<string, unknown> };
+  const ragStartMs = Date.now();
 
   if (hasOpenAI()) {
     try {
@@ -143,19 +145,26 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
         answer: ragResult.answer,
         sources: ragResult.sources as unknown as Record<string, unknown>[],
         mode: ragResult.mode ?? "full",
+        metadata: ragResult.metadata as unknown as Record<string, unknown>,
       };
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
       if (status === 401 || status === 403 || status === 429) {
         const sources = keywordHitsToSources(parsed.data.message, config.CHAT_CONTEXT_K);
-        result = { answer: null, sources, mode: "context-only" };
+        result = {
+          answer: null, sources, mode: "context-only",
+          metadata: { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - ragStartMs },
+        };
       } else {
         throw err;
       }
     }
   } else {
     const sources = keywordHitsToSources(parsed.data.message, config.CHAT_CONTEXT_K);
-    result = { answer: null, sources, mode: "context-only" };
+    result = {
+      answer: null, sources, mode: "context-only",
+      metadata: { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - ragStartMs },
+    };
   }
 
   // 4. Save assistant message
@@ -164,6 +173,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     content: result.answer ?? "",
     sources: result.sources,
     created_at: new Date().toISOString().replace(/(\.\d{3})\d*Z$/, "$1Z"),
+    ...(result.metadata ? { metadata: result.metadata } : {}),
   };
 
   session = await sessionStore.addMessage(sessionId, assistantMsg);

@@ -1,9 +1,9 @@
-# Hono TypeScript API (v2.25)
+# Hono TypeScript API (v2.27)
 
 REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（Node.js server / AWS Lambda）。
 
 **特點：**
-- 9 個路由器（Routers）、32 個 API endpoints、368 個測試（39 檔案，coverage 80%+）
+- 9 個路由器（Routers）、32 個 API endpoints、372 個測試（39 檔案，coverage 80%+）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
 - Local Mode graceful degradation（無 OpenAI 時自動降級）
@@ -112,6 +112,8 @@ Client → Function URL / localhost:8002
 **Graceful Degradation:**
 - 有 OpenAI API Key：檢索相關 Q&A + GPT 生成回答
 - 無 OpenAI API Key：僅回傳相關 Q&A 內容
+
+**Response Metadata（v2.27）：** 每次回應附帶 `metadata` 欄位，記錄 model、provider、mode、embedding_model、input/output/total/reasoning tokens、duration_ms、retrieval_count、reranker_used。Session assistant message 同步記錄。
 
 ### 5. SEO 週報 (reports) — 3 個 endpoints
 
@@ -292,7 +294,7 @@ api/
 │       ├── mode-detect.ts    # hasOpenAI() / hasSupabase() 偵測
 │       ├── observability.ts  # Laminar tracing
 │       └── laminar-scoring.ts  # Online scoring
-├── tests/                      # 39 個測試檔案，368 tests
+├── tests/                      # 39 個測試檔案，372 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
@@ -356,9 +358,9 @@ LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 
 ### Chat 端點
 
-**有 OpenAI：** RAG Pipeline（檢索 → GPT 生成）
+**有 OpenAI：** RAG Pipeline（檢索 → GPT 生成）+ metadata（model、tokens、duration）
 
-**無 OpenAI：** Context-only（僅回傳相關 Q&A，不生成回答）
+**無 OpenAI：** Context-only（僅回傳相關 Q&A，不生成回答）+ metadata（provider、retrieval_count、duration）
 
 ---
 
@@ -429,8 +431,8 @@ pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
 **測試套件統計（v2.25）：**
-- 總測試數：368 個（39 個測試檔案）
-- 通過：368/368 (100%)
+- 總測試數：372 個（39 個測試檔案）
+- 通過：372/372 (100%)
 - 覆蓋率：80%+
 
 ---
