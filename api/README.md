@@ -85,7 +85,7 @@ Client → Function URL / localhost:8002
 |------|-----|------|
 | OpenAPI JSON | `http://localhost:8002/openapi.json` | 機器可讀規格（可匯入 Postman / Swagger Editor） |
 | 互動式文件 | `http://localhost:8002/docs` | Scalar UI（可直接在瀏覽器測試 API） |
-| Mintlify 文件 | `api/docs/` 目錄 | 結構化文件（introduction + authentication） |
+| Mintlify 託管文件 | [`vocus.mintlify.app`](https://vocus.mintlify.app) | 託管文件站（auto-deploy from main，Pro trial 至 2026-03-21） |
 
 > `/openapi.json` 和 `/docs` 不需要認證，也不受 rate limit 限制。
 
@@ -248,7 +248,7 @@ curl -H "X-API-Key: your-api-key" http://localhost:8002/api/v1/qa
 api/
 ├── src/
 │   ├── index.ts              # 入口點（middleware + route mount + OpenAPI/Scalar + initStores()）
-│   ├── openapi.ts            # OpenAPI 3.1 spec（29 paths, 32 endpoints）
+│   ├── openapi.ts            # OpenAPI 3.1 spec（31 paths, 32 endpoints）
 │   ├── lambda.ts             # Lambda 入口（cold start + hono/aws-lambda handler）
 │   ├── config.ts             # Zod 驗證環境變數 + paths
 │   ├── routes/               # 9 個路由
@@ -317,11 +317,13 @@ api/
 │       ├── mode-detect.ts    # hasOpenAI() / hasSupabase() / isAgentEnabled() / resolveMode() 偵測
 │       ├── observability.ts  # Laminar tracing
 │       └── laminar-scoring.ts  # Online scoring
-├── docs/                       # Mintlify API 文件
-│   ├── mint.json              # Mintlify 設定
+├── docs/                       # Mintlify API 文件（託管於 vocus.mintlify.app）
+│   ├── docs.json              # Mintlify 設定（docs.json v2 格式）
+│   ├── openapi.json           # OpenAPI 3.1 靜態規格（31 paths）
 │   ├── introduction.mdx       # API 簡介
-│   └── authentication.mdx     # 認證說明
-├── tests/                      # 44 個測試檔案，421 tests
+│   ├── authentication.mdx     # 認證說明
+│   └── favicon.svg            # 文件站 favicon
+├── tests/                      # 45 個測試檔案，428 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
