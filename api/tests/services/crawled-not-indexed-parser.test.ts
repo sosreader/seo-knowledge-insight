@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseIndexingTsv } from "../../src/services/indexing-parser.js";
+import { parseCrawledNotIndexedTsv } from "../../src/services/crawled-not-indexed-parser.js";
 
 const SAMPLE_TSV = [
   "全網域\t19.69%\t0\t1,014,769\t409,827\t\t843,969",
@@ -20,9 +20,9 @@ const SAMPLE_WITH_HEADER = [
   ...SAMPLE_TSV.split("\n"),
 ].join("\n");
 
-describe("parseIndexingTsv", () => {
+describe("parseCrawledNotIndexedTsv", () => {
   it("parses domain row", () => {
-    const result = parseIndexingTsv(SAMPLE_TSV);
+    const result = parseCrawledNotIndexedTsv(SAMPLE_TSV);
     expect(result.domain).not.toBeNull();
     expect(result.domain!.segment).toBe("全網域");
     expect(result.domain!.change_pct).toBeCloseTo(0.1969);
@@ -33,7 +33,7 @@ describe("parseIndexingTsv", () => {
   });
 
   it("parses not_indexed_total row", () => {
-    const result = parseIndexingTsv(SAMPLE_TSV);
+    const result = parseCrawledNotIndexedTsv(SAMPLE_TSV);
     expect(result.not_indexed_total).not.toBeNull();
     expect(result.not_indexed_total!.segment).toBe("檢索未索引 (全部)");
     expect(result.not_indexed_total!.change_pct).toBeCloseTo(0.3219);
@@ -41,7 +41,7 @@ describe("parseIndexingTsv", () => {
   });
 
   it("parses path rows", () => {
-    const result = parseIndexingTsv(SAMPLE_TSV);
+    const result = parseCrawledNotIndexedTsv(SAMPLE_TSV);
     expect(result.paths).toHaveLength(6);
     const article = result.paths.find((p) => p.segment === "/article/");
     expect(article).toBeDefined();
@@ -52,7 +52,7 @@ describe("parseIndexingTsv", () => {
   });
 
   it("parses negative trends correctly", () => {
-    const result = parseIndexingTsv(SAMPLE_TSV);
+    const result = parseCrawledNotIndexedTsv(SAMPLE_TSV);
     const en = result.paths.find((p) => p.segment === "/en/");
     expect(en!.change_pct).toBeCloseTo(-0.3151);
     const tag = result.paths.find((p) => p.segment === "/tag/");
@@ -60,7 +60,7 @@ describe("parseIndexingTsv", () => {
   });
 
   it("parses summary rows", () => {
-    const result = parseIndexingTsv(SAMPLE_TSV);
+    const result = parseCrawledNotIndexedTsv(SAMPLE_TSV);
     expect(result.sum).not.toBeNull();
     expect(result.sum!.segment).toBe("總合");
     expect(result.sum!.change_pct).toBeCloseTo(0.6199);
@@ -75,27 +75,27 @@ describe("parseIndexingTsv", () => {
   });
 
   it("handles header row correctly", () => {
-    const result = parseIndexingTsv(SAMPLE_WITH_HEADER);
+    const result = parseCrawledNotIndexedTsv(SAMPLE_WITH_HEADER);
     expect(result.domain).not.toBeNull();
     expect(result.paths).toHaveLength(6);
     expect(result.domain!.change_pct).toBeCloseTo(0.1969);
   });
 
   it("returns empty result for empty input", () => {
-    const result = parseIndexingTsv("");
+    const result = parseCrawledNotIndexedTsv("");
     expect(result.domain).toBeNull();
     expect(result.paths).toHaveLength(0);
     expect(result.all_rows).toHaveLength(0);
   });
 
   it("returns all_rows with correct count", () => {
-    const result = parseIndexingTsv(SAMPLE_TSV);
+    const result = parseCrawledNotIndexedTsv(SAMPLE_TSV);
     // domain + not_indexed_total + 6 paths + sum + ratio + gap = 11
     expect(result.all_rows).toHaveLength(11);
   });
 
   it("classifies row_type correctly for all rows", () => {
-    const result = parseIndexingTsv(SAMPLE_TSV);
+    const result = parseCrawledNotIndexedTsv(SAMPLE_TSV);
     const types = result.all_rows.map((r) => r.row_type);
     expect(types).toContain("domain");
     expect(types).toContain("not_indexed_total");
@@ -119,7 +119,7 @@ describe("parseIndexingTsv", () => {
       ...SAMPLE_TSV.split("\n"),
     ].join("\n");
 
-    const result = parseIndexingTsv(fullSheet);
+    const result = parseCrawledNotIndexedTsv(fullSheet);
     expect(result.domain).not.toBeNull();
     expect(result.domain!.segment).toBe("全網域");
     expect(result.domain!.change_pct).toBeCloseTo(0.1969);

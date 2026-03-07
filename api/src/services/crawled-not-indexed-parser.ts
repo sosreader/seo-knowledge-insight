@@ -1,8 +1,8 @@
 /**
- * indexing-parser — 「檢索未索引」路徑分段資料解析器
+ * crawled-not-indexed-parser — 「已檢索 — 目前未建立索引」路徑分段資料解析器
  *
  * 解析 Google Sheets 中的索引覆蓋率分段表，識別 URL 路徑、
- * 全網域/總合等特殊列，產出結構化資料供 indexing-analyzer 消費。
+ * 全網域/總合等特殊列，產出結構化資料供 crawled-not-indexed-analyzer 消費。
  */
 
 import { fetchFromSheets, parseValue } from "./metrics-parser.js";
@@ -25,7 +25,7 @@ function classifyRow(segment: string): RowType {
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export interface IndexingRow {
+export interface CrawledNotIndexedRow {
   readonly segment: string;
   readonly change_pct: number | null;
   readonly delta: number | null;
@@ -35,14 +35,14 @@ export interface IndexingRow {
   readonly row_type: RowType;
 }
 
-export interface IndexingResult {
-  readonly domain: IndexingRow | null;
-  readonly not_indexed_total: IndexingRow | null;
-  readonly paths: readonly IndexingRow[];
-  readonly sum: IndexingRow | null;
-  readonly ratio: IndexingRow | null;
-  readonly gap: IndexingRow | null;
-  readonly all_rows: readonly IndexingRow[];
+export interface CrawledNotIndexedResult {
+  readonly domain: CrawledNotIndexedRow | null;
+  readonly not_indexed_total: CrawledNotIndexedRow | null;
+  readonly paths: readonly CrawledNotIndexedRow[];
+  readonly sum: CrawledNotIndexedRow | null;
+  readonly ratio: CrawledNotIndexedRow | null;
+  readonly gap: CrawledNotIndexedRow | null;
+  readonly all_rows: readonly CrawledNotIndexedRow[];
 }
 
 // ── Header detection ─────────────────────────────────────────────────
@@ -95,7 +95,7 @@ function extractIndexingSection(lines: readonly string[]): readonly string[] {
 
 // ── Parser ───────────────────────────────────────────────────────────
 
-function parseRow(line: string): IndexingRow | null {
+function parseRow(line: string): CrawledNotIndexedRow | null {
   const cols = line.split("\t");
   const segment = (cols[0] ?? "").trim();
   if (!segment) return null;
@@ -114,11 +114,11 @@ function parseRow(line: string): IndexingRow | null {
   };
 }
 
-const EMPTY: IndexingResult = {
+const EMPTY: CrawledNotIndexedResult = {
   domain: null, not_indexed_total: null, paths: [], sum: null, ratio: null, gap: null, all_rows: [],
 };
 
-export function parseIndexingTsv(text: string): IndexingResult {
+export function parseCrawledNotIndexedTsv(text: string): CrawledNotIndexedResult {
   const allLines = text.split("\n").filter((l) => l.trim());
   if (allLines.length === 0) return EMPTY;
 
@@ -134,7 +134,7 @@ export function parseIndexingTsv(text: string): IndexingResult {
   // Extract indexing section from full sheet data
   const section = extractIndexingSection(lines);
 
-  const rows: IndexingRow[] = [];
+  const rows: CrawledNotIndexedRow[] = [];
   for (const line of section) {
     const row = parseRow(line);
     if (row) rows.push(row);
@@ -155,10 +155,10 @@ export function parseIndexingTsv(text: string): IndexingResult {
 
 // ── Main entry ───────────────────────────────────────────────────────
 
-export async function loadIndexing(
+export async function loadCrawledNotIndexed(
   source: string,
   tab = "vocus",
-): Promise<IndexingResult> {
+): Promise<CrawledNotIndexedResult> {
   const rawTsv = await fetchFromSheets(source, tab);
-  return parseIndexingTsv(rawTsv);
+  return parseCrawledNotIndexedTsv(rawTsv);
 }

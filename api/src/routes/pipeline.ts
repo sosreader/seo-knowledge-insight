@@ -7,6 +7,7 @@ import {
   extractQARequestSchema,
   dedupeClassifyRequestSchema,
   metricsRequestSchema,
+  crawledNotIndexedRequestSchema,
   metricsSaveSchema,
   snapshotIdSchema,
   sourceDocsQuerySchema,
@@ -19,6 +20,8 @@ import {
 } from "../schemas/pipeline.js";
 import { execPython, execQaTools } from "../services/pipeline-runner.js";
 import { loadMetrics } from "../services/metrics-parser.js";
+import { loadCrawledNotIndexed } from "../services/crawled-not-indexed-parser.js";
+import { analyzeCrawledNotIndexed } from "../services/crawled-not-indexed-analyzer.js";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
 import { hasSupabase } from "../store/supabase-client.js";
@@ -359,7 +362,7 @@ pipelineRoute.post("/metrics/save", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  const { metrics, source, tab, label, weeks } = parsed.data;
+  const { metrics, crawled_not_indexed, source, tab, label, weeks } = parsed.data;
   const id = generateSnapshotId();
   const created_at = new Date().toISOString();
 
@@ -371,7 +374,8 @@ pipelineRoute.post("/metrics/save", async (c) => {
     tab,
     weeks,
     metrics,
-  };
+    ...(crawled_not_indexed ? { crawled_not_indexed } : {}),
+  } as MetricsSnapshot;
 
   if (supabaseSnapshotStore) {
     try {
@@ -464,5 +468,39 @@ pipelineRoute.post("/metrics", async (c) => {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("Metrics loading failed:", msg);
     return c.json(fail("Metrics loading failed"), 500);
+  }
+});
+
+// POST /crawled-not-indexed
+pipelineRoute.post("/crawled-not-indexed", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = crawledNotIndexedRequestSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(fail("Invalid request body"), 400);
+  }
+
+  const { source, tab } = parsed.data;
+
+  try {
+    const data = await loadCrawledNotIndexed(source, tab);
+    const insight = analyzeCrawledNotIndexed(data);
+    return c.json(ok({
+      data,
+      insight: {
+        overall_severity: insight.overall_severity,
+        domain_change_pct: insight.domain_change_pct,
+        not_indexed_change_pct: insight.not_indexed_change_pct,
+        worsening_paths: insight.worsening_paths,
+        improving_paths: insight.improving_paths,
+        stable_paths: insight.stable_paths,
+        summary_text: insight.summary_text,
+      },
+      markdown: insight.markdown,
+    }));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("Crawled-not-indexed analysis failed:", msg);
+    return c.json(fail("Crawled-not-indexed analysis failed"), 500);
   }
 });

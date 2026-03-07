@@ -778,6 +778,7 @@ export interface LlmAnalyses {
   readonly situation?: string | null;
   readonly traffic?: string | null;
   readonly technical?: string | null;
+  readonly crawledNotIndexed?: string | null;
   readonly intent?: string | null;
   readonly action?: string | null;
 }
@@ -788,6 +789,7 @@ export async function generateReportLocal(
   qaCount: number,
   llmAnalyses?: LlmAnalyses | null,
   weeks?: number | null,
+  crawledNotIndexed?: import("./crawled-not-indexed-parser.js").CrawledNotIndexedResult | null,
 ): Promise<string> {
   const typedMetrics = metrics as Record<string, MetricData>;
   const alerts = detectAlerts(typedMetrics);
@@ -839,15 +841,33 @@ export async function generateReportLocal(
     }
   }
 
-  // Build all 6 sections
+  // Build sections (6 core + optional indexing = up to 7)
   const tracker = new CitationTracker();
   const analyses = llmAnalyses ?? {};
   const s1 = buildSituationSnapshot(alerts, core, down, qaMap, tracker, analyses.situation);
   const s2 = buildTrafficSignals(core, down, qaMap, analyses.traffic);
   const s3 = buildTechnicalHealth(typedMetrics, down, qaMap, analyses.technical);
+
+  // Optional crawled-not-indexed section — inserted between 技術 SEO and 搜尋意圖
+  let crawledNotIndexedSection = "";
+  if (crawledNotIndexed && crawledNotIndexed.paths.length > 0) {
+    const { analyzeCrawledNotIndexed } = await import("./crawled-not-indexed-analyzer.js");
+    const insight = analyzeCrawledNotIndexed(crawledNotIndexed);
+    crawledNotIndexedSection = insight.markdown;
+    if (analyses.crawledNotIndexed) {
+      crawledNotIndexedSection += `\n### 檢索未索引 AI 判讀\n\n${analyses.crawledNotIndexed}\n`;
+    }
+  }
+
   const s4 = buildIntentMapping(core, down, qaMap, analyses.intent);
   const s5 = buildPriorityActions(down, up, topQas, analyses.action);
   const s6 = buildKbCitations(topQas, tracker);
+
+  const hasCrawledNotIndexed = crawledNotIndexedSection.length > 0;
+  const dimensionCount = hasCrawledNotIndexed ? 7 : 6;
+  const dimensionLabel = hasCrawledNotIndexed
+    ? "7 維度（情勢 / 流量 / 技術 / 索引覆蓋 / 意圖 / 行動 / 知識庫）"
+    : "6 維度（情勢 / 流量 / 技術 / 意圖 / 行動 / 知識庫）";
 
   // Meta block
   const kbVersion = getKbVersion();
@@ -862,7 +882,7 @@ export async function generateReportLocal(
 - 生成方式：${generationMode}
 - 知識庫版本：${kbVersion}（${kbLabel}，4 個來源集合）
 - 分析框架：Semrush 2025 / GSC 官方指引 / First Page Sage 2025 排名因素
-- 分析維度：6 維度（情勢 / 流量 / 技術 / 意圖 / 行動 / 知識庫）
+- 分析維度：${dimensionCount} 維度（${dimensionLabel}）
 - 生成日期：${reportDate}
 ---
 `;
@@ -874,10 +894,15 @@ export async function generateReportLocal(
     generation_mode: llmUsed ? "hybrid" : "template",
     generation_label: generationMode,
     model: llmUsed ? "claude-code" : "none",
+    has_crawled_not_indexed: hasCrawledNotIndexed,
   };
   const metaComment = `\n<!-- report_meta ${JSON.stringify(reportMeta)} -->`;
 
-  return [metaBlock, s1, s2, s3, s4, s5, s6].join("\n") + tracker.toBlock() + metaComment;
+  const sections = [metaBlock, s1, s2, s3];
+  if (crawledNotIndexedSection) sections.push(crawledNotIndexedSection);
+  sections.push(s4, s5, s6);
+
+  return sections.join("\n") + tracker.toBlock() + metaComment;
 }
 
 /**

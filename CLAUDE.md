@@ -145,7 +145,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/pipeline-local` — 完整 pipeline Steps 1–4（你是 LLM 引擎）
 - `/extract-qa` — 只執行 Step 2 Q&A 萃取（parallel sub-agents）
 - `/dedupe-classify` — 只執行 Step 3 去重 + 分類
-- `/generate-report <URL 或路徑>` — 生成 SEO 週報（解析指標 + 知識庫搜尋，支援 `--snapshot <snapshot_id>` 參數）
+- `/generate-report <URL 或路徑>` — 生成 SEO 週報（7 維度：情勢/流量/技術/索引覆蓋/意圖/行動/來源，支援 `--snapshot <snapshot_id>` 參數）
 - `/search <問題>` — 搜尋知識庫（關鍵字加權，回傳 top-K Q&A）
 - `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
 - `/chat-agent` — Agentic RAG 問答（多輪自主搜尋，混合 Grep/Read/qa_tools.py，不需要 OpenAI）
@@ -179,11 +179,11 @@ pnpm install
 pnpm dev               # 啟動前端伺服器（http://localhost:3000）
 ```
 
-測試（428 個測試，80% 覆蓋率）：
+測試（454 個測試，80% 覆蓋率）：
 
 ```bash
 cd api
-pnpm test              # 執行所有 vitest 測試（428 tests, 45 files）
+pnpm test              # 執行所有 vitest 測試（454 tests, 48 files）
 pnpm test:watch       # 監視模式下執行測試
 pnpm test:coverage    # 生成測試覆蓋率報告
 ```
@@ -220,7 +220,7 @@ API 端點特性：
 - `GET /docs` — Scalar 互動式 API 文件（瀏覽器直接測試）
 - Mintlify 託管文件：[vocus.mintlify.app](https://vocus.mintlify.app)（auto-deploy from main，設定檔 `api/docs/docs.json`）
 - 9 個路由器：qa、search、chat、reports、sessions、feedback、pipeline、synonyms、health
-- Pipeline 端點：15 個（狀態、會議、來源文件、指標、快照等）
+- Pipeline 端點：16 個（狀態、會議、來源文件、指標、快照、索引覆蓋率等）
 - 認證：`X-API-Key` header + 安全層（SSRF whitelist、auth fail-fast、HTTP security headers、session UUID validation）
 - 詳見 `api/README.md`
 
@@ -257,6 +257,7 @@ Pipeline API 端點：
 - `POST /api/v1/pipeline/metrics/save` — 儲存指標快照（支援 source、tab、label、weeks metadata）
 - `GET /api/v1/pipeline/metrics/snapshots` — 列出指標快照清單（含 metadata）
 - `DELETE /api/v1/pipeline/metrics/snapshots/:id` — 刪除指定快照
+- `POST /api/v1/pipeline/crawled-not-indexed` — 檢索未索引路徑分段分析（解析 Google Sheet 中的檢索未索引資料）
 
 Synonyms API 端點（v2.11 新增）：
 

@@ -1,12 +1,12 @@
 /**
- * indexing-analyzer — 「檢索未索引」洞察分析引擎
+ * crawled-not-indexed-analyzer — 「已檢索 — 目前未建立索引」洞察分析引擎
  *
  * 兩種模式：
- * 1. Rule-based template（無 LLM）：formatIndexingSection()
- * 2. LLM prompt 輔助：INDEXING_ANALYSIS_PROMPT + buildIndexingContext()
+ * 1. Rule-based template（無 LLM）：formatCrawledNotIndexedSection()
+ * 2. LLM prompt 輔助：CRAWLED_NOT_INDEXED_ANALYSIS_PROMPT + buildCrawledNotIndexedContext()
  */
 
-import type { IndexingResult, IndexingRow } from "./indexing-parser.js";
+import type { CrawledNotIndexedResult, CrawledNotIndexedRow } from "./crawled-not-indexed-parser.js";
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ export interface PathInsight {
   readonly recommendation: string;
 }
 
-export interface IndexingInsight {
+export interface CrawledNotIndexedInsight {
   readonly overall_severity: "critical" | "warning" | "stable" | "improving";
   readonly domain_change_pct: number | null;
   readonly not_indexed_change_pct: number | null;
@@ -88,7 +88,7 @@ function fmtNum(v: number | null): string {
 
 // ── Analyzer ─────────────────────────────────────────────────────────
 
-function buildPathInsight(row: IndexingRow): PathInsight {
+function buildPathInsight(row: CrawledNotIndexedRow): PathInsight {
   const severity = classifySeverity(row.change_pct);
   return {
     segment: row.segment,
@@ -98,7 +98,7 @@ function buildPathInsight(row: IndexingRow): PathInsight {
   };
 }
 
-export function analyzeIndexing(data: IndexingResult): IndexingInsight {
+export function analyzeCrawledNotIndexed(data: CrawledNotIndexedResult): CrawledNotIndexedInsight {
   const pathInsights = data.paths.map(buildPathInsight);
 
   const worsening = pathInsights
@@ -123,7 +123,7 @@ export function analyzeIndexing(data: IndexingResult): IndexingInsight {
   const notIndexedPct = data.not_indexed_total?.change_pct ?? null;
 
   const summary = buildSummaryText(overallSeverity, worsening, improving, domainPct, notIndexedPct);
-  const markdown = formatIndexingSection(data, { worsening, improving, stable }, overallSeverity, summary);
+  const markdown = formatCrawledNotIndexedSection(data, { worsening, improving, stable }, overallSeverity, summary);
 
   return {
     overall_severity: overallSeverity,
@@ -140,7 +140,7 @@ export function analyzeIndexing(data: IndexingResult): IndexingInsight {
 // ── Summary text ─────────────────────────────────────────────────────
 
 function buildSummaryText(
-  severity: IndexingInsight["overall_severity"],
+  severity: CrawledNotIndexedInsight["overall_severity"],
   worsening: readonly PathInsight[],
   improving: readonly PathInsight[],
   domainPct: number | null,
@@ -178,14 +178,14 @@ function buildSummaryText(
 
 // ── Markdown formatter ───────────────────────────────────────────────
 
-function formatIndexingSection(
-  data: IndexingResult,
+function formatCrawledNotIndexedSection(
+  data: CrawledNotIndexedResult,
   classified: {
     worsening: readonly PathInsight[];
     improving: readonly PathInsight[];
     stable: readonly PathInsight[];
   },
-  severity: IndexingInsight["overall_severity"],
+  severity: CrawledNotIndexedInsight["overall_severity"],
   summary: string,
 ): string {
   const lines: string[] = [];
@@ -282,7 +282,7 @@ function formatIndexingSection(
 
 // ── LLM Prompt ───────────────────────────────────────────────────────
 
-export const INDEXING_ANALYSIS_PROMPT = `你是 SEO 技術分析師，專精 Google Search Console 索引覆蓋率分析。
+export const CRAWLED_NOT_INDEXED_ANALYSIS_PROMPT = `你是 SEO 技術分析師，專精 Google Search Console 索引覆蓋率分析。
 
 ## 任務
 分析以下「檢索未索引」（Crawled - Currently Not Indexed）路徑分段資料，產出可操作的洞察。
@@ -312,7 +312,7 @@ export const INDEXING_ANALYSIS_PROMPT = `你是 SEO 技術分析師，專精 Goo
 /**
  * Build structured context string for the LLM prompt.
  */
-export function buildIndexingContext(data: IndexingResult): string {
+export function buildCrawledNotIndexedContext(data: CrawledNotIndexedResult): string {
   const lines: string[] = ["## 檢索未索引路徑分段資料\n"];
 
   lines.push("| 路徑 | 變化率 | Delta | 數值A | 數值B | 基準值 | 類型 |");

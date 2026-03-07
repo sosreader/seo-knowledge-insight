@@ -1,14 +1,14 @@
 /**
- * indexing-evaluator — 「檢索未索引」分析品質評估器
+ * crawled-not-indexed-evaluator — 「已檢索 — 目前未建立索引」分析品質評估器
  *
  * Rule-based，5 個維度 + overall，與 report-evaluator 同風格。
  */
 
-import type { IndexingResult } from "./indexing-parser.js";
+import type { CrawledNotIndexedResult } from "./crawled-not-indexed-parser.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export interface IndexingEvalResult {
+export interface CrawledNotIndexedEvalResult {
   /** 所有路徑是否都被提及（0-1） */
   path_coverage: number;
   /** 趨勢方向描述是否正確（0-1） */
@@ -33,10 +33,10 @@ const SEVERITY_KEYWORDS = [
 
 // ── Evaluator ────────────────────────────────────────────────────────
 
-export function evaluateIndexingAnalysis(
+export function evaluateCrawledNotIndexedAnalysis(
   content: string,
-  data: IndexingResult,
-): IndexingEvalResult {
+  data: CrawledNotIndexedResult,
+): CrawledNotIndexedEvalResult {
   if (!content || content.trim().length === 0) {
     return {
       path_coverage: 0,

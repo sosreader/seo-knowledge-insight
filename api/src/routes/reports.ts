@@ -245,6 +245,9 @@ reportsRoute.post("/generate", async (c) => {
     try {
       const qaCount = qaStore.count;
       const snapshotWeeks = typeof snapshot.weeks === "number" ? snapshot.weeks : null;
+      // Extract crawled-not-indexed data from snapshot (backward-compat: old snapshots stored as .indexing)
+      const snapshotCrawledNotIndexed = (snapshot as Record<string, unknown>)?.crawled_not_indexed ?? (snapshot as Record<string, unknown>)?.indexing ?? null;
+
       reportContent = await generateReportLocal(
         snapshotMetrics,
         reportDate,
@@ -253,10 +256,12 @@ reportsRoute.post("/generate", async (c) => {
           situation: parsed.data.situation_analysis,
           traffic: parsed.data.traffic_analysis,
           technical: parsed.data.technical_analysis,
+          crawledNotIndexed: parsed.data.crawled_not_indexed_analysis,
           intent: parsed.data.intent_analysis,
           action: parsed.data.action_analysis,
         },
         snapshotWeeks,
+        snapshotCrawledNotIndexed as import("../services/crawled-not-indexed-parser.js").CrawledNotIndexedResult | null,
       );
       const dateOnly = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const hash8 = createHash("sha1").update(reportContent).digest("hex").slice(0, 8);

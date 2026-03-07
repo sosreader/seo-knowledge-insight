@@ -45,6 +45,7 @@ export interface MetricsResult {
   anomalies: readonly AnomalyData[];
   total_metrics: number;
   total_anomalies: number;
+  crawledNotIndexed?: import("./crawled-not-indexed-parser.js").CrawledNotIndexedResult;
 }
 
 // ── URL 解析 ──
@@ -180,7 +181,7 @@ function parseCSV(text: string): string[][] {
 
 // ── TSV 解析 ──
 
-function parseValue(raw: string): number | null {
+export function parseValue(raw: string): number | null {
   const v = raw.trim();
   if (["#N/A", "#DIV/0!", "#REF!", "#VALUE!", ""].includes(v)) return null;
   if (v.endsWith("%")) {
@@ -261,10 +262,17 @@ export async function loadMetrics(source: string, tab = "vocus"): Promise<Metric
   const rawTsv = await fetchFromSheets(source, tab);
   const metrics = parseMetricsTsv(rawTsv);
   const anomalies = detectAnomalies(metrics);
+
+  // Also extract indexing section from the same sheet (bottom section)
+  const { parseCrawledNotIndexedTsv } = await import("./crawled-not-indexed-parser.js");
+  const crawledNotIndexed = parseCrawledNotIndexedTsv(rawTsv);
+  const hasCrawledNotIndexed = crawledNotIndexed.paths.length > 0;
+
   return {
     metrics,
     anomalies,
     total_metrics: Object.keys(metrics).length,
     total_anomalies: anomalies.length,
+    ...(hasCrawledNotIndexed ? { crawledNotIndexed } : {}),
   };
 }
