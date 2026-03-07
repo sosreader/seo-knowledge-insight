@@ -47,6 +47,9 @@
 - **Pipeline 管理** — `/api/v1/pipeline/*`（14 endpoints：狀態、會議、來源文件、指標、快照、觸發 fetch/fetch-articles/extract/dedupe）
 - **同義詞管理** — `/api/v1/synonyms/*`（4 endpoints：列表、新增、更新、刪除；雙層設計：靜態+自訂）
 - **API 安全** — API Key 認證（`X-API-Key` header）、Rate Limit（chat 20/min、search/qa 60/min）、Zod schema validation
+- **API 文件** — 啟動 dev server 後存取：
+  - [`/docs`](http://localhost:8002/docs) — Scalar 互動式文件（可直接在瀏覽器測試 API）
+  - [`/openapi.json`](http://localhost:8002/openapi.json) — OpenAPI 3.1 規格（可匯入 Postman / Swagger Editor）
 
 #### RAG 迭代改進（v2.11 新增）
 

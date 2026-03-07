@@ -1,0 +1,99 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "SEO Knowledge Insight API",
+  "colors": {
+    "primary": "#0D9373",
+    "light": "#07C983",
+    "dark": "#0D9373"
+  },
+  "favicon": "favicon.svg",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Getting Started",
+        "pages": ["introduction", "authentication"]
+      },
+      {
+        "group": "Core",
+        "openapi": "openapi.json",
+        "pages": [
+          { "openapi": "GET /health" },
+          { "openapi": "POST /api/v1/search" },
+          { "openapi": "POST /api/v1/chat" }
+        ]
+      },
+      {
+        "group": "QA Knowledge Base",
+        "openapi": "openapi.json",
+        "pages": [
+          { "openapi": "GET /api/v1/qa" },
+          { "openapi": "GET /api/v1/qa/categories" },
+          { "openapi": "GET /api/v1/qa/collections" },
+          { "openapi": "GET /api/v1/qa/{id}" }
+        ]
+      },
+      {
+        "group": "Reports",
+        "openapi": "openapi.json",
+        "pages": [
+          { "openapi": "GET /api/v1/reports" },
+          { "openapi": "GET /api/v1/reports/{date}" },
+          { "openapi": "POST /api/v1/reports/generate" }
+        ]
+      },
+      {
+        "group": "Sessions",
+        "openapi": "openapi.json",
+        "pages": [
+          { "openapi": "GET /api/v1/sessions" },
+          { "openapi": "POST /api/v1/sessions" },
+          { "openapi": "GET /api/v1/sessions/{id}" },
+          { "openapi": "POST /api/v1/sessions/{id}/messages" },
+          { "openapi": "DELETE /api/v1/sessions/{id}" }
+        ]
+      },
+      {
+        "group": "Feedback",
+        "openapi": "openapi.json",
+        "pages": [
+          { "openapi": "POST /api/v1/feedback" }
+        ]
+      },
+      {
+        "group": "Synonyms",
+        "openapi": "openapi.json",
+        "pages": [
+          { "openapi": "GET /api/v1/synonyms" },
+          { "openapi": "POST /api/v1/synonyms" },
+          { "openapi": "PUT /api/v1/synonyms/{term}" },
+          { "openapi": "DELETE /api/v1/synonyms/{term}" }
+        ]
+      },
+      {
+        "group": "Pipeline",
+        "openapi": "openapi.json",
+        "pages": [
+          { "openapi": "GET /api/v1/pipeline/status" },
+          { "openapi": "GET /api/v1/pipeline/meetings" },
+          { "openapi": "GET /api/v1/pipeline/meetings/{id}/preview" },
+          { "openapi": "GET /api/v1/pipeline/source-docs" },
+          { "openapi": "GET /api/v1/pipeline/source-docs/{collection}/{file}/preview" },
+          { "openapi": "GET /api/v1/pipeline/unprocessed" },
+          { "openapi": "GET /api/v1/pipeline/logs" },
+          { "openapi": "POST /api/v1/pipeline/fetch" },
+          { "openapi": "POST /api/v1/pipeline/fetch-articles" },
+          { "openapi": "POST /api/v1/pipeline/extract-qa" },
+          { "openapi": "POST /api/v1/pipeline/dedupe-classify" },
+          { "openapi": "POST /api/v1/pipeline/metrics" },
+          { "openapi": "POST /api/v1/pipeline/metrics/save" },
+          { "openapi": "GET /api/v1/pipeline/metrics/snapshots" },
+          { "openapi": "DELETE /api/v1/pipeline/metrics/snapshots/{id}" }
+        ]
+      }
+    ]
+  },
+  "api": {
+    "openapi": "openapi.json"
+  }
+}
