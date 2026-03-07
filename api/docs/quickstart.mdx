@@ -1,0 +1,125 @@
+---
+title: Quick Start
+description: Frontend integration guide for the SEO Knowledge Insight API
+---
+
+# Quick Start
+
+This guide covers integrating the SEO Knowledge Insight API into a frontend application.
+
+## Base Configuration
+
+```typescript
+const API_BASE = process.env.NEXT_PUBLIC_SEO_API_URL || "http://localhost:8002";
+const API_KEY = process.env.SEO_API_KEY; // server-side only, never expose to browser
+
+async function seoApi(path: string, options?: RequestInit) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": API_KEY!,
+      ...options?.headers,
+    },
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+```
+
+<Warning>
+  API Key must stay server-side. Use a proxy route (e.g. Next.js API route) to
+  forward requests — never embed the key in browser code.
+</Warning>
+
+## Common Operations
+
+### Search the Knowledge Base
+
+```typescript
+const results = await seoApi("/api/v1/search", {
+  method: "POST",
+  body: JSON.stringify({ query: "Core Web Vitals optimization", top_k: 5 }),
+});
+
+// results.results[] contains { question, answer, score, source, category }
+```
+
+### RAG Chat (Single Turn)
+
+```typescript
+const chat = await seoApi("/api/v1/chat", {
+  method: "POST",
+  body: JSON.stringify({
+    message: "How to improve LCP?",
+    mode: "rag", // "rag" or "agent"
+  }),
+});
+
+// chat.answer — AI-generated answer with citations
+// chat.sources[] — relevant Q&A sources
+// chat.mode — actual mode used ("rag" | "agent" | "context-only")
+// chat.metadata — model, tokens, duration
+```
+
+### Multi-Turn Chat with Sessions
+
+```typescript
+// 1. Create session
+const session = await seoApi("/api/v1/sessions", { method: "POST" });
+const sessionId = session.id;
+
+// 2. Send messages (context preserved)
+const msg1 = await seoApi(`/api/v1/sessions/${sessionId}/messages`, {
+  method: "POST",
+  body: JSON.stringify({ message: "What is canonical URL?" }),
+});
+
+// 3. Follow up (session remembers previous messages)
+const msg2 = await seoApi(`/api/v1/sessions/${sessionId}/messages`, {
+  method: "POST",
+  body: JSON.stringify({ message: "How does it affect SEO?" }),
+});
+
+// 4. Get full history
+const history = await seoApi(`/api/v1/sessions/${sessionId}`);
+```
+
+### Browse QA Knowledge Base
+
+```typescript
+// List with filters
+const qa = await seoApi(
+  "/api/v1/qa?category=Technical%20SEO&difficulty=intermediate&limit=20"
+);
+
+// Get single QA detail
+const detail = await seoApi("/api/v1/qa/a1b2c3d4e5f67890");
+
+// Get all categories
+const categories = await seoApi("/api/v1/qa/categories");
+```
+
+## Chat Mode Parameter
+
+The `mode` parameter controls how the API processes your request:
+
+| Mode | Behavior | Best For |
+|------|----------|----------|
+| `"rag"` | Single-pass retrieval + generation | Fast, predictable answers |
+| `"agent"` | Multi-turn autonomous search (up to 5 rounds) | Complex questions needing multiple sources |
+| _(omit)_ | Auto-detect based on server config | Default behavior |
+
+```typescript
+// Force RAG mode (faster)
+await seoApi("/api/v1/chat", {
+  method: "POST",
+  body: JSON.stringify({ message: "What is robots.txt?", mode: "rag" }),
+});
+
+// Force agent mode (more thorough)
+await seoApi("/api/v1/chat", {
+  method: "POST",
+  body: JSON.stringify({ message: "Compare canonical vs 301 redirect for SEO", mode: "agent" }),
+});
+```

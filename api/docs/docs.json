@@ -12,7 +12,11 @@
     "groups": [
       {
         "group": "Getting Started",
-        "pages": ["introduction", "authentication"]
+        "pages": ["introduction", "authentication", "quickstart"]
+      },
+      {
+        "group": "Guides",
+        "pages": ["search-and-chat", "api-overview"]
       }
     ]
   },
