@@ -8,6 +8,7 @@ export const generateRequestSchema = z.object({
   situation_analysis: z.string().max(2000).optional(),
   traffic_analysis: z.string().max(2000).optional(),
   technical_analysis: z.string().max(2000).optional(),
+  crawled_not_indexed_analysis: z.string().max(2000).optional(),
   intent_analysis: z.string().max(2000).optional(),
   action_analysis: z.string().max(2000).optional(),
 });

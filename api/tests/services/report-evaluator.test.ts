@@ -180,4 +180,32 @@ describe("evaluateReport()", () => {
       5;
     expect(templateResult.overall).toBeCloseTo(expectedTemplate, 5);
   });
+
+  // ── has_crawled_not_indexed_section ───────────────────────────────
+
+  it("has_crawled_not_indexed_section: 1 when report contains ## 檢索未索引分析 section", () => {
+    const reportWithSection = FULL_SIX_SECTION_REPORT + "\n## 檢索未索引分析（警示）\n\n路徑分段分析結果...\n";
+    const result = evaluateReport(reportWithSection, []);
+    expect(result.has_crawled_not_indexed_section).toBe(1);
+  });
+
+  it("has_crawled_not_indexed_section: 0 when report does not contain ## 檢索未索引分析 section", () => {
+    const result = evaluateReport(FULL_SIX_SECTION_REPORT, []);
+    expect(result.has_crawled_not_indexed_section).toBe(0);
+  });
+
+  it("has_crawled_not_indexed_section: 0 for empty report", () => {
+    const result = evaluateReport(EMPTY_REPORT, []);
+    expect(result.has_crawled_not_indexed_section).toBe(0);
+  });
+
+  it("section_coverage denominator remains 6 regardless of has_crawled_not_indexed_section", () => {
+    const reportWith7Sections =
+      FULL_SIX_SECTION_REPORT + "\n## 檢索未索引分析（警示）\n\n路徑分段分析結果...\n";
+    const result = evaluateReport(reportWith7Sections, []);
+    // 6 standard sections all present → section_coverage stays 1.0
+    expect(result.section_coverage).toBe(1.0);
+    // has_crawled_not_indexed_section is independent
+    expect(result.has_crawled_not_indexed_section).toBe(1);
+  });
 });

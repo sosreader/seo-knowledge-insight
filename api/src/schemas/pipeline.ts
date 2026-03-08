@@ -47,8 +47,42 @@ export const metricsRequestSchema = z.object({
   tab: z.string().min(1).max(50).regex(/^[\w\s\u4e00-\u9fff-]+$/u, "tab must be alphanumeric, CJK, or spaces").default("vocus"),
 });
 
+export const crawledNotIndexedRequestSchema = z
+  .object({
+    source: z
+      .string()
+      .url("source must be a valid URL")
+      .max(500)
+      .refine(
+        (url) => {
+          try {
+            const parsed = new URL(url);
+            return (
+              parsed.protocol === "https:" &&
+              (parsed.hostname === "docs.google.com" || parsed.hostname === "sheets.google.com")
+            );
+          } catch {
+            return false;
+          }
+        },
+        { message: "source must be a Google Sheets URL (docs.google.com or sheets.google.com)" },
+      )
+      .optional(),
+    raw_tsv: z.string().min(10).max(50000).optional(),
+    tab: z.string().min(1).max(50).regex(/^[\w\s\u4e00-\u9fff-]+$/u, "tab must be alphanumeric, CJK, or spaces").default("vocus"),
+  })
+  .refine(
+    (data) => {
+      const hasSource = data.source !== undefined;
+      const hasTsv = data.raw_tsv !== undefined;
+      return hasSource !== hasTsv; // exactly one must be provided (XOR)
+    },
+    { message: "exactly one of source or raw_tsv must be provided" },
+  );
+
 export const metricsSaveSchema = z.object({
   metrics: z.any(),
+  crawled_not_indexed: z.any().optional(),
   source: z.string().max(500),
   tab: z.string().min(1).max(50).regex(/^[\w\s\u4e00-\u9fff-]+$/u, "tab must be alphanumeric, CJK, or spaces"),
   label: z.string().max(60),

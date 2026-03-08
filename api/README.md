@@ -3,7 +3,7 @@
 REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（Node.js server / AWS Lambda）。
 
 **特點：**
-- 9 個路由器（Routers）、32 個 API endpoints、428 個測試（45 檔案，coverage 80%+）
+- 9 個路由器（Routers）、33 個 API endpoints、454 個測試（48 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
@@ -55,8 +55,8 @@ pnpm start                   # node dist/index.js，port 8002
 
 ```
 Client → Function URL / localhost:8002
-  → CORS → Security Headers
-  → /health（直接回應，無 auth）
+  → CORS → Security Headers → Request Logger（JSON log + X-Request-Id）
+  → /health（直接回應，無 auth，不產生 log）
   → /api/v1/* → Auth → Rate Limit → Route Handler → Service → Store → Supabase / File
 ```
 
@@ -64,7 +64,7 @@ Client → Function URL / localhost:8002
 
 | 層 | 目錄 | 職責 |
 |----|------|------|
-| Middleware | `middleware/` | CORS、安全標頭、API Key 認證、Rate Limit、錯誤處理 |
+| Middleware | `middleware/` | CORS、安全標頭、Request Logger、API Key 認證、Rate Limit、錯誤處理 |
 | Routes | `routes/` | 請求驗證（Zod schema）、回應格式化 |
 | Services | `services/` | 業務邏輯（RAG、embedding、週報生成、指標解析） |
 | Store | `store/` | 資料存取（Factory Pattern：Supabase pgvector vs 檔案模式） |
@@ -155,7 +155,7 @@ Client → Function URL / localhost:8002
 |------|------|------|------|-----------|
 | POST | `/api/v1/feedback` | 提交使用者回饋 | ✓ | 60/min |
 
-### 8. Pipeline 管理 (pipeline) — 15 個 endpoints
+### 8. Pipeline 管理 (pipeline) — 16 個 endpoints
 
 | 方法 | 路由 | 說明 | 認證 | Rate Limit |
 |------|------|------|------|-----------|
@@ -168,6 +168,7 @@ Client → Function URL / localhost:8002
 | POST | `/api/v1/pipeline/fetch-articles` | 觸發外部文章擷取（Medium + iThome + Google Cases） | ✓ | 60/min |
 | POST | `/api/v1/pipeline/extract-qa` | 觸發 Q&A 萃取 | ✓ | 60/min |
 | POST | `/api/v1/pipeline/dedupe-classify` | 觸發去重 + 分類 | ✓ | 60/min |
+| POST | `/api/v1/pipeline/crawled-not-indexed` | 分析檢索未索引路徑（從 Google Sheet 解析 + 規則引擎 + LLM 分析） | ✓ | 60/min |
 | GET | `/api/v1/pipeline/source-docs` | 列出所有來源文件（支援 filter + pagination） | ✓ | 60/min |
 | GET | `/api/v1/pipeline/source-docs/:collection/:file/preview` | 來源文件 Markdown 預覽 | ✓ | 60/min |
 | POST | `/api/v1/pipeline/metrics` | 取得 Pipeline metrics | ✓ | 60/min |
@@ -267,6 +268,7 @@ api/
 │   │   ├── rate-limit.ts        # Sliding window 速率限制（Lambda 自動 bypass）
 │   │   ├── cors.ts              # CORS 設定
 │   │   ├── security-headers.ts  # HTTP security headers（X-Content-Type-Options 等）
+│   │   ├── request-logger.ts    # 結構化 JSON request log + X-Request-Id
 │   │   └── error-handler.ts     # 錯誤處理
 │   ├── store/
 │   │   ├── qa-store.ts              # QAStore singleton + loadQaStore() factory
@@ -294,7 +296,10 @@ api/
 │   │   ├── reranker.ts       # Claude Haiku reranker
 │   │   ├── context-relevance.ts  # Context Relevance 評估
 │   │   ├── metrics-parser.ts # SEO 指標解析（純 TS，取代 Python）
-│   │   ├── report-generator-local.ts  # ECC 6 維度本地週報
+│   │   ├── crawled-not-indexed-parser.ts # 檢索未索引 TSV 解析
+│   │   ├── crawled-not-indexed-analyzer.ts # 檢索未索引分析規則引擎 + LLM prompt
+│   │   ├── crawled-not-indexed-evaluator.ts # 檢索未索引品質 5 維度評估器
+│   │   ├── report-generator-local.ts  # 7 維度本地週報（新增索引章節）
 │   │   ├── report-llm.ts     # LLM 週報生成（純 TS，取代 Python）
 │   │   ├── report-evaluator.ts  # 5 維度品質評估
 │   │   └── pipeline-runner.ts # Python 腳本執行器
@@ -452,6 +457,88 @@ API 伺服器透過 `@lmnr-ai/lmnr` JS SDK 整合 Laminar tracing。
 
 ---
 
+## Request Logging
+
+每個 HTTP request（除 `/health`）自動產生一行結構化 JSON log，包含 `X-Request-Id` response header 供前端關聯。
+
+### 日誌格式
+
+```json
+{"level":"info","method":"GET","path":"/api/v1/qa","status":200,"duration_ms":42,"request_id":"a1b2c3d4-...","timestamp":"2026-03-07T12:00:00.000Z"}
+```
+
+| 欄位 | 說明 |
+|------|------|
+| `level` | `info`（2xx/3xx）、`warn`（4xx）、`error`（5xx） |
+| `method` | HTTP method |
+| `path` | 請求路徑（不含 query string） |
+| `status` | HTTP status code |
+| `duration_ms` | 請求處理時間（毫秒） |
+| `request_id` | UUID v4（同時設為 `X-Request-Id` response header） |
+| `timestamp` | ISO 8601 時間戳 |
+
+**安全設計**：不記錄 API key header、request body、query string（防洩漏 token）。`/health` 路徑被排除以避免高頻心跳噪音。
+
+### 本地開發
+
+Terminal 直接看到 JSON log，可用 `jq` 美化：
+
+```bash
+pnpm dev 2>&1 | jq .
+```
+
+### CloudWatch Logs
+
+Lambda 部署後，可在 AWS CloudWatch 查看 request log：
+
+| 頁面 | URL |
+|------|-----|
+| Log Group | [`/aws/lambda/seo-insight-api`](https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:log-groups/log-group/$252Faws$252Flambda$252Fseo-insight-api) |
+| Logs Insights | [CloudWatch Logs Insights](https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:logs-insights) |
+
+CLI 查看（不需要登入 Console）：
+
+```bash
+# 即時追蹤最近 1 小時的 log
+aws logs tail /aws/lambda/seo-insight-api --since 1h --follow --region ap-northeast-1 --profile seo-deployer
+
+# 只看 request log（過濾 JSON 格式）
+aws logs tail /aws/lambda/seo-insight-api --since 1h --region ap-northeast-1 --profile seo-deployer | grep '"level"'
+```
+
+### Logs Insights 查詢範例
+
+在 [Logs Insights](https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:logs-insights) 頁面選擇 `/aws/lambda/seo-insight-api` log group 後，可用以下查詢：
+
+```sql
+-- 找出所有 5xx 錯誤
+fields @timestamp, method, path, status, duration_ms, request_id
+| filter status >= 500
+| sort @timestamp desc
+| limit 20
+
+-- 依路徑統計 P95 延遲
+stats percentile(duration_ms, 95) as p95, count(*) as total by path
+| sort p95 desc
+
+-- 用 request_id 關聯前端 502 錯誤
+fields @timestamp, method, path, status, duration_ms
+| filter request_id = "a1b2c3d4-..."
+
+-- 錯誤率趨勢（每 5 分鐘）
+stats sum(status >= 500) / count(*) * 100 as error_rate by bin(5m)
+```
+
+### 502 除錯 Workflow
+
+1. 前端收到 502 → 檢查 response header `X-Request-Id`
+2. CloudWatch Logs Insights → `filter request_id = "<id>"`
+3. 若找到 → 看 `status` + `duration_ms` 判斷後端是否正常回應
+4. 若找不到 → 請求未到達 Lambda（DNS / Function URL 問題）
+5. 若 `duration_ms` 接近 Lambda timeout（120s）→ 考慮增加 timeout 或優化
+
+---
+
 ## 測試
 
 所有路由都有完整的單元 + 整合測試：
@@ -462,9 +549,9 @@ pnpm test:watch               # 監視模式
 pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
-**測試套件統計（v2.29）：**
-- 總測試數：428 個（45 個測試檔案）
-- 通過：428/428 (100%)
+**測試套件統計（v2.31）：**
+- 總測試數：454 個（48 個測試檔案）
+- 通過：454/454 (100%)
 - 覆蓋率：80%+
 
 ---

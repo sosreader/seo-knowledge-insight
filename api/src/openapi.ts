@@ -947,6 +947,33 @@ const paths: Record<string, Record<string, unknown>> = {
       },
     },
   },
+  "/api/v1/pipeline/crawled-not-indexed": {
+    post: {
+      tags: ["Pipeline"],
+      summary: "Analyze crawled-not-indexed path segments",
+      operationId: "analyzeCrawledNotIndexed",
+      description: "Parse and analyze Google Search Console 'Crawled - currently not indexed' data by path segment. Supports URL mode (Google Sheets) and raw TSV mode (inline data).",
+      requestBody: jsonContent({
+        type: "object",
+        properties: {
+          source: { type: "string", format: "uri", description: "Google Sheets published CSV URL (mutually exclusive with raw_tsv)" },
+          raw_tsv: { type: "string", minLength: 10, maxLength: 50000, description: "Raw TSV data string (mutually exclusive with source)" },
+          tab: { type: "string", default: "vocus", description: "Sheet tab name (only used with source)" },
+        },
+      }),
+      responses: {
+        "200": jsonContent(apiResponse({
+          type: "object",
+          properties: {
+            data: { type: "object", description: "Parsed crawled-not-indexed result (domain, not_indexed_total, paths, etc.)" },
+            insight: { type: "object", description: "Analysis insight (overall_severity, domain_change_pct, not_indexed_change_pct, worsening/improving/stable paths, summary_text)" },
+            markdown: { type: "string", description: "Formatted Markdown analysis report" },
+          },
+        })),
+        "400": jsonContent(apiResponse({ type: "null" }), "Invalid request (provide either source or raw_tsv)"),
+      },
+    },
+  },
 };
 
 export function buildOpenAPISpec(): OpenAPISpec {
