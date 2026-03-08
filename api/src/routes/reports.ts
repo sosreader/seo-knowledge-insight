@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import { readdirSync, readFileSync, statSync, existsSync, openSync, readSync, closeSync } from "node:fs";
+import { readFileSync, existsSync, statSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
-import { generateRequestSchema, type ReportSummary, type ReportMeta } from "../schemas/report.js";
+import { generateRequestSchema } from "../schemas/report.js";
 import { paths } from "../config.js";
 import { hasOpenAI } from "../utils/mode-detect.js";
 import { generateReportLocal, saveReport, getAlertMetricNames } from "../services/report-generator-local.js";
@@ -16,74 +16,15 @@ import { qaStore } from "../store/qa-store.js";
 import { hasSupabase } from "../store/supabase-client.js";
 import { SupabaseReportStore } from "../store/supabase-report-store.js";
 import { SupabaseSnapshotStore } from "../store/supabase-snapshot-store.js";
+import { parseReportMeta, listReportFiles } from "../utils/report-file.js";
 
 const supabaseReportStore = hasSupabase() ? new SupabaseReportStore() : null;
 const supabaseSnapshotStore = hasSupabase() ? new SupabaseSnapshotStore() : null;
 
 const execFileAsync = promisify(execFile);
-// Matches report_YYYYMMDD.md (legacy) and report_YYYYMMDD_<sha1-8>.md (content-addressed)
-const REPORT_PATTERN = /^report_(\d{8}(?:_[0-9a-f]{8})?)\.md$/;
 const DATE_RE = /^\d{8}(?:_[0-9a-f]{8})?$/;
-const REPORT_META_RE = /<!-- report_meta ({[\s\S]*?}) -->/;
 const ALLOWED_URL_SCHEMES = new Set(["https:", "http:"]);
 const ALLOWED_URL_HOSTS = new Set(["docs.google.com", "sheets.google.com"]);
-
-function parseReportMeta(content: string): ReportMeta | undefined {
-  const m = content.match(REPORT_META_RE);
-  if (!m) return undefined;
-  try {
-    const raw = JSON.parse(m[1]) as Record<string, unknown>;
-    return {
-      weeks: typeof raw.weeks === "number" ? raw.weeks : 1,
-      generated_at: typeof raw.generated_at === "string" ? raw.generated_at : "",
-      generation_mode: typeof raw.generation_mode === "string" ? raw.generation_mode : "template",
-      generation_label: typeof raw.generation_label === "string" ? raw.generation_label : "",
-      model: typeof raw.model === "string" ? raw.model : undefined,
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-/** Read last N bytes of a file (for parsing meta from tail without reading entire file). */
-function readTail(filepath: string, bytes: number): string {
-  const { size } = statSync(filepath);
-  const start = Math.max(0, size - bytes);
-  const buf = Buffer.alloc(Math.min(bytes, size));
-  const fd = openSync(filepath, "r");
-  try {
-    readSync(fd, buf, 0, buf.length, start);
-    return buf.toString("utf-8");
-  } finally {
-    closeSync(fd);
-  }
-}
-
-function listReportFiles(): readonly ReportSummary[] {
-  const dir = paths.outputDir;
-  if (!existsSync(dir)) return [];
-
-  const files = readdirSync(dir)
-    .filter((f) => REPORT_PATTERN.test(f))
-    .map((f) => {
-      const m = REPORT_PATTERN.exec(f)!;
-      const filepath = join(dir, f);
-      const st = statSync(filepath);
-      // Parse meta from file tail (report_meta is appended at the end, ~200 bytes)
-      const tail = readTail(filepath, 300);
-      const meta = parseReportMeta(tail);
-      return {
-        date: m[1]!,
-        filename: f,
-        size_bytes: st.size,
-        mtime: st.mtimeMs,
-        meta,
-      };
-    })
-    .sort((a, b) => b.mtime - a.mtime);
-
-  return files.map(({ date, filename, size_bytes, meta }) => ({ date, filename, size_bytes, meta }));
-}
 
 export const reportsRoute = new Hono();
 

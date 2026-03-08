@@ -242,6 +242,24 @@ migrate-supabase-verify: ## 驗證 Supabase qa_items 筆數
 quality-gate: ## ETL 品質門檻檢查（hit_rate/mrr/qa_count）
 	$(PYTHON) scripts/quality_gate.py
 
+# ── Supabase 同步 ────────────────────────────────────
+
+.PHONY: sync-db
+sync-db: ## 上傳 reports + sessions 到 Supabase（跳過已存在）
+	cd api && npx tsx scripts/sync-db.ts upload
+
+.PHONY: sync-db-status
+sync-db-status: ## 檢視本地 vs Supabase 差異
+	cd api && npx tsx scripts/sync-db.ts status
+
+.PHONY: sync-db-force
+sync-db-force: ## 強制上傳（覆蓋已存在項目）
+	cd api && npx tsx scripts/sync-db.ts upload --force
+
+.PHONY: sync-db-dry
+sync-db-dry: ## 同步試跑（不寫入）
+	cd api && npx tsx scripts/sync-db.ts upload --dry-run
+
 # ── 說明 ─────────────────────────────────────────────
 
 .PHONY: help

@@ -154,6 +154,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/evaluate-faithfulness-local` — RAGAS Faithfulness 評估（Answer 是否有幻覺，Claude Code 作為 Judge，不需要 OpenAI）
 - `/evaluate-context-precision-local` — RAGAS Context Precision 評估（Retrieved contexts 有多少真正相關，Claude Code 作為 Judge）
 - `/evaluate-crawled-not-indexed-local` — 檢索未索引分析品質評估（12 golden cases，rule-based）
+- `/sync-db` — 本地 Reports + Sessions 上傳至 Supabase（`make sync-db` / `make sync-db-status` / `make sync-db-force`）
 
 ### 評估命令（需要 OpenAI API key）
 
