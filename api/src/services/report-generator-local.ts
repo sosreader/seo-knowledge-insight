@@ -841,7 +841,7 @@ export async function generateReportLocal(
     }
   }
 
-  // Build sections (6 core + optional indexing = up to 7)
+  // Build sections (6 core + optional crawled-not-indexed = up to 7)
   const tracker = new CitationTracker();
   const analyses = llmAnalyses ?? {};
   const s1 = buildSituationSnapshot(alerts, core, down, qaMap, tracker, analyses.situation);

@@ -94,6 +94,7 @@
 | `chat_quality` | **4** | 10 | API-first（`POST /api/v1/chat`）| `evals/eval_chat.py` | `python evals/eval_chat.py` |
 | `qa_classification_quality` | **4** | **48** | API-first（`POST /api/v1/search`）| `evals/eval_qa_classification.py` | `python evals/eval_qa_classification.py` |
 | `dedup_quality` | **3** | **40** | API-first（`POST /api/v1/search`）| `evals/eval_dedup.py` | `python evals/eval_dedup.py` |
+| `crawled_not_indexed_quality` | **5** | **12** | API-backed（`POST /api/v1/pipeline/crawled-not-indexed`）| `evals/eval_crawled_not_indexed.py` | `python evals/eval_crawled_not_indexed.py` |
 | `report-quality` | 7 | — | identity（已生成報告）| `scripts/_eval_report.py` | `python scripts/_eval_report.py --report <path>` |
 | `extraction_quality` | 4 | **12** | identity（已萃取 QA）| `evals/eval_extraction.py` | `python evals/eval_extraction.py` |
 | `enrichment_quality` | 3 | 35 | synonym-expanded keyword | `evals/eval_enrichment.py` | `python evals/eval_enrichment.py` |
@@ -101,9 +102,9 @@
 | `retrieval-enhancement` | 3 | — | synonym-expanded keyword | `scripts/_eval_laminar.py --group retrieval-enhancement` | 同上 |
 | `report-quality-eval` | 4 | — | identity（批量報告）| `scripts/_eval_laminar.py --mode report` | 同上 |
 
-> **主要 group**：`retrieval_quality`（API-backed, 8 指標, 35 scenarios）+ `chat_quality`（API-backed, 4 指標）是最完整的端對端 eval。`qa_classification_quality` 和 `dedup_quality` 為 v2.26 新增。`keyword-retrieval` 保留為 naive baseline 對照。
+> **主要 group**：`retrieval_quality`（API-backed, 8 指標, 35 scenarios）+ `chat_quality`（API-backed, 4 指標）是最完整的端對端 eval。`qa_classification_quality` 和 `dedup_quality` 為 v2.26 新增。`crawled_not_indexed_quality` 為 v2.31 新增。`keyword-retrieval` 保留為 naive baseline 對照。
 
-### Golden Dataset 總覽（v2.26）
+### Golden Dataset 總覽（v2.31）
 
 | Golden File | 筆數 | 涵蓋來源 | 使用的 Eval Groups |
 |-------------|------|---------|-------------------|
@@ -111,6 +112,7 @@
 | `golden_qa.json` | 48 | 9 categories 全覆蓋 | qa_classification_quality |
 | `golden_extraction.json` | **12** | meeting(5) + medium(1) + iThome(2) + google-cases(4) | extraction_quality |
 | `golden_dedup.json` | 40 | 20 merge + 20 no-merge | dedup_quality |
+| `golden_crawled_not_indexed.json` | **12** | 4 severity levels 全覆蓋 | crawled_not_indexed_quality |
 | `golden_report.json` | 5 | 4 focus + 1 guard | push_golden_to_laminar（手動） |
 | `golden_seo_analysis.json` | 1 | provider 比較基準 | push_golden_to_laminar（手動） |
 
@@ -167,6 +169,31 @@
 | overlap_consistency | **TBD** | ≥ 0.50 | merge 對 jaccard 高、no-merge 對 jaccard 低 |
 | category_consistency | **TBD** | ≥ 0.70 | merge 對同 category、no-merge 對不同 category |
 | both_have_results | **TBD** | ≥ 0.95 | 兩個查詢都有搜尋結果 |
+
+### crawled_not_indexed_quality（v2.31 新增）
+
+**離線 eval**（`evals/eval_crawled_not_indexed.py`，golden dataset driven）：
+
+| 指標 | 當前值 | 目標值 | 備註 |
+|------|--------|--------|------|
+| severity_accuracy | **TBD** | >= 0.80 | 整體嚴重度判定正確率 |
+| worsening_path_recall | **TBD** | >= 0.80 | 惡化路徑識別 recall |
+| improving_path_recall | **TBD** | >= 0.80 | 改善路徑識別 recall |
+| path_coverage | **TBD** | >= 0.80 | evaluator 的 path coverage 分數 |
+| overall | **TBD** | >= 0.60 | evaluator 的 overall 分數 |
+
+**線上 scoring**（`pipeline.ts`，每次 API 呼叫 fire-and-forget）：
+
+| scoreEvent | 來源 | 備註 |
+|------------|------|------|
+| `cni_path_coverage` | `crawled-not-indexed-evaluator.ts` | 分析中提及的路徑比例 |
+| `cni_trend_accuracy` | 同上 | 趨勢方向判定正確率 |
+| `cni_has_severity` | 同上 | 是否包含嚴重度評估 |
+| `cni_recommendation_specificity` | 同上 | 路徑建議具體程度 |
+| `cni_data_fidelity` | 同上 | 引用數字與原始資料一致性 |
+| `cni_overall` | 同上 | 5 維度平均 |
+
+> **命名差異說明**：離線 eval（5 指標）測量端對端準確性（severity/path recall），線上 scoring（6 個 `cni_*`）測量單次分析品質（TS evaluator 5 維度）。兩者互補，刻意分開命名。
 
 ### v2.25–v2.26 Eval 改善摘要
 

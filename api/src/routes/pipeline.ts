@@ -20,8 +20,9 @@ import {
 } from "../schemas/pipeline.js";
 import { execPython, execQaTools } from "../services/pipeline-runner.js";
 import { loadMetrics } from "../services/metrics-parser.js";
-import { loadCrawledNotIndexed } from "../services/crawled-not-indexed-parser.js";
+import { loadCrawledNotIndexed, parseCrawledNotIndexedTsv } from "../services/crawled-not-indexed-parser.js";
 import { analyzeCrawledNotIndexed } from "../services/crawled-not-indexed-analyzer.js";
+import { scoreEvent } from "../utils/laminar-scoring.js";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
 import { hasSupabase } from "../store/supabase-client.js";
@@ -480,11 +481,39 @@ pipelineRoute.post("/crawled-not-indexed", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  const { source, tab } = parsed.data;
+  const { source, raw_tsv, tab } = parsed.data;
 
   try {
-    const data = await loadCrawledNotIndexed(source, tab);
+    const data = raw_tsv
+      ? parseCrawledNotIndexedTsv(raw_tsv)
+      : await loadCrawledNotIndexed(source!, tab);
     const insight = analyzeCrawledNotIndexed(data);
+
+    // Async quality eval — does not block response
+    if (data.paths.length > 0) {
+      void (async () => {
+        try {
+          const { observe } = await import("@lmnr-ai/lmnr");
+          const { evaluateCrawledNotIndexedAnalysis } = await import(
+            "../services/crawled-not-indexed-evaluator.js"
+          );
+          const evalResult = evaluateCrawledNotIndexedAnalysis(insight.markdown, data);
+          await observe({ name: "crawled_not_indexed_quality_eval" }, async () => {
+            await Promise.all([
+              scoreEvent("cni_path_coverage", evalResult.path_coverage),
+              scoreEvent("cni_trend_accuracy", evalResult.trend_accuracy),
+              scoreEvent("cni_has_severity", evalResult.has_severity_assessment),
+              scoreEvent("cni_recommendation_specificity", evalResult.recommendation_specificity),
+              scoreEvent("cni_data_fidelity", evalResult.data_fidelity),
+              scoreEvent("cni_overall", evalResult.overall),
+            ]);
+          });
+        } catch {
+          // Scoring failures must never affect the main response path.
+        }
+      })();
+    }
+
     return c.json(ok({
       data,
       insight: {

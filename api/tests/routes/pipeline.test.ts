@@ -909,3 +909,143 @@ describe("DELETE /api/v1/pipeline/metrics/snapshots/:id", () => {
     expect(res.status).toBe(400);
   });
 });
+
+// --- POST /pipeline/crawled-not-indexed ---
+
+const SAMPLE_TSV_PAYLOAD = [
+  "全網域\t19.69%\t0\t1,014,769\t409,827\t\t843,969",
+  "檢索未索引 (全部)\t32.19%\t0\t715,813\t46,287\t\t433,875",
+  "/article/\t52.59%\t0\t374,127\t12,604\t\t99,887",
+  "/salon/\t133.71%\t0\t94,803\t11,659\t\t94,803",
+  "總合\t61.99%\t-1\t442,033\t42,819\t\t",
+  "總合/全網域\t44.66%\t-1\t43.56%\t10.45%\t\t",
+  "差距\t\t\t\t\t\t",
+].join("\n");
+
+vi.mock("../../src/services/crawled-not-indexed-parser.js", () => ({
+  parseCrawledNotIndexedTsv: vi.fn().mockImplementation((tsv: string) => {
+    // Minimal mock: return non-empty result for non-empty input
+    if (!tsv || tsv.trim().length === 0) {
+      return { domain: null, not_indexed_total: null, paths: [], sum: null, ratio: null, gap: null, all_rows: [] };
+    }
+    return {
+      domain: { segment: "全網域", change_pct: 0.1969, delta: 0, value_a: 1014769, value_b: 409827, baseline: 843969, row_type: "domain" },
+      not_indexed_total: { segment: "檢索未索引 (全部)", change_pct: 0.3219, delta: 0, value_a: 715813, value_b: 46287, baseline: 433875, row_type: "not_indexed_total" },
+      paths: [
+        { segment: "/article/", change_pct: 0.5259, delta: 0, value_a: 374127, value_b: 12604, baseline: 99887, row_type: "path" },
+        { segment: "/salon/", change_pct: 1.3371, delta: 0, value_a: 94803, value_b: 11659, baseline: 94803, row_type: "path" },
+      ],
+      sum: { segment: "總合", change_pct: 0.6199, delta: -1, value_a: 442033, value_b: 42819, baseline: null, row_type: "sum" },
+      ratio: { segment: "總合/全網域", change_pct: 0.4466, delta: -1, value_a: 0.4356, value_b: 0.1045, baseline: null, row_type: "ratio" },
+      gap: { segment: "差距", change_pct: null, delta: null, value_a: null, value_b: null, baseline: null, row_type: "gap" },
+      all_rows: [],
+    };
+  }),
+  loadCrawledNotIndexed: vi.fn().mockResolvedValue({
+    domain: { segment: "全網域", change_pct: 0.1969, delta: 0, value_a: 1014769, value_b: 409827, baseline: 843969, row_type: "domain" },
+    not_indexed_total: null,
+    paths: [],
+    sum: null,
+    ratio: null,
+    gap: null,
+    all_rows: [],
+  }),
+}));
+
+vi.mock("../../src/services/crawled-not-indexed-analyzer.js", () => ({
+  analyzeCrawledNotIndexed: vi.fn().mockReturnValue({
+    overall_severity: "moderate",
+    domain_change_pct: 0.1969,
+    not_indexed_change_pct: 0.3219,
+    worsening_paths: [{ segment: "/article/", change_pct: 0.5259, severity: "critical" as const, recommendation: "檢查核心內容品質" }],
+    improving_paths: [],
+    stable_paths: [],
+    summary_text: "Overall moderate increase in not-indexed pages.",
+    markdown: "## Crawled Not Indexed\n\nModerate severity.",
+  }),
+}));
+
+describe("POST /api/v1/pipeline/crawled-not-indexed", () => {
+  it("raw_tsv mode: returns parsed data and insight from TSV string", async () => {
+    const res = await app.request("/api/v1/pipeline/crawled-not-indexed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_tsv: SAMPLE_TSV_PAYLOAD }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data).toHaveProperty("data");
+    expect(body.data).toHaveProperty("insight");
+    expect(body.data).toHaveProperty("markdown");
+    expect(body.data.data.domain).not.toBeNull();
+    expect(body.data.insight.overall_severity).toBe("moderate");
+  });
+
+  it("raw_tsv mode: calls parseCrawledNotIndexedTsv with the provided TSV", async () => {
+    const { parseCrawledNotIndexedTsv } = await import("../../src/services/crawled-not-indexed-parser.js");
+    vi.mocked(parseCrawledNotIndexedTsv).mockClear();
+
+    await app.request("/api/v1/pipeline/crawled-not-indexed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_tsv: SAMPLE_TSV_PAYLOAD }),
+    });
+
+    expect(parseCrawledNotIndexedTsv).toHaveBeenCalledWith(SAMPLE_TSV_PAYLOAD);
+  });
+
+  it("source URL mode: still works (regression)", async () => {
+    const { loadCrawledNotIndexed } = await import("../../src/services/crawled-not-indexed-parser.js");
+    vi.mocked(loadCrawledNotIndexed as ReturnType<typeof vi.fn>).mockClear();
+
+    const res = await app.request("/api/v1/pipeline/crawled-not-indexed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: "https://docs.google.com/spreadsheets/d/abc123",
+        tab: "vocus",
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(loadCrawledNotIndexed).toHaveBeenCalled();
+  });
+
+  it("returns 400 when both source and raw_tsv are provided", async () => {
+    const res = await app.request("/api/v1/pipeline/crawled-not-indexed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: "https://docs.google.com/spreadsheets/d/abc123",
+        raw_tsv: SAMPLE_TSV_PAYLOAD,
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when neither source nor raw_tsv is provided", async () => {
+    const res = await app.request("/api/v1/pipeline/crawled-not-indexed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tab: "vocus" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when raw_tsv is too short (less than 10 chars)", async () => {
+    const res = await app.request("/api/v1/pipeline/crawled-not-indexed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_tsv: "short" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when raw_tsv exceeds 50000 chars", async () => {
+    const res = await app.request("/api/v1/pipeline/crawled-not-indexed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_tsv: "a".repeat(50001) }),
+    });
+    expect(res.status).toBe(400);
+  });
+});

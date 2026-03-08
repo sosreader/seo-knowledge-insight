@@ -22,6 +22,8 @@ export interface ReportEvalResult {
   overall: number;
   /** 1 if report contains Claude Code LLM-augmented sections, else 0 (not counted in overall) */
   llm_augmented: number;
+  /** 1 if report contains ## 檢索未索引分析 section, else 0 (independent metric, not counted in overall) */
+  has_crawled_not_indexed_section: number;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────
@@ -73,6 +75,7 @@ export function evaluateReport(
       alert_coverage: 0,
       overall: 0,
       llm_augmented: 0,
+      has_crawled_not_indexed_section: 0,
     };
   }
 
@@ -139,6 +142,8 @@ export function evaluateReport(
   const llm_augmented =
     body.includes("AI 輔助") || body.includes("AI 解讀") ? 1 : 0;
 
+  const has_crawled_not_indexed_section = body.includes("## 檢索未索引分析") ? 1 : 0;
+
   return {
     section_coverage,
     kb_citation_count,
@@ -147,6 +152,7 @@ export function evaluateReport(
     alert_coverage,
     overall,
     llm_augmented,
+    has_crawled_not_indexed_section,
   };
 }
 

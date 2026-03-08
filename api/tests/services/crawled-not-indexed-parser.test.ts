@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { parseCrawledNotIndexedTsv } from "../../src/services/crawled-not-indexed-parser.js";
 
 const SAMPLE_TSV = [
@@ -103,6 +105,24 @@ describe("parseCrawledNotIndexedTsv", () => {
     expect(types).toContain("sum");
     expect(types).toContain("ratio");
     expect(types).toContain("gap");
+  });
+
+  it("parses all golden dataset cases without throwing", () => {
+    const goldenPath = join(__dirname, "../../../eval/golden_crawled_not_indexed.json");
+    const goldenData = JSON.parse(readFileSync(goldenPath, "utf-8")) as Array<{
+      id: string;
+      input_tsv: string;
+    }>;
+
+    expect(goldenData).toHaveLength(12);
+
+    for (const testCase of goldenData) {
+      const result = parseCrawledNotIndexedTsv(testCase.input_tsv);
+      expect(result, `case ${testCase.id} should return valid result`).toBeDefined();
+      expect(result.all_rows.length, `case ${testCase.id} should parse at least one row`).toBeGreaterThan(0);
+      expect(result.domain, `case ${testCase.id} should have domain row`).not.toBeNull();
+      expect(result.not_indexed_total, `case ${testCase.id} should have not_indexed_total row`).not.toBeNull();
+    }
   });
 
   it("extracts indexing section from full sheet with preceding metrics", () => {

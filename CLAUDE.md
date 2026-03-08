@@ -153,6 +153,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/evaluate-provider <目錄路徑>` — 評估通用 LLM Provider 的 SEO 洞察品質（Claude Code 作為 Judge）
 - `/evaluate-faithfulness-local` — RAGAS Faithfulness 評估（Answer 是否有幻覺，Claude Code 作為 Judge，不需要 OpenAI）
 - `/evaluate-context-precision-local` — RAGAS Context Precision 評估（Retrieved contexts 有多少真正相關，Claude Code 作為 Judge）
+- `/evaluate-crawled-not-indexed-local` — 檢索未索引分析品質評估（12 golden cases，rule-based）
 
 ### 評估命令（需要 OpenAI API key）
 
@@ -257,7 +258,7 @@ Pipeline API 端點：
 - `POST /api/v1/pipeline/metrics/save` — 儲存指標快照（支援 source、tab、label、weeks metadata）
 - `GET /api/v1/pipeline/metrics/snapshots` — 列出指標快照清單（含 metadata）
 - `DELETE /api/v1/pipeline/metrics/snapshots/:id` — 刪除指定快照
-- `POST /api/v1/pipeline/crawled-not-indexed` — 檢索未索引路徑分段分析（解析 Google Sheet 中的檢索未索引資料）
+- `POST /api/v1/pipeline/crawled-not-indexed` — 檢索未索引路徑分段分析（支援 `source` URL 模式和 `raw_tsv` 直接輸入模式）
 
 Synonyms API 端點（v2.11 新增）：
 

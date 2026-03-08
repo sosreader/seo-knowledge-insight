@@ -303,6 +303,7 @@ reportsRoute.post("/generate", async (c) => {
               scoreEvent("report_alert_coverage", evalResult.alert_coverage),
               scoreEvent("report_overall", evalResult.overall),
               scoreEvent("report_llm_augmented", evalResult.llm_augmented),
+              scoreEvent("report_has_crawled_not_indexed", evalResult.has_crawled_not_indexed_section),
             ]);
           });
         } catch {
