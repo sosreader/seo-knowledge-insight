@@ -1561,7 +1561,7 @@ Health Score = 100
 |------|------|------|
 | 80–100 | 💚 良好 | 維持現狀，重點監控新機會 |
 | 60–79 | 🟡 需關注 | 調查特定異常指標根因 |
-| < 60 | 🔴 警示 | 啟動應急除錯（structure / indexing / traffic） |
+| < 60 | 🔴 警示 | 啟動應急除錯（structure / crawled-not-indexed / traffic） |
 
 ### Laminar Online Scoring（非同步）
 

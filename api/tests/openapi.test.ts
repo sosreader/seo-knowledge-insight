@@ -61,8 +61,8 @@ describe("OpenAPI Spec", () => {
     const spec = buildOpenAPISpec();
     const pathKeys = Object.keys(spec.paths as Record<string, unknown>);
 
-    // 31 unique path patterns covering 34 HTTP operations
-    expect(pathKeys.length).toBe(31);
+    // 32 unique path patterns covering 36 HTTP operations
+    expect(pathKeys.length).toBe(32);
 
     // Verify key paths exist
     const expected = [
@@ -95,6 +95,7 @@ describe("OpenAPI Spec", () => {
       "/api/v1/pipeline/metrics/save",
       "/api/v1/pipeline/metrics/snapshots",
       "/api/v1/pipeline/metrics/snapshots/{id}",
+      "/api/v1/pipeline/crawled-not-indexed",
     ];
 
     for (const path of expected) {
