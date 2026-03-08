@@ -171,7 +171,7 @@ describe("POST /api/v1/reports/generate (local mode — no OpenAI)", () => {
     expect(files.length).toBeGreaterThan(0);
     const content = readFileSync(pathJoin(tmpDir, files[files.length - 1]!), "utf-8");
 
-    for (const heading of ["## 一、", "## 二、", "## 三、", "## 四、", "## 五、", "## 六、"]) {
+    for (const heading of ["## 一、", "## 二、", "## 三、", "## 四、", "## 五、", "## 六、", "## 七、"]) {
       expect(content).toContain(heading);
     }
   });
@@ -193,7 +193,7 @@ describe("POST /api/v1/reports/generate (local mode — no OpenAI)", () => {
     expect(content).toMatch(/知識庫版本：v[\d]{4}\.[\d]{2}\.[\d]{2}|知識庫版本：v\(unknown\)/);
   });
 
-  it("generated report section 六 contains at least one link", async () => {
+  it("generated report section 七 contains at least one link", async () => {
     const res = await app.request("/api/v1/reports/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -207,7 +207,7 @@ describe("POST /api/v1/reports/generate (local mode — no OpenAI)", () => {
     const content = readFileSync(pathJoin(tmpDir, files[files.length - 1]!), "utf-8");
 
     // Section 六 should exist and have a link (KB or external)
-    expect(content).toContain("## 六、來源");
+    expect(content).toContain("## 七、來源");
     // When no QAs found, section says "未找到" — this is acceptable fallback
     const hasKbLink = content.includes("/admin/seoInsight/") || content.includes("https://") || content.includes("未找到");
     expect(hasKbLink).toBe(true);

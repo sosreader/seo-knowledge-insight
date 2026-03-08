@@ -109,6 +109,11 @@ vi.mock("../../src/agent/agent-deps.js", () => ({
   createAgentDeps: () => ({}),
 }));
 
+const mockRagChatStream = vi.fn();
+vi.mock("../../src/services/rag-chat-stream.js", () => ({
+  ragChatStream: (...args: unknown[]) => mockRagChatStream(...args),
+}));
+
 import { Hono } from "hono";
 import { chatRoute } from "../../src/routes/chat.js";
 import { config } from "../../src/config.js";
@@ -392,5 +397,72 @@ describe("POST /api/v1/chat", () => {
       body: JSON.stringify({ message: "What is SEO?", mode: "invalid" }),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /api/v1/chat/stream", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns context-only when no OpenAI key (non-streaming fallback)", async () => {
+    const app = buildApp();
+    const res = await app.request("/api/v1/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "What is SEO?" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.mode).toBe("context-only");
+  });
+
+  it("returns 400 for invalid body", async () => {
+    const app = buildApp();
+    const res = await app.request("/api/v1/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns SSE stream when OpenAI key is set", async () => {
+    const originalKey = config.OPENAI_API_KEY;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+
+    // Mock ragChatStream to call callbacks
+    mockRagChatStream.mockImplementationOnce(async (_msg: string, _hist: unknown, callbacks: {
+      onSources: (s: unknown[]) => Promise<void>;
+      onToken: (t: string) => Promise<void>;
+      onMetadata: (m: unknown) => Promise<void>;
+      onDone: () => Promise<void>;
+    }) => {
+      await callbacks.onSources([{ id: "abc123", question: "What is SEO?" }]);
+      await callbacks.onToken("Hello");
+      await callbacks.onToken(" world");
+      await callbacks.onMetadata({ model: "gpt-4o-mini", mode: "rag" });
+      await callbacks.onDone();
+    });
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "What is SEO?" }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/event-stream");
+
+      const text = await res.text();
+      expect(text).toContain("event: sources");
+      expect(text).toContain("event: token");
+      expect(text).toContain("event: metadata");
+      expect(text).toContain("event: done");
+      expect(text).toContain("Hello");
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = originalKey;
+    }
   });
 });

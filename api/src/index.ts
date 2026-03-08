@@ -54,6 +54,7 @@ api.use("/qa/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/qa", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/search", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/chat", rateLimit(config.RATE_LIMIT_CHAT));
+api.use("/chat/*", rateLimit(config.RATE_LIMIT_CHAT));
 api.use("/feedback", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/reports", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/reports/generate", rateLimit(config.RATE_LIMIT_GENERATE));

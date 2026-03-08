@@ -56,6 +56,11 @@ vi.mock("../../src/services/reranker.js", () => ({
   rerank: vi.fn((_query: string, hits: unknown[]) => hits),
 }));
 
+const mockRecordMiss = vi.fn();
+vi.mock("../../src/store/learning-store.js", () => ({
+  recordMiss: (...args: unknown[]) => mockRecordMiss(...args),
+}));
+
 import { FAKE_ITEMS } from "../setup.js";
 
 // Dynamic import to get the un-observed version
@@ -84,7 +89,9 @@ describe("ragChat", () => {
 
   it("passes history to GPT when provided", async () => {
     mockGetEmbedding.mockResolvedValueOnce(new Float32Array([0.1]));
-    mockHybridSearch.mockResolvedValueOnce([]);
+    mockHybridSearch.mockResolvedValueOnce([
+      { item: FAKE_ITEMS[0], score: 0.7 },
+    ]);
     mockCreate.mockResolvedValueOnce({
       choices: [{ message: { content: "Follow-up answer" } }],
     });
@@ -102,12 +109,106 @@ describe("ragChat", () => {
 
   it("handles empty GPT response", async () => {
     mockGetEmbedding.mockResolvedValueOnce(new Float32Array([0.1]));
-    mockHybridSearch.mockResolvedValueOnce([]);
+    mockHybridSearch.mockResolvedValueOnce([
+      { item: FAKE_ITEMS[0], score: 0.65 },
+    ]);
     mockCreate.mockResolvedValueOnce({
       choices: [{ message: { content: null } }],
     });
 
     const result = await ragChat("test");
     expect(result.answer).toBe("");
+  });
+
+  describe("retrieval quality gate", () => {
+    it("returns context-only when retrieval quality is incorrect (score < 0.4)", async () => {
+      mockGetEmbedding.mockResolvedValueOnce(new Float32Array([0.1]));
+      mockHybridSearch.mockResolvedValueOnce([
+        { item: FAKE_ITEMS[0], score: 0.3 },
+      ]);
+
+      const result = await ragChat("completely unrelated query");
+      expect(result.mode).toBe("context-only");
+      expect(result.answer).toBeNull();
+      expect(result.metadata?.retrieval_quality).toBe("incorrect");
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockRecordMiss).toHaveBeenCalledWith({
+        query: "completely unrelated query",
+        top_score: 0.3,
+        context: "rag-chat",
+      });
+    });
+
+    it("returns context-only when no hits at all", async () => {
+      mockGetEmbedding.mockResolvedValueOnce(new Float32Array([0.1]));
+      mockHybridSearch.mockResolvedValueOnce([]);
+
+      const result = await ragChat("no results query");
+      expect(result.mode).toBe("context-only");
+      expect(result.answer).toBeNull();
+      expect(result.metadata?.retrieval_quality).toBe("incorrect");
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it("appends disclaimer for ambiguous retrieval (0.4 <= score < 0.6)", async () => {
+      mockGetEmbedding.mockResolvedValueOnce(new Float32Array([0.1]));
+      mockHybridSearch.mockResolvedValueOnce([
+        { item: FAKE_ITEMS[0], score: 0.5 },
+      ]);
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: "Some answer based on limited data." } }],
+      });
+
+      const result = await ragChat("ambiguous query");
+      expect(result.mode).toBe("rag");
+      expect(result.answer).toContain("Some answer based on limited data.");
+      expect(result.answer).toContain("注意：以上回答基於相似度較低的知識庫結果");
+      expect(result.metadata?.retrieval_quality).toBe("ambiguous");
+    });
+
+    it("proceeds normally for correct retrieval (score >= 0.6)", async () => {
+      mockGetEmbedding.mockResolvedValueOnce(new Float32Array([0.1]));
+      mockHybridSearch.mockResolvedValueOnce([
+        { item: FAKE_ITEMS[0], score: 0.85 },
+      ]);
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: "Confident answer [1]." } }],
+      });
+
+      const result = await ragChat("well-matched query");
+      expect(result.mode).toBe("rag");
+      expect(result.answer).toBe("Confident answer [1].");
+      expect(result.answer).not.toContain("注意：以上回答基於相似度較低的知識庫結果");
+      expect(result.metadata?.retrieval_quality).toBe("correct");
+    });
+  });
+
+  describe("inline citation", () => {
+    it("tracks citation count in metadata", async () => {
+      mockGetEmbedding.mockResolvedValueOnce(new Float32Array([0.1]));
+      mockHybridSearch.mockResolvedValueOnce([
+        { item: FAKE_ITEMS[0], score: 0.9 },
+        { item: FAKE_ITEMS[1], score: 0.8 },
+      ]);
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: "LCP [1] and title tags [2] are important." } }],
+      });
+
+      const result = await ragChat("SEO basics");
+      expect(result.metadata?.citation_count).toBe(2);
+    });
+
+    it("reports zero citations when answer has none", async () => {
+      mockGetEmbedding.mockResolvedValueOnce(new Float32Array([0.1]));
+      mockHybridSearch.mockResolvedValueOnce([
+        { item: FAKE_ITEMS[0], score: 0.75 },
+      ]);
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: "General SEO advice." } }],
+      });
+
+      const result = await ragChat("general question");
+      expect(result.metadata?.citation_count).toBe(0);
+    });
   });
 });

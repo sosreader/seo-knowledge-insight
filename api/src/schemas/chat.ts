@@ -37,6 +37,9 @@ export interface MessageMetadata {
   readonly duration_ms?: number;
   readonly retrieval_count?: number;
   readonly reranker_used?: boolean;
+  readonly cache_hit?: boolean;
+  readonly retrieval_quality?: "correct" | "ambiguous" | "incorrect";
+  readonly citation_count?: number;
 }
 
 export interface ChatResponse {
