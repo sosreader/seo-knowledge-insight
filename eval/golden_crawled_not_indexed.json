@@ -2,7 +2,7 @@
   {
     "id": "crawled_not_indexed_critical_multi_path",
     "description": "多路徑嚴重惡化場景：/article/ 和 /salon/ 大幅上升，應標記 critical",
-    "input_tsv": "全網域\t19.69%\t0\t1,014,769\t409,827\t\t843,969\n檢索未索引 (全部)\t32.19%\t0\t715,813\t46,287\t\t433,875\n/article/\t52.59%\t0\t374,127\t12,604\t\t99,887\n/en/\t-31.51%\t0\t22,891\t950\t\t950\n/post\t49.79%\t1\t2,461\t446\t\t2,461\n/salon/\t133.71%\t0\t94,803\t11,659\t\t94,803\n/tag/\t-11.99%\t0\t34,171\t10,625\t\t27,020\n/user/\t-3.05%\t0\t4,197\t1,352\t\t3,391\n總合\t61.99%\t-1\t442,033\t42,819\t\t\n總合/全網域\t44.66%\t-1\t43.56%\t10.45%\t\t\n差距\t\t\t\t\t\t",
+    "input_tsv": "全網域\t19.69%\t0\t1,014,769\t409,827\t\t843,969\n檢索未索引 (全部)\t32.19%\t0\t715,813\t46,287\t\t433,875\n/article/\t52.59%\t0\t374,127\t12,604\t\t99,887\n/en/\t-31.51%\t0\t22,891\t950\t\t950\n/post\t49.79%\t1\t2,461\t446\t\t2,461\n/salon/\t133.71%\t0\t94,803\t11,659\t\t94,803\n/tag/\t-11.99%\t0\t34,171\t10,625\t\t27,020\n/user/\t-3.05%\t0\t4,197\t1,352\t\t3,391\n總合\t66.80%\t0\t442,033\t42,819\t\t228,512\n總合/全網域\t46.95%\t0\t43.56%\t10.45%\t\t27.08%\n差距\t\t\t\t\t\t205,363",
     "expected_severity": "critical",
     "expected_worsening_paths": ["/salon/", "/article/", "/post"],
     "expected_improving_paths": ["/en/", "/tag/"],
