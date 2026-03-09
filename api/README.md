@@ -1,17 +1,24 @@
-# Hono TypeScript API (v2.29)
+# Hono TypeScript API (v3.0)
 
 REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（Node.js server / AWS Lambda）。
 
 **特點：**
-- 9 個路由器（Routers）、33 個 API endpoints、454 個測試（48 檔案，coverage 80%+）
+- 9 個路由器（Routers）、39 個 API endpoints、562 個測試（56 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
 - Local Mode graceful degradation（無 OpenAI 時自動降級）
 - Supabase pgvector hybrid search（自動偵測，fallback 檔案模式）
-- Lambda + Function URL 部署（arm64，~$0/月）
+- Lambda + Function URL 部署（arm64，~$0/月，支援 Response Streaming）
 - 純 TypeScript 架構——metrics-parser + report-llm 已消除 Lambda Python 依賴
 - 安全加固：SSRF whitelist (pipeline schema)、auth fail-fast (production 503)、HTTP security headers middleware、session UUID validation
+- CRAG 3-tier quality gate（correct / ambiguous / incorrect 三級檢索品質閘門）
+- SSE streaming（`POST /chat/stream`，5 event types）
+- Inline citation（[1][2] 來源標注 + `validateCitations()` 後處理）
+- Exact match response cache（sha256 hash lookup）
+- Categorical feedback（4 categories: wrong_answer / missing_info / wrong_source / outdated）
+- Timeseries anomaly detection（MA deviation / consecutive decline / linear trend）
+- AI visibility 報告維度（7 維度含 AI 可見度；有 crawled-not-indexed 資料時升至 8 維度）
 
 ---
 
@@ -118,18 +125,24 @@ Client → Function URL / localhost:8002
 - 有 OpenAI API Key：使用 embedding + cosine similarity（語意搜尋）
 - 無 OpenAI API Key：自動降級至 keyword-only 搜尋
 
-### 4. RAG 問答 (chat) — 1 個 endpoint
+### 4. RAG 問答 (chat) — 2 個 endpoints
 
 | 方法 | 路由 | 說明 | 認證 | Rate Limit |
 |------|------|------|------|-----------|
 | POST | `/api/v1/chat` | 互動式問答（有 OpenAI: RAG + GPT，無: context-only） | ✓ | 20/min |
+| POST | `/api/v1/chat/stream` | SSE streaming 問答（5 event types: sources/token/metadata/done/error） | ✓ | 20/min |
 
 **三模式 Graceful Degradation:**
 - **Agent mode**（`AGENT_ENABLED=true` 或 `auto` + 有 OpenAI key）：LLM 自主決定 tool calling（search / get_qa_detail / list_categories / get_stats），多輪收集資訊後回答
 - **RAG mode**（有 OpenAI key，agent 未啟用；或 request `mode: "rag"`）：單次檢索相關 Q&A + GPT 生成回答
 - **Context-only mode**（無 OpenAI key）：僅回傳相關 Q&A 內容
 
-**Response Metadata（v2.27）：** 每次回應附帶 `metadata` 欄位，記錄 model、provider、mode、embedding_model、input/output/total/reasoning tokens、duration_ms、retrieval_count、reranker_used。Agent mode 額外記錄 `tool_calls_count`、`agent_turns`。Session assistant message 同步記錄。
+**CRAG Quality Gate（v3.0）：** 檢索結果經 3-tier 品質閘門評估：
+- **correct**（score >= 0.6）：正常 RAG flow + inline citation [1][2]
+- **ambiguous**（0.4–0.6）：加入謹慎指示 + 免責聲明
+- **incorrect**（< 0.4）：直接回傳 context-only，不呼叫 GPT
+
+**Response Metadata（v3.0）：** 每次回應附帶 `metadata` 欄位，記錄 model、provider、mode、embedding_model、input/output/total/reasoning tokens、duration_ms、retrieval_count、reranker_used、`retrieval_quality`（correct/ambiguous/incorrect）、`citation_count`、`cache_hit`。Agent mode 額外記錄 `tool_calls_count`、`agent_turns`。Session assistant message 同步記錄。
 
 ### 5. SEO 週報 (reports) — 3 個 endpoints
 
@@ -153,9 +166,9 @@ Client → Function URL / localhost:8002
 
 | 方法 | 路由 | 說明 | 認證 | Rate Limit |
 |------|------|------|------|-----------|
-| POST | `/api/v1/feedback` | 提交使用者回饋 | ✓ | 60/min |
+| POST | `/api/v1/feedback` | 提交使用者回饋（支援 4 類別：wrong_answer/missing_info/wrong_source/outdated） | ✓ | 60/min |
 
-### 8. Pipeline 管理 (pipeline) — 16 個 endpoints
+### 8. Pipeline 管理 (pipeline) — 18 個 endpoints
 
 | 方法 | 路由 | 說明 | 認證 | Rate Limit |
 |------|------|------|------|-----------|
@@ -175,6 +188,8 @@ Client → Function URL / localhost:8002
 | POST | `/api/v1/pipeline/metrics/save` | 儲存指標快照 | ✓ | 60/min |
 | GET | `/api/v1/pipeline/metrics/snapshots` | 列出指標快照清單 | ✓ | 60/min |
 | DELETE | `/api/v1/pipeline/metrics/snapshots/:id` | 刪除指定快照 | ✓ | 60/min |
+| GET | `/api/v1/pipeline/metrics/trends` | Timeseries 異常偵測（MA deviation / decline / trend） | ✓ | 60/min |
+| GET | `/api/v1/pipeline/llm-usage` | LLM cost/latency monitoring | ✓ | 60/min |
 
 ### 9. 同義詞管理 (synonyms) — 4 個 endpoints（v2.10 新增）
 
@@ -249,7 +264,7 @@ curl -H "X-API-Key: your-api-key" http://localhost:8002/api/v1/qa
 api/
 ├── src/
 │   ├── index.ts              # 入口點（middleware + route mount + OpenAPI/Scalar + initStores()）
-│   ├── openapi.ts            # OpenAPI 3.1 spec（31 paths, 32 endpoints）
+│   ├── openapi.ts            # OpenAPI 3.1 spec（32 paths, 36 endpoints）
 │   ├── lambda.ts             # Lambda 入口（cold start + hono/aws-lambda handler）
 │   ├── config.ts             # Zod 驗證環境變數 + paths
 │   ├── routes/               # 9 個路由
@@ -292,15 +307,19 @@ api/
 │   │   └── agent-deps.ts       # qaStore → AgentDeps 橋接（DI）
 │   ├── services/
 │   │   ├── embedding.ts      # OpenAI embedding 服務
-│   │   ├── rag-chat.ts       # RAG 問答邏輯
+│   │   ├── rag-chat.ts       # RAG 問答邏輯（CRAG quality gate + inline citation）
+│   │   ├── rag-chat-stream.ts  # SSE streaming 問答（callback-based）
+│   │   ├── retrieval-gate.ts   # CRAG 3-tier quality gate + citation validation
 │   │   ├── reranker.ts       # Claude Haiku reranker
+│   │   ├── response-cache.ts   # Exact match response cache（sha256）
 │   │   ├── context-relevance.ts  # Context Relevance 評估
+│   │   ├── timeseries-analyzer.ts # Timeseries anomaly detection（MA/decline/trend）
 │   │   ├── metrics-parser.ts # SEO 指標解析（純 TS，取代 Python）
 │   │   ├── crawled-not-indexed-parser.ts # 檢索未索引 TSV 解析
 │   │   ├── crawled-not-indexed-analyzer.ts # 檢索未索引分析規則引擎 + LLM prompt
 │   │   ├── crawled-not-indexed-evaluator.ts # 檢索未索引品質 5 維度評估器
-│   │   ├── report-generator-local.ts  # 7 維度本地週報（新增索引章節）
-│   │   ├── report-llm.ts     # LLM 週報生成（純 TS，取代 Python）
+│   │   ├── report-generator-local.ts  # 8 維度本地週報（含 AI 可見度 + 索引章節）
+│   │   ├── report-llm.ts     # LLM 週報生成（純 TS，7 維度含 AI 可見度）
 │   │   ├── report-evaluator.ts  # 5 維度品質評估
 │   │   └── pipeline-runner.ts # Python 腳本執行器
 │   ├── schemas/              # Zod schemas
@@ -321,14 +340,20 @@ api/
 │       ├── sanitize.ts       # HTML escape 防 XSS
 │       ├── mode-detect.ts    # hasOpenAI() / hasSupabase() / isAgentEnabled() / resolveMode() 偵測
 │       ├── observability.ts  # Laminar tracing
-│       └── laminar-scoring.ts  # Online scoring
+│       ├── laminar-scoring.ts  # Online scoring
+│       └── llm-usage-logger.ts  # LLM cost monitoring（token usage tracking）
 ├── docs/                       # Mintlify API 文件（託管於 vocus.mintlify.app）
 │   ├── docs.json              # Mintlify 設定（docs.json v2 格式）
 │   ├── openapi.json           # OpenAPI 3.1 靜態規格（31 paths）
 │   ├── introduction.mdx       # API 簡介
 │   ├── authentication.mdx     # 認證說明
 │   └── favicon.svg            # 文件站 favicon
-├── tests/                      # 45 個測試檔案，428 tests
+├── scripts/
+│   ├── ai-crawler-checker.ts  # AI crawler readiness CLI（GPTBot/ClaudeBot 等 10 bots）
+│   ├── feedback-to-golden.ts  # 使用者回饋 → golden dataset 候選
+│   ├── sync-db.ts             # Reports + Sessions → Supabase 同步
+│   └── eval-semantic.ts       # Retrieval eval（keyword/hybrid/rerank）
+├── tests/                      # 56 個測試檔案，562 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
@@ -419,7 +444,7 @@ zip lambda.js + package.json → aws lambda update-function-code
 - Function: `seo-insight-api`
 - Architecture: arm64（便宜 20%）
 - Runtime: Node.js 22
-- Memory: 512 MB / Timeout: 30s
+- Memory: 512 MB / Timeout: 120s
 - Function URL: `https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/`
 
 ### Docker（本地驗證用）
@@ -549,9 +574,9 @@ pnpm test:watch               # 監視模式
 pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
-**測試套件統計（v2.31）：**
-- 總測試數：454 個（48 個測試檔案）
-- 通過：454/454 (100%)
+**測試套件統計（v3.0）：**
+- 總測試數：562 個（56 個測試檔案）
+- 通過：562/562 (100%)
 - 覆蓋率：80%+
 
 ---
