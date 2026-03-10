@@ -274,20 +274,61 @@ def ndcg_at_k(output: dict, target: dict) -> float:
     return dcg / idcg if idcg > 0 else 0.0
 
 
+# ── Threshold gate (CI eval gate) ─────────────────────────────────────────────
+
+_EVALUATOR_MAP = {
+    "keyword_hit_rate": keyword_hit_rate,
+    "top1_category_match": top1_category_match,
+    "top5_category_coverage": top5_category_coverage,
+    "hit_rate": hit_rate,
+    "mrr": mrr,
+    "precision_at_k": precision_at_k,
+    "recall_at_k": recall_at_k,
+    "ndcg_at_k": ndcg_at_k,
+}
+
+_threshold_path = PROJECT_ROOT / "eval" / "eval_thresholds.json"
+if _threshold_path.exists():
+    with open(_threshold_path, encoding="utf-8") as _tf:
+        _retrieval_thresholds: dict[str, float] = json.load(_tf).get("retrieval", {})
+
+    if _retrieval_thresholds:
+        print("\n--- CI Eval Gate: retrieval thresholds ---")
+
+        # Pre-compute executor results (reused by evaluate() below via cache)
+        _pre_results = [(retrieval_executor(dp["data"]), dp["target"]) for dp in _dataset]
+        _exec_cache: dict[str, dict] = {dp["data"]["query"]: out for dp, (out, _) in zip(_dataset, _pre_results)}
+
+        _gate_failed = False
+        for _metric, _min_val in _retrieval_thresholds.items():
+            _fn = _EVALUATOR_MAP.get(_metric)
+            if not _fn:
+                continue
+            _scores = [_fn(out, tgt) for out, tgt in _pre_results]
+            _avg = sum(_scores) / len(_scores) if _scores else 0.0
+            if _avg < _min_val:
+                print(f"  FAIL: {_metric} = {_avg:.4f} < {_min_val}", file=sys.stderr)
+                _gate_failed = True
+            else:
+                print(f"  PASS: {_metric} = {_avg:.4f} >= {_min_val}")
+
+        if _gate_failed:
+            print("\nCI eval gate FAILED. Fix regressions before merging.", file=sys.stderr)
+            sys.exit(1)
+        print("All retrieval thresholds passed.\n")
+
+
+def _cached_executor(data: dict) -> dict:
+    """Return pre-computed result if available, otherwise call API."""
+    cached = _exec_cache.get(data["query"]) if "_exec_cache" in dir() else None
+    return cached if cached is not None else retrieval_executor(data)
+
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 evaluate(
     data=_dataset,
-    executor=retrieval_executor,
-    evaluators={
-        "keyword_hit_rate": keyword_hit_rate,
-        "top1_category_match": top1_category_match,
-        "top5_category_coverage": top5_category_coverage,
-        "hit_rate": hit_rate,
-        "mrr": mrr,
-        "precision_at_k": precision_at_k,
-        "recall_at_k": recall_at_k,
-        "ndcg_at_k": ndcg_at_k,
-    },
+    executor=_cached_executor if _threshold_path.exists() else retrieval_executor,
+    evaluators=_EVALUATOR_MAP,
     group_name="retrieval_quality",
 )

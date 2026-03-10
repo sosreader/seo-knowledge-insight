@@ -75,7 +75,17 @@ Discover 單獨分析，引用 First Page Sage 2025。
 
 **重要**：section 五必須逐一提及每個 ALERT_DOWN 指標的**完整名稱**（與指標摘要中一致），即使判斷影響不大也要列出，可歸類至低優先並註明原因。不可遺漏任何 ALERT_DOWN 指標。
 
-### 六、來源
+### 六、AI 可見度分析
+- AI Overview / SGE 出現頻率觀察
+- AI 引用率（網站內容被 AI 引用的跡象）
+- AI 流量佔比趨勢（若有 GA4 Referral 來源）
+- 若無具體 AI visibility 資料，提供改善建議：
+  - 結構化資料（JSON-LD Schema.org）完整度
+  - E-E-A-T 信號強化方向
+  - 內容是否適合 AI 引用（權威性、可引用段落）
+  - robots.txt 中 AI bot 設定建議
+
+### 七、來源
 列出最相關的 KB Q&A（max 8），格式：
 \`\`\`
 [知識庫N →](/admin/seoInsight/{id}) **{source_title}、{source_date}** — {answer 前 80 字}…
@@ -335,7 +345,7 @@ export async function generateReportLlm(
 - 生成方式：OpenAI ${model} 生成
 - 知識庫版本：${qaCount} Q&A，${sourceCollections} 個來源集合
 - 分析框架：Semrush 2025 / GSC 官方指引 / First Page Sage 2025 排名因素
-- 分析維度：6 維度（情勢 / 流量 / 技術 / 意圖 / 行動 / 知識庫）
+- 分析維度：7 維度（情勢 / 流量 / 技術 / 意圖 / 行動 / AI 可見度 / 知識庫）
 - 生成日期：${metricsDate}
 ---
 `;

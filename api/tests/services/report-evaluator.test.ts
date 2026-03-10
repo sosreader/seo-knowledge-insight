@@ -3,7 +3,7 @@ import { evaluateReport } from "../../src/services/report-evaluator.js";
 
 // ── Test fixtures ─────────────────────────────────────────────────────
 
-const FULL_SIX_SECTION_REPORT = `---
+const FULL_SEVEN_SECTION_REPORT = `---
 **報告資訊**
 - 知識庫版本：v2026.03.05
 - 分析框架：Semrush 2025 / GSC 官方指引
@@ -31,7 +31,11 @@ E-E-A-T 信號觀察。
 - 🟡 曝光 CTR 優化
 - 🟢 低優先規劃
 
-## 六、知識庫引用
+## 六、AI 可見度分析
+
+AI Overview 出現率持續上升。
+
+## 七、知識庫引用
 
 **Q**：如何改善 CTR？
 **A（節錄）**：優化 Title 與 Description…
@@ -46,7 +50,9 @@ const REPORT_WITH_LINKS = `## 一、本週 SEO 情勢快照
 ## 四、搜尋意圖對映
 ## 五、本週優先行動清單
 CTR 出現下滑
-## 六、知識庫引用
+## 六、AI 可見度分析
+AI visibility 持續觀察中
+## 七、知識庫引用
 [知識庫 →](/admin/seoInsight/aabbccdd11223344)
 [知識庫 →](/admin/seoInsight/1122334455667788)
 `;
@@ -64,13 +70,13 @@ describe("evaluateReport()", () => {
     expect(result.overall).toBe(0);
   });
 
-  it("returns section_coverage: 1.0 for full 6-section report", () => {
-    const result = evaluateReport(FULL_SIX_SECTION_REPORT, []);
+  it("returns section_coverage: 1.0 for full 7-section report", () => {
+    const result = evaluateReport(FULL_SEVEN_SECTION_REPORT, []);
     expect(result.section_coverage).toBe(1.0);
   });
 
   it("detects research citations (Semrush / GSC / Backlinko)", () => {
-    const result = evaluateReport(FULL_SIX_SECTION_REPORT, []);
+    const result = evaluateReport(FULL_SEVEN_SECTION_REPORT, []);
     expect(result.has_research_citations).toBe(1);
   });
 
@@ -81,12 +87,12 @@ describe("evaluateReport()", () => {
 
   it("counts KB citation links correctly (capped at 1.0)", () => {
     const result = evaluateReport(REPORT_WITH_LINKS, []);
-    // 2 links / 6 ≈ 0.333
+    // 2 unique kb links / 6 ≈ 0.333
     expect(result.kb_citation_count).toBeCloseTo(2 / 6, 3);
   });
 
   it("returns 0 has_research_citations for report without any research keyword", () => {
-    const plain = "## 一、\n## 二、\n## 三、\n## 四、\n## 五、\n## 六、\n";
+    const plain = "## 一、\n## 二、\n## 三、\n## 四、\n## 五、\n## 六、\n## 七、\n";
     const result = evaluateReport(plain, []);
     expect(result.has_research_citations).toBe(0);
   });
@@ -102,7 +108,7 @@ describe("evaluateReport()", () => {
   });
 
   it("computes alert_coverage: 1 (full credit) when alertNames is empty", () => {
-    const result = evaluateReport(FULL_SIX_SECTION_REPORT, []);
+    const result = evaluateReport(FULL_SEVEN_SECTION_REPORT, []);
     expect(result.alert_coverage).toBe(1);
   });
 
@@ -124,7 +130,7 @@ describe("evaluateReport()", () => {
   });
 
   it("overall is average of all 5 dimension scores", () => {
-    const result = evaluateReport(FULL_SIX_SECTION_REPORT, []);
+    const result = evaluateReport(FULL_SEVEN_SECTION_REPORT, []);
     const expected =
       (result.section_coverage +
         result.kb_citation_count +
@@ -135,26 +141,26 @@ describe("evaluateReport()", () => {
     expect(result.overall).toBeCloseTo(expected, 5);
   });
 
-  it("returns section_coverage: 0.5 for half-complete report", () => {
+  it("returns section_coverage for partial report", () => {
     const partial = "## 一、\n## 二、\n## 三、\n";
     const result = evaluateReport(partial, []);
-    expect(result.section_coverage).toBeCloseTo(3 / 6, 5);
+    expect(result.section_coverage).toBeCloseTo(3 / 7, 5);
   });
 
   it("llm_augmented: 1 when report contains AI 輔助 marker", () => {
-    const hybridReport = FULL_SIX_SECTION_REPORT + "\n### 跨指標關聯分析（AI 輔助）\n分析內容";
+    const hybridReport = FULL_SEVEN_SECTION_REPORT + "\n### 跨指標關聯分析（AI 輔助）\n分析內容";
     const result = evaluateReport(hybridReport, []);
     expect(result.llm_augmented).toBe(1);
   });
 
   it("llm_augmented: 1 when report contains AI 解讀 marker", () => {
-    const hybridReport = FULL_SIX_SECTION_REPORT + "\n### 流量信號 AI 解讀\n分析內容";
+    const hybridReport = FULL_SEVEN_SECTION_REPORT + "\n### 流量信號 AI 解讀\n分析內容";
     const result = evaluateReport(hybridReport, []);
     expect(result.llm_augmented).toBe(1);
   });
 
   it("llm_augmented: 0 for standard template report", () => {
-    const result = evaluateReport(FULL_SIX_SECTION_REPORT, []);
+    const result = evaluateReport(FULL_SEVEN_SECTION_REPORT, []);
     expect(result.llm_augmented).toBe(0);
   });
 
@@ -164,8 +170,8 @@ describe("evaluateReport()", () => {
   });
 
   it("overall is not affected by llm_augmented field", () => {
-    const hybridReport = FULL_SIX_SECTION_REPORT + "\n### 跨指標關聯分析（AI 輔助）\n分析內容";
-    const templateResult = evaluateReport(FULL_SIX_SECTION_REPORT, []);
+    const hybridReport = FULL_SEVEN_SECTION_REPORT + "\n### 跨指標關聯分析（AI 輔助）\n分析內容";
+    const templateResult = evaluateReport(FULL_SEVEN_SECTION_REPORT, []);
     const hybridResult = evaluateReport(hybridReport, []);
     // overall should be the same (llm_augmented not counted), section_coverage slightly differs
     expect(hybridResult.llm_augmented).toBe(1);
@@ -184,13 +190,13 @@ describe("evaluateReport()", () => {
   // ── has_crawled_not_indexed_section ───────────────────────────────
 
   it("has_crawled_not_indexed_section: 1 when report contains ## 檢索未索引分析 section", () => {
-    const reportWithSection = FULL_SIX_SECTION_REPORT + "\n## 檢索未索引分析（警示）\n\n路徑分段分析結果...\n";
+    const reportWithSection = FULL_SEVEN_SECTION_REPORT + "\n## 檢索未索引分析（警示）\n\n路徑分段分析結果...\n";
     const result = evaluateReport(reportWithSection, []);
     expect(result.has_crawled_not_indexed_section).toBe(1);
   });
 
   it("has_crawled_not_indexed_section: 0 when report does not contain ## 檢索未索引分析 section", () => {
-    const result = evaluateReport(FULL_SIX_SECTION_REPORT, []);
+    const result = evaluateReport(FULL_SEVEN_SECTION_REPORT, []);
     expect(result.has_crawled_not_indexed_section).toBe(0);
   });
 
@@ -199,11 +205,11 @@ describe("evaluateReport()", () => {
     expect(result.has_crawled_not_indexed_section).toBe(0);
   });
 
-  it("section_coverage denominator remains 6 regardless of has_crawled_not_indexed_section", () => {
-    const reportWith7Sections =
-      FULL_SIX_SECTION_REPORT + "\n## 檢索未索引分析（警示）\n\n路徑分段分析結果...\n";
-    const result = evaluateReport(reportWith7Sections, []);
-    // 6 standard sections all present → section_coverage stays 1.0
+  it("section_coverage denominator is 7, independent of has_crawled_not_indexed_section", () => {
+    const reportWithExtra =
+      FULL_SEVEN_SECTION_REPORT + "\n## 檢索未索引分析（警示）\n\n路徑分段分析結果...\n";
+    const result = evaluateReport(reportWithExtra, []);
+    // 7 standard sections all present → section_coverage stays 1.0
     expect(result.section_coverage).toBe(1.0);
     // has_crawled_not_indexed_section is independent
     expect(result.has_crawled_not_indexed_section).toBe(1);

@@ -24,7 +24,7 @@
   - `hybrid`：模板 + LLM 5 維度增強（前端可選）
   - `openai`：Python `04_generate_report.py` + OpenAI API（ECC 6 維度 + Health Score 扣分明細）
   - `claude-code`：前端 Claude Code 自動 fallback
-- **ECC 6 維度報告** — OpenAI 模式升級到 Health Score 扣分明細、CTR 四象限分析、Perplexity 風格 [N] 引用；本地模板 v1.0：情勢快照、流量信號、技術 SEO、搜尋意圖、優先行動、知識庫引用
+- **ECC 7 維度報告** — 情勢快照、流量信號、技術 SEO、搜尋意圖、優先行動、AI 可見度、知識庫引用；OpenAI 模式含 Health Score 扣分明細、CTR 四象限分析、Perplexity 風格 [N] 引用
 - **業界研究引用** — 內建 7 條引用常數（Backlinko 2024、arxiv SERP Features、NavBoost 洩露、E-E-A-T 2024、First Page Sage 2025、Semrush Intent Framework、GSC CausalImpact）
 - **報告品質評估** — `report-evaluator.ts` 5 維度規則式評分（section_coverage / kb_citations / research_cited / kb_links / alert_coverage），生成後非同步推送 Laminar scoreEvent
 - **知識庫交叉引用** — 關鍵字搜尋對應 Q&A，生成含原文連結的行動建議
@@ -40,11 +40,11 @@
 ### 4. REST API 服務（Hono + TypeScript，`api/`）
 
 - **語意搜尋** — `POST /api/v1/search`（有 OpenAI: hybrid search，無 OpenAI: 原生 keyword search 自動降級）
-- **RAG 問答** — `POST /api/v1/chat`（三模式：Agent mode / Full RAG + GPT / Context-only 自動降級）
+- **RAG 問答** — `POST /api/v1/chat`（三模式：Agent mode / Full RAG + GPT / Context-only 自動降級）+ `POST /api/v1/chat/stream`（SSE streaming）
 - **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢，使用穩定的 16-char hex ID 或 seq number）
 - **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）
 - **對話管理** — `GET/POST/DELETE /api/v1/sessions/*`（CRUD、訊息歷史）
-- **Pipeline 管理** — `/api/v1/pipeline/*`（14 endpoints：狀態、會議、來源文件、指標、快照、觸發 fetch/fetch-articles/extract/dedupe）
+- **Pipeline 管理** — `/api/v1/pipeline/*`（17 endpoints：狀態、會議、來源文件、指標、快照、趨勢分析、觸發 fetch/fetch-articles/extract/dedupe）
 - **同義詞管理** — `/api/v1/synonyms/*`（4 endpoints：列表、新增、更新、刪除；雙層設計：靜態+自訂）
 - **API 安全** — API Key 認證（`X-API-Key` header）、Rate Limit（chat 20/min、search/qa 60/min）、Zod schema validation
 - **API 文件** — 啟動 dev server 後存取：

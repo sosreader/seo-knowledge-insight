@@ -19,13 +19,14 @@ import {
   type MetricsSnapshot,
 } from "../schemas/pipeline.js";
 import { execPython, execQaTools } from "../services/pipeline-runner.js";
-import { loadMetrics } from "../services/metrics-parser.js";
+import { loadMetrics, type MetricData } from "../services/metrics-parser.js";
+import { analyzeAllMetrics, type TimeseriesPoint } from "../services/timeseries-analyzer.js";
 import { loadCrawledNotIndexed, parseCrawledNotIndexedTsv } from "../services/crawled-not-indexed-parser.js";
 import { analyzeCrawledNotIndexed } from "../services/crawled-not-indexed-analyzer.js";
 import { scoreEvent } from "../utils/laminar-scoring.js";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
-import { hasSupabase } from "../store/supabase-client.js";
+import { hasSupabase, supabaseSelect } from "../store/supabase-client.js";
 import { SupabaseSnapshotStore } from "../store/supabase-snapshot-store.js";
 import type { SourceDocEntry } from "../schemas/pipeline.js";
 import {
@@ -531,5 +532,130 @@ pipelineRoute.post("/crawled-not-indexed", async (c) => {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("Crawled-not-indexed analysis failed:", msg);
     return c.json(fail("Crawled-not-indexed analysis failed"), 500);
+  }
+});
+
+// GET /llm-usage — LLM cost/latency monitoring
+pipelineRoute.get("/llm-usage", async (c) => {
+  if (!hasSupabase()) {
+    return c.json(fail("Supabase not configured"), 503);
+  }
+
+  const daysParam = c.req.query("days") ?? "30";
+  const days = Math.min(Math.max(parseInt(daysParam, 10) || 30, 1), 90);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  try {
+    interface UsageRow {
+      readonly endpoint: string;
+      readonly model: string;
+      readonly input_tokens: number;
+      readonly output_tokens: number;
+      readonly latency_ms: number;
+      readonly created_at: string;
+    }
+
+    const rows = await supabaseSelect<UsageRow>(
+      "llm_usage",
+      `?select=endpoint,model,input_tokens,output_tokens,latency_ms,created_at&created_at=gte.${since}&order=created_at.desc&limit=1000`,
+    );
+
+    // Aggregate by endpoint + model
+    const groups = new Map<string, { calls: number; input_tokens: number; output_tokens: number; total_latency_ms: number }>();
+    for (const row of rows) {
+      const key = `${row.endpoint}::${row.model}`;
+      const g = groups.get(key) ?? { calls: 0, input_tokens: 0, output_tokens: 0, total_latency_ms: 0 };
+      g.calls += 1;
+      g.input_tokens += row.input_tokens;
+      g.output_tokens += row.output_tokens;
+      g.total_latency_ms += row.latency_ms;
+      groups.set(key, g);
+    }
+
+    const summary = [...groups.entries()].map(([key, g]) => {
+      const [endpoint, model] = key.split("::");
+      return {
+        endpoint,
+        model,
+        calls: g.calls,
+        input_tokens: g.input_tokens,
+        output_tokens: g.output_tokens,
+        avg_latency_ms: Math.round(g.total_latency_ms / g.calls),
+      };
+    });
+
+    return c.json(ok({ days, total_calls: rows.length, summary }));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json(fail(`LLM usage query failed: ${msg}`), 500);
+  }
+});
+
+/**
+ * GET /metrics/trends — Timeseries anomaly detection across snapshots.
+ *
+ * Query params:
+ *   metric  — optional metric name filter (e.g. "CTR", "曝光")
+ *   weeks   — number of recent snapshots to analyze (default 8, max 12)
+ */
+pipelineRoute.get("/metrics/trends", async (c) => {
+  if (!supabaseSnapshotStore) {
+    return c.json(fail("Supabase not configured"), 503);
+  }
+
+  const metricFilter = c.req.query("metric") ?? "";
+  const weeksParam = c.req.query("weeks") ?? "8";
+  const weeks = Math.min(Math.max(parseInt(weeksParam, 10) || 8, 4), 12);
+
+  try {
+    const allSnapshots = await supabaseSnapshotStore.list();
+    const sorted = [...allSnapshots]
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .slice(-weeks);
+
+    if (sorted.length < 4) {
+      return c.json(ok({
+        message: `需要至少 4 週快照才能進行趨勢分析（目前 ${sorted.length} 筆）`,
+        snapshots_count: sorted.length,
+        anomalies: [],
+      }));
+    }
+
+    // Load full snapshots with metrics
+    const fullSnapshots = await Promise.all(
+      sorted.map((s) => supabaseSnapshotStore!.getById(s.id)),
+    );
+
+    // Build timeseries per metric
+    const metricsTimeseries: Record<string, TimeseriesPoint[]> = {};
+
+    for (const snapshot of fullSnapshots) {
+      if (!snapshot) continue;
+      const metrics = snapshot.metrics as Record<string, MetricData>;
+
+      for (const [name, data] of Object.entries(metrics)) {
+        if (metricFilter && name !== metricFilter) continue;
+        if (data.latest == null) continue;
+
+        if (!metricsTimeseries[name]) {
+          metricsTimeseries[name] = [];
+        }
+        metricsTimeseries[name].push({
+          date: snapshot.created_at,
+          value: data.latest,
+        });
+      }
+    }
+
+    const anomalies = analyzeAllMetrics(metricsTimeseries);
+
+    return c.json(ok({
+      snapshots_count: sorted.length,
+      metrics_analyzed: Object.keys(metricsTimeseries).length,
+      anomalies,
+    }));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json(fail(`Trend analysis failed: ${msg}`), 500);
   }
 });

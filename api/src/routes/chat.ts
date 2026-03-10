@@ -1,7 +1,9 @@
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { chatRequestSchema, itemToSource } from "../schemas/chat.js";
 import { ok, fail } from "../schemas/api-response.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
+import { ragChatStream } from "../services/rag-chat-stream.js";
 import { qaStore } from "../store/qa-store.js";
 import { hasOpenAI, resolveMode } from "../utils/mode-detect.js";
 import { config } from "../config.js";
@@ -67,4 +69,79 @@ chatRoute.post("/", async (c) => {
     }
     throw err;
   }
+});
+
+/**
+ * POST /chat/stream — SSE streaming RAG chat.
+ *
+ * Events:
+ *   - event: sources   → JSON array of SourceItem
+ *   - event: token     → partial text chunk
+ *   - event: metadata  → MessageMetadata JSON
+ *   - event: done      → stream complete
+ *   - event: error     → error message
+ */
+chatRoute.post("/stream", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = chatRequestSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(fail("Invalid request body"), 400);
+  }
+
+  const { message, history } = parsed.data;
+
+  if (!hasOpenAI()) {
+    // Streaming not available without OpenAI — return non-streaming fallback
+    const result = contextOnlyResponse(message);
+    return c.json(ok(result));
+  }
+
+  const historyDicts = history.map((h) => ({ role: h.role, content: h.content }));
+
+  return streamSSE(c, async (stream) => {
+    let eventId = 0;
+
+    await ragChatStream(
+      message,
+      historyDicts.length > 0 ? historyDicts : null,
+      {
+        onSources: async (sources) => {
+          await stream.writeSSE({
+            event: "sources",
+            data: JSON.stringify(sources),
+            id: String(eventId++),
+          });
+        },
+        onToken: async (token) => {
+          await stream.writeSSE({
+            event: "token",
+            data: token,
+            id: String(eventId++),
+          });
+        },
+        onMetadata: async (metadata) => {
+          await stream.writeSSE({
+            event: "metadata",
+            data: JSON.stringify(metadata),
+            id: String(eventId++),
+          });
+        },
+        onDone: async () => {
+          await stream.writeSSE({
+            event: "done",
+            data: "[DONE]",
+            id: String(eventId++),
+          });
+        },
+        onError: async (error) => {
+          await stream.writeSSE({
+            event: "error",
+            data: error,
+            id: String(eventId++),
+          });
+        },
+      },
+    );
+  });
 });

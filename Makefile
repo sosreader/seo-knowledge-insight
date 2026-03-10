@@ -260,6 +260,16 @@ sync-db-force: ## 強制上傳（覆蓋已存在項目）
 sync-db-dry: ## 同步試跑（不寫入）
 	cd api && npx tsx scripts/sync-db.ts upload --dry-run
 
+# ── Eval 品質門禁 ────────────────────────────────────
+
+.PHONY: golden-from-feedback
+golden-from-feedback: ## 從使用者回饋生成 golden dataset 候選（需人工審核）
+	cd api && npx tsx scripts/feedback-to-golden.ts
+
+.PHONY: check-ai-crawlers
+check-ai-crawlers: ## 檢查網站 AI 爬蟲可讀性（URL=https://example.com）
+	cd api && npx tsx scripts/ai-crawler-checker.ts $(URL)
+
 # ── 說明 ─────────────────────────────────────────────
 
 .PHONY: help

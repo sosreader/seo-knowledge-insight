@@ -35,6 +35,7 @@ const SECTION_MARKERS = [
   "## 四、",
   "## 五、",
   "## 六、",
+  "## 七、",
 ] as const;
 
 // "GSC" is intentionally excluded — it appears in every SEO report and would
@@ -94,7 +95,7 @@ export function evaluateReport(
   const uniqueKbLinks = new Set(kbMatches).size;
   // Also count http/https external links in 知識庫引用 section (body only, no comments)
   const externalLinkRe = /https?:\/\/[^\s)>]+/g;
-  const kbSection = extractSection(body, "## 六、");
+  const kbSection = extractSection(body, "## 七、");
   const externalLinks = kbSection.match(externalLinkRe) ?? [];
   const totalCitations = uniqueKbLinks + externalLinks.length;
   const kb_citation_count = Math.min(totalCitations / 6, 1);

@@ -26,6 +26,7 @@ function recordFeedbackLocal(params: {
   query: string;
   qa_id: string;
   feedback: string;
+  feedback_category?: string;
   top_score?: number;
 }): void {
   ensureDir(LEARNINGS_PATH);
@@ -56,6 +57,7 @@ export function recordFeedback(params: {
   query: string;
   qa_id: string;
   feedback: string;
+  feedback_category?: string;
   top_score?: number;
 }): void {
   if (hasSupabase()) {

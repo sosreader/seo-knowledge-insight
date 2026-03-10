@@ -13,15 +13,16 @@ feedbackRoute.post("/", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  const { query, qa_id, feedback, top_score } = parsed.data;
+  const { query, qa_id, feedback, feedback_category, top_score } = parsed.data;
 
-  recordFeedback({ query, qa_id, feedback, top_score });
+  recordFeedback({ query, qa_id, feedback, feedback_category, top_score });
 
   return c.json(
     ok({
       recorded: true,
       qa_id,
       feedback,
+      feedback_category,
     }),
   );
 });

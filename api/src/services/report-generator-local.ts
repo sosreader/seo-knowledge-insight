@@ -48,7 +48,7 @@ const ALERT_THRESHOLD_WEEKLY = 0.20;
 
 const SECTION_HEADINGS = [
   "## 一、", "## 二、", "## 三、",
-  "## 四、", "## 五、", "## 六、",
+  "## 四、", "## 五、", "## 六、", "## 七、",
 ] as const;
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -715,9 +715,26 @@ function buildPriorityActions(
   return lines.join("\n");
 }
 
-/** 六、來源 */
+/** 六、AI 可見度分析 */
+function buildAiVisibility(): string {
+  const lines: string[] = [`${SECTION_HEADINGS[5]}AI 可見度分析\n`];
+
+  lines.push(
+    "**目前狀態**：AI visibility 資料尚未整合，以下為建議改善方向。\n",
+    "- **結構化資料**：確保 JSON-LD Schema.org 標記完整（FAQPage、HowTo、Article 等）",
+    "- **E-E-A-T 強化**：確認作者署名、About 頁面、外部可查核聲譽",
+    "- **可引用性**：關鍵段落採用清晰的問答格式，方便 AI 引用",
+    "- **AI Bot 設定**：透過 `robots.txt` 管理 GPTBot、ClaudeBot 等 AI 爬蟲存取權限",
+    "",
+    "> 建議使用 `make check-ai-crawlers URL=<your-site>` 檢查 AI 爬蟲設定。",
+  );
+
+  return lines.join("\n");
+}
+
+/** 七、來源 */
 function buildKbCitations(topQas: readonly QAItem[], tracker: CitationTracker): string {
-  const lines: string[] = [`${SECTION_HEADINGS[5]}來源\n`];
+  const lines: string[] = [`${SECTION_HEADINGS[6]}來源\n`];
 
   if (topQas.length === 0) {
     lines.push("（本週指標未找到直接對應的 Q&A）");
@@ -861,13 +878,14 @@ export async function generateReportLocal(
 
   const s4 = buildIntentMapping(core, down, qaMap, analyses.intent);
   const s5 = buildPriorityActions(down, up, topQas, analyses.action);
-  const s6 = buildKbCitations(topQas, tracker);
+  const s6 = buildAiVisibility();
+  const s7 = buildKbCitations(topQas, tracker);
 
   const hasCrawledNotIndexed = crawledNotIndexedSection.length > 0;
-  const dimensionCount = hasCrawledNotIndexed ? 7 : 6;
+  const dimensionCount = hasCrawledNotIndexed ? 8 : 7;
   const dimensionLabel = hasCrawledNotIndexed
-    ? "7 維度（情勢 / 流量 / 技術 / 索引覆蓋 / 意圖 / 行動 / 知識庫）"
-    : "6 維度（情勢 / 流量 / 技術 / 意圖 / 行動 / 知識庫）";
+    ? "8 維度（情勢 / 流量 / 技術 / 索引覆蓋 / 意圖 / 行動 / AI 可見度 / 知識庫）"
+    : "7 維度（情勢 / 流量 / 技術 / 意圖 / 行動 / AI 可見度 / 知識庫）";
 
   // Meta block
   const kbVersion = getKbVersion();
@@ -900,7 +918,7 @@ export async function generateReportLocal(
 
   const sections = [metaBlock, s1, s2, s3];
   if (crawledNotIndexedSection) sections.push(crawledNotIndexedSection);
-  sections.push(s4, s5, s6);
+  sections.push(s4, s5, s6, s7);
 
   return sections.join("\n") + tracker.toBlock() + metaComment;
 }

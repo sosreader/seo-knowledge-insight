@@ -400,6 +400,15 @@ def parse_metrics_tsv(text: str) -> dict[str, dict]:
     def _safe_col(cols: list[str], idx: int):
         return _parse_value(cols[idx]) if idx < len(cols) else None
 
+    def _safe_trend_col(cols: list[str], idx: int):
+        """趨勢欄位只接受百分比格式（如 '-3.61%'），絕對值回傳 None。"""
+        if idx >= len(cols):
+            return None
+        raw = cols[idx].strip()
+        if raw.endswith("%"):
+            return _parse_value(raw)
+        return None
+
     metrics: dict[str, dict] = {}
     for line in lines[header_idx + 1:]:
         cols = line.split("\t")
@@ -410,8 +419,8 @@ def parse_metrics_tsv(text: str) -> dict[str, dict]:
             continue
 
         metrics[name] = {
-            "monthly":       _safe_col(cols, 1),
-            "weekly":        _safe_col(cols, 2),
+            "monthly":       _safe_trend_col(cols, 1),
+            "weekly":        _safe_trend_col(cols, 2),
             "max":           _safe_col(cols, 3),
             "min":           _safe_col(cols, 4),
             "latest":        _safe_col(cols, 6) if len(cols) > 6 else None,
