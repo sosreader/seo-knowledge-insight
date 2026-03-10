@@ -128,7 +128,12 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
 
         # 獨立的直接保留（immutable — dict unpacking）
         for idx in unique_indices:
-            result.append({**items[idx], "is_merged": False})
+            item = items[idx]
+            result.append({
+                **item,
+                "is_merged": False,
+                "extraction_model": item.get("extraction_model") or None,
+            })
 
         # 重複的合併
         if groups:

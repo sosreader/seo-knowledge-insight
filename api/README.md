@@ -3,7 +3,7 @@
 REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（Node.js server / AWS Lambda）。
 
 **特點：**
-- 9 個路由器（Routers）、39 個 API endpoints、562 個測試（56 檔案，coverage 80%+）
+- 9 個路由器（Routers）、39 個 API endpoints、566 個測試（56 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
@@ -110,7 +110,7 @@ Client → Function URL / localhost:8002
 
 | 方法 | 路由 | 說明 | 認證 | Rate Limit |
 |------|------|------|------|-----------|
-| GET | `/api/v1/qa` | 列出所有 Q&A（支援分頁、source_type/source_collection filter） | ✓ | 60/min |
+| GET | `/api/v1/qa` | 列出所有 Q&A（支援分頁、source_type/source_collection/extraction_model filter） | ✓ | 60/min |
 | GET | `/api/v1/qa/{id}` | 取得單筆 Q&A 詳情（id: 16-char hex 或 integer seq） | ✓ | 60/min |
 | GET | `/api/v1/qa/categories` | 列出所有分類標籤 | ✓ | 60/min |
 | GET | `/api/v1/qa/collections` | 列出所有 collection（含 source_type + count） | ✓ | 60/min |
@@ -353,7 +353,7 @@ api/
 │   ├── feedback-to-golden.ts  # 使用者回饋 → golden dataset 候選
 │   ├── sync-db.ts             # Reports + Sessions → Supabase 同步
 │   └── eval-semantic.ts       # Retrieval eval（keyword/hybrid/rerank）
-├── tests/                      # 56 個測試檔案，562 tests
+├── tests/                      # 56 個測試檔案，566 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
@@ -574,9 +574,9 @@ pnpm test:watch               # 監視模式
 pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
-**測試套件統計（v3.0）：**
-- 總測試數：562 個（56 個測試檔案）
-- 通過：562/562 (100%)
+**測試套件統計（v3.1）：**
+- 總測試數：566 個（56 個測試檔案）
+- 通過：566/566 (100%)
 - 覆蓋率：80%+
 
 ---

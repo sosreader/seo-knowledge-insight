@@ -84,6 +84,13 @@ make fetch-ithelp      # 只執行 iThome 鐵人賽擷取（HTML → Markdown）
 make fetch-google-cases # 只執行 Google Case Studies 擷取（HTML → Markdown）
 make fetch-articles    # 擷取所有外部文章（Medium + iThome + Google Cases）
 make fetch-all         # Notion + 所有外部文章
+make backfill-extraction-model      # 回填 extraction_model（全量 Supabase UPDATE）
+make backfill-extraction-model-dry  # 回填 extraction_model（dry-run，不寫入）
+make backfill-extraction-model-verify # 驗證回填結果（NULL count = 0）
+make update-freshness               # 套用 freshness_score 衰減
+make update-freshness-dry            # freshness_score 衰減（dry-run）
+make update-freshness-verify         # 驗證 freshness_score 結果
+make evaluate-retrieval-by-model MODEL=claude-code  # 按模型分群 eval
 make help              # 顯示所有可用 targets
 ```
 
@@ -155,6 +162,9 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/evaluate-context-precision-local` — RAGAS Context Precision 評估（Retrieved contexts 有多少真正相關，Claude Code 作為 Judge）
 - `/evaluate-crawled-not-indexed-local` — 檢索未索引分析品質評估（12 golden cases，rule-based）
 - `/sync-db` — 本地 Reports + Sessions 上傳至 Supabase（`make sync-db` / `make sync-db-status` / `make sync-db-force`）
+- `/backfill-extraction-model` — 追溯回填 Supabase qa_items 的 extraction_model（`--dry-run` / `--execute`）
+- `/update-freshness` — 批次更新 freshness_score 指數衰減（`--dry-run` / `--execute`）
+- `/evaluate-retrieval-by-model` — 按 extraction_model 分群評估檢索品質
 
 ### 評估命令（需要 OpenAI API key）
 
@@ -185,7 +195,7 @@ pnpm dev               # 啟動前端伺服器（http://localhost:3000）
 
 ```bash
 cd api
-pnpm test              # 執行所有 vitest 測試（562 tests, 56 files）
+pnpm test              # 執行所有 vitest 測試（566 tests, 56 files）
 pnpm test:watch       # 監視模式下執行測試
 pnpm test:coverage    # 生成測試覆蓋率報告
 ```
@@ -221,7 +231,7 @@ API 端點特性：
 - `GET /openapi.json` — OpenAPI 3.1 規格（機器可讀，可匯入 Postman / Swagger）
 - `GET /docs` — Scalar 互動式 API 文件（瀏覽器直接測試）
 - Mintlify 託管文件：[vocus.mintlify.app](https://vocus.mintlify.app)（auto-deploy from main，設定檔 `api/docs/docs.json`）
-- 9 個路由器：qa、search、chat、reports、sessions、feedback、pipeline、synonyms、health
+- 9 個路由器：qa（含 extraction_model filter）、search（含 search_hit_count tracking）、chat、reports、sessions、feedback、pipeline、synonyms、health
 - Pipeline 端點：18 個（狀態、會議、來源文件、指標、快照、趨勢分析、LLM 用量、索引覆蓋率等）
 - 認證：`X-API-Key` header + 安全層（SSRF whitelist、auth fail-fast、HTTP security headers、session UUID validation）
 - 詳見 `api/README.md`

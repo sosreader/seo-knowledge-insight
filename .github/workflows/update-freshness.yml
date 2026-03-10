@@ -1,0 +1,31 @@
+name: Update Freshness Scores
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Every Monday 02:00 UTC
+  workflow_dispatch:       # Manual trigger
+
+jobs:
+  update-freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests python-dotenv
+
+      - name: Update freshness scores
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/update_freshness.py --execute
+
+      - name: Verify
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/update_freshness.py --verify

@@ -12,6 +12,7 @@ export interface ListQaParams {
   readonly evergreen?: boolean | null;
   readonly source_type?: string | null;
   readonly source_collection?: string | null;
+  readonly extraction_model?: string | null;
   readonly sort_by?: string | null;
   readonly sort_order?: string | null;
   readonly limit?: number;
@@ -29,6 +30,7 @@ export function filterAndPaginateQa(
     evergreen,
     source_type,
     source_collection,
+    extraction_model,
     sort_by,
     sort_order,
     limit = 20,
@@ -62,6 +64,9 @@ export function filterAndPaginateQa(
   }
   if (source_collection) {
     results = results.filter((i) => i.source_collection === source_collection);
+  }
+  if (extraction_model) {
+    results = results.filter((i) => i.extraction_model === extraction_model);
   }
 
   if (sort_by === "source_date") {

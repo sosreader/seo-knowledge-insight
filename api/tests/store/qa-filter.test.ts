@@ -157,6 +157,26 @@ describe("filterAndPaginateQa", () => {
     expect(page2[0]!.id).not.toBe(page1[0]!.id);
   });
 
+  it("filters by extraction_model", () => {
+    const { items } = filterAndPaginateQa(FAKE_ITEMS, {
+      extraction_model: "gpt-4o",
+      limit: 100,
+    });
+    expect(items.length).toBe(1);
+    expect(items[0]!.extraction_model).toBe("gpt-4o");
+  });
+
+  it("filters by extraction_model claude-code", () => {
+    const { items } = filterAndPaginateQa(FAKE_ITEMS, {
+      extraction_model: "claude-code",
+      limit: 100,
+    });
+    expect(items.length).toBe(4);
+    for (const item of items) {
+      expect(item.extraction_model).toBe("claude-code");
+    }
+  });
+
   it("does not mutate the original array", () => {
     const original = [...FAKE_ITEMS];
     filterAndPaginateQa(FAKE_ITEMS, {

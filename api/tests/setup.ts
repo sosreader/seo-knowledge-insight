@@ -25,6 +25,7 @@ export const FAKE_ITEMS: readonly QAItem[] = [
     source_type: "meeting",
     source_collection: "seo-meetings",
     source_url: "",
+    extraction_model: "claude-code",
   },
   {
     id: "b2c3d4e5f6789012",
@@ -46,6 +47,7 @@ export const FAKE_ITEMS: readonly QAItem[] = [
     source_type: "meeting",
     source_collection: "seo-meetings",
     source_url: "",
+    extraction_model: "claude-code",
   },
   {
     id: "c3d4e5f678901234",
@@ -67,6 +69,7 @@ export const FAKE_ITEMS: readonly QAItem[] = [
     source_type: "meeting",
     source_collection: "seo-meetings",
     source_url: "",
+    extraction_model: "claude-code",
   },
   {
     id: "d4e5f67890123456",
@@ -88,6 +91,7 @@ export const FAKE_ITEMS: readonly QAItem[] = [
     source_type: "meeting",
     source_collection: "seo-meetings",
     source_url: "",
+    extraction_model: "gpt-4o",
   },
   {
     id: "e5f6789012345678",
@@ -109,6 +113,7 @@ export const FAKE_ITEMS: readonly QAItem[] = [
     source_type: "article",
     source_collection: "genehong-medium",
     source_url: "https://genehong.medium.com/ai-technical-seo",
+    extraction_model: "claude-code",
   },
 ];
 

@@ -235,4 +235,20 @@ export class SupabaseQAStore {
   collections(): ReadonlyArray<{ source_collection: string; source_type: string; count: number }> {
     return collectionsFromItems(this.items);
   }
+
+  /**
+   * Atomically increment search_hit_count for given QA IDs.
+   * Fire-and-forget: errors are logged but never thrown.
+   */
+  async incrementSearchHitCount(ids: readonly string[]): Promise<void> {
+    if (ids.length === 0) return;
+
+    try {
+      await supabaseRpc("increment_search_hit_count", {
+        qa_ids: ids,
+      });
+    } catch (err) {
+      console.warn("incrementSearchHitCount failed (non-fatal):", err);
+    }
+  }
 }
