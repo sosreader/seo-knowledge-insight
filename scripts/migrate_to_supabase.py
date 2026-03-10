@@ -93,7 +93,7 @@ def _map_item(qa: dict[str, Any], embedding: list[float] | None) -> dict[str, An
         "is_merged": bool(qa.get("is_merged", False)),
         "extraction_model": qa.get("extraction_model"),
         "synonyms": enrichment.get("synonyms") or [],
-        "freshness_score": enrichment.get("freshness_score") or 1.0,
+        "freshness_score": enrichment.get("freshness_score") if enrichment.get("freshness_score") is not None else 1.0,
         "search_hit_count": enrichment.get("search_hit_count") or 0,
         "embedding": embedding,
     }

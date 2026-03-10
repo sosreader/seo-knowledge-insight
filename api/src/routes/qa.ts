@@ -23,6 +23,8 @@ function toSchema(item: QAItem) {
     source_type: item.source_type,
     source_collection: item.source_collection,
     source_url: item.source_url,
+    extraction_model: item.extraction_model ?? null,
+    freshness_score: item.freshness_score,
   };
 }
 
@@ -62,6 +64,7 @@ qaRoute.get("/", (c) => {
     evergreen: c.req.query("evergreen"),
     source_type: c.req.query("source_type"),
     source_collection: c.req.query("source_collection"),
+    extraction_model: c.req.query("extraction_model"),
     sort_by: c.req.query("sort_by"),
     sort_order: c.req.query("sort_order"),
     limit: c.req.query("limit"),

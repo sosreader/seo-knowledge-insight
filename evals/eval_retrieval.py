@@ -10,10 +10,13 @@ Data source: output/qa_final.json (local) or Supabase qa_items (CI fallback)
 
 Run:
     python evals/eval_retrieval.py
+    python evals/eval_retrieval.py --model claude-code   # Filter by extraction_model
+    python evals/eval_retrieval.py --limit 5             # Limit golden cases
     lmnr eval evals/eval_retrieval.py
 """
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import math
@@ -34,6 +37,15 @@ logger = logging.getLogger(__name__)
 
 from lmnr import evaluate  # type: ignore[import]
 
+# ── CLI args ──────────────────────────────────────────────────────────────────
+
+_parser = argparse.ArgumentParser(description="Retrieval quality eval")
+_parser.add_argument("--model", type=str, default=None, help="Filter by extraction_model (e.g. claude-code)")
+_parser.add_argument("--limit", type=int, default=0, help="Limit golden cases (0=all)")
+_args, _unknown = _parser.parse_known_args()
+_filter_model: str | None = _args.model
+_limit_cases: int = _args.limit
+
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
 _golden_path = PROJECT_ROOT / "eval" / "golden_retrieval.json"
@@ -44,6 +56,10 @@ if not _golden_path.exists():
 
 with open(_golden_path, encoding="utf-8") as _f:
     _golden_raw: list[dict] = json.load(_f)
+
+if _limit_cases > 0:
+    _golden_raw = _golden_raw[:_limit_cases]
+    print(f"[eval_retrieval] Limiting to {_limit_cases} golden cases")
 
 _dataset = [
     {
@@ -150,6 +166,13 @@ def _naive_search(query: str, qa_items: list[dict]) -> list[dict]:
     return [qa for _, qa in scored[:5]]
 
 
+def _filter_by_model(results: list[dict], model: str | None) -> list[dict]:
+    """Filter results by extraction_model if specified."""
+    if not model:
+        return results
+    return [r for r in results if r.get("extraction_model") == model]
+
+
 def retrieval_executor(data: dict) -> dict:
     """Search via actual API first, fallback to naive keyword search."""
     query: str = data["query"]
@@ -157,10 +180,13 @@ def retrieval_executor(data: dict) -> dict:
     # 1. Try the real search API (keyword + synonym + hybrid)
     api_results = _search_via_api(query)
     if api_results is not None:
-        return {"results": api_results[:5], "query": query, "source": "api"}
+        filtered = _filter_by_model(api_results, _filter_model)
+        return {"results": filtered[:5], "query": query, "source": "api"}
 
     # 2. Fallback to naive search
     qa_items = _load_qa_items()
+    if _filter_model:
+        qa_items = [qa for qa in qa_items if qa.get("extraction_model") == _filter_model]
     results = _naive_search(query, qa_items)
     return {"results": results, "query": query, "source": "naive"}
 
@@ -320,15 +346,19 @@ if _threshold_path.exists():
 
 def _cached_executor(data: dict) -> dict:
     """Return pre-computed result if available, otherwise call API."""
-    cached = _exec_cache.get(data["query"]) if "_exec_cache" in dir() else None
+    cached = _exec_cache.get(data["query"]) if "_exec_cache" in globals() else None
     return cached if cached is not None else retrieval_executor(data)
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
+_group_name = f"retrieval_quality_{_filter_model}" if _filter_model else "retrieval_quality"
+if _filter_model:
+    print(f"\n[eval_retrieval] Filtering by extraction_model={_filter_model}")
+
 evaluate(
     data=_dataset,
     executor=_cached_executor if _threshold_path.exists() else retrieval_executor,
     evaluators=_EVALUATOR_MAP,
-    group_name="retrieval_quality",
+    group_name=_group_name,
 )

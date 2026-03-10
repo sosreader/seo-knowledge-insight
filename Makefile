@@ -224,6 +224,32 @@ audit-access: ## 資料存取記錄（今天）
 audit-top: ## Top 30 最常被存取的 QA
 	$(PYTHON) scripts/audit_trail.py access --top 30
 
+# ── Metadata 回填 / 更新 ───────────────────────────────
+
+.PHONY: backfill-extraction-model
+backfill-extraction-model: ## 回填 extraction_model（實際寫入 Supabase）
+	$(PYTHON) scripts/backfill_extraction_model.py --execute
+
+.PHONY: backfill-extraction-model-dry
+backfill-extraction-model-dry: ## 回填 extraction_model 預覽（不寫入）
+	$(PYTHON) scripts/backfill_extraction_model.py --dry-run
+
+.PHONY: backfill-extraction-model-verify
+backfill-extraction-model-verify: ## 驗證 extraction_model IS NULL 筆數
+	$(PYTHON) scripts/backfill_extraction_model.py --verify
+
+.PHONY: update-freshness
+update-freshness: ## 更新 freshness_score 指數衰減（實際寫入）
+	$(PYTHON) scripts/update_freshness.py --execute
+
+.PHONY: update-freshness-dry
+update-freshness-dry: ## 更新 freshness_score 預覽（不寫入）
+	$(PYTHON) scripts/update_freshness.py --dry-run
+
+.PHONY: update-freshness-verify
+update-freshness-verify: ## 驗證 freshness_score 正確性
+	$(PYTHON) scripts/update_freshness.py --verify
+
 # ── Supabase 遷移 ──────────────────────────────────────
 
 .PHONY: migrate-supabase
@@ -269,6 +295,10 @@ golden-from-feedback: ## 從使用者回饋生成 golden dataset 候選（需人
 .PHONY: check-ai-crawlers
 check-ai-crawlers: ## 檢查網站 AI 爬蟲可讀性（URL=https://example.com）
 	cd api && npx tsx scripts/ai-crawler-checker.ts $(URL)
+
+.PHONY: evaluate-retrieval-by-model
+evaluate-retrieval-by-model: ## 按 extraction_model 分群評估檢索品質（MODEL=claude-code）
+	$(PYTHON) evals/eval_retrieval.py --model $(MODEL)
 
 # ── 說明 ─────────────────────────────────────────────
 

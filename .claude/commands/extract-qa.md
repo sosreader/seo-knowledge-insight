@@ -119,7 +119,8 @@
       "confidence": 0.85,
       "source_file": "原始檔案名稱.md",
       "source_title": "會議標題",
-      "source_date": "YYYY-MM-DD"
+      "source_date": "YYYY-MM-DD",
+      "extraction_model": "claude-code"
     }
   ],
   "meeting_summary": "一句話概述這次會議的主要內容"

@@ -1384,3 +1384,39 @@ Laminar dashboard ←─── Laminar.flush() ←─── Laminar.event()
 - Python: 65 處 print→logging 替換（3 files）
 
 **詳細 Changelog**：見 [06a-architecture-changelog.md](./06a-architecture-changelog.md)
+
+---
+
+## v3.1（2026-03-10）— QA Metadata 追蹤增強
+
+**核心亮點**：5 個 Phase 完成 extraction_model / freshness_score / search_hit_count 三個 metadata 欄位從虛設到可用。
+
+### P0: extraction_model 追溯回填
+- 新增 `scripts/backfill_extraction_model.py`：從 `output/qa_per_meeting/*.json` 反查 stable_id，查無者標記 `"claude-code"`
+- 修復 `scripts/03_dedupe_classify.py`：獨立路徑補充 `extraction_model`（fallback `None`）
+- 修復 `.claude/commands/extract-qa.md`：輸出 JSON 加入 `extraction_model` 欄位
+
+### P1: freshness_score 指數衰減
+- 新增 `scripts/update_freshness.py`：`exp(-λ * age_days)`，half_life=540 天，floor 0.01
+- 修復 `scripts/migrate_to_supabase.py`：freshness_score falsy bug（`or 1.0` → `is not None` check）
+- 新增 `.github/workflows/update-freshness.yml`：每週一 02:00 UTC cron
+
+### P2: search_hit_count 追蹤
+- Supabase SQL function `increment_search_hit_count(qa_ids TEXT[])`：atomic increment
+- `SupabaseQAStore.incrementSearchHitCount()`：fire-and-forget pattern
+- `search.ts` module-scope `trackHits()` 函式：搜尋命中後非同步遞增
+
+### P3: Eval extraction_model 分群
+- `evals/eval_retrieval.py` 新增 `--model` / `--limit` CLI 參數
+- Group name 含模型名稱：`retrieval_quality_{model}`
+
+### P4: API extraction_model filter
+- `GET /api/v1/qa?extraction_model=claude-code` 正確過濾
+- Response 每筆含 `extraction_model` + `freshness_score` 欄位
+
+### 安全修復
+- `update_freshness.py` `--since` 參數加 `_DATE_RE` regex 驗證（防 URL injection）
+
+### 測試
+- Python: 21 tests passing（9 backfill + 12 freshness）
+- TypeScript: 562→566 tests（qa filter + route 新增 4 tests）

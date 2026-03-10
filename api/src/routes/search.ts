@@ -3,7 +3,18 @@ import { searchRequestSchema } from "../schemas/search.js";
 import { ok, fail } from "../schemas/api-response.js";
 import { getEmbedding } from "../services/embedding.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
+import { SupabaseQAStore } from "../store/supabase-qa-store.js";
 import { hasOpenAI, type SearchMode } from "../utils/mode-detect.js";
+
+/** Fire-and-forget: increment search_hit_count for matched IDs. */
+const trackHits = (hits: ReadonlyArray<{ item: QAItem; score: number }>): void => {
+  if (qaStore instanceof SupabaseQAStore && hits.length > 0) {
+    const hitIds = hits.map((h) => h.item.id);
+    qaStore.incrementSearchHitCount(hitIds).catch((err) => {
+      console.warn("trackHits failed (non-fatal):", err);
+    });
+  }
+};
 
 export const searchRoute = new Hono();
 
@@ -40,6 +51,7 @@ searchRoute.post("/", async (c) => {
     try {
       const embedding = await getEmbedding(query);
       const hits = await qaStore.hybridSearch(query, embedding, top_k, category ?? null);
+      trackHits(hits);
       const results = mapResults(hits);
       return c.json(ok({ results, total: results.length, mode: "hybrid" as SearchMode }));
     } catch (err: unknown) {
@@ -55,6 +67,7 @@ searchRoute.post("/", async (c) => {
 
   // Native TypeScript keyword search — in-memory, no OpenAI required
   const hits = qaStore.keywordSearch(query, top_k, category ?? null);
+  trackHits(hits);
   const results = mapResults(hits);
   return c.json(ok({ results, total: results.length, mode: "keyword" as SearchMode }));
 });

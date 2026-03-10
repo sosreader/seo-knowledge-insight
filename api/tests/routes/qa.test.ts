@@ -22,6 +22,7 @@ vi.mock("../../src/store/qa-store.js", () => {
         }
         if (params.source_type) results = results.filter((i) => i.source_type === params.source_type);
         if (params.source_collection) results = results.filter((i) => i.source_collection === params.source_collection);
+        if (params.extraction_model) results = results.filter((i) => i.extraction_model === params.extraction_model);
         if (params.sort_by === "source_date") {
           const dir = params.sort_order === "asc" ? 1 : -1;
           results.sort((a, b) => dir * a.source_date.localeCompare(b.source_date));
@@ -174,6 +175,27 @@ describe("GET /api/v1/qa", () => {
     const article = body.data.items.find((i: { source_type: string }) => i.source_type === "article");
     expect(article).toBeDefined();
     expect(article.source_url).toContain("genehong.medium.com");
+  });
+
+  it("filters by extraction_model", async () => {
+    const res = await app.request("/api/v1/qa?extraction_model=gpt-4o");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.total).toBe(1);
+    for (const item of body.data.items) {
+      expect(item.extraction_model).toBe("gpt-4o");
+    }
+  });
+
+  it("returns extraction_model and freshness_score in response", async () => {
+    const res = await app.request("/api/v1/qa?limit=10");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    for (const item of body.data.items) {
+      expect(item).toHaveProperty("extraction_model");
+      expect(item).toHaveProperty("freshness_score");
+      expect(typeof item.freshness_score).toBe("number");
+    }
   });
 
   it("returns all items when no source filter applied", async () => {
