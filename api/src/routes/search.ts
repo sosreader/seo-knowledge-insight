@@ -18,6 +18,16 @@ const trackHits = (hits: ReadonlyArray<{ item: QAItem; score: number }>): void =
 
 export const searchRoute = new Hono();
 
+const filterHitsByModel = (
+  hits: ReadonlyArray<{ item: QAItem; score: number }>,
+  extractionModel?: string,
+): ReadonlyArray<{ item: QAItem; score: number }> => {
+  if (!extractionModel) {
+    return hits;
+  }
+  return hits.filter(({ item }) => item.extraction_model === extractionModel);
+};
+
 searchRoute.post("/", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parsed = searchRequestSchema.safeParse(body);
@@ -26,7 +36,7 @@ searchRoute.post("/", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  const { query, top_k, category } = parsed.data;
+  const { query, top_k, category, extraction_model } = parsed.data;
 
   const mapResults = (
     hits: ReadonlyArray<{ item: QAItem; score: number }>,
@@ -44,6 +54,7 @@ searchRoute.post("/", async (c) => {
       source_type: item.source_type,
       source_collection: item.source_collection,
       source_url: item.source_url,
+      extraction_model: item.extraction_model ?? null,
       score: Math.round(score * 10000) / 10000,
     }));
 
@@ -51,8 +62,9 @@ searchRoute.post("/", async (c) => {
     try {
       const embedding = await getEmbedding(query);
       const hits = await qaStore.hybridSearch(query, embedding, top_k, category ?? null);
-      trackHits(hits);
-      const results = mapResults(hits);
+      const filteredHits = filterHitsByModel(hits, extraction_model);
+      trackHits(filteredHits);
+      const results = mapResults(filteredHits);
       return c.json(ok({ results, total: results.length, mode: "hybrid" as SearchMode }));
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
@@ -67,7 +79,8 @@ searchRoute.post("/", async (c) => {
 
   // Native TypeScript keyword search — in-memory, no OpenAI required
   const hits = qaStore.keywordSearch(query, top_k, category ?? null);
-  trackHits(hits);
-  const results = mapResults(hits);
+  const filteredHits = filterHitsByModel(hits, extraction_model);
+  trackHits(filteredHits);
+  const results = mapResults(filteredHits);
   return c.json(ok({ results, total: results.length, mode: "keyword" as SearchMode }));
 });

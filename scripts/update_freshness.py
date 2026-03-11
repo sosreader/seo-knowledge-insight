@@ -25,6 +25,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 from dotenv import load_dotenv
@@ -36,6 +37,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
 
 BATCH_SIZE = 100
+FETCH_PAGE_SIZE = 1000
 HALF_LIFE_DAYS = 540
 LAMBDA = math.log(2) / HALF_LIFE_DAYS
 MIN_DIFF = 0.001
@@ -88,26 +90,71 @@ def _fetch_items(
         "apikey": service_key,
         "Authorization": f"Bearer {service_key}",
     }
-    url = (
-        f"{supabase_url}/rest/v1/qa_items"
-        "?select=id,source_date,evergreen,freshness_score"
-        "&order=seq.asc"
-    )
-    if since:
-        if not _DATE_RE.fullmatch(since):
-            raise ValueError(f"--since must be YYYY-MM-DD, got: {since!r}")
-        url += f"&source_date=gte.{since}"
-    if limit > 0:
-        url += f"&limit={limit}"
+    items: list[dict] = []
+    offset = 0
 
-    resp = requests.get(url, headers=headers, timeout=30)
-    if resp.status_code != 200:
-        logger.error("Fetch failed: %s %s", resp.status_code, resp.text[:200])
-        return []
+    while True:
+        remaining = limit - len(items) if limit > 0 else FETCH_PAGE_SIZE
+        page_limit = min(FETCH_PAGE_SIZE, remaining) if limit > 0 else FETCH_PAGE_SIZE
+        if page_limit <= 0:
+            break
 
-    items = resp.json()
+        url = (
+            f"{supabase_url}/rest/v1/qa_items"
+            "?select=id,source_date,evergreen,freshness_score"
+            "&order=seq.asc"
+            f"&limit={page_limit}"
+            f"&offset={offset}"
+        )
+        if since:
+            if not _DATE_RE.fullmatch(since):
+                raise ValueError(f"--since must be YYYY-MM-DD, got: {since!r}")
+            url += f"&source_date=gte.{since}"
+
+        resp = requests.get(url, headers=headers, timeout=30)
+        if resp.status_code != 200:
+            logger.error("Fetch failed: %s %s", resp.status_code, resp.text[:200])
+            return []
+
+        page_items = resp.json()
+        items.extend(page_items)
+
+        if len(page_items) < page_limit:
+            break
+
+        offset += len(page_items)
+
     logger.info("Fetched %d qa_items for freshness check", len(items))
     return items
+
+
+def _patch_ids_with_score(
+    supabase_url: str,
+    service_key: str,
+    row_ids: list[str],
+    score: float,
+) -> tuple[int, int]:
+    """PATCH freshness_score for a group of ids sharing the same score."""
+    if not row_ids:
+        return 0, 0
+
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    id_filter = ",".join(quote(row_id, safe="") for row_id in row_ids)
+    resp = requests.patch(
+        f"{supabase_url}/rest/v1/qa_items?id=in.({id_filter})",
+        headers=headers,
+        json={"freshness_score": score},
+        timeout=60,
+    )
+    if resp.status_code in (200, 204):
+        return len(row_ids), 0
+    logger.error("Patch failed: %s %s", resp.status_code, resp.text[:300])
+    return 0, len(row_ids)
 
 
 def _patch_batch(
@@ -115,24 +162,19 @@ def _patch_batch(
     service_key: str,
     updates: list[dict],
 ) -> tuple[int, int]:
-    """PATCH a batch of freshness_score updates."""
-    headers = {
-        "apikey": service_key,
-        "Authorization": f"Bearer {service_key}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates,return=minimal",
-    }
-    rows = [{"id": u["id"], "freshness_score": u["score"]} for u in updates]
-    resp = requests.post(
-        f"{supabase_url}/rest/v1/qa_items",
-        headers=headers,
-        json=rows,
-        timeout=60,
-    )
-    if resp.status_code in (200, 201):
-        return len(rows), 0
-    logger.error("Patch failed: %s %s", resp.status_code, resp.text[:300])
-    return 0, len(rows)
+    """PATCH a batch of freshness_score updates grouped by score."""
+    grouped_ids: dict[float, list[str]] = {}
+    for update in updates:
+        grouped_ids.setdefault(update["score"], []).append(update["id"])
+
+    total_success = 0
+    total_fail = 0
+    for score, row_ids in grouped_ids.items():
+        success, fail = _patch_ids_with_score(supabase_url, service_key, row_ids, score)
+        total_success += success
+        total_fail += fail
+
+    return total_success, total_fail
 
 
 def _compute_updates(
@@ -234,6 +276,7 @@ def _verify(supabase_url: str, service_key: str) -> None:
         f"{supabase_url}/rest/v1/qa_items"
         "?select=id,source_date,freshness_score,evergreen"
         "&evergreen=eq.false"
+        "&source_date=gte.1900-01-01"
         "&source_date=lt.2024-01-01"
         "&freshness_score=gte.1.0"
         "&limit=10",

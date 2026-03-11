@@ -72,6 +72,7 @@ const schemas: Record<string, Record<string, unknown>> = {
       source_type: { type: "string" },
       source_collection: { type: "string" },
       source_url: { type: "string" },
+      extraction_model: { type: "string", nullable: true },
       score: { type: "number" },
     },
   },
@@ -353,6 +354,7 @@ const paths: Record<string, Record<string, unknown>> = {
           query: { type: "string", minLength: 1, maxLength: 500, example: "Core Web Vitals" },
           top_k: { type: "integer", minimum: 1, maximum: 20, default: 5 },
           category: { type: "string" },
+          extraction_model: { type: "string", example: "claude-code" },
         },
       }, "Search parameters"),
       responses: {

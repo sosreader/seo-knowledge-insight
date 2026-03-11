@@ -23,6 +23,7 @@ import math
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlencode
 
 import requests
 
@@ -78,6 +79,7 @@ _dataset = [
 
 _API_BASE = os.environ.get("EVAL_API_BASE", "http://localhost:8002")
 _API_KEY = os.environ.get("SEO_API_KEY", "")
+_SUPABASE_PAGE_SIZE = 1000
 
 
 def _search_via_api(query: str, top_k: int = 5) -> list[dict] | None:
@@ -86,10 +88,14 @@ def _search_via_api(query: str, top_k: int = 5) -> list[dict] | None:
     if _API_KEY:
         headers["X-API-Key"] = _API_KEY
 
+    payload: dict[str, object] = {"query": query, "top_k": top_k}
+    if _filter_model:
+        payload["extraction_model"] = _filter_model
+
     try:
         resp = requests.post(
             f"{_API_BASE}/api/v1/search",
-            json={"query": query, "top_k": top_k},
+            json=payload,
             headers=headers,
             timeout=10,
         )
@@ -106,6 +112,53 @@ def _search_via_api(query: str, top_k: int = 5) -> list[dict] | None:
     return None
 
 
+def _local_items_support_model_filter(items: list[dict], model: str | None) -> bool:
+    """Return True if local items can satisfy the requested model filter."""
+    if not model:
+        return True
+    return any(item.get("extraction_model") for item in items)
+
+
+def _fetch_supabase_qa_items(supabase_url: str, anon_key: str) -> list[dict]:
+    """Fetch all QA items from Supabase with pagination."""
+    headers = {"apikey": anon_key, "Authorization": f"Bearer {anon_key}"}
+    items: list[dict] = []
+    offset = 0
+
+    while True:
+        query = urlencode(
+            {
+                "select": (
+                    "id,question,answer,keywords,category,confidence,difficulty,evergreen,"
+                    "source_title,source_type,source_collection,source_url,extraction_model"
+                ),
+                "order": "seq.asc",
+                "limit": _SUPABASE_PAGE_SIZE,
+                "offset": offset,
+            }
+        )
+        resp = requests.get(
+            f"{supabase_url}/rest/v1/qa_items?{query}",
+            headers=headers,
+            timeout=30,
+        )
+
+        if resp.status_code != 200:
+            logger.error("[eval_retrieval] Supabase fetch failed: %s %s", resp.status_code, resp.text[:200])
+            return []
+
+        page_items = resp.json()
+        items.extend(page_items)
+
+        if len(page_items) < _SUPABASE_PAGE_SIZE:
+            break
+
+        offset += len(page_items)
+
+    logger.info("[eval_retrieval] Loaded %d QA items from Supabase", len(items))
+    return items
+
+
 def _load_qa_items() -> list[dict]:
     """Load QA items from local file first, fallback to Supabase REST API."""
     qa_final_path = PROJECT_ROOT / "output" / "qa_final.json"
@@ -116,8 +169,13 @@ def _load_qa_items() -> list[dict]:
             data = json.loads(qa_final_path.read_text(encoding="utf-8"))
             items = data.get("qa_database", [])
             if items:
-                logger.info("[eval_retrieval] Loaded %d QA items from local file", len(items))
-                return items
+                if _local_items_support_model_filter(items, _filter_model):
+                    logger.info("[eval_retrieval] Loaded %d QA items from local file", len(items))
+                    return items
+                logger.info(
+                    "[eval_retrieval] Local file lacks extraction_model for --model=%s, falling back to Supabase",
+                    _filter_model,
+                )
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("[eval_retrieval] Local file read failed: %s", e)
 
@@ -129,22 +187,8 @@ def _load_qa_items() -> list[dict]:
         logger.error("[eval_retrieval] No local qa_final.json and no SUPABASE_URL/SUPABASE_ANON_KEY set")
         return []
 
-    logger.info("[eval_retrieval] Local file not found, loading from Supabase...")
-    resp = requests.get(
-        f"{supabase_url}/rest/v1/qa_items"
-        "?select=id,question,answer,keywords,category,confidence,difficulty,evergreen,"
-        "source_title,source_type,source_collection,source_url",
-        headers={"apikey": anon_key, "Authorization": f"Bearer {anon_key}"},
-        timeout=30,
-    )
-
-    if resp.status_code != 200:
-        logger.error("[eval_retrieval] Supabase fetch failed: %s %s", resp.status_code, resp.text[:200])
-        return []
-
-    items = resp.json()
-    logger.info("[eval_retrieval] Loaded %d QA items from Supabase", len(items))
-    return items
+    logger.info("[eval_retrieval] Loading QA items from Supabase...")
+    return _fetch_supabase_qa_items(supabase_url, anon_key)
 
 
 def _naive_search(query: str, qa_items: list[dict]) -> list[dict]:
@@ -314,51 +358,69 @@ _EVALUATOR_MAP = {
 }
 
 _threshold_path = PROJECT_ROOT / "eval" / "eval_thresholds.json"
-if _threshold_path.exists():
+_exec_cache: dict[str, dict] = {}
+
+
+def _run_threshold_gate() -> None:
+    """Run retrieval threshold gate and populate executor cache."""
+    global _exec_cache
+
+    if not _threshold_path.exists():
+        _exec_cache = {}
+        return
+
     with open(_threshold_path, encoding="utf-8") as _tf:
-        _retrieval_thresholds: dict[str, float] = json.load(_tf).get("retrieval", {})
+        retrieval_thresholds: dict[str, float] = json.load(_tf).get("retrieval", {})
 
-    if _retrieval_thresholds:
-        print("\n--- CI Eval Gate: retrieval thresholds ---")
+    if not retrieval_thresholds:
+        _exec_cache = {}
+        return
 
-        # Pre-compute executor results (reused by evaluate() below via cache)
-        _pre_results = [(retrieval_executor(dp["data"]), dp["target"]) for dp in _dataset]
-        _exec_cache: dict[str, dict] = {dp["data"]["query"]: out for dp, (out, _) in zip(_dataset, _pre_results)}
+    print("\n--- CI Eval Gate: retrieval thresholds ---")
 
-        _gate_failed = False
-        for _metric, _min_val in _retrieval_thresholds.items():
-            _fn = _EVALUATOR_MAP.get(_metric)
-            if not _fn:
-                continue
-            _scores = [_fn(out, tgt) for out, tgt in _pre_results]
-            _avg = sum(_scores) / len(_scores) if _scores else 0.0
-            if _avg < _min_val:
-                print(f"  FAIL: {_metric} = {_avg:.4f} < {_min_val}", file=sys.stderr)
-                _gate_failed = True
-            else:
-                print(f"  PASS: {_metric} = {_avg:.4f} >= {_min_val}")
+    pre_results = [(retrieval_executor(dp["data"]), dp["target"]) for dp in _dataset]
+    _exec_cache = {dp["data"]["query"]: out for dp, (out, _) in zip(_dataset, pre_results)}
 
-        if _gate_failed:
-            print("\nCI eval gate FAILED. Fix regressions before merging.", file=sys.stderr)
-            sys.exit(1)
-        print("All retrieval thresholds passed.\n")
+    gate_failed = False
+    for metric, min_val in retrieval_thresholds.items():
+        evaluator = _EVALUATOR_MAP.get(metric)
+        if not evaluator:
+            continue
+        scores = [evaluator(out, tgt) for out, tgt in pre_results]
+        avg = sum(scores) / len(scores) if scores else 0.0
+        if avg < min_val:
+            print(f"  FAIL: {metric} = {avg:.4f} < {min_val}", file=sys.stderr)
+            gate_failed = True
+        else:
+            print(f"  PASS: {metric} = {avg:.4f} >= {min_val}")
+
+    if gate_failed:
+        print("\nCI eval gate FAILED. Fix regressions before merging.", file=sys.stderr)
+        sys.exit(1)
+    print("All retrieval thresholds passed.\n")
 
 
 def _cached_executor(data: dict) -> dict:
     """Return pre-computed result if available, otherwise call API."""
-    cached = _exec_cache.get(data["query"]) if "_exec_cache" in globals() else None
+    cached = _exec_cache.get(data["query"])
     return cached if cached is not None else retrieval_executor(data)
 
 
-# ── Run ───────────────────────────────────────────────────────────────────────
+def run_eval() -> None:
+    """Run threshold gate and Laminar evaluation."""
+    _run_threshold_gate()
 
-_group_name = f"retrieval_quality_{_filter_model}" if _filter_model else "retrieval_quality"
-if _filter_model:
-    print(f"\n[eval_retrieval] Filtering by extraction_model={_filter_model}")
+    group_name = f"retrieval_quality_{_filter_model}" if _filter_model else "retrieval_quality"
+    if _filter_model:
+        print(f"\n[eval_retrieval] Filtering by extraction_model={_filter_model}")
 
-evaluate(
-    data=_dataset,
-    executor=_cached_executor if _threshold_path.exists() else retrieval_executor,
-    evaluators=_EVALUATOR_MAP,
-    group_name=_group_name,
-)
+    evaluate(
+        data=_dataset,
+        executor=_cached_executor if _threshold_path.exists() else retrieval_executor,
+        evaluators=_EVALUATOR_MAP,
+        group_name=group_name,
+    )
+
+
+if __name__ == "__main__":
+    run_eval()

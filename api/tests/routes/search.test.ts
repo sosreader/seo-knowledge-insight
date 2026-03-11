@@ -42,6 +42,7 @@ const mockKeywordSearch = vi.fn().mockReturnValue([
       source_type: "meeting",
       source_collection: "seo-meetings",
       source_url: "",
+      extraction_model: "claude-code",
     },
     score: 0.3,
   },
@@ -62,6 +63,7 @@ const mockHybridSearch = vi.fn().mockResolvedValue([
       source_type: "meeting",
       source_collection: "seo-meetings",
       source_url: "",
+      extraction_model: "claude-code",
     },
     score: 0.85,
   },
@@ -231,5 +233,59 @@ describe("POST /api/v1/search", () => {
     expect(result.source_type).toBe("meeting");
     expect(result.source_collection).toBe("seo-meetings");
     expect(result).toHaveProperty("source_url");
+    expect(result.extraction_model).toBe("claude-code");
+  });
+
+  it("filters keyword results by extraction_model", async () => {
+    mockKeywordSearch.mockReturnValueOnce([
+      {
+        item: {
+          id: "abc123def456",
+          question: "What is SEO?",
+          answer: "SEO stands for Search Engine Optimization",
+          keywords: ["SEO", "optimization"],
+          category: "basics",
+          difficulty: "easy",
+          evergreen: true,
+          source_title: "SEO Meeting",
+          source_date: "2024-05-02",
+          source_type: "meeting",
+          source_collection: "seo-meetings",
+          source_url: "",
+          extraction_model: "claude-code",
+        },
+        score: 0.3,
+      },
+      {
+        item: {
+          id: "def456ghi789",
+          question: "What is CWV?",
+          answer: "Core Web Vitals metrics",
+          keywords: ["CWV"],
+          category: "basics",
+          difficulty: "easy",
+          evergreen: true,
+          source_title: "SEO Meeting",
+          source_date: "2024-05-02",
+          source_type: "meeting",
+          source_collection: "seo-meetings",
+          source_url: "",
+          extraction_model: "gpt-4o",
+        },
+        score: 0.2,
+      },
+    ]);
+
+    const app = buildApp();
+    const res = await app.request("/api/v1/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "SEO", extraction_model: "claude-code" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.results).toHaveLength(1);
+    expect(body.data.results[0].extraction_model).toBe("claude-code");
   });
 });
