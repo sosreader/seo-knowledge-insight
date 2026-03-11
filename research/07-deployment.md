@@ -24,7 +24,7 @@ Route 層零修改，只有 `hybridSearch()` 從 sync 改為 async。
 
 **Supabase 配置**：
 - Project: `eqrlomuujichshkbtoat`（ap-northeast-1）
-- Tables: `qa_items`（1,323 rows + vector(1536)）、`eval_runs`
+- Tables: `qa_items`（1,469 rows + vector(1536)）、`eval_runs`
 - RPC: `match_qa_items()`、`search_qa_items_keyword()`
 - Thin REST client（`supabase-client.ts`），不依賴 `@supabase/supabase-js`
 - MCP: `https://mcp.supabase.com/mcp?project_ref=eqrlomuujichshkbtoat`
@@ -287,7 +287,7 @@ const LOAD_TIMEOUT_MS = 25_000;  // 啟動載入用較長 timeout
 ```
 
 **實測數據**：
-- Supabase 暖時：load 1,323 items ≈ 1.5-2 秒
+- Supabase 暖時：load 1,469 items ≈ 1.5-2 秒
 - Supabase 冷時：可能超過 10 秒 → 改用 25 秒 timeout
 
 #### Supabase RPC 函數注意事項
@@ -303,13 +303,13 @@ Lambda 無檔案系統，部分端點透過 Supabase fallback 提供資料：
 
 | 端點 | Lambda 資料來源 | 資料量 | 說明 |
 |------|----------------|--------|------|
-| `GET /qa` | SupabaseQAStore | 1,323 | pgvector + in-memory metadata |
+| `GET /qa` | SupabaseQAStore | 1,469 | pgvector + in-memory metadata |
 | `POST /search` | Supabase RPC `match_qa_items` | hybrid | pgvector + TS re-rank |
 | `POST /sessions/*/messages` | Supabase + OpenAI | RAG 回答 | 完整 RAG pipeline |
 | `GET /reports` | SupabaseReportStore | 31 | 完整 markdown content |
 | `GET /sessions` | SupabaseSessionStore | 8 | CRUD 完整 |
 | `GET /pipeline/status` | qaStore.collections | 6 步驟 | 從 QA metadata 計算 |
-| `GET /pipeline/source-docs` | **qaStore fallback** | 230 | `buildSourceDocsFromStore()` 從 QA metadata group by 反推 |
+| `GET /pipeline/source-docs` | **qaStore fallback** | 232 | `buildSourceDocsFromStore()` 從 QA metadata group by 反推 |
 | `GET /pipeline/metrics/snapshots` | SupabaseSnapshotStore | 2 | CRUD 完整 |
 | `GET /synonyms` | SupabaseSynonymsStore | 0 custom | 讀寫完整 |
 | `GET /pipeline/meetings` | 無（回傳空） | 0 | Notion JSON 為本地產物 |
@@ -318,6 +318,26 @@ Lambda 無檔案系統，部分端點透過 Supabase fallback 提供資料：
 
 **source-docs fallback 設計**：當 `buildSourceDocs()`（檔案掃描）回傳空且 `qaStore.count > 0` 時，
 自動切換至 `buildSourceDocsFromStore()`，從 `qaStore.allItems` 按 `(source_collection, source_title, source_date)` group by 反推來源文件清單。`is_processed` 恆為 true、`size_bytes` 為 0。
+
+#### Supabase PostgREST 批次操作注意事項（2026-03-12）
+
+**預設 Row Limit**：PostgREST 預設每次最多回傳 1,000 筆。需要處理超過 1,000 筆時，必須分批呼叫或加 `&limit=N` 參數。`backfill_extraction_model.py` 首次回填 1,375 筆時需執行兩次（1000 + 375）。
+
+**POST Upsert vs PATCH Update（BUG-007）**：
+
+```
+# 錯誤做法：POST upsert 會觸發所有 NOT NULL constraint
+requests.post(url, headers={"Prefer": "resolution=merge-duplicates"}, json={"id": x, "field": val})
+# → 422 NOT NULL violation on "question" column
+
+# 正確做法：PATCH + id filter 只更新指定欄位
+requests.patch(f"{url}?id=in.({id_list})", json={"field": val})
+# → 200/204 成功，不觸發其他欄位的 NOT NULL
+```
+
+原因：POST upsert 即使設定 `merge-duplicates`，PostgREST 仍會對所有 NOT NULL 欄位進行約束檢查。PATCH 只驗證被更新的欄位。
+
+**Supabase 資料清理**：刪除舊資料時用 batch DELETE + service_key（bypass RLS），確認 `content-range` header 回傳正確的總數後才操作。
 
 #### tsup 雙重 Build 設定
 

@@ -161,6 +161,22 @@ else:
         suffix += 1
 ```
 
+### Medium 批次補抓與清理（2026-03-12）
+
+**問題**：index 有 370 筆但僅 107 個 markdown 檔案，102 篇文章缺少對應 markdown（歷史抓取失敗或清理時誤刪）。
+
+**修復步驟**：
+
+1. **直接 URL 下載**：用 Python 逐一呼叫 `fetch_medium.py` 內部函式（`importlib.util` 動態載入），避免 shell 參數串接問題（102 個 URL 會被 shell 拼成一個巨大字串）
+2. **MD5 內容去重**：重複下載產生 269 個 markdown（123 unique），用 `hashlib.md5(content)` 分群，每群保留最短檔名
+3. **404 頁面偵測**：部分文章已被作者刪除，抓取結果為 Medium 404 page。特徵：內容含 `PAGE NOT FOUND` + `## 404`。建立空 QA 檔 `{"qa_pairs": []}` 標記為已處理
+4. **孤立檔案清理**：20 個 markdown 不在 index 中（可能是手動測試產物），直接刪除
+
+**教訓**：
+- Shell 變數傳遞大量 URL 時容易出錯，用 Python inline script 更可靠
+- Medium 文章會消失（404），index 應記錄 `status` 欄位以追蹤
+- 重複下載 + 清理的迭代流程容易產生檔案不一致，MD5 去重是最可靠的手段
+
 ### CLI 用法
 
 ```bash
