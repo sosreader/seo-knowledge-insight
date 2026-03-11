@@ -7,10 +7,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import json
+from unittest.mock import Mock
 from unittest.mock import patch
 
 from scripts.backfill_extraction_model import (
     _compute_stable_id,
+    _fetch_null_model_ids,
+    _patch_batch,
     _scan_per_meeting_files,
     backfill,
 )
@@ -115,3 +118,39 @@ class TestBackfillDryRun:
         result = backfill("http://fake", "key", dry_run=False)
         assert result["updated"] == 1
         mock_patch.assert_called_once()
+
+
+class TestBackfillSupabaseIO:
+    @patch("scripts.backfill_extraction_model.requests.get")
+    def test_fetch_null_model_ids_paginates_past_1000(self, mock_get):
+        first = Mock(status_code=200)
+        first.json.return_value = [{"id": f"id-{i}"} for i in range(1000)]
+        second = Mock(status_code=200)
+        second.json.return_value = [{"id": f"id-{1000 + i}"} for i in range(329)]
+        mock_get.side_effect = [first, second]
+
+        result = _fetch_null_model_ids("http://fake", "key")
+
+        assert len(result) == 1329
+        assert mock_get.call_count == 2
+        assert "offset=1000" in mock_get.call_args_list[1].args[0]
+
+    @patch("scripts.backfill_extraction_model.requests.patch")
+    def test_patch_batch_uses_partial_patch_by_model(self, mock_patch):
+        mock_patch.return_value = Mock(status_code=204, text="")
+
+        success, fail = _patch_batch(
+            "http://fake",
+            "key",
+            [
+                {"id": "a1", "model": "claude-code"},
+                {"id": "a2", "model": "claude-code"},
+                {"id": "b1", "model": "gpt-4o"},
+            ],
+        )
+
+        assert (success, fail) == (3, 0)
+        assert mock_patch.call_count == 2
+        first_call = mock_patch.call_args_list[0]
+        assert "id=in.(a1,a2)" in first_call.args[0]
+        assert first_call.kwargs["json"] == {"extraction_model": "claude-code"}

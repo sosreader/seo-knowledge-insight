@@ -418,6 +418,15 @@ LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 
 **無 OpenAI：** Keyword-only 搜尋（CJK 分詞 + 關鍵字加權）
 
+**Request 參數：**
+- `query`：搜尋字串（必填）
+- `top_k`：回傳筆數（選填，預設 5）
+- `category`：分類 filter（選填）
+- `extraction_model`：按 extraction_model 過濾結果（選填，例如 `"claude-code"`）
+
+**Response 欄位（每筆 hit）：**
+- 包含 `extraction_model` 欄位，方便前端依模型分群顯示
+
 ### Chat 端點
 
 **有 OpenAI：** RAG Pipeline（檢索 → GPT 生成）+ metadata（model、tokens、duration）

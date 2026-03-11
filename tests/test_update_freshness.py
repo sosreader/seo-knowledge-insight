@@ -8,11 +8,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import math
 from datetime import datetime, timezone
+from unittest.mock import Mock
 from unittest.mock import patch
 
 from scripts.update_freshness import (
     HALF_LIFE_DAYS,
     LAMBDA,
+    _verify,
+    _fetch_items,
+    _patch_batch,
     compute_freshness_score,
     update_freshness,
 )
@@ -102,3 +106,56 @@ class TestUpdateFreshnessDryRun:
         result = update_freshness("http://fake", "key", dry_run=False)
         assert result["updated"] == 1
         mock_patch.assert_called_once()
+
+
+class TestUpdateFreshnessSupabaseIO:
+    @patch("scripts.update_freshness.requests.get")
+    def test_fetch_items_paginates_past_1000(self, mock_get):
+        first = Mock(status_code=200)
+        first.json.return_value = [
+            {"id": f"id-{i}", "source_date": "2023-01-01", "evergreen": False, "freshness_score": 1.0}
+            for i in range(1000)
+        ]
+        second = Mock(status_code=200)
+        second.json.return_value = [
+            {"id": f"id-{1000 + i}", "source_date": "2023-01-01", "evergreen": False, "freshness_score": 1.0}
+            for i in range(329)
+        ]
+        mock_get.side_effect = [first, second]
+
+        result = _fetch_items("http://fake", "key")
+
+        assert len(result) == 1329
+        assert mock_get.call_count == 2
+        assert "offset=1000" in mock_get.call_args_list[1].args[0]
+
+    @patch("scripts.update_freshness.requests.patch")
+    def test_patch_batch_uses_partial_patch_by_score(self, mock_patch):
+        mock_patch.return_value = Mock(status_code=204, text="")
+
+        success, fail = _patch_batch(
+            "http://fake",
+            "key",
+            [
+                {"id": "a1", "score": 0.2625},
+                {"id": "a2", "score": 0.2625},
+                {"id": "b1", "score": 0.5},
+            ],
+        )
+
+        assert (success, fail) == (3, 0)
+        assert mock_patch.call_count == 2
+        first_call = mock_patch.call_args_list[0]
+        assert "id=in.(a1,a2)" in first_call.args[0]
+        assert first_call.kwargs["json"] == {"freshness_score": 0.2625}
+
+    @patch("scripts.update_freshness.requests.get")
+    def test_verify_excludes_unknown_dates(self, mock_get):
+        mock_get.return_value = Mock(status_code=200)
+        mock_get.return_value.json.return_value = []
+
+        _verify("http://fake", "key")
+
+        request_url = mock_get.call_args.args[0]
+        assert "source_date=gte.1900-01-01" in request_url
+        assert "source_date=lt.2024-01-01" in request_url
