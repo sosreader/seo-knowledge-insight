@@ -17,6 +17,7 @@ import { sessionsRoute } from "./routes/sessions.js";
 import { feedbackRoute } from "./routes/feedback.js";
 import { pipelineRoute } from "./routes/pipeline.js";
 import { synonymsRoute } from "./routes/synonyms.js";
+import { meetingPrepRoute } from "./routes/meeting-prep.js";
 import { buildOpenAPISpec } from "./openapi.js";
 import { qaStore, loadQaStore } from "./store/qa-store.js";
 import { synonymsStore } from "./store/synonyms-store.js";
@@ -65,6 +66,8 @@ api.use("/pipeline", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/pipeline/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/synonyms", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/synonyms/*", rateLimit(config.RATE_LIMIT_DEFAULT));
+api.use("/meeting-prep", rateLimit(config.RATE_LIMIT_DEFAULT));
+api.use("/meeting-prep/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 
 // Mount routes
 api.route("/qa", qaRoute);
@@ -75,6 +78,7 @@ api.route("/sessions", sessionsRoute);
 api.route("/feedback", feedbackRoute);
 api.route("/pipeline", pipelineRoute);
 api.route("/synonyms", synonymsRoute);
+api.route("/meeting-prep", meetingPrepRoute);
 
 app.route("/api/v1", api);
 

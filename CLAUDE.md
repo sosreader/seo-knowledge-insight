@@ -91,6 +91,8 @@ make update-freshness               # 套用 freshness_score 衰減
 make update-freshness-dry            # freshness_score 衰減（dry-run）
 make update-freshness-verify         # 驗證 freshness_score 結果
 make evaluate-retrieval-by-model MODEL=claude-code  # 按模型分群 eval
+make meeting-prep-articles          # 列出顧問文章清單（去重）
+make meeting-prep-topics            # 最近 3 份會議的主題詞
 make help              # 顯示所有可用 targets
 ```
 
@@ -153,6 +155,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/extract-qa` — 只執行 Step 2 Q&A 萃取（parallel sub-agents）
 - `/dedupe-classify` — 只執行 Step 3 去重 + 分類
 - `/generate-report <URL 或路徑>` — 生成 SEO 週報（7 維度：情勢/流量/技術/意圖/行動/AI 可見度/來源，支援 `--snapshot <snapshot_id>` 參數）
+- `/meeting-prep <snapshot 路徑 或 --report 週報路徑>` — 顧問會議準備深度研究報告（11 sections：異常地圖/業界動態/根因假設/交叉比對/審計缺口/E-E-A-T/人本要素/成熟度/提問清單/行動核查）
 - `/search <問題>` — 搜尋知識庫（關鍵字加權，回傳 top-K Q&A）
 - `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
 - `/chat-agent` — Agentic RAG 問答（多輪自主搜尋，混合 Grep/Read/qa_tools.py，不需要 OpenAI）
@@ -186,16 +189,16 @@ pnpm dev               # 啟動開發伺服器（tsx watch，port 8002）
 
 ```bash
 cd ../vocus-web-ui
-git checkout feat/admin-seo-insight  # 切換到前端開發分支
+git checkout main  # feat/admin-seo-insight 已 merge，從主線開新分支
 pnpm install
 pnpm dev               # 啟動前端伺服器（http://localhost:3000）
 ```
 
-測試（562 個測試，80% 覆蓋率）：
+測試（576 個測試，80% 覆蓋率）：
 
 ```bash
 cd api
-pnpm test              # 執行所有 vitest 測試（566 tests, 56 files）
+pnpm test              # 執行所有 vitest 測試（576 tests, 57 files）
 pnpm test:watch       # 監視模式下執行測試
 pnpm test:coverage    # 生成測試覆蓋率報告
 ```
@@ -231,7 +234,7 @@ API 端點特性：
 - `GET /openapi.json` — OpenAPI 3.1 規格（機器可讀，可匯入 Postman / Swagger）
 - `GET /docs` — Scalar 互動式 API 文件（瀏覽器直接測試）
 - Mintlify 託管文件：[vocus.mintlify.app](https://vocus.mintlify.app)（auto-deploy from main，設定檔 `api/docs/docs.json`）
-- 9 個路由器：qa（含 extraction_model filter）、search（含 extraction_model filter + search_hit_count tracking）、chat、reports、sessions、feedback、pipeline、synonyms、health
+- 10 個路由器：qa（含 extraction_model filter）、search（含 extraction_model filter + search_hit_count tracking）、chat、reports、sessions、feedback、pipeline、synonyms、meeting-prep、health
 - Pipeline 端點：18 個（狀態、會議、來源文件、指標、快照、趨勢分析、LLM 用量、索引覆蓋率等）
 - 認證：`X-API-Key` header + 安全層（SSRF whitelist、auth fail-fast、HTTP security headers、session UUID validation）
 - 詳見 `api/README.md`
@@ -279,6 +282,11 @@ Synonyms API 端點（v2.11 新增）：
 - `POST /api/v1/synonyms` — 新增自訂同義詞
 - `PUT /api/v1/synonyms/:term` — 更新自訂同義詞
 - `DELETE /api/v1/synonyms/:term` — 刪除自訂同義詞
+
+Meeting Prep API 端點（v3.2 新增）：
+
+- `GET /api/v1/meeting-prep` — 列出所有會議準備報告（日期 + meta）
+- `GET /api/v1/meeting-prep/:date` — 取得單篇會議準備報告（YYYYMMDD 或 YYYYMMDD_hash8 格式）
 
 環境變數（v2.11 新增，均可選）：
 
@@ -375,3 +383,5 @@ AGENT_TIMEOUT_MS=90000         # Agent loop 總逾時（5000-300000，預設 90s
 | 模型選擇決策 / Embedding 模型比較                                  | `research/05-models.md`               |
 | 專案架構 / 技術決策 / Changelog / Mermaid 圖 / Observability       | `research/06-project-architecture.md` |
 | 部署 / Lambda / Docker / Supabase 遷移 / App Runner（已淘汰）      | `research/07-deployment.md`           |
+| SEO 業界動態（Google 更新 / SER / 業界報導）                        | `research/11-seo-industry-updates.md` |
+| Meeting Prep 評分追蹤 / 交叉比對發現                                | `research/12-meeting-prep-insights.md`|
