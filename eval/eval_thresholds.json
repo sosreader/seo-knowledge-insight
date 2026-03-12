@@ -8,5 +8,25 @@
   "extraction": {
     "qa_count_in_range": 0.80,
     "keyword_coverage": 0.70
+  },
+  "meeting_prep_structure": {
+    "section_completeness": 1.0,
+    "metadata_valid": 1.0,
+    "citation_block_valid": 1.0,
+    "question_count_valid": 1.0,
+    "question_source_annotated": 0.9,
+    "eeat_score_format": 1.0,
+    "maturity_level_format": 1.0,
+    "s3_hypothesis_structure": 0.8,
+    "s5_all_layers_present": 1.0,
+    "s7_seven_elements": 1.0,
+    "s10_checklist_present": 1.0
+  },
+  "meeting_prep_grounding": {
+    "citation_id_resolution": 0.9,
+    "citation_category_consistency": 0.8,
+    "citation_count_in_range": 1.0,
+    "s4_four_sources_populated": 0.8,
+    "inline_citation_coverage": 0.55
   }
 }

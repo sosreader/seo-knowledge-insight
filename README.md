@@ -110,6 +110,7 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 - **自動監控三環節** — Retrieval 品質、Q&A Extraction、RAG Chat 端到端表現
 - **無需額外 API** — 基於 Laminar SDK，純 Python/SQL 邏輯，不消耗 OpenAI tokens
 - **儀表板可視化** — 所有指標匯總至 Laminar 後台（laminar.sh/app/evals）
+- **Meeting-Prep 評估（v3.2）** — 三層架構：Layer 1 結構 eval（11 evaluators，`evals/eval_meeting_prep_structure.py`）、Layer 2 grounding eval（5 evaluators，`evals/eval_meeting_prep_grounding.py`）、Layer 3 LLM-as-Judge（`/evaluate-meeting-prep-quality`）；共 13 個 Laminar eval groups
 
 ---
 
@@ -183,6 +184,10 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | 跨 Provider 評估             | 無獨立指令                                        | `/evaluate-provider <目錄>`（不需要 OpenAI）        | LLM Provider SEO 洞察品質評估（Grounding、Actionability、Relevance、Topic Coverage） |
 | Faithfulness 評估           | 無獨立指令                                        | `/evaluate-faithfulness-local`                      | RAGAS：Answer 是否有幻覺（Claude Code as Judge）|
 | Context Precision 評估      | 無獨立指令                                        | `/evaluate-context-precision-local`                 | RAGAS：Retrieved contexts 相關性評估 |
+| Meeting-Prep 結構 eval（L1）| `make evaluate-meeting-prep-structure`            | 無獨立指令                                          | 11 evaluators：section_completeness、metadata_valid、eeat_score_format 等；推送 Laminar `meeting_prep_structure` group |
+| Meeting-Prep Grounding eval（L2）| `make evaluate-meeting-prep-grounding`       | 無獨立指令                                          | 5 evaluators：citation_id_resolution、citation_count_in_range、inline_citation_coverage 等；推送 Laminar `meeting_prep_grounding` group |
+| Meeting-Prep 合併（L1+L2）  | `make evaluate-meeting-prep`                      | 無獨立指令                                          | 執行 L1 + L2 兩層評估 |
+| Meeting-Prep LLM Judge（L3）| 無獨立指令                                        | `/evaluate-meeting-prep-quality`                    | 5 維度 LLM-as-Judge（Claude Code as Judge，不需要 OpenAI） |
 
 ### Laminar Eval Groups ↔ 來源腳本 ↔ 評估對象
 
@@ -278,6 +283,8 @@ flowchart LR
 | `enrichment_quality` | `evals/eval_enrichment.py` | 手動 | 離線 enrichment | kw_hit_with_synonyms, freshness_rank, synonym_coverage |
 | `chat_quality` | `evals/eval_chat.py` | 手動 | RAG 問答 | answer_keyword_coverage, top_source_category |
 | `data-quality` | `_eval_data_quality.py` | ETL CI / 手動 | 資料集整體 | qa_count, avg_confidence, category_distribution |
+| `meeting_prep_structure` | `evals/eval_meeting_prep_structure.py` | `make evaluate-meeting-prep-structure` / CI | Meeting-Prep 報告結構 | section_completeness, metadata_valid, citation_block_valid, question_count_valid, eeat_score_format, maturity_level_format 等 11 指標 |
+| `meeting_prep_grounding` | `evals/eval_meeting_prep_grounding.py` | `make evaluate-meeting-prep-grounding` / CI | Meeting-Prep 引用與接地性 | citation_id_resolution, citation_category_consistency, citation_count_in_range, s4_four_sources_populated, inline_citation_coverage |
 
 > **注意**：Dashboard 中的 `v2.12-fixed`、`v2.12-1317items`、`retrieval-eval-20...` 等為歷史一次性 run（測試或版本驗證），不是固定 group。
 
@@ -338,7 +345,9 @@ seo-knowledge-insight/
 │   ├── __init__.py              # Package 初始化
 │   ├── eval_retrieval.py        # Retrieval 品質評估（keyword hit rate 等）
 │   ├── eval_extraction.py       # Q&A 萃取品質評估
-│   └── eval_chat.py             # RAG chat 端到端品質評估
+│   ├── eval_chat.py             # RAG chat 端到端品質評估
+│   ├── eval_meeting_prep_structure.py  # Meeting-Prep Layer 1 結構 eval（11 evaluators）
+│   └── eval_meeting_prep_grounding.py  # Meeting-Prep Layer 2 grounding eval（5 evaluators）
 ├── raw_data/                    # 原始資料（source of truth）
 │   ├── notion_json/             # Notion API 回傳的原始 JSON
 │   ├── markdown/                # Notion 會議 Markdown（87 份）

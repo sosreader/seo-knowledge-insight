@@ -8,7 +8,7 @@ on:
 
 jobs:
   eval:
-    name: Offline evals (retrieval + extraction)
+    name: Offline evals (retrieval + extraction + meeting-prep)
     runs-on: ubuntu-latest
 
     steps:
@@ -37,3 +37,17 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         # extraction eval 需要本地 output/qa_per_meeting/，CI 無此資料，graceful skip (exit 0)
         run: lmnr eval evals/eval_extraction.py
+
+      - name: Run meeting-prep structure eval
+        env:
+          LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
+        # 純 file-based，fixtures committed 至 eval/fixtures/meeting_prep/
+        run: lmnr eval evals/eval_meeting_prep_structure.py
+
+      - name: Run meeting-prep grounding eval
+        env:
+          LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        # 讀取 fixtures + KB lookup（local → Supabase fallback）
+        run: lmnr eval evals/eval_meeting_prep_grounding.py

@@ -93,6 +93,9 @@ make update-freshness-verify         # 驗證 freshness_score 結果
 make evaluate-retrieval-by-model MODEL=claude-code  # 按模型分群 eval
 make meeting-prep-articles          # 列出顧問文章清單（去重）
 make meeting-prep-topics            # 最近 3 份會議的主題詞
+make evaluate-meeting-prep          # Meeting-Prep 完整評估（L1+L2）
+make evaluate-meeting-prep-structure  # Meeting-Prep 結構品質評估
+make evaluate-meeting-prep-grounding  # Meeting-Prep 引用根基評估
 make help              # 顯示所有可用 targets
 ```
 
@@ -164,6 +167,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/evaluate-faithfulness-local` — RAGAS Faithfulness 評估（Answer 是否有幻覺，Claude Code 作為 Judge，不需要 OpenAI）
 - `/evaluate-context-precision-local` — RAGAS Context Precision 評估（Retrieved contexts 有多少真正相關，Claude Code 作為 Judge）
 - `/evaluate-crawled-not-indexed-local` — 檢索未索引分析品質評估（12 golden cases，rule-based）
+- `/evaluate-meeting-prep-quality` — Meeting-Prep 內容品質評估（5 維度，Claude Code 作為 Judge，不需要 OpenAI）
 - `/sync-db` — 本地 Reports + Sessions 上傳至 Supabase（`make sync-db` / `make sync-db-status` / `make sync-db-force`）
 - `/backfill-extraction-model` — 追溯回填 Supabase qa_items 的 extraction_model（`--dry-run` / `--execute`）
 - `/update-freshness` — 批次更新 freshness_score 指數衰減（`--dry-run` / `--execute`）
