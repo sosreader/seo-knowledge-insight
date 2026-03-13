@@ -334,7 +334,7 @@ def s3_hypothesis_structure(output: dict, target: dict) -> float:
     # Check each subsection has >= 3 hypothesis rows (| H\d |)
     compliant = 0
     for sub in subsections:
-        hypotheses = re.findall(r"^\|\s*H\d\s*\|", sub, re.MULTILINE)
+        hypotheses = re.findall(r"^\|\s*H\d[a-z]?\s*\|", sub, re.MULTILINE)
         if len(hypotheses) >= 3:
             compliant += 1
 

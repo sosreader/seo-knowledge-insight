@@ -21,7 +21,8 @@
     "s5_all_layers_present": 1.0,
     "s7_seven_elements": 1.0,
     "s10_checklist_present": 1.0,
-    "s8_meta_maturity_consistency": 1.0
+    "s8_meta_maturity_consistency": 1.0,
+    "s10_maturity_upgrade_labeled": 0.8
   },
   "meeting_prep_grounding": {
     "citation_id_resolution": 0.9,

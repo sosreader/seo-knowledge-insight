@@ -55,8 +55,11 @@ def _report_action_maturity_labeled(content: str) -> float:
     - No maturity reference line → 0.5 (acceptable: no meeting-prep report)
     - Has reference line but no labels → 0.0
     """
-    # Try both S5 (Fallback) and S6 (API mode) for the action section
-    s_action = _extract_section(content, "## 五、") or _extract_section(content, "## 六、")
+    # Try to find the action section by title first, then fall back to section number
+    s_action = _extract_section(content, "優先行動清單")
+    if not s_action:
+        # Fall back to section numbers: S6 (7-section fallback) or S5 (API mode)
+        s_action = _extract_section(content, "## 六、") or _extract_section(content, "## 五、")
     if not s_action:
         return 0.5  # No action section found, degrade gracefully
 

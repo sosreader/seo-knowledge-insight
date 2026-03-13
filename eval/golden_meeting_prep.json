@@ -1,7 +1,7 @@
 [
   {
     "id": "meeting_prep_20260306_ea576a4f",
-    "description": "基線：24 ALERT_DOWN（含 10 資料斷層），19 citations，15 提問",
+    "description": "基線：v3.3 重生，9 ALERT_DOWN（含 10 資料斷層），15 citations，15 提問，含 S8 成熟度表 + S10 [LX→LY] 標籤",
     "report_path": "eval/fixtures/meeting_prep/meeting_prep_20260306_ea576a4f.md",
     "snapshot_id": "20260306-184745",
     "expected_structure": {
@@ -19,11 +19,11 @@
       "citation_category_consistency_min": 0.8,
       "s4_row_count_min": 3
     },
-    "notes": "首次生成的基線報告，S1 含 3 個子表格（嚴重異常 + 資料斷層 + 月趨勢）"
+    "notes": "v3.3 全 pipeline 重生（snapshot → 週報 → meeting-prep），S8 成熟度表 + S10 含 9 個 [LX→LY] 升級標籤"
   },
   {
     "id": "meeting_prep_20260220_25caf520",
-    "description": "回測 Case 2：6 ALERT_DOWN（AMP/News/Discover/檢索未索引/CWV），14 citations，14 提問",
+    "description": "回測 Case 2：v3.3 重生，6 ALERT_DOWN（AMP/News/Discover/檢索未索引/CWV），11 citations，14 提問，含 S8 成熟度表 + S10 [LX→LY] 標籤",
     "report_path": "eval/fixtures/meeting_prep/meeting_prep_20260220_25caf520.md",
     "snapshot_id": "report_20260220",
     "expected_structure": {
@@ -41,11 +41,11 @@
       "citation_category_consistency_min": 0.8,
       "s4_row_count_min": 3
     },
-    "notes": "回測生成，週報萃取模式，時事曝光渠道斷裂 + 檢索未索引 + 桌機 CWV"
+    "notes": "v3.3 重生，週報萃取模式，S8 成熟度表 + S10 含 8 個 [LX→LY] 升級標籤"
   },
   {
     "id": "meeting_prep_20260227_765384ce",
-    "description": "回測 Case 3：16 ALERT_DOWN（AMP -166%/Sessions -16%/AI 三平台崩退），11 citations，14 提問",
+    "description": "回測 Case 3：v3.3 重生，16 ALERT_DOWN（AMP -166%/Sessions -16%/AI 三平台崩退），11 citations，14 提問，含 S8 成熟度表 + S10 [LX→LY] 標籤",
     "report_path": "eval/fixtures/meeting_prep/meeting_prep_20260227_765384ce.md",
     "snapshot_id": "report_20260227_b47f1eb7",
     "expected_structure": {
@@ -63,11 +63,11 @@
       "citation_category_consistency_min": 0.8,
       "s4_row_count_min": 3
     },
-    "notes": "回測生成，Health Score 0，新聞版位崩潰 + 工作階段跌破警戒 + AI 三線崩退 + /salon/ 爆發"
+    "notes": "v3.3 重生，Health Score 0，S8 成熟度表 + S10 含 11 個 [LX→LY] 升級標籤"
   },
   {
     "id": "meeting_prep_20260309_49530993",
-    "description": "回測 Case 4：9 ALERT_DOWN（外部連結 -18%/AI 月降但週轉正），13 citations，14 提問",
+    "description": "回測 Case 4：v3.3 重生，9 ALERT_DOWN（外部連結 -18%/AI 月降但週轉正），12 citations，15 提問，含 S8 成熟度表 + S10 [LX→LY] 標籤",
     "report_path": "eval/fixtures/meeting_prep/meeting_prep_20260309_49530993.md",
     "snapshot_id": "report_20260309_f4d6dcb9",
     "expected_structure": {
@@ -85,6 +85,6 @@
       "citation_category_consistency_min": 0.8,
       "s4_row_count_min": 3
     },
-    "notes": "回測生成，Health Score 10，連結雙重衰退 + Video Appearance +340% + Discover 回穩"
+    "notes": "v3.3 重生，Health Score 10，S8 成熟度表 + S10 含 9 個 [LX→LY] 升級標籤"
   }
 ]
