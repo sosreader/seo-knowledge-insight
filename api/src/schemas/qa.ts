@@ -13,6 +13,7 @@ export const qaListParamsSchema = z.object({
   source_type: z.string().optional(),
   source_collection: z.string().optional(),
   extraction_model: z.string().optional(),
+  maturity_relevance: z.enum(["L1", "L2", "L3", "L4"]).optional(),
   sort_by: z.enum(["source_date"]).optional(),
   sort_order: z.enum(["asc", "desc"]).default("desc").optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),

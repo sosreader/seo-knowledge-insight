@@ -40,10 +40,16 @@ export interface SessionMessage {
   readonly metadata?: Record<string, unknown>;
 }
 
+export interface SessionMetadata {
+  readonly maturity_level?: "L1" | "L2" | "L3" | "L4";
+  readonly [key: string]: unknown;
+}
+
 export interface Session {
   readonly id: string;
   readonly title: string;
   readonly messages: readonly SessionMessage[];
+  readonly metadata: SessionMetadata;
   readonly created_at: string;
   readonly updated_at: string;
 }
@@ -121,6 +127,7 @@ export class FileSessionStore {
       id: uuidv4(),
       title: title ? sanitizeTitle(title) : "New Chat",
       messages: [],
+      metadata: {},
       created_at: nowIso(),
       updated_at: nowIso(),
     };
@@ -148,7 +155,21 @@ export class FileSessionStore {
       id: session.id,
       title: newTitle,
       messages: [...session.messages, msg],
+      metadata: session.metadata ?? {},
       created_at: session.created_at,
+      updated_at: nowIso(),
+    };
+    this.writeSession(updated);
+    return updated;
+  }
+
+  updateMetadata(sessionId: string, metadata: Partial<SessionMetadata>): Session | null {
+    const session = this.readSession(sessionId);
+    if (!session) return null;
+
+    const updated: Session = {
+      ...session,
+      metadata: { ...(session.metadata ?? {}), ...metadata },
       updated_at: nowIso(),
     };
     this.writeSession(updated);
@@ -179,6 +200,7 @@ export interface AsyncSessionStore {
   getSession(sessionId: string): Promise<Session | null>;
   createSession(title?: string): Promise<Session>;
   addMessage(sessionId: string, msg: SessionMessage): Promise<Session | null>;
+  updateMetadata(sessionId: string, metadata: Partial<SessionMetadata>): Promise<Session | null>;
   deleteSession(sessionId: string): Promise<boolean>;
 }
 
@@ -188,6 +210,7 @@ function wrapFileStore(fs: FileSessionStore): AsyncSessionStore {
     getSession: (id) => Promise.resolve(fs.getSession(id)),
     createSession: (title) => Promise.resolve(fs.createSession(title)),
     addMessage: (id, msg) => Promise.resolve(fs.addMessage(id, msg)),
+    updateMetadata: (id, meta) => Promise.resolve(fs.updateMetadata(id, meta)),
     deleteSession: (id) => Promise.resolve(fs.deleteSession(id)),
   };
 }

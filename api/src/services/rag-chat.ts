@@ -15,6 +15,7 @@ import { normalizeQuery, hashQuery, lookupCache, saveCache } from "./response-ca
 import { logLLMUsage } from "../utils/llm-usage-logger.js";
 import { evaluateRetrievalQuality, validateCitations, type RetrievalQuality } from "./retrieval-gate.js";
 import { recordMiss } from "../store/learning-store.js";
+import { buildMaturityContext, type MaturityLevel } from "../utils/maturity.js";
 
 const SYSTEM_PROMPT = `你是一位資深 SEO 顧問，根據以下 SEO 知識庫內容回答用戶的問題。
 回答時請：
@@ -68,11 +69,12 @@ function getOpenAI(): OpenAI {
 export async function ragChat(
   message: string,
   history: ReadonlyArray<{ role: string; content: string }> | null = null,
+  maturityLevel: MaturityLevel | null = null,
 ): Promise<ChatResponse> {
   const startMs = Date.now();
 
-  // 0. Cache lookup (only for first message without history)
-  if (!history || history.length === 0) {
+  // 0. Cache lookup (only for first message without history, skip when maturity-aware)
+  if ((!history || history.length === 0) && !maturityLevel) {
     const normalized = normalizeQuery(message);
     const qHash = hashQuery(normalized);
     const cached = await lookupCache(qHash);
@@ -125,10 +127,13 @@ export async function ragChat(
   const context = formatContext(finalHits);
 
   // 5. Assemble messages
-  const systemPrompt =
-    retrievalQuality === "ambiguous"
-      ? SYSTEM_PROMPT + "\n\n注意：檢索結果的相似度偏低，回答時請格外謹慎，僅根據有把握的內容作答。"
-      : SYSTEM_PROMPT;
+  let systemPrompt = SYSTEM_PROMPT;
+  if (maturityLevel) {
+    systemPrompt += `\n\n--- 客戶成熟度脈絡 ---\n${buildMaturityContext(maturityLevel)}\n--- 脈絡結束 ---`;
+  }
+  if (retrievalQuality === "ambiguous") {
+    systemPrompt += "\n\n注意：檢索結果的相似度偏低，回答時請格外謹慎，僅根據有把握的內容作答。";
+  }
 
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     { role: "system", content: systemPrompt },
@@ -205,8 +210,8 @@ export async function ragChat(
 
   const result: ChatResponse = { answer, sources, mode: "rag", metadata };
 
-  // Save to cache (first message only, fire-and-forget)
-  if (!history || history.length === 0) {
+  // Save to cache (first message only, skip when maturity-aware, fire-and-forget)
+  if ((!history || history.length === 0) && !maturityLevel) {
     const normalized = normalizeQuery(message);
     const qHash = hashQuery(normalized);
     saveCache(message, qHash, result as unknown as Record<string, unknown>);

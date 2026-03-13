@@ -39,6 +39,7 @@ interface MatchRow {
   source_url: string;
   is_merged: boolean;
   extraction_model: string | null;
+  maturity_relevance: string | null;
   synonyms: string[];
   freshness_score: number;
   search_hit_count: number;
@@ -78,6 +79,7 @@ function rowToQAItem(row: QARow): QAItem {
     source_collection: row.source_collection ?? "seo-meetings",
     source_url: row.source_url ?? "",
     extraction_model: row.extraction_model ?? undefined,
+    maturity_relevance: (row.maturity_relevance as "L1" | "L2" | "L3" | "L4") ?? undefined,
   };
 }
 
@@ -130,7 +132,7 @@ export class SupabaseQAStore {
     for (let page = 0; page < MAX_PAGES; page++) {
       const rows = await supabaseSelect<QARow>(
         "qa_items",
-        `?select=id,seq,question,answer,keywords,confidence,category,difficulty,evergreen,source_title,source_date,source_type,source_collection,source_url,is_merged,extraction_model,synonyms,freshness_score,search_hit_count&order=seq.asc&limit=${PAGE_SIZE}&offset=${offset}`,
+        `?select=id,seq,question,answer,keywords,confidence,category,difficulty,evergreen,source_title,source_date,source_type,source_collection,source_url,is_merged,extraction_model,maturity_relevance,synonyms,freshness_score,search_hit_count&order=seq.asc&limit=${PAGE_SIZE}&offset=${offset}`,
         LOAD_TIMEOUT_MS,
       );
 

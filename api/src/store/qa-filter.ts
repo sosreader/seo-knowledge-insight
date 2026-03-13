@@ -13,6 +13,7 @@ export interface ListQaParams {
   readonly source_type?: string | null;
   readonly source_collection?: string | null;
   readonly extraction_model?: string | null;
+  readonly maturity_relevance?: string | null;
   readonly sort_by?: string | null;
   readonly sort_order?: string | null;
   readonly limit?: number;
@@ -31,6 +32,7 @@ export function filterAndPaginateQa(
     source_type,
     source_collection,
     extraction_model,
+    maturity_relevance,
     sort_by,
     sort_order,
     limit = 20,
@@ -67,6 +69,9 @@ export function filterAndPaginateQa(
   }
   if (extraction_model) {
     results = results.filter((i) => i.extraction_model === extraction_model);
+  }
+  if (maturity_relevance) {
+    results = results.filter((i) => i.maturity_relevance === maturity_relevance);
   }
 
   if (sort_by === "source_date") {

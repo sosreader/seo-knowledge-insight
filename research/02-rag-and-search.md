@@ -615,6 +615,36 @@ cd api && npx tsx scripts/eval-semantic.ts --top-k 3 # 改變 top-K 參數
 - Discover 專屬情境（keyword 命中「流量」但非 Discover 導向的結果被降權）
 - 相關性梯度（部分相關 vs 完全相關，而非二元 relevant/irrelevant）
 
+### Maturity-Aware Ranking（v3.4）
+
+**策略**：Post-retrieve 乘法 boost，符合使用者成熟度的 QA 項目獲得 1.15× 分數加成。
+
+**核心實作**（`api/src/utils/maturity.ts`）：
+
+```typescript
+// opt-in：只在 maturity_level param 存在時生效
+const boostedHits = applyMaturityBoost(filteredHits, maturityLevel);
+// maturityLevel = null → 原始排序不變（同一 reference，零開銷）
+// maturityLevel = "L2" → item.maturity_relevance === "L2" 的 score × 1.15，重排
+```
+
+**設計決策**：
+- **opt-in 而非 auto-detect**：Lambda 上無 meeting-prep 檔案，不適合自動偵測
+- **post-retrieve 而非 pre-filter**：不排除其他等級的 QA，僅調整排序
+- **乘法 boost 而非加法**：與 synonym_boost / freshness_decay 相容，高分項目被提升幅度更大
+- **搜尋路徑**：`routes/search.ts` 呼叫 `applyMaturityBoost()` post-retrieve reranking
+- **聊天路徑**：`rag-chat.ts` 呼叫 `buildMaturityContext()` 注入 system prompt（不做 reranking，而是調整回答深度）
+
+**與現有 boost 的交互**：
+
+| Boost 類型 | 實作位置 | 應用階段 |
+|-----------|---------|---------|
+| Keyword boost | `SearchEngine` / `SupabaseQAStore` | Retrieve 時 |
+| Synonym boost | `SearchEngine._synonym_boost_vec` | Retrieve 時 |
+| Freshness decay | `SearchEngine._freshness_vec` | Retrieve 時 |
+| Claude rerank | `reranker.ts` | Post-retrieve |
+| **Maturity boost** | `maturity.ts` | **Post-rerank**（最後一層） |
+
 ### Synonym Expansion 評估維度（v2.13）
 
 **評估問題**：Synonym 擴充後，搜尋品質改善了多少？

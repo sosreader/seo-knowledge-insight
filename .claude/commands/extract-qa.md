@@ -99,6 +99,15 @@
 - 必須是 SEO 領域術語或具體名詞（如 canonical、Discover、CTR）
 - 避免通用詞（如「方法」「建議」「討論」）
 
+### maturity_relevance 判斷標準
+
+根據 Q&A 內容判斷最適合的 SEO 成熟度等級：
+
+- **L1（起步期）**：基礎概念解釋、「什麼是 X」類問題、入門工具介紹
+- **L2（建置期）**：流程建置、指標追蹤、GSC/GA4 設定、canonical/hreflang 設定
+- **L3（優化期）**：A/B 測試、數據分析驅動決策、自動化工具、SOP 建立
+- **L4（領先期）**：預測模型、跨通路整合、AI 驅動策略、競爭情報系統
+
 ### 防止幻覺（嚴格遵守）
 
 - **僅從會議文本提取**：不要用通用 SEO 知識補充會議未提及的細節
@@ -120,7 +129,8 @@
       "source_file": "原始檔案名稱.md",
       "source_title": "會議標題",
       "source_date": "YYYY-MM-DD",
-      "extraction_model": "claude-code"
+      "extraction_model": "claude-code",
+      "maturity_relevance": "L1|L2|L3|L4"
     }
   ],
   "meeting_summary": "一句話概述這次會議的主要內容"

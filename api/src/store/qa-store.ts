@@ -40,6 +40,7 @@ export interface QAItem {
   readonly source_collection: string; // "seo-meetings" | "genehong-medium" | "ithelp-sc-kpi"
   readonly source_url: string; // canonical URL to original content
   readonly extraction_model?: string; // model used to extract this QA
+  readonly maturity_relevance?: "L1" | "L2" | "L3" | "L4"; // SEO maturity level
 }
 
 interface RawQAData {
@@ -66,6 +67,7 @@ interface RawQAData {
       search_hit_count?: number;
       notion_url?: string;
       source_url?: string;
+      maturity_relevance?: string;
     };
   }>;
 }
@@ -144,6 +146,7 @@ export class QAStore {
       source_collection: qa.source_collection ?? "seo-meetings",
       source_url: qa.source_url ?? qa._enrichment?.source_url ?? qa._enrichment?.notion_url ?? "",
       extraction_model: qa.extraction_model,
+      maturity_relevance: qa._enrichment?.maturity_relevance as "L1" | "L2" | "L3" | "L4" | undefined,
     }));
 
     // Build indexes

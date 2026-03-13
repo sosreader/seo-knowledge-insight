@@ -116,7 +116,9 @@
       "is_merged": false,
       "category": "索引與檢索",
       "difficulty": "基礎",
-      "evergreen": true
+      "evergreen": true,
+      "extraction_model": "claude-code",
+      "maturity_relevance": "L2"
     }
   ]
 }

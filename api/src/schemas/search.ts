@@ -5,6 +5,7 @@ export const searchRequestSchema = z.object({
   top_k: z.number().int().min(1).max(20).default(5),
   category: z.string().optional(),
   extraction_model: z.string().optional(),
+  maturity_level: z.enum(["L1", "L2", "L3", "L4"]).optional(),
 });
 
 export type SearchRequest = z.infer<typeof searchRequestSchema>;

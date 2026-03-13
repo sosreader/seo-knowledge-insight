@@ -28,7 +28,7 @@ chatRoute.post("/", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  const { message, history, mode: requestMode } = parsed.data;
+  const { message, history, mode: requestMode, maturity_level: maturityLevel } = parsed.data;
 
   if (!hasOpenAI()) {
     const result = contextOnlyResponse(message);
@@ -57,7 +57,7 @@ chatRoute.post("/", async (c) => {
     }
 
     // Full mode: single-pass RAG
-    const result = await ragChat(message, historyDicts.length > 0 ? historyDicts : null);
+    const result = await ragChat(message, historyDicts.length > 0 ? historyDicts : null, maturityLevel ?? null);
     return c.json(ok({ answer: result.answer, sources: result.sources, mode: result.mode, metadata: result.metadata }));
   } catch (err: unknown) {
     // OpenAI auth/quota errors — fall back to context-only mode
@@ -89,7 +89,7 @@ chatRoute.post("/stream", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  const { message, history } = parsed.data;
+  const { message, history, maturity_level: streamMaturityLevel } = parsed.data;
 
   if (!hasOpenAI()) {
     // Streaming not available without OpenAI — return non-streaming fallback
@@ -142,6 +142,7 @@ chatRoute.post("/stream", async (c) => {
           });
         },
       },
+      streamMaturityLevel ?? null,
     );
   });
 });

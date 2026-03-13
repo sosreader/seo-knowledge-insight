@@ -30,5 +30,14 @@
     "citation_count_in_range": 1.0,
     "s4_four_sources_populated": 0.8,
     "inline_citation_coverage": 0.55
+  },
+  "maturity_classification": {
+    "accuracy": 0.80,
+    "adjacent_accuracy": 0.90,
+    "classification_rate": 0.85
+  },
+  "chat_maturity_quality": {
+    "appropriateness": 0.80,
+    "has_answer": 0.80
   }
 }

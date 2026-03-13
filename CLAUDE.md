@@ -379,14 +379,14 @@ AGENT_TIMEOUT_MS=90000         # Agent loop 總逾時（5000-300000，預設 90s
 
 新知識補充時，依主題寫入對應檔案：
 
-| 主題                                                               | 檔案                                  |
-| ------------------------------------------------------------------ | ------------------------------------- |
-| LLM / Token / Embedding / Cosine / Prompt 基礎 / Structured Output | `research/01-ai-fundamentals.md`      |
-| RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標                | `research/02-rag-and-search.md`       |
-| 評估 / LLM-as-Judge / Reasoning Model / 評估維度設計               | `research/03-evaluation.md`           |
-| Prompt Engineering 進階 / 業界最佳實踐                             | `research/04-prompting.md`            |
-| 模型選擇決策 / Embedding 模型比較                                  | `research/05-models.md`               |
-| 專案架構 / 技術決策 / Changelog / Mermaid 圖 / Observability       | `research/06-project-architecture.md` |
-| 部署 / Lambda / Docker / Supabase 遷移 / App Runner（已淘汰）      | `research/07-deployment.md`           |
-| SEO 業界動態（Google 更新 / SER / 業界報導）                        | `research/11-seo-industry-updates.md` |
-| Meeting Prep 評分追蹤 / 交叉比對發現                                | `research/12-meeting-prep-insights.md`|
+| 主題                                                               | 檔案                                   |
+| ------------------------------------------------------------------ | -------------------------------------- |
+| LLM / Token / Embedding / Cosine / Prompt 基礎 / Structured Output | `research/01-ai-fundamentals.md`       |
+| RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標                | `research/02-rag-and-search.md`        |
+| 評估 / LLM-as-Judge / Reasoning Model / 評估維度設計               | `research/03-evaluation.md`            |
+| Prompt Engineering 進階 / 業界最佳實踐                             | `research/04-prompting.md`             |
+| 模型選擇決策 / Embedding 模型比較                                  | `research/05-models.md`                |
+| 專案架構 / 技術決策 / Changelog / Mermaid 圖 / Observability       | `research/06-project-architecture.md`  |
+| 部署 / Lambda / Docker / Supabase 遷移 / App Runner（已淘汰）      | `research/07-deployment.md`            |
+| SEO 業界動態（Google 更新 / SER / 業界報導）                       | `research/11-seo-industry-updates.md`  |
+| Meeting Prep 評分追蹤 / 交叉比對發現                               | `research/12-meeting-prep-insights.md` |

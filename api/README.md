@@ -3,6 +3,7 @@
 REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（Node.js server / AWS Lambda）。
 
 **特點：**
+
 - 10 個路由器（Routers）、42 個 API endpoints、582 個測試（57 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
@@ -69,14 +70,14 @@ Client → Function URL / localhost:8002
 
 **分層設計：**
 
-| 層 | 目錄 | 職責 |
-|----|------|------|
+| 層         | 目錄          | 職責                                                               |
+| ---------- | ------------- | ------------------------------------------------------------------ |
 | Middleware | `middleware/` | CORS、安全標頭、Request Logger、API Key 認證、Rate Limit、錯誤處理 |
-| Routes | `routes/` | 請求驗證（Zod schema）、回應格式化 |
-| Services | `services/` | 業務邏輯（RAG、embedding、週報生成、指標解析） |
-| Store | `store/` | 資料存取（Factory Pattern：Supabase pgvector vs 檔案模式） |
-| Schemas | `schemas/` | Zod 驗證 schema（請求參數、API 回應） |
-| Utils | `utils/` | 純函式工具（cosine、CJK 分詞、keyword boost、sanitize） |
+| Routes     | `routes/`     | 請求驗證（Zod schema）、回應格式化                                 |
+| Services   | `services/`   | 業務邏輯（RAG、embedding、週報生成、指標解析）                     |
+| Store      | `store/`      | 資料存取（Factory Pattern：Supabase pgvector vs 檔案模式）         |
+| Schemas    | `schemas/`    | Zod 驗證 schema（請求參數、API 回應）                              |
+| Utils      | `utils/`      | 純函式工具（cosine、CJK 分詞、keyword boost、sanitize）            |
 
 **雙模式資料層：** `hasSupabase()` 偵測環境變數，有設定走 `SupabaseQAStore`（pgvector hybrid search），否則 fallback 到檔案模式（JSON + `.npy` embedding）。
 
@@ -88,10 +89,10 @@ Client → Function URL / localhost:8002
 
 啟動開發伺服器後即可存取：
 
-| 格式 | URL | 說明 |
-|------|-----|------|
-| OpenAPI JSON | `http://localhost:8002/openapi.json` | 機器可讀規格（可匯入 Postman / Swagger Editor） |
-| 互動式文件 | `http://localhost:8002/docs` | Scalar UI（可直接在瀏覽器測試 API） |
+| 格式              | URL                                                | 說明                                                         |
+| ----------------- | -------------------------------------------------- | ------------------------------------------------------------ |
+| OpenAPI JSON      | `http://localhost:8002/openapi.json`               | 機器可讀規格（可匯入 Postman / Swagger Editor）              |
+| 互動式文件        | `http://localhost:8002/docs`                       | Scalar UI（可直接在瀏覽器測試 API）                          |
 | Mintlify 託管文件 | [`vocus.mintlify.app`](https://vocus.mintlify.app) | 託管文件站（auto-deploy from main，Pro trial 至 2026-03-21） |
 
 > `/openapi.json` 和 `/docs` 不需要認證，也不受 rate limit 限制。
@@ -102,42 +103,45 @@ Client → Function URL / localhost:8002
 
 ### 1. 健康檢查 (health)
 
-| 方法 | 路由 | 說明 | 認證 | Rate Limit |
-|------|------|------|------|-----------|
-| GET | `/health` | 伺服器健康檢查 | ✗ | — |
+| 方法 | 路由      | 說明           | 認證 | Rate Limit |
+| ---- | --------- | -------------- | ---- | ---------- |
+| GET  | `/health` | 伺服器健康檢查 | ✗    | —          |
 
 ### 2. Q&A 知識庫 (qa) — 4 個 endpoints
 
-| 方法 | 路由 | 說明 | 認證 | Rate Limit |
-|------|------|------|------|-----------|
-| GET | `/api/v1/qa` | 列出所有 Q&A（支援分頁、source_type/source_collection/extraction_model filter） | ✓ | 60/min |
-| GET | `/api/v1/qa/{id}` | 取得單筆 Q&A 詳情（id: 16-char hex 或 integer seq） | ✓ | 60/min |
-| GET | `/api/v1/qa/categories` | 列出所有分類標籤 | ✓ | 60/min |
-| GET | `/api/v1/qa/collections` | 列出所有 collection（含 source_type + count） | ✓ | 60/min |
+| 方法 | 路由                     | 說明                                                                            | 認證 | Rate Limit |
+| ---- | ------------------------ | ------------------------------------------------------------------------------- | ---- | ---------- |
+| GET  | `/api/v1/qa`             | 列出所有 Q&A（支援分頁、source_type/source_collection/extraction_model filter） | ✓    | 60/min     |
+| GET  | `/api/v1/qa/{id}`        | 取得單筆 Q&A 詳情（id: 16-char hex 或 integer seq）                             | ✓    | 60/min     |
+| GET  | `/api/v1/qa/categories`  | 列出所有分類標籤                                                                | ✓    | 60/min     |
+| GET  | `/api/v1/qa/collections` | 列出所有 collection（含 source_type + count）                                   | ✓    | 60/min     |
 
 ### 3. 語意搜尋 (search) — 1 個 endpoint
 
-| 方法 | 路由 | 說明 | 認證 | Rate Limit |
-|------|------|------|------|-----------|
-| POST | `/api/v1/search` | 混合搜尋（有 OpenAI: hybrid，無: keyword fallback） | ✓ | 60/min |
+| 方法 | 路由             | 說明                                                | 認證 | Rate Limit |
+| ---- | ---------------- | --------------------------------------------------- | ---- | ---------- |
+| POST | `/api/v1/search` | 混合搜尋（有 OpenAI: hybrid，無: keyword fallback） | ✓    | 60/min     |
 
 **Graceful Degradation:**
+
 - 有 OpenAI API Key：使用 embedding + cosine similarity（語意搜尋）
 - 無 OpenAI API Key：自動降級至 keyword-only 搜尋
 
 ### 4. RAG 問答 (chat) — 2 個 endpoints
 
-| 方法 | 路由 | 說明 | 認證 | Rate Limit |
-|------|------|------|------|-----------|
-| POST | `/api/v1/chat` | 互動式問答（有 OpenAI: RAG + GPT，無: context-only） | ✓ | 20/min |
-| POST | `/api/v1/chat/stream` | SSE streaming 問答（5 event types: sources/token/metadata/done/error） | ✓ | 20/min |
+| 方法 | 路由                  | 說明                                                                   | 認證 | Rate Limit |
+| ---- | --------------------- | ---------------------------------------------------------------------- | ---- | ---------- |
+| POST | `/api/v1/chat`        | 互動式問答（有 OpenAI: RAG + GPT，無: context-only）                   | ✓    | 20/min     |
+| POST | `/api/v1/chat/stream` | SSE streaming 問答（5 event types: sources/token/metadata/done/error） | ✓    | 20/min     |
 
 **三模式 Graceful Degradation:**
+
 - **Agent mode**（`AGENT_ENABLED=true` 或 `auto` + 有 OpenAI key）：LLM 自主決定 tool calling（search / get_qa_detail / list_categories / get_stats），多輪收集資訊後回答
 - **RAG mode**（有 OpenAI key，agent 未啟用；或 request `mode: "rag"`）：單次檢索相關 Q&A + GPT 生成回答
 - **Context-only mode**（無 OpenAI key）：僅回傳相關 Q&A 內容
 
 **CRAG Quality Gate（v3.0）：** 檢索結果經 3-tier 品質閘門評估：
+
 - **correct**（score >= 0.6）：正常 RAG flow + inline citation [1][2]
 - **ambiguous**（0.4–0.6）：加入謹慎指示 + 免責聲明
 - **incorrect**（< 0.4）：直接回傳 context-only，不呼叫 GPT
@@ -146,67 +150,67 @@ Client → Function URL / localhost:8002
 
 ### 5. SEO 週報 (reports) — 3 個 endpoints
 
-| 方法 | 路由 | 說明 | 認證 | Rate Limit |
-|------|------|------|------|-----------|
-| GET | `/api/v1/reports` | 列出所有週報 | ✓ | 60/min |
-| GET | `/api/v1/reports/{date}` | 取得單篇週報（date: YYYYMMDD） | ✓ | 60/min |
-| POST | `/api/v1/reports/generate` | 觸發週報生成（同步，120s timeout；`cache_hit` 欄位） | ✓ | 5/min |
+| 方法 | 路由                       | 說明                                                 | 認證 | Rate Limit |
+| ---- | -------------------------- | ---------------------------------------------------- | ---- | ---------- |
+| GET  | `/api/v1/reports`          | 列出所有週報                                         | ✓    | 60/min     |
+| GET  | `/api/v1/reports/{date}`   | 取得單篇週報（date: YYYYMMDD）                       | ✓    | 60/min     |
+| POST | `/api/v1/reports/generate` | 觸發週報生成（同步，120s timeout；`cache_hit` 欄位） | ✓    | 5/min      |
 
 ### 6. 對話管理 (sessions) — 5 個 endpoints
 
-| 方法 | 路由 | 說明 | 認證 | Rate Limit |
-|------|------|------|------|-----------|
-| GET | `/api/v1/sessions` | 列出所有對話 | ✓ | 60/min |
-| GET | `/api/v1/sessions/{id}` | 取得單個對話詳情 | ✓ | 60/min |
-| POST | `/api/v1/sessions` | 建立新對話 | ✓ | 20/min |
-| POST | `/api/v1/sessions/{id}/messages` | 新增訊息到對話（支援 `mode: "agent"\|"rag"` + context-only 降級） | ✓ | 20/min |
-| DELETE | `/api/v1/sessions/{id}` | 刪除對話 | ✓ | 60/min |
+| 方法   | 路由                             | 說明                                                              | 認證 | Rate Limit |
+| ------ | -------------------------------- | ----------------------------------------------------------------- | ---- | ---------- |
+| GET    | `/api/v1/sessions`               | 列出所有對話                                                      | ✓    | 60/min     |
+| GET    | `/api/v1/sessions/{id}`          | 取得單個對話詳情                                                  | ✓    | 60/min     |
+| POST   | `/api/v1/sessions`               | 建立新對話                                                        | ✓    | 20/min     |
+| POST   | `/api/v1/sessions/{id}/messages` | 新增訊息到對話（支援 `mode: "agent"\|"rag"` + context-only 降級） | ✓    | 20/min     |
+| DELETE | `/api/v1/sessions/{id}`          | 刪除對話                                                          | ✓    | 60/min     |
 
 ### 7. 回饋收集 (feedback) — 1 個 endpoint
 
-| 方法 | 路由 | 說明 | 認證 | Rate Limit |
-|------|------|------|------|-----------|
-| POST | `/api/v1/feedback` | 提交使用者回饋（支援 4 類別：wrong_answer/missing_info/wrong_source/outdated） | ✓ | 60/min |
+| 方法 | 路由               | 說明                                                                           | 認證 | Rate Limit |
+| ---- | ------------------ | ------------------------------------------------------------------------------ | ---- | ---------- |
+| POST | `/api/v1/feedback` | 提交使用者回饋（支援 4 類別：wrong_answer/missing_info/wrong_source/outdated） | ✓    | 60/min     |
 
 ### 8. Pipeline 管理 (pipeline) — 18 個 endpoints
 
-| 方法 | 路由 | 說明 | 認證 | Rate Limit |
-|------|------|------|------|-----------|
-| GET | `/api/v1/pipeline/status` | 各步驟完成狀態 | ✓ | 60/min |
-| GET | `/api/v1/pipeline/meetings` | 會議列表（含 metadata） | ✓ | 60/min |
-| GET | `/api/v1/pipeline/meetings/{id}/preview` | Markdown 預覽 | ✓ | 60/min |
-| GET | `/api/v1/pipeline/unprocessed` | 待處理的 Markdown 列表 | ✓ | 60/min |
-| GET | `/api/v1/pipeline/logs` | Fetch 歷史日誌 | ✓ | 60/min |
-| POST | `/api/v1/pipeline/fetch` | 觸發 Notion 增量擷取 | ✓ | 60/min |
-| POST | `/api/v1/pipeline/fetch-articles` | 觸發外部文章擷取（Medium + iThome + Google Cases） | ✓ | 60/min |
-| POST | `/api/v1/pipeline/extract-qa` | 觸發 Q&A 萃取 | ✓ | 60/min |
-| POST | `/api/v1/pipeline/dedupe-classify` | 觸發去重 + 分類 | ✓ | 60/min |
-| POST | `/api/v1/pipeline/crawled-not-indexed` | 分析檢索未索引路徑（從 Google Sheet 解析 + 規則引擎 + LLM 分析） | ✓ | 60/min |
-| GET | `/api/v1/pipeline/source-docs` | 列出所有來源文件（支援 filter + pagination） | ✓ | 60/min |
-| GET | `/api/v1/pipeline/source-docs/:collection/:file/preview` | 來源文件 Markdown 預覽 | ✓ | 60/min |
-| POST | `/api/v1/pipeline/metrics` | 取得 Pipeline metrics | ✓ | 60/min |
-| POST | `/api/v1/pipeline/metrics/save` | 儲存指標快照 | ✓ | 60/min |
-| GET | `/api/v1/pipeline/metrics/snapshots` | 列出指標快照清單 | ✓ | 60/min |
-| DELETE | `/api/v1/pipeline/metrics/snapshots/:id` | 刪除指定快照 | ✓ | 60/min |
-| GET | `/api/v1/pipeline/metrics/trends` | Timeseries 異常偵測（MA deviation / decline / trend） | ✓ | 60/min |
-| GET | `/api/v1/pipeline/llm-usage` | LLM cost/latency monitoring | ✓ | 60/min |
+| 方法   | 路由                                                     | 說明                                                             | 認證 | Rate Limit |
+| ------ | -------------------------------------------------------- | ---------------------------------------------------------------- | ---- | ---------- |
+| GET    | `/api/v1/pipeline/status`                                | 各步驟完成狀態                                                   | ✓    | 60/min     |
+| GET    | `/api/v1/pipeline/meetings`                              | 會議列表（含 metadata）                                          | ✓    | 60/min     |
+| GET    | `/api/v1/pipeline/meetings/{id}/preview`                 | Markdown 預覽                                                    | ✓    | 60/min     |
+| GET    | `/api/v1/pipeline/unprocessed`                           | 待處理的 Markdown 列表                                           | ✓    | 60/min     |
+| GET    | `/api/v1/pipeline/logs`                                  | Fetch 歷史日誌                                                   | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/fetch`                                 | 觸發 Notion 增量擷取                                             | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/fetch-articles`                        | 觸發外部文章擷取（Medium + iThome + Google Cases）               | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/extract-qa`                            | 觸發 Q&A 萃取                                                    | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/dedupe-classify`                       | 觸發去重 + 分類                                                  | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/crawled-not-indexed`                   | 分析檢索未索引路徑（從 Google Sheet 解析 + 規則引擎 + LLM 分析） | ✓    | 60/min     |
+| GET    | `/api/v1/pipeline/source-docs`                           | 列出所有來源文件（支援 filter + pagination）                     | ✓    | 60/min     |
+| GET    | `/api/v1/pipeline/source-docs/:collection/:file/preview` | 來源文件 Markdown 預覽                                           | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/metrics`                               | 取得 Pipeline metrics                                            | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/metrics/save`                          | 儲存指標快照                                                     | ✓    | 60/min     |
+| GET    | `/api/v1/pipeline/metrics/snapshots`                     | 列出指標快照清單                                                 | ✓    | 60/min     |
+| DELETE | `/api/v1/pipeline/metrics/snapshots/:id`                 | 刪除指定快照                                                     | ✓    | 60/min     |
+| GET    | `/api/v1/pipeline/metrics/trends`                        | Timeseries 異常偵測（MA deviation / decline / trend）            | ✓    | 60/min     |
+| GET    | `/api/v1/pipeline/llm-usage`                             | LLM cost/latency monitoring                                      | ✓    | 60/min     |
 
 ### 9. 同義詞管理 (synonyms) — 4 個 endpoints（v2.10 新增）
 
-| 方法 | 路由 | 說明 | 認證 | Rate Limit |
-|------|------|------|------|-----------|
-| GET | `/api/v1/synonyms` | 列出所有同義詞（靜態 + 自訂） | ✓ | 60/min |
-| POST | `/api/v1/synonyms` | 新增自訂同義詞 | ✓ | 60/min |
-| PUT | `/api/v1/synonyms/{term}` | 更新自訂同義詞 | ✓ | 60/min |
-| DELETE | `/api/v1/synonyms/{term}` | 刪除自訂同義詞 | ✓ | 60/min |
+| 方法   | 路由                      | 說明                          | 認證 | Rate Limit |
+| ------ | ------------------------- | ----------------------------- | ---- | ---------- |
+| GET    | `/api/v1/synonyms`        | 列出所有同義詞（靜態 + 自訂） | ✓    | 60/min     |
+| POST   | `/api/v1/synonyms`        | 新增自訂同義詞                | ✓    | 60/min     |
+| PUT    | `/api/v1/synonyms/{term}` | 更新自訂同義詞                | ✓    | 60/min     |
+| DELETE | `/api/v1/synonyms/{term}` | 刪除自訂同義詞                | ✓    | 60/min     |
 
 ### 10. 顧問會議準備 (meeting-prep) — 3 個 endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/meeting-prep` | 列出所有會議準備報告（日期 + meta） |
-| GET | `/api/v1/meeting-prep/maturity-trend` | SEO 成熟度趨勢時間序列（data_points + summary） |
-| GET | `/api/v1/meeting-prep/:date` | 取得單篇會議準備報告（YYYYMMDD 或 YYYYMMDD_hash8 格式） |
+| Method | Path                                  | Description                                             |
+| ------ | ------------------------------------- | ------------------------------------------------------- |
+| GET    | `/api/v1/meeting-prep`                | 列出所有會議準備報告（日期 + meta）                     |
+| GET    | `/api/v1/meeting-prep/maturity-trend` | SEO 成熟度趨勢時間序列（data_points + summary）         |
+| GET    | `/api/v1/meeting-prep/:date`          | 取得單篇會議準備報告（YYYYMMDD 或 YYYYMMDD_hash8 格式） |
 
 ---
 
@@ -429,12 +433,14 @@ LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 **無 OpenAI：** Keyword-only 搜尋（CJK 分詞 + 關鍵字加權）
 
 **Request 參數：**
+
 - `query`：搜尋字串（必填）
 - `top_k`：回傳筆數（選填，預設 5）
 - `category`：分類 filter（選填）
 - `extraction_model`：按 extraction_model 過濾結果（選填，例如 `"claude-code"`）
 
 **Response 欄位（每筆 hit）：**
+
 - 包含 `extraction_model` 欄位，方便前端依模型分群顯示
 
 ### Chat 端點
@@ -460,6 +466,7 @@ zip lambda.js + package.json → aws lambda update-function-code
 ```
 
 **Lambda 設定**：
+
 - Function: `seo-insight-api`
 - Architecture: arm64（便宜 20%）
 - Runtime: Node.js 22
@@ -485,9 +492,9 @@ API 伺服器透過 `@lmnr-ai/lmnr` JS SDK 整合 Laminar tracing。
 
 ### 追蹤範圍
 
-| Span | 模組 | 說明 |
-|------|------|------|
-| `rag_chat` | `services/rag-chat.ts` | RAG 問答完整流程 |
+| Span            | 模組                    | 說明                  |
+| --------------- | ----------------------- | --------------------- |
+| `rag_chat`      | `services/rag-chat.ts`  | RAG 問答完整流程      |
 | `get_embedding` | `services/embedding.ts` | OpenAI embedding 呼叫 |
 
 ### Online Scoring
@@ -508,18 +515,26 @@ API 伺服器透過 `@lmnr-ai/lmnr` JS SDK 整合 Laminar tracing。
 ### 日誌格式
 
 ```json
-{"level":"info","method":"GET","path":"/api/v1/qa","status":200,"duration_ms":42,"request_id":"a1b2c3d4-...","timestamp":"2026-03-07T12:00:00.000Z"}
+{
+  "level": "info",
+  "method": "GET",
+  "path": "/api/v1/qa",
+  "status": 200,
+  "duration_ms": 42,
+  "request_id": "a1b2c3d4-...",
+  "timestamp": "2026-03-07T12:00:00.000Z"
+}
 ```
 
-| 欄位 | 說明 |
-|------|------|
-| `level` | `info`（2xx/3xx）、`warn`（4xx）、`error`（5xx） |
-| `method` | HTTP method |
-| `path` | 請求路徑（不含 query string） |
-| `status` | HTTP status code |
-| `duration_ms` | 請求處理時間（毫秒） |
-| `request_id` | UUID v4（同時設為 `X-Request-Id` response header） |
-| `timestamp` | ISO 8601 時間戳 |
+| 欄位          | 說明                                               |
+| ------------- | -------------------------------------------------- |
+| `level`       | `info`（2xx/3xx）、`warn`（4xx）、`error`（5xx）   |
+| `method`      | HTTP method                                        |
+| `path`        | 請求路徑（不含 query string）                      |
+| `status`      | HTTP status code                                   |
+| `duration_ms` | 請求處理時間（毫秒）                               |
+| `request_id`  | UUID v4（同時設為 `X-Request-Id` response header） |
+| `timestamp`   | ISO 8601 時間戳                                    |
 
 **安全設計**：不記錄 API key header、request body、query string（防洩漏 token）。`/health` 路徑被排除以避免高頻心跳噪音。
 
@@ -535,10 +550,10 @@ pnpm dev 2>&1 | jq .
 
 Lambda 部署後，可在 AWS CloudWatch 查看 request log：
 
-| 頁面 | URL |
-|------|-----|
-| Log Group | [`/aws/lambda/seo-insight-api`](https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:log-groups/log-group/$252Faws$252Flambda$252Fseo-insight-api) |
-| Logs Insights | [CloudWatch Logs Insights](https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:logs-insights) |
+| 頁面          | URL                                                                                                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Log Group     | [`/aws/lambda/seo-insight-api`](https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:log-groups/log-group/$252Faws$252Flambda$252Fseo-insight-api) |
+| Logs Insights | [CloudWatch Logs Insights](https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:logs-insights)                                                     |
 
 CLI 查看（不需要登入 Console）：
 
@@ -594,6 +609,7 @@ pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
 **測試套件統計（v3.3）：**
+
 - 總測試數：582 個（57 個測試檔案）
 - 通過：582/582 (100%)
 - 覆蓋率：80%+

@@ -141,6 +141,24 @@ print(response.choices[0].finish_reason)
 - **Actionable**：A 提供具體可執行建議（Completeness 的核心要求）
 - **Faithfulness**：A 的內容來自原始文件，不是 AI 自行補充（Accuracy 的核心要求）
 
+### 成熟度評估維度（v3.3–v3.4）
+
+v3.3 起，成熟度模型（L1-L4）成為評估體系的新橫切維度：
+
+| 評估器 | 類型 | Laminar Group | 說明 |
+|--------|------|---------------|------|
+| `s8_meta_maturity_consistency` | rule-based | `meeting_prep_structure` | meta JSON 與 S8 表格的 L1-L4 一致性 |
+| `s10_maturity_upgrade_labeled` | rule-based | `meeting_prep_structure` | S10 checklist 是否含 `[策略 L1→L2]` 升級標籤 |
+| `report_action_maturity_labeled` | rule-based | `report_quality` | 報告 S5 是否含成熟度參考區塊 |
+| `s8_maturity_justified` | LLM-as-Judge | `meeting_prep_quality` | 成熟度評分是否有根據（非隨意標注） |
+
+**成熟度與四層評估框架的關係**：
+
+- **L1 Data Quality**：`maturity_relevance` 欄位完整度（backfill coverage）
+- **L2 Retrieval**：`applyMaturityBoost()` 不退化現有 golden retrieval（35 cases）
+- **L3 Enhancement**：Chat system prompt 注入成熟度脈絡，回答深度適配
+- **L4 Context**：Session 跨輪次成熟度持久化，一致性體驗
+
 ---
 
 ---
