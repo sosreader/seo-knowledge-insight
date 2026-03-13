@@ -23,9 +23,9 @@ Layer 3 Content Quality 評估：針對已生成的 meeting-prep 報告，評估
 
 讀取完整報告內容。
 
-### Step B：五維度評分（你是 Judge）
+### Step B：六維度評分（你是 Judge）
 
-對報告的 5 個維度逐一評分（1-5 分）：
+對報告的 6 個維度逐一評分（1-5 分）：
 
 #### 1. `s3_hypothesis_grounded`（根因假設扎根度）
 

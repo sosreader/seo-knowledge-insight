@@ -222,10 +222,10 @@ Notion 會議紀錄（87 份，2023–2026）
     - agent/agent-loop.ts：while-loop + 4 終止條件（stop/max_turns/timeout/loop_detection）+ ALLOWED_TOOLS whitelist + JSON.parse guard
     - agent/agent-deps.ts：qaStore → AgentDeps 橋接（Dependency Injection）
   評估工具：
-    - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port，複製 report-evaluator.ts 邏輯；7 維度推送 Laminar `report-quality` group；供 `/generate-report` 存檔後呼叫）
+    - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port；8 維度推送 Laminar `report-quality` group；含 report_action_maturity_labeled）
   schemas：
-    - qa / search / chat / feedback / report / session / pipeline / synonyms / api-response
-  測試：Vitest（39 個 test files，367 tests passing）
+    - qa / search / chat / feedback / report / session / pipeline / synonyms / meeting-prep / api-response
+  測試：Vitest（57 個 test files，582 tests passing）
   部署：Lambda + Function URL（arm64，~$0/月）/ docker-compose（本地開發）
             ↓ http://localhost:8002 (開發) 或 https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/ (生產)
 
