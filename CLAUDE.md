@@ -287,9 +287,10 @@ Synonyms API 端點（v2.11 新增）：
 - `PUT /api/v1/synonyms/:term` — 更新自訂同義詞
 - `DELETE /api/v1/synonyms/:term` — 刪除自訂同義詞
 
-Meeting Prep API 端點（v3.2 新增）：
+Meeting Prep API 端點（v3.3 新增 maturity-trend）：
 
 - `GET /api/v1/meeting-prep` — 列出所有會議準備報告（日期 + meta）
+- `GET /api/v1/meeting-prep/maturity-trend` — SEO 成熟度趨勢時間序列（data_points + summary）
 - `GET /api/v1/meeting-prep/:date` — 取得單篇會議準備報告（YYYYMMDD 或 YYYYMMDD_hash8 格式）
 
 環境變數（v2.11 新增，均可選）：

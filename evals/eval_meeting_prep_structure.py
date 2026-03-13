@@ -385,6 +385,79 @@ def s10_checklist_present(output: dict, target: dict) -> float:
     return 1.0 if len(items) >= min_items else len(items) / min_items
 
 
+def _parse_s8_table_levels(s8_content: str) -> dict[str, str]:
+    """Parse maturity levels from S8 table rows.
+
+    Expects rows like: | **策略（Strategy）** | L2 發展 | ... |
+    Returns: {"strategy": "L2", "process": "L2", ...}
+    """
+    dim_map = {
+        "策略": "strategy",
+        "流程": "process",
+        "關鍵字": "keywords",
+        "指標": "metrics",
+    }
+    levels: dict[str, str] = {}
+    for line in s8_content.splitlines():
+        if not line.strip().startswith("|"):
+            continue
+        for zh_name, en_key in dim_map.items():
+            if zh_name in line:
+                m = re.search(r"(L[1-4])", line)
+                if m:
+                    levels[en_key] = m.group(1)
+                break
+    return levels
+
+
+def s8_meta_maturity_consistency(output: dict, target: dict) -> float:
+    """Meta JSON maturity levels must match S8 table levels."""
+    if "error" in output:
+        return 0.0
+    meta = output.get("metadata")
+    if not meta:
+        return 0.0
+
+    meta_maturity = meta.get("scores", {}).get("maturity", {})
+    if not meta_maturity:
+        return 0.0
+
+    content = output.get("raw_content", "")
+    s8 = _extract_section_content(content, "八、SEO 成熟度自評")
+    if not s8:
+        return 0.0
+
+    s8_levels = _parse_s8_table_levels(s8)
+    if not s8_levels:
+        return 0.0
+
+    expected_keys = ["strategy", "process", "keywords", "metrics"]
+    matches = sum(
+        1 for k in expected_keys
+        if meta_maturity.get(k) == s8_levels.get(k)
+    )
+    return matches / len(expected_keys)
+
+
+def s10_maturity_upgrade_labeled(output: dict, target: dict) -> float:
+    """S10 checklist should contain maturity upgrade markers [LX→LY]."""
+    if "error" in output:
+        return 0.0
+    content = output.get("raw_content", "")
+    s10 = _extract_section_content(content, "十、會議後行動核查表")
+    if not s10:
+        return 0.0
+
+    labels = re.findall(
+        r"\[(?:策略|流程|關鍵字|指標)\s*L[1-4]→L[1-4]\]", s10
+    )
+    items = re.findall(r"- \[ \]", s10)
+    if not items:
+        return 0.0
+    # At least 30% of checklist items should have upgrade labels
+    return min(len(labels) / max(len(items) * 0.3, 1), 1.0)
+
+
 # ── Evaluator map ─────────────────────────────────────────────────────────────
 
 _EVALUATOR_MAP = {
@@ -399,6 +472,8 @@ _EVALUATOR_MAP = {
     "s5_all_layers_present": s5_all_layers_present,
     "s7_seven_elements": s7_seven_elements,
     "s10_checklist_present": s10_checklist_present,
+    "s8_meta_maturity_consistency": s8_meta_maturity_consistency,
+    "s10_maturity_upgrade_labeled": s10_maturity_upgrade_labeled,
 }
 
 # ── Threshold gate (CI eval gate) ─────────────────────────────────────────────

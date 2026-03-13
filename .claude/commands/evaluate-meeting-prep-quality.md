@@ -67,6 +67,14 @@ Layer 3 Content Quality 評估：針對已生成的 meeting-prep 報告，評估
 - **3 分**：有部分連結但存在邏輯跳躍
 - **5 分**：S1 每個重要異常都有 S3 假設對應，S3 假設都衍生出 S9 提問，形成完整推理鏈
 
+#### 6. `s8_maturity_justified`（成熟度評分依據充分度）
+
+評估 S8 每個成熟度等級是否有具體依據，且「下一步」建議是否對應正確的鄰近等級。
+
+- **1 分**：等級無依據，或下一步目標與當前等級不連貫（如 L1 直接建議 L4 行動）
+- **3 分**：有部分依據但某些維度缺乏具體觀察，下一步建議偏泛
+- **5 分**：每個等級都有 S1/S3/S5 的具體證據支撐，下一步明確描述目標等級特徵
+
 ### Step C：彙整結果並儲存
 
 將 Step B 的結果彙整為以下 JSON 結構：
@@ -80,7 +88,8 @@ Layer 3 Content Quality 評估：針對已生成的 meeting-prep 報告，評估
     "s6_eeat_justified": {"score": 3, "reason": "..."},
     "s9_question_specificity": {"score": 5, "reason": "..."},
     "s4_contradiction_quality": {"score": 4, "reason": "..."},
-    "overall_coherence": {"score": 4, "reason": "..."}
+    "overall_coherence": {"score": 4, "reason": "..."},
+    "s8_maturity_justified": {"score": 4, "reason": "..."}
   },
   "average_score": 4.0,
   "summary": "一句話總結品質"
@@ -88,6 +97,18 @@ Layer 3 Content Quality 評估：針對已生成的 meeting-prep 報告，評估
 ```
 
 寫入 `output/eval_meeting_prep_quality_YYYYMMDD.json`。
+
+### Step C2：推送至 Laminar Dashboard
+
+將 6 個維度分數推送至 Laminar group `meeting_prep_quality`：
+
+```bash
+.venv/bin/python scripts/_push_laminar_score.py \
+  --json-file output/eval_meeting_prep_quality_YYYYMMDD.json \
+  --group meeting_prep_quality
+```
+
+此步驟將 JSON 中 `dimensions` 的 6 個 key-score 對推送至 Laminar。若 `LMNR_PROJECT_API_KEY` 未設定則靜默跳過。
 
 ### Step D：輸出報告
 
@@ -103,8 +124,9 @@ Layer 3 Content Quality 評估：針對已生成的 meeting-prep 報告，評估
 | 提問特異性 | X/5 | ... |
 | 矛盾項目品質 | X/5 | ... |
 | 整體邏輯鏈 | X/5 | ... |
+| 成熟度評分依據 | X/5 | ... |
 
-**平均分：X.X/5**
+**平均分：X.X/5**（6 維度）
 
 ### 改善建議
 {列出 1-3 個可操作的改善項目}

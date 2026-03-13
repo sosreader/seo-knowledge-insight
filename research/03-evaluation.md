@@ -1607,3 +1607,85 @@ python scripts/_eval_laminar.py --mode report
 
 ---
 
+## 20. SEO 成熟度模型（Demand Metric 改編）
+
+### 來源
+
+**Demand Metric**：加拿大 B2B 行銷研究與顧問公司（2006 年成立），專門建立行銷能力的基準測試和成熟度模型。他們的 SEO Maturity Model 將組織的 SEO 能力分成 4 階段：
+
+| 階段 | 原文 | 特徵 |
+|------|------|------|
+| Ad Hoc | 臨時 | 沒有策略，誰想到就做 |
+| Developing | 發展 | 有初步計畫和基本工具，但執行不一致 |
+| Defined | 成熟 | 文件化流程、系統化追蹤、團隊有明確分工 |
+| Optimized | 領先 | 數據驅動決策、自動化、預測性優化、持續改進 |
+
+原版涵蓋十餘個維度（Technical、Content、Link Building、Measurement、Team 等），適合大型組織全面評估。
+
+### 本專案改編（`/meeting-prep` S8）
+
+保留「分階段自評」的框架邏輯，針對 vocus SEO 顧問情境做三點調整：
+
+1. **維度精簡為 4 個**：策略（Strategy）、流程（Process）、關鍵字（Keywords）、指標（Metrics）——原版的 Technical、Content、Link Building 等維度已在 E-E-A-T 和五層審計中覆蓋
+2. **描述在地化**：用 vocus 實際情境替換通用描述（例如 L2 流程 = 「有 SOP 但執行不一」而非原版的 organization-wide adoption）
+3. **動態評分**：每次 `/meeting-prep` 根據當週指標數據重新評分，而非一次性問卷
+
+### L1-L4 對照表
+
+| 維度 | L1 起步 | L2 發展 | L3 成熟 | L4 領先 |
+|------|---------|---------|---------|---------|
+| 策略 | 無明確策略 | 有基本計畫 | 數據驅動決策 | 預測性優化 |
+| 流程 | 臨時處理 | 有 SOP 但執行不一 | 自動化流程 | 持續改進循環 |
+| 關鍵字 | 直覺選詞 | 有研究但零散 | 系統化追蹤 | 意圖分群 + 競爭分析 |
+| 指標 | 不看數據 | 看基本指標 | 多維度追蹤 | 預警 + 歸因分析 |
+
+### 前端色階
+
+分數以深淺色階視覺化，一眼辨識強弱：
+
+| 等級 | 色階 | 語意 |
+|------|------|------|
+| L4 / 4-5 分 | 黑底白字 | 強 |
+| L3 / 3 分 | 深灰底白字 | 中等 |
+| L2 / 2 分 | 淺灰底黑字 | 待改善 |
+| L1 / 1 分 | 極淺灰底灰字 | 弱 |
+
+E-E-A-T 評分（1-5）共用同一套色階邏輯。
+
+### 與其他框架的分工
+
+| 框架 | 評估什麼 | 用在哪 |
+|------|---------|--------|
+| E-E-A-T（Google QRG） | 內容品質信號 | `/meeting-prep` S6 |
+| 5-Layer SEO Audit | 技術 → UX 五層缺口 | `/meeting-prep` S5 |
+| 人本七要素（Gene Hong） | 網站作為「人」的完整度 | `/meeting-prep` S7 |
+| **SEO 成熟度（Demand Metric 改編）** | **組織能力階段** | `/meeting-prep` S8 |
+
+四個框架互補：E-E-A-T 看內容、Audit 看技術、七要素看人性、成熟度看組織。
+
+### 成熟度全系統整合（v3.3，2026-03-13）
+
+成熟度模型從 `/meeting-prep` S8 單點使用，擴展至全系統四層：
+
+| 層 | 整合點 | Eval 覆蓋 |
+|----|--------|----------|
+| 生成 | `/generate-report` S5 成熟度感知行動建議 + `/meeting-prep` S10 `[LX→LY]` 升級標籤 | E2 `s10_maturity_upgrade_labeled` + E4 `report_action_maturity_labeled` |
+| API | `GET /meeting-prep/maturity-trend` 時間序列端點 | E5 vitest 5 cases |
+| 評估 | E1 meta↔S8 一致性 + E3 `s8_maturity_justified`（LLM-as-Judge 第 6 維度） | 4 新 evaluators + 1 新 LLM 維度 |
+| 前端 | `MaturityTrendChart.tsx` 4 條折線（Recharts）+ `SummaryBadges` 變化摘要 | — |
+
+**Eval 新增**（6 個）：
+
+| # | 名稱 | 類型 | Laminar Group |
+|---|------|------|---------------|
+| E1 | `s8_meta_maturity_consistency` | Rule-based | `meeting_prep_structure` |
+| E2 | `s10_maturity_upgrade_labeled` | Rule-based | `meeting_prep_structure` |
+| E3 | `s8_maturity_justified` | LLM-as-Judge | `meeting_prep_quality`（新） |
+| E4 | `report_action_maturity_labeled` | Rule-based | `report-quality` |
+| E5 | maturity-trend API tests | vitest | N/A |
+| E6 | `maturity_progression_sanity` | Rule-based（延後） | `maturity_progression`（延後） |
+
+**`_push_laminar_score.py` 擴充**：新增 `--json-file` 批次模式，讀取 `dimensions.*.score` 正規化至 [0,1] 後推送。
+
+---
+

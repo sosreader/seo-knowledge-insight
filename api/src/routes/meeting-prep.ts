@@ -4,7 +4,13 @@ import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
 import { paths } from "../config.js";
 import { readTail } from "../utils/report-file.js";
-import type { MeetingPrepMeta, MeetingPrepSummary } from "../schemas/meeting-prep.js";
+import type {
+  MeetingPrepMeta,
+  MeetingPrepSummary,
+  MaturityDataPoint,
+  MaturityTrendResponse,
+  MaturityTrendSummary,
+} from "../schemas/meeting-prep.js";
 
 /** Matches meeting_prep_YYYYMMDD_<hash8>.md */
 const MEETING_PREP_PATTERN = /^meeting_prep_(\d{8})_([0-9a-f]{8})\.md$/;
@@ -96,6 +102,71 @@ export const meetingPrepRoute = new Hono();
 meetingPrepRoute.get("/", (c) => {
   const items = listMeetingPrepFiles();
   return c.json(ok({ items, total: items.length }));
+});
+
+/** Parse "L1"→1, "L2"→2, etc. Returns 0 for unrecognised strings. */
+function parseLevel(level: string): number {
+  const m = /^L(\d+)$/i.exec(level);
+  return m ? parseInt(m[1]!, 10) : 0;
+}
+
+meetingPrepRoute.get("/maturity-trend", (c) => {
+  const all = listMeetingPrepFiles();
+  const withMeta = all.filter((item): item is MeetingPrepSummary & { meta: MeetingPrepMeta } =>
+    item.meta !== undefined,
+  );
+
+  if (withMeta.length === 0) {
+    const response: MaturityTrendResponse = { data_points: [], summary: null, total: 0 };
+    return c.json(ok(response));
+  }
+
+  // Sort by date ascending (YYYYMMDD prefix is lexicographically sortable)
+  const sorted = [...withMeta].sort((a, b) => {
+    const aDate = a.date.slice(0, 8);
+    const bDate = b.date.slice(0, 8);
+    return aDate.localeCompare(bDate);
+  });
+
+  const data_points: MaturityDataPoint[] = sorted.map((item) => {
+    const dateStr = item.date.slice(0, 8);
+    const formatted = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+    return {
+      date: formatted,
+      maturity: item.meta.scores.maturity,
+      eeat: item.meta.scores.eeat,
+      alert_down_count: item.meta.alert_down_count,
+    };
+  });
+
+  let summary: MaturityTrendSummary | null = null;
+
+  if (sorted.length >= 2) {
+    const first = sorted[0]!.meta.scores.maturity;
+    const last = sorted[sorted.length - 1]!.meta.scores.maturity;
+    const dimensions = ["strategy", "process", "keywords", "metrics"] as const;
+
+    const improved: string[] = [];
+    const stagnant: string[] = [];
+    const regressed: string[] = [];
+
+    for (const dim of dimensions) {
+      const firstLevel = parseLevel(first[dim]);
+      const lastLevel = parseLevel(last[dim]);
+      if (lastLevel > firstLevel) {
+        improved.push(dim);
+      } else if (lastLevel < firstLevel) {
+        regressed.push(dim);
+      } else {
+        stagnant.push(dim);
+      }
+    }
+
+    summary = { improved, stagnant, regressed };
+  }
+
+  const response: MaturityTrendResponse = { data_points, summary, total: data_points.length };
+  return c.json(ok(response));
 });
 
 meetingPrepRoute.get("/:date", (c) => {

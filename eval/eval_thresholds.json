@@ -20,7 +20,8 @@
     "s3_hypothesis_structure": 0.8,
     "s5_all_layers_present": 1.0,
     "s7_seven_elements": 1.0,
-    "s10_checklist_present": 1.0
+    "s10_checklist_present": 1.0,
+    "s8_meta_maturity_consistency": 1.0
   },
   "meeting_prep_grounding": {
     "citation_id_resolution": 0.9,

@@ -26,4 +26,32 @@ export interface MeetingPrepSummary {
   readonly meta?: MeetingPrepMeta;
 }
 
+export interface MaturityDataPoint {
+  readonly date: string;
+  readonly maturity: {
+    readonly strategy: string;
+    readonly process: string;
+    readonly keywords: string;
+    readonly metrics: string;
+  };
+  readonly eeat: {
+    readonly experience: number;
+    readonly expertise: number;
+    readonly authoritativeness: number;
+    readonly trustworthiness: number;
+  };
+  readonly alert_down_count: number;
+}
+
+export interface MaturityTrendSummary {
+  readonly improved: readonly string[];
+  readonly stagnant: readonly string[];
+  readonly regressed: readonly string[];
+}
+
+export interface MaturityTrendResponse {
+  readonly data_points: readonly MaturityDataPoint[];
+  readonly summary: MaturityTrendSummary | null;
+  readonly total: number;
+}
 

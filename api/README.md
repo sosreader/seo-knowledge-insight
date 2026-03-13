@@ -1,9 +1,9 @@
-# Hono TypeScript API (v3.0)
+# Hono TypeScript API (v3.3)
 
 REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（Node.js server / AWS Lambda）。
 
 **特點：**
-- 9 個路由器（Routers）、39 個 API endpoints、566 個測試（56 檔案，coverage 80%+）
+- 10 個路由器（Routers）、42 個 API endpoints、582 個測試（57 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
@@ -200,6 +200,14 @@ Client → Function URL / localhost:8002
 | PUT | `/api/v1/synonyms/{term}` | 更新自訂同義詞 | ✓ | 60/min |
 | DELETE | `/api/v1/synonyms/{term}` | 刪除自訂同義詞 | ✓ | 60/min |
 
+### 10. 顧問會議準備 (meeting-prep) — 3 個 endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/meeting-prep` | 列出所有會議準備報告（日期 + meta） |
+| GET | `/api/v1/meeting-prep/maturity-trend` | SEO 成熟度趨勢時間序列（data_points + summary） |
+| GET | `/api/v1/meeting-prep/:date` | 取得單篇會議準備報告（YYYYMMDD 或 YYYYMMDD_hash8 格式） |
+
 ---
 
 ## Reports API — 回應格式
@@ -267,7 +275,7 @@ api/
 │   ├── openapi.ts            # OpenAPI 3.1 spec（32 paths, 36 endpoints）
 │   ├── lambda.ts             # Lambda 入口（cold start + hono/aws-lambda handler）
 │   ├── config.ts             # Zod 驗證環境變數 + paths
-│   ├── routes/               # 9 個路由
+│   ├── routes/               # 10 個路由
 │   │   ├── health.ts
 │   │   ├── qa.ts
 │   │   ├── search.ts
@@ -277,7 +285,8 @@ api/
 │   │   ├── feedback.ts
 │   │   ├── pipeline.ts
 │   │   ├── pipeline-fs.ts      # Pipeline 檔案系統邏輯（source-docs 等）
-│   │   └── synonyms.ts
+│   │   ├── synonyms.ts
+│   │   └── meeting-prep.ts
 │   ├── middleware/
 │   │   ├── auth.ts              # API Key 驗證（timingSafeEqual）
 │   │   ├── rate-limit.ts        # Sliding window 速率限制（Lambda 自動 bypass）
@@ -331,7 +340,8 @@ api/
 │   │   ├── session.ts
 │   │   ├── feedback.ts
 │   │   ├── pipeline.ts
-│   │   └── synonyms.ts
+│   │   ├── synonyms.ts
+│   │   └── meeting-prep.ts
 │   └── utils/
 │       ├── npy-reader.ts     # numpy 檔案讀取
 │       ├── cosine-similarity.ts  # Float32Array 矩陣運算
@@ -353,7 +363,7 @@ api/
 │   ├── feedback-to-golden.ts  # 使用者回饋 → golden dataset 候選
 │   ├── sync-db.ts             # Reports + Sessions → Supabase 同步
 │   └── eval-semantic.ts       # Retrieval eval（keyword/hybrid/rerank）
-├── tests/                      # 56 個測試檔案，566 tests
+├── tests/                      # 57 個測試檔案，582 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
@@ -583,9 +593,9 @@ pnpm test:watch               # 監視模式
 pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
-**測試套件統計（v3.1）：**
-- 總測試數：566 個（56 個測試檔案）
-- 通過：566/566 (100%)
+**測試套件統計（v3.3）：**
+- 總測試數：582 個（57 個測試檔案）
+- 通過：582/582 (100%)
 - 覆蓋率：80%+
 
 ---
