@@ -27,6 +27,14 @@ L4_KEYWORDS = frozenset([
     "competitive intelligence", "競爭情報",
     "ai 驅動", "ai-driven", "ai-powered",
     "程式化 seo", "programmatic seo",
+    # v3.4 擴充：中文 variants + 缺口主題
+    "競爭情報系統", "跨通路整合", "歸因模型",
+    "增量價值", "incremental value",
+    "知識圖譜", "knowledge graph",
+    "排名預測", "流量預測",
+    "內容生成 pipeline", "content pipeline",
+    "seo 自動化測試", "regression testing",
+    "推薦系統", "recommendation engine",
 ])
 
 L3_KEYWORDS = frozenset([
@@ -115,6 +123,9 @@ def classify_maturity_level(
 
     for term in L4_KEYWORDS:
         if term in full_text:
+            # Guard: 「預期」不是「預測」，「預設」不是「預測」
+            if term == "預測" and "預測" not in full_text and ("預期" in full_text or "預設" in full_text):
+                continue
             scores["L4"] += 2
 
     for term in L3_KEYWORDS:

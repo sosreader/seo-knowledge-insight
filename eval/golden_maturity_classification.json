@@ -208,5 +208,33 @@
     "keywords": ["automated testing framework", "自動化測試", "CI/CD", "competitive intelligence"],
     "expected_maturity": "L4",
     "rationale": "自動化測試框架 + CI/CD + 競爭情報"
+  },
+  {
+    "question": "如何建立 SEO 排名預測模型？",
+    "answer": "收集歷史排名、連結數量和內容品質數據，建立排名預測模型。用流量預測判斷關鍵字投資的增量價值，結合跨通路整合數據做資源分配決策。",
+    "keywords": ["排名預測", "流量預測", "增量價值", "跨通路整合"],
+    "expected_maturity": "L4",
+    "rationale": "中文 L4 keywords — 排名預測 + 增量價值"
+  },
+  {
+    "question": "跨通路歸因模型如何量化 SEO 的貢獻？",
+    "answer": "建立多觸點歸因模型，追蹤使用者從自然搜尋首次觸及到最終轉換的完整路徑。整合 GA4 和 CRM 數據，計算 SEO 渠道的增量價值和歸因權重。",
+    "keywords": ["歸因模型", "multi-touch", "增量價值", "跨通路"],
+    "expected_maturity": "L4",
+    "rationale": "跨通路歸因 + multi-touch"
+  },
+  {
+    "question": "如何用數據分析找出流量下降的根因？",
+    "answer": "在 GSC 按頁面模板分群，交叉比對排名和 CTR 數據。用 dashboard 追蹤趨勢變化，建立分群分析 SOP。",
+    "keywords": ["數據分析", "分群", "dashboard", "SOP"],
+    "expected_maturity": "L3",
+    "rationale": "L3 邊界 — 有數據分析和 SOP，但無預測/跨通路/AI"
+  },
+  {
+    "question": "SEO 自動化測試如何整合到 CI/CD 流程？",
+    "answer": "建立 SEO regression testing 框架，在每次部署前自動檢查 canonical、meta robots、結構化資料和 Core Web Vitals。用競爭情報系統追蹤競品變化，動態調整測試基準線。",
+    "keywords": ["regression testing", "seo 自動化測試", "CI/CD", "競爭情報系統"],
+    "expected_maturity": "L4",
+    "rationale": "中文自動化測試 + 競爭情報系統"
   }
 ]
