@@ -111,7 +111,7 @@ def _enrich_qa_metadata(qa: dict) -> dict:
 def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
     """
     回傳 (already_done, unprocessed) 兩份清單（精確定義：_qa.json 存在且非空非失敗才算完成）。
-    掃描所有 4 個來源目錄：Notion、Medium、iThome、Google Cases。
+    掃描所有來源目錄（DIR_COLLECTION_MAP + Notion）。
     不輸出任何內容，供 show_full_status 與 list_unprocessed_extract_qa 共用。
     """
     source_dirs = [
@@ -119,6 +119,9 @@ def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
         config.RAW_MEDIUM_MD_DIR,
         config.RAW_ITHELP_MD_DIR,
         config.RAW_GOOGLE_CASES_MD_DIR,
+        config.RAW_AHREFS_MD_DIR,
+        config.RAW_SEJ_MD_DIR,
+        config.RAW_GROWTHMEMO_MD_DIR,
     ]
     md_files: list[Path] = []
     for d in source_dirs:

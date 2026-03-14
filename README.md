@@ -13,6 +13,7 @@
 - **Collection-Scoped 去重合併** — 各 collection 內部獨立去重，跨 collection 保留（支援多來源知識不互相覆蓋）
 - **智能分類標籤** — 10 個分類（技術 SEO、內容策略、連結建設等），用 `gpt-5-mini` 自動標記難度與時效性
 - **雙層 metadata** — `source_type`（meeting/article）+ `source_collection`（seo-meetings/genehong-medium/ithelp-sc-kpi/google-case-studies）
+- **Retrieval 維度 metadata** — `primary_category`、`categories`、`intent_labels`、`scenario_tags`、`serving_tier`、`retrieval_phrases`、`booster_target_queries`
 - **目前規模** — 1,323 筆 Q&A（4 個 collection：notion-seo-meetings 584、medium-genehong 511、ithelp-gsc-kpi 185、google-case-studies 43）
 
 ### 2. 每週 SEO 週報生成（步驟 4）
@@ -33,13 +34,14 @@
 ### 3. Q&A 品質評估（步驟 5）
 
 - **五維度 LLM-as-Judge** — Relevance、Accuracy、Completeness、Granularity、Faithfulness（各 1–5 分）
-- **Retrieval 品質指標** — Hit Rate 100%、MRR 0.88、Recall@K 77.5%、NDCG@K 0.72（v2.12 基準，20 golden cases）
+- **Retrieval 品質指標** — Retrieval Data Dimensions phase baseline `precision_at_k=0.58` → Phase 4 `precision_at_k=0.85`、`boosterless_precision_at_k=0.83`、`canonical_top1_rate=0.37`、`MRR=0.99`（35 golden cases）
 - **分類準確度檢驗** — Category、Difficulty、Evergreen 標籤驗證
 - **對標基準線** — 自動與歷史 eval 比較進度（v2.0: Relevance 5.00、Accuracy 4.30、Completeness 3.95）
 
 ### 4. REST API 服務（Hono + TypeScript，`api/`）
 
 - **語意搜尋** — `POST /api/v1/search`（有 OpenAI: hybrid search，無 OpenAI: 原生 keyword search 自動降級）
+- **Runtime retrieval rerank** — top-K 前先 over-retrieve，使用 category / intent / scenario / serving tier / duplicate suppression 做 metadata-aware rerank
 - **RAG 問答** — `POST /api/v1/chat`（三模式：Agent mode / Full RAG + GPT / Context-only 自動降級）+ `POST /api/v1/chat/stream`（SSE streaming）
 - **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢，使用穩定的 16-char hex ID 或 seq number）
 - **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）
@@ -66,6 +68,11 @@
   - 錯誤時自動 fallback 至原始排序
 - **實際效果**：Hit Rate 100%、MRR 0.88（v2.12 基準）
 
+**Phase 3.5：Retrieval Data Dimensions（2026-03-15）**
+- `scripts/enrich_qa.py` 回填 `categories`、`intent_labels`、`scenario_tags`、`serving_tier`、`retrieval_phrases`、`retrieval_surface_text`
+- `api/src/store/search-engine.ts` 與 `api/src/store/supabase-qa-store.ts` 將上述欄位接入 runtime hybrid / keyword search
+- `POST /api/v1/search` 若帶 `extraction_model`，會先以 `top_k × 3` over-retrieve，再做 model filter 與 maturity boost，避免 post-filter 導致回傳數不足
+
 **Phase 4：Context Relevance 評估（v2.12 新增）**
 - `api/src/services/context-relevance.ts` — Claude Haiku LLM judge
   - 評估 query 與 retrieved contexts 的語意相關性
@@ -89,6 +96,16 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | Recall@K | 80% |
 | F1 Score | 0.73 |
 | MRR | 0.88 |
+
+Retrieval Data Dimensions phase gate（2026-03-15，35 cases，top-k=5）：
+| 指標 | Baseline | Phase 4 |
+|------|----------|---------|
+| Precision@K | 0.58 | 0.85 |
+| Boosterless Precision@K | — | 0.83 |
+| Dual Category Recall@K | — | 1.00 |
+| Multi-label F1@K | — | 0.97 |
+| Canonical Top-1 Rate | — | 0.37 |
+| MRR | 0.92 | 0.99 |
 
 ### 5. Claude Code 模式（不需要 OpenAI API Key）
 

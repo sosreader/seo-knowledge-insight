@@ -41,6 +41,17 @@ export interface QAItem {
   readonly source_url: string; // canonical URL to original content
   readonly extraction_model?: string; // model used to extract this QA
   readonly maturity_relevance?: "L1" | "L2" | "L3" | "L4"; // SEO maturity level
+  readonly primary_category?: string;
+  readonly categories?: readonly string[];
+  readonly intent_labels?: readonly string[];
+  readonly scenario_tags?: readonly string[];
+  readonly serving_tier?: string;
+  readonly retrieval_phrases?: readonly string[];
+  readonly retrieval_surface_text?: string;
+  readonly content_granularity?: string;
+  readonly evidence_scope?: readonly string[];
+  readonly booster_target_queries?: readonly string[];
+  readonly hard_negative_terms?: readonly string[];
 }
 
 interface RawQAData {
@@ -61,6 +72,17 @@ interface RawQAData {
     source_collection?: string;
     source_url?: string;
     extraction_model?: string;
+    primary_category?: string;
+    categories?: string[];
+    intent_labels?: string[];
+    scenario_tags?: string[];
+    serving_tier?: string;
+    retrieval_phrases?: string[];
+    retrieval_surface_text?: string;
+    content_granularity?: string;
+    evidence_scope?: string[];
+    booster_target_queries?: string[];
+    hard_negative_terms?: string[];
     _enrichment?: {
       synonyms?: string[];
       freshness_score?: number;
@@ -147,6 +169,17 @@ export class QAStore {
       source_url: qa.source_url ?? qa._enrichment?.source_url ?? qa._enrichment?.notion_url ?? "",
       extraction_model: qa.extraction_model,
       maturity_relevance: qa._enrichment?.maturity_relevance as "L1" | "L2" | "L3" | "L4" | undefined,
+      primary_category: qa.primary_category ?? qa.category ?? "",
+      categories: qa.categories ?? (qa.category ? [qa.category] : []),
+      intent_labels: qa.intent_labels ?? [],
+      scenario_tags: qa.scenario_tags ?? [],
+      serving_tier: qa.serving_tier ?? "canonical",
+      retrieval_phrases: qa.retrieval_phrases ?? [],
+      retrieval_surface_text: qa.retrieval_surface_text ?? [qa.question, qa.answer, ...(qa.keywords ?? [])].join("\n"),
+      content_granularity: qa.content_granularity,
+      evidence_scope: qa.evidence_scope ?? [],
+      booster_target_queries: qa.booster_target_queries ?? [],
+      hard_negative_terms: qa.hard_negative_terms ?? [],
     }));
 
     // Build indexes
@@ -160,6 +193,15 @@ export class QAStore {
       answer: qa.answer,
       keywords: qa.keywords ?? [],
       category: qa.category ?? "",
+      primary_category: qa.primary_category ?? qa.category ?? "",
+      categories: qa.categories ?? (qa.category ? [qa.category] : []),
+      intent_labels: qa.intent_labels ?? [],
+      scenario_tags: qa.scenario_tags ?? [],
+      serving_tier: qa.serving_tier ?? "canonical",
+      retrieval_phrases: qa.retrieval_phrases ?? [],
+      retrieval_surface_text: qa.retrieval_surface_text ?? [qa.question, qa.answer, ...(qa.keywords ?? [])].join("\n"),
+      booster_target_queries: qa.booster_target_queries ?? [],
+      hard_negative_terms: qa.hard_negative_terms ?? [],
       _enrichment: qa._enrichment
         ? {
             synonyms: qa._enrichment.synonyms,

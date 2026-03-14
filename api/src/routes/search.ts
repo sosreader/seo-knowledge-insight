@@ -21,6 +21,8 @@ const trackHits = (
 
 export const searchRoute = new Hono();
 
+const MODEL_FILTER_OVERFETCH = 3;
+
 const filterHitsByModel = (
   hits: ReadonlyArray<{ item: QAItem; score: number }>,
   extractionModel?: string,
@@ -50,6 +52,11 @@ searchRoute.post("/", async (c) => {
       answer: item.answer,
       keywords: item.keywords,
       category: item.category,
+      primary_category: item.primary_category ?? item.category,
+      categories: item.categories ?? [item.category],
+      intent_labels: item.intent_labels ?? [],
+      scenario_tags: item.scenario_tags ?? [],
+      serving_tier: item.serving_tier ?? "canonical",
       difficulty: item.difficulty,
       evergreen: item.evergreen,
       source_title: item.source_title,
@@ -65,14 +72,15 @@ searchRoute.post("/", async (c) => {
   if (hasOpenAI()) {
     try {
       const embedding = await getEmbedding(query);
+      const retrievalTopK = extraction_model ? top_k * MODEL_FILTER_OVERFETCH : top_k;
       const hits = await qaStore.hybridSearch(
         query,
         embedding,
-        top_k,
+        retrievalTopK,
         category ?? null,
       );
-      const filteredHits = filterHitsByModel(hits, extraction_model);
-      const boostedHits = applyMaturityBoost(filteredHits, maturityLevel);
+      const filteredHits = filterHitsByModel(hits, extraction_model).slice(0, top_k);
+      const boostedHits = applyMaturityBoost(filteredHits, maturityLevel).slice(0, top_k);
       trackHits(boostedHits);
       const results = mapResults(boostedHits);
       return c.json(
@@ -92,9 +100,10 @@ searchRoute.post("/", async (c) => {
   }
 
   // Native TypeScript keyword search — in-memory, no OpenAI required
-  const hits = qaStore.keywordSearch(query, top_k, category ?? null);
-  const filteredHits = filterHitsByModel(hits, extraction_model);
-  const boostedHits = applyMaturityBoost(filteredHits, maturityLevel);
+  const retrievalTopK = extraction_model ? top_k * MODEL_FILTER_OVERFETCH : top_k;
+  const hits = qaStore.keywordSearch(query, retrievalTopK, category ?? null);
+  const filteredHits = filterHitsByModel(hits, extraction_model).slice(0, top_k);
+  const boostedHits = applyMaturityBoost(filteredHits, maturityLevel).slice(0, top_k);
   trackHits(boostedHits);
   const results = mapResults(boostedHits);
   return c.json(

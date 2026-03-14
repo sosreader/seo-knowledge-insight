@@ -73,6 +73,9 @@ def _load_embeddings() -> np.ndarray | None:
 def _map_item(qa: dict[str, Any], embedding: list[float] | None) -> dict[str, Any]:
     """Map a raw QA item + embedding to a Supabase row dict."""
     enrichment = qa.get("_enrichment") or {}
+    source_url_value = str(qa.get("source_url") or "").strip()
+    enrichment_source_url = str(enrichment.get("source_url") or "").strip()
+    notion_url = str(enrichment.get("notion_url") or "").strip()
     return {
         "id": qa.get("stable_id") or _compute_stable_id(
             qa.get("source_title", ""), qa.get("question", "")
@@ -89,13 +92,31 @@ def _map_item(qa: dict[str, Any], embedding: list[float] | None) -> dict[str, An
         "source_date": qa.get("source_date") or "",
         "source_type": qa.get("source_type") or "meeting",
         "source_collection": qa.get("source_collection") or "seo-meetings",
-        "source_url": qa.get("source_url") or enrichment.get("source_url") or enrichment.get("notion_url") or "",
+        "source_url": source_url_value or enrichment_source_url or notion_url,
         "is_merged": bool(qa.get("is_merged", False)),
         "extraction_model": qa.get("extraction_model"),
         "synonyms": enrichment.get("synonyms") or [],
         "freshness_score": enrichment.get("freshness_score") if enrichment.get("freshness_score") is not None else 1.0,
         "search_hit_count": enrichment.get("search_hit_count") or 0,
         "embedding": embedding,
+    }
+
+
+def _append_extended_fields(row: dict[str, Any], qa: dict[str, Any]) -> dict[str, Any]:
+    """Optionally append retrieval-dimension fields for extended Supabase schemas."""
+    return {
+        **row,
+        "primary_category": qa.get("primary_category") or qa.get("category") or "",
+        "categories": qa.get("categories") or [qa.get("category") or ""],
+        "intent_labels": qa.get("intent_labels") or [],
+        "scenario_tags": qa.get("scenario_tags") or [],
+        "serving_tier": qa.get("serving_tier") or "canonical",
+        "retrieval_phrases": qa.get("retrieval_phrases") or [],
+        "retrieval_surface_text": qa.get("retrieval_surface_text") or "",
+        "content_granularity": qa.get("content_granularity") or "strategic",
+        "evidence_scope": qa.get("evidence_scope") or [],
+        "booster_target_queries": qa.get("booster_target_queries") or [],
+        "hard_negative_terms": qa.get("hard_negative_terms") or [],
     }
 
 
@@ -145,16 +166,17 @@ def migrate(
     service_key: str,
     batch_size: int = BATCH_SIZE_DEFAULT,
     dry_run: bool = False,
+    include_extended_fields: bool = False,
 ) -> None:
     """Main migration logic."""
     items = _load_qa_data()
     embeddings = _load_embeddings()
 
     if embeddings is not None and len(embeddings) != len(items):
-        logger.warning(
-            "Count mismatch: %d items vs %d embeddings — items beyond embedding count will have NULL embedding",
-            len(items),
-            len(embeddings),
+        raise ValueError(
+            "Count mismatch: "
+            f"{len(items)} items vs {len(embeddings)} embeddings. "
+            "Regenerate embeddings before migrating to avoid partial NULL embeddings."
         )
 
     rows = []
@@ -164,7 +186,10 @@ def migrate(
             if embeddings is not None and i < len(embeddings)
             else None
         )
-        rows.append(_map_item(qa, emb))
+        row = _map_item(qa, emb)
+        if include_extended_fields:
+            row = _append_extended_fields(row, qa)
+        rows.append(row)
 
     logger.info("Prepared %d rows for upsert", len(rows))
 
@@ -226,6 +251,11 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Validate only, do not write to Supabase")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE_DEFAULT, help="Rows per upsert batch")
     parser.add_argument("--verify", action="store_true", help="Only verify row count in Supabase")
+    parser.add_argument(
+        "--include-extended-fields",
+        action="store_true",
+        help="Include retrieval dimension fields (requires matching Supabase columns)",
+    )
     args = parser.parse_args()
 
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -246,6 +276,7 @@ def main() -> None:
         service_key=service_key,
         batch_size=args.batch_size,
         dry_run=args.dry_run,
+        include_extended_fields=args.include_extended_fields,
     )
 
     if not args.dry_run:

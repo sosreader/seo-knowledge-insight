@@ -21,6 +21,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from typing import Any
+
 logger = logging.getLogger(__name__)
 
 # 確保 project root 在 path
@@ -36,6 +38,143 @@ OUTPUT_DIR = _ROOT / "output"
 QA_FINAL_PATH = OUTPUT_DIR / "qa_final.json"
 QA_ENRICHED_PATH = OUTPUT_DIR / "qa_enriched.json"
 ACCESS_LOGS_DIR = OUTPUT_DIR / "access_logs"
+
+INTENT_PATTERNS: dict[str, tuple[str, ...]] = {
+    "diagnosis": ("異常", "下滑", "問題", "診斷", "原因", "why", "根因"),
+    "root-cause": ("root cause", "根因", "歸因", "waf", "canonical", "衝突"),
+    "implementation": ("如何", "怎麼", "修正", "實作", "設定", "schema", "標記"),
+    "measurement": ("ga", "ga4", "gsc", "ctr", "曝光", "點擊", "kpi", "追蹤"),
+    "reporting": ("報告", "週報", "監測", "儀表板", "slice"),
+    "platform-decision": ("平台", "策略", "roadmap", "優先", "取捨", "vocus"),
+}
+
+SCENARIO_PATTERNS: dict[str, tuple[str, ...]] = {
+    "discover": ("discover", "探索"),
+    "google-news": ("google news", "news", "新聞"),
+    "faq-rich-result": ("faq", "rich result", "搜尋外觀"),
+    "ga4-attribution": ("ga4", "attribution", "歸因", "unassigned"),
+    "author-page": ("/user", "作者頁", "author"),
+    "image-seo": ("image", "圖片", "alt", "縮圖"),
+}
+
+CATEGORY_HINTS: dict[str, tuple[str, ...]] = {
+    "技術SEO": ("core web vitals", "lcp", "cls", "schema", "結構化資料", "ttfb", "速度", "amp"),
+    "索引與檢索": ("索引", "coverage", "googlebot", "canonical", "檢索未索引"),
+    "搜尋表現分析": ("ctr", "曝光", "點擊", "排名", "serp", "search console"),
+    "GA與數據追蹤": ("ga", "ga4", "歸因", "事件", "direct", "unassigned"),
+    "Discover與AMP": ("discover", "amp", "news", "探索"),
+    "內容策略": ("內容", "文章", "供給", "eeat", "主題", "更新"),
+    "連結策略": ("連結", "內部連結", "錨點", "backlink"),
+    "平台策略": ("平台", "作者", "路徑", "站內", "vocus", "/user"),
+    "演算法與趨勢": ("演算法", "更新", "ai", "趨勢", "gemini", "perplexity"),
+}
+
+
+def _normalize_text(qa: dict[str, Any]) -> str:
+    text_parts = [qa.get("question", ""), qa.get("answer", "")]
+    text_parts.extend(qa.get("keywords", []))
+    return " ".join(str(part) for part in text_parts if part).lower()
+
+
+def _infer_categories(primary_category: str, text: str) -> tuple[list[str], str]:
+    categories: list[str] = [primary_category] if primary_category else []
+    for category, hints in CATEGORY_HINTS.items():
+        if category == primary_category:
+            continue
+        if any(hint in text for hint in hints):
+            categories.append(category)
+    # Preserve order while removing duplicates.
+    deduped = list(dict.fromkeys(categories))
+    if len(deduped) >= 3:
+        confidence = "high"
+    elif len(deduped) == 2:
+        confidence = "medium"
+    else:
+        confidence = "low"
+    return deduped, confidence
+
+
+def _infer_labels(text: str, mapping: dict[str, tuple[str, ...]]) -> list[str]:
+    labels: list[str] = []
+    for label, hints in mapping.items():
+        if any(hint in text for hint in hints):
+            labels.append(label)
+    return labels
+
+
+def _infer_serving_tier(qa: dict[str, Any], confidence: str) -> str:
+    curation_tag = str(qa.get("manual_curation_tag", "")).lower()
+    curation_reason = str(qa.get("manual_curation_reason", "")).lower()
+    if "booster" in curation_tag or "booster" in curation_reason:
+        return "booster"
+    if confidence == "low":
+        return "supporting"
+    return "canonical"
+
+
+def _derive_retrieval_phrases(question: str, keywords: list[str]) -> list[str]:
+    phrases: list[str] = []
+    q_tokens = [token for token in question.lower().split() if len(token) >= 2]
+    for idx in range(len(q_tokens) - 1):
+        phrases.append(f"{q_tokens[idx]} {q_tokens[idx + 1]}")
+    phrases.extend(keyword.lower() for keyword in keywords if keyword)
+    return list(dict.fromkeys(phrases))[:12]
+
+
+def _infer_granularity(text: str) -> str:
+    if any(token in text for token in ("步驟", "checklist", "如何", "修正", "設定")):
+        return "tactical"
+    if any(token in text for token in ("診斷", "根因", "為什麼", "異常")):
+        return "diagnostic"
+    return "strategic"
+
+
+def _infer_evidence_scope(text: str) -> list[str]:
+    scopes: list[str] = []
+    if any(token in text for token in ("cwv", "schema", "索引", "crawl", "canonical", "技術")):
+        scopes.append("technical")
+    if any(token in text for token in ("內容", "文章", "eeat", "主題", "編輯")):
+        scopes.append("content")
+    if any(token in text for token in ("ga", "ga4", "gsc", "曝光", "點擊", "ctr", "session")):
+        scopes.append("analytics")
+    if any(token in text for token in ("平台", "作者", "路徑", "ia", "產品")):
+        scopes.append("platform")
+    return scopes
+
+
+def _infer_retrieval_metadata(qa: dict[str, Any]) -> dict[str, Any]:
+    primary_category = str(qa.get("category", "")).strip()
+    keywords = [str(keyword) for keyword in qa.get("keywords", []) if keyword]
+    question = str(qa.get("question", ""))
+    text = _normalize_text(qa)
+
+    categories, confidence = _infer_categories(primary_category, text)
+    intent_labels = _infer_labels(text, INTENT_PATTERNS)
+    scenario_tags = _infer_labels(text, SCENARIO_PATTERNS)
+    serving_tier = _infer_serving_tier(qa, confidence)
+    retrieval_phrases = _derive_retrieval_phrases(question, keywords)
+
+    retrieval_surface_parts = [question, str(qa.get("answer", ""))]
+    retrieval_surface_parts.extend(categories)
+    retrieval_surface_parts.extend(intent_labels)
+    retrieval_surface_parts.extend(scenario_tags)
+    retrieval_surface_parts.extend(keywords)
+
+    metadata: dict[str, Any] = {
+        "primary_category": primary_category,
+        "categories": categories,
+        "intent_labels": intent_labels,
+        "scenario_tags": scenario_tags,
+        "serving_tier": serving_tier,
+        "retrieval_phrases": retrieval_phrases,
+        "retrieval_surface_text": "\n".join(part for part in retrieval_surface_parts if part),
+        "content_granularity": _infer_granularity(text),
+        "evidence_scope": _infer_evidence_scope(text),
+        "booster_target_queries": retrieval_phrases[:5] if serving_tier == "booster" else [],
+        "hard_negative_terms": ["無關", "不適用", "誤判"] if confidence == "low" else [],
+        "backfill_confidence": confidence,
+    }
+    return metadata
 
 
 def _aggregate_hit_counts() -> dict[str, int]:
@@ -101,10 +240,13 @@ def _enrich_qa(
 
     # source_url：article 類型直接使用 Q&A 本身的 source_url；meeting 類型用 notion_url
     source_type = qa.get("source_type", "meeting")
-    if source_type != "meeting" and qa.get("source_url"):
-        source_url = qa["source_url"]
+    source_url_value = str(qa.get("source_url", "")).strip()
+    if source_type != "meeting" and source_url_value:
+        source_url = source_url_value
     else:
         source_url = notion_url
+
+    retrieval_metadata = _infer_retrieval_metadata(qa)
 
     enrichment = {
         "synonyms": synonyms,
@@ -112,8 +254,23 @@ def _enrich_qa(
         "search_hit_count": search_hit_count,
         "notion_url": notion_url,
         "source_url": source_url,
+        "backfill_confidence": retrieval_metadata["backfill_confidence"],
     }
-    return {**qa, "_enrichment": enrichment}
+    return {
+        **qa,
+        "primary_category": retrieval_metadata["primary_category"],
+        "categories": retrieval_metadata["categories"],
+        "intent_labels": retrieval_metadata["intent_labels"],
+        "scenario_tags": retrieval_metadata["scenario_tags"],
+        "serving_tier": retrieval_metadata["serving_tier"],
+        "retrieval_phrases": retrieval_metadata["retrieval_phrases"],
+        "retrieval_surface_text": retrieval_metadata["retrieval_surface_text"],
+        "content_granularity": retrieval_metadata["content_granularity"],
+        "evidence_scope": retrieval_metadata["evidence_scope"],
+        "booster_target_queries": retrieval_metadata["booster_target_queries"],
+        "hard_negative_terms": retrieval_metadata["hard_negative_terms"],
+        "_enrichment": enrichment,
+    }
 
 
 def run_enrichment(
@@ -161,6 +318,14 @@ def run_enrichment(
     total_synonyms = sum(len(qa["_enrichment"]["synonyms"]) for qa in enriched_list)
     total_freshness = sum(qa["_enrichment"]["freshness_score"] for qa in enriched_list)
     total_with_url = sum(1 for qa in enriched_list if qa["_enrichment"].get("notion_url"))
+    categories_coverage = sum(1 for qa in enriched_list if qa.get("categories"))
+    intent_coverage = sum(1 for qa in enriched_list if qa.get("intent_labels"))
+    scenario_coverage = sum(1 for qa in enriched_list if qa.get("scenario_tags"))
+    serving_tier_coverage = sum(1 for qa in enriched_list if qa.get("serving_tier"))
+    confidence_distribution: dict[str, int] = {"high": 0, "medium": 0, "low": 0}
+    for qa in enriched_list:
+        confidence = qa.get("_enrichment", {}).get("backfill_confidence", "low")
+        confidence_distribution[confidence] = confidence_distribution.get(confidence, 0) + 1
     n = len(enriched_list)
 
     if notion_url_map and total_with_url == 0:
@@ -188,6 +353,11 @@ def run_enrichment(
         "avg_freshness": round(total_freshness / n, 4) if n else 0.0,
         "notion_url_count": total_with_url,
         "notion_url_pct": round(total_with_url / n * 100, 1) if n else 0.0,
+        "categories_coverage": round(categories_coverage / n, 4) if n else 0.0,
+        "intent_labels_coverage": round(intent_coverage / n, 4) if n else 0.0,
+        "scenario_tags_coverage": round(scenario_coverage / n, 4) if n else 0.0,
+        "serving_tier_coverage": round(serving_tier_coverage / n, 4) if n else 0.0,
+        "backfill_confidence_distribution": confidence_distribution,
     }
     logger.info(
         "Enrichment 完成：avg_synonyms=%.2f, avg_freshness=%.4f, notion_url=%.1f%%",

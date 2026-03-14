@@ -63,6 +63,17 @@ function buildFakeJson() {
       source_collection: item.source_collection,
       source_url: item.source_url,
       extraction_model: item.extraction_model,
+      primary_category: item.primary_category,
+      categories: item.categories,
+      intent_labels: item.intent_labels,
+      scenario_tags: item.scenario_tags,
+      serving_tier: item.serving_tier,
+      retrieval_phrases: item.retrieval_phrases,
+      retrieval_surface_text: item.retrieval_surface_text,
+      content_granularity: item.content_granularity,
+      evidence_scope: item.evidence_scope,
+      booster_target_queries: item.booster_target_queries,
+      hard_negative_terms: item.hard_negative_terms,
       _enrichment: {
         synonyms: [...item.synonyms],
         freshness_score: item.freshness_score,
@@ -178,6 +189,13 @@ describe("QAStore (file-based)", () => {
     }
   });
 
+  it("keywordSearch exposes retrieval metadata on returned items", () => {
+    const [first] = store.keywordSearch("AI SEO", 3);
+    expect(first).toBeDefined();
+    expect(first!.item.categories).toBeDefined();
+    expect(first!.item.serving_tier).toBeDefined();
+  });
+
   it("keywordSearch filters by category", () => {
     const results = store.keywordSearch("SEO", 10, "SEO Technical");
     for (const r of results) {
@@ -192,6 +210,12 @@ describe("QAStore (file-based)", () => {
     for (const r of results) {
       expect(r.score).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it("keywordSearch prefers targeted booster for matching AI scenario query", () => {
+    const [first] = store.keywordSearch("AI SEO SGE", 3);
+    expect(first).toBeDefined();
+    expect(first!.item.serving_tier).toBe("booster");
   });
 });
 
