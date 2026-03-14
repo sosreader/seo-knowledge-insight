@@ -82,7 +82,10 @@ make test              # 執行測試
 make fetch-medium      # 只執行 Medium 文章擷取（RSS → Markdown）
 make fetch-ithelp      # 只執行 iThome 鐵人賽擷取（HTML → Markdown）
 make fetch-google-cases # 只執行 Google Case Studies 擷取（HTML → Markdown）
-make fetch-articles    # 擷取所有外部文章（Medium + iThome + Google Cases）
+make fetch-ahrefs      # 只執行 Ahrefs Blog 擷取（WP API → Markdown，L4 分類篩選）
+make fetch-sej         # 只執行 Search Engine Journal 擷取（RSS → Markdown）
+make fetch-growthmemo  # 只執行 Growth Memo 擷取（Substack RSS → Markdown）
+make fetch-articles    # 擷取所有外部文章（Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo）
 make fetch-all         # Notion + 所有外部文章
 make backfill-extraction-model      # 回填 extraction_model（全量 Supabase UPDATE）
 make backfill-extraction-model-dry  # 回填 extraction_model（dry-run，不寫入）

@@ -6,6 +6,12 @@ raw_data/medium_markdown/
 raw_data/medium_articles_index.json
 raw_data/ithelp_markdown/
 raw_data/ithelp_articles_index.json
+raw_data/ahrefs_markdown/
+raw_data/ahrefs_articles_index.json
+raw_data/sej_markdown/
+raw_data/sej_articles_index.json
+raw_data/growthmemo_markdown/
+raw_data/growthmemo_articles_index.json
 output/
 __pycache__/
 *.pyc

@@ -21,6 +21,9 @@ RAW_MD_DIR = ROOT_DIR / "raw_data" / "markdown"
 RAW_MEDIUM_MD_DIR = ROOT_DIR / "raw_data" / "medium_markdown"
 RAW_ITHELP_MD_DIR = ROOT_DIR / "raw_data" / "ithelp_markdown"
 RAW_GOOGLE_CASES_MD_DIR = ROOT_DIR / "raw_data" / "google_cases_markdown"
+RAW_AHREFS_MD_DIR = ROOT_DIR / "raw_data" / "ahrefs_markdown"
+RAW_SEJ_MD_DIR = ROOT_DIR / "raw_data" / "sej_markdown"
+RAW_GROWTHMEMO_MD_DIR = ROOT_DIR / "raw_data" / "growthmemo_markdown"
 IMAGES_DIR = ROOT_DIR / "raw_data" / "images"
 OUTPUT_DIR = ROOT_DIR / "output"
 QA_PER_MEETING_DIR = OUTPUT_DIR / "qa_per_meeting"
@@ -32,6 +35,9 @@ DIR_COLLECTION_MAP: Dict[str, tuple] = {
     "medium_markdown": ("article", "genehong-medium"),
     "ithelp_markdown": ("article", "ithelp-sc-kpi"),
     "google_cases_markdown": ("article", "google-case-studies"),
+    "ahrefs_markdown": ("article", "ahrefs-blog"),
+    "sej_markdown": ("article", "sej"),
+    "growthmemo_markdown": ("article", "growth-memo"),
 }
 
 # ── 外部文章來源 URL ─────────────────────────────────
