@@ -1,8 +1,27 @@
 # Retrieval 評分與 QA 資料維度提升計畫
 
-**狀態：計劃中**
+**狀態：已完成**
 **建立日期：** 2026-03-15
+**完成日期：** 2026-03-15
 **前置脈絡：** `plans/completed/version-registry-multilayer.md`、`plans/active/phase2-learning-query.md`
+
+## 完成摘要
+
+- 已完成 retrieval metadata backfill：`primary_category`、`categories`、`intent_labels`、`scenario_tags`、`serving_tier`、`retrieval_phrases`、`retrieval_surface_text`
+- 已完成 Python 離線 retrieval scoring / rerank 升級，並輸出 `slice_metrics`、`failure_buckets`、`boosterless` / `dual-label` 指標
+- 已完成 TypeScript runtime search path 對齊：file-based 與 Supabase store 均使用 metadata-aware rerank
+- 已完成 `extraction_model` over-retrieve before filter、migration fail-fast、source_url fallback consistency
+- 已完成 README / API / research 文件同步與 PR 更新
+
+## 驗證結果
+
+- Baseline `precision_at_k=0.58` → Phase 4 `precision_at_k=0.85`
+- `boosterless_precision_at_k=0.83`
+- `dual_category_recall_at_k=1.00`
+- `multi_label_f1_at_k=0.97`
+- `mrr=0.99`
+- `pytest tests/test_qa_tools_eval.py tests/test_retrieval_enrichment_migration.py -q` → `43 passed`
+- `pnpm test`（api/）→ `58 files / 613 tests passed`
 
 ---
 

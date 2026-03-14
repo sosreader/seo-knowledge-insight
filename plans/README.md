@@ -2,7 +2,7 @@
 
 | 計畫 | 狀態 | 摘要 |
 |------|------|------|
-| [retrieval-quality-data-dimensions](active/retrieval-quality-data-dimensions.md) | 計劃中 | 提升 retrieval 評分、top-k purity 與 QA 多維 metadata |
+| [retrieval-quality-data-dimensions](completed/retrieval-quality-data-dimensions.md) | 已完成 | 提升 retrieval 評分、top-k purity 與 QA 多維 metadata |
 | [multi-domain-analysis](active/multi-domain-analysis.md) | 計劃中 | 系統從 SEO 擴增到多領域的架構分析 |
 | [cache-redis](active/cache-redis.md) | 計劃中 | Redis/Valkey 升級觸發條件與模式分析 |
 | [phase2-learning-query](active/phase2-learning-query.md) | 計劃中 | Learning Store 深化 + Query Understanding |
