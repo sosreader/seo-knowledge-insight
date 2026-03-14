@@ -287,5 +287,30 @@ describe("POST /api/v1/search", () => {
     const body = await res.json();
     expect(body.data.results).toHaveLength(1);
     expect(body.data.results[0].extraction_model).toBe("claude-code");
+    expect(mockKeywordSearch).toHaveBeenCalledWith("SEO", 15, null);
+  });
+
+  it("over-fetches hybrid results before extraction_model filtering", async () => {
+    const original = config.OPENAI_API_KEY;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "SEO", top_k: 4, extraction_model: "claude-code" }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(mockHybridSearch).toHaveBeenCalledWith(
+        "SEO",
+        expect.any(Float32Array),
+        12,
+        null,
+      );
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = original;
+    }
   });
 });

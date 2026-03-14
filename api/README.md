@@ -4,7 +4,7 @@ REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（No
 
 **特點：**
 
-- 10 個路由器（Routers）、42 個 API endpoints、582 個測試（57 檔案，coverage 80%+）
+- 10 個路由器（Routers）、42 個 API endpoints、613 個測試（58 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
@@ -126,6 +126,15 @@ Client → Function URL / localhost:8002
 
 - 有 OpenAI API Key：使用 embedding + cosine similarity（語意搜尋）
 - 無 OpenAI API Key：自動降級至 keyword-only 搜尋
+
+**Search Runtime（2026-03-15）:**
+
+- `hybridSearch()` 與 `keywordSearch()` 都會讀取 retrieval metadata：`primary_category`、`categories`、`intent_labels`、`scenario_tags`、`serving_tier`
+- ranking 公式除 semantic + keyword + synonym 外，額外納入 metadata feature score、serving tier prior、duplicate suppression、category / intent diversity rerank
+- 若 request 帶 `extraction_model`，route layer 會先以 `top_k × 3` over-retrieve，再做 model filter，避免 post-filter 導致結果數不足
+- API response 會帶回 `primary_category`、`categories`、`intent_labels`、`scenario_tags`、`serving_tier`
+
+`extraction_model` filter 的 `×3` multiplier 是經驗值：目的是在 mixed-model corpus 中避免 filter 後剩不到 `top_k` 筆，同時把額外查詢成本控制在固定常數倍，而不是無上限放大。
 
 ### 4. RAG 問答 (chat) — 2 個 endpoints
 

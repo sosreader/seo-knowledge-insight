@@ -53,6 +53,17 @@ const FAKE_ROWS = FAKE_ITEMS.map((item) => ({
   source_url: item.source_url,
   is_merged: item.is_merged,
   extraction_model: item.extraction_model ?? null,
+  primary_category: item.primary_category ?? item.category,
+  categories: [...(item.categories ?? [item.category])],
+  intent_labels: [...(item.intent_labels ?? [])],
+  scenario_tags: [...(item.scenario_tags ?? [])],
+  serving_tier: item.serving_tier ?? "canonical",
+  retrieval_phrases: [...(item.retrieval_phrases ?? item.keywords)],
+  retrieval_surface_text: item.retrieval_surface_text ?? `${item.question}\n${item.answer}`,
+  content_granularity: item.content_granularity ?? null,
+  evidence_scope: [...(item.evidence_scope ?? [])],
+  booster_target_queries: [...(item.booster_target_queries ?? [])],
+  hard_negative_terms: [...(item.hard_negative_terms ?? [])],
   synonyms: [...item.synonyms],
   freshness_score: item.freshness_score,
   search_hit_count: item.search_hit_count,
@@ -157,6 +168,13 @@ describe("SupabaseQAStore", () => {
     }
   });
 
+  it("keywordSearch returns retrieval metadata in items", () => {
+    const [first] = store.keywordSearch("AI SEO", 3);
+    expect(first).toBeDefined();
+    expect(first!.item.categories).toBeDefined();
+    expect(first!.item.serving_tier).toBeDefined();
+  });
+
   it("keywordSearch filters by category", () => {
     const results = store.keywordSearch("SEO", 10, "SEO Technical");
     for (const r of results) {
@@ -182,6 +200,12 @@ describe("SupabaseQAStore", () => {
     for (const r of results) {
       expect(r.score).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it("keywordSearch prefers targeted booster for AI scenario query", () => {
+    const [first] = store.keywordSearch("AI SEO SGE", 3);
+    expect(first).toBeDefined();
+    expect(first!.item.serving_tier).toBe("booster");
   });
 
   it("hybridSearch passes category filter to RPC", async () => {

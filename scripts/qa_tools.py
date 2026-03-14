@@ -594,31 +594,211 @@ def _kw_fuzzy_hit(exp_kw: str, retrieved_kws: set[str]) -> bool:
     )
 
 
-def _keyword_search(query: str, qas: list[dict], top_k: int = 5) -> list[tuple[dict, float]]:
-    """關鍵字加權搜尋（CJK n-gram + synonym 展開，回傳 (qa, score) 清單）。"""
-    tokens = expand_query_tokens(query)
-    scored: list[tuple[dict, float]] = []
+_QUERY_INTENT_HINTS: dict[str, tuple[str, ...]] = {
+    "diagnosis": ("異常", "下滑", "原因", "診斷", "why", "根因"),
+    "root-cause": ("root cause", "根因", "canonical", "waf", "衝突"),
+    "implementation": ("如何", "修正", "設定", "實作", "schema", "標記"),
+    "measurement": ("ga", "ga4", "gsc", "ctr", "曝光", "點擊", "追蹤", "kpi"),
+    "reporting": ("報表", "週報", "監測", "趨勢"),
+    "platform-decision": ("平台", "策略", "路徑", "作者"),
+}
 
+_QUERY_SCENARIO_HINTS: dict[str, tuple[str, ...]] = {
+    "discover": ("discover", "探索"),
+    "google-news": ("google news", "news", "新聞"),
+    "faq-rich-result": ("faq", "rich result", "搜尋外觀"),
+    "ga4-attribution": ("ga4", "歸因", "unassigned"),
+    "author-page": ("/user", "作者頁", "author"),
+    "image-seo": ("image", "圖片", "alt", "縮圖"),
+}
+
+_QUERY_CATEGORY_HINTS: dict[str, tuple[str, ...]] = {
+    "技術SEO": ("schema", "結構化資料", "core web vitals", "lcp", "cls", "ttfb", "amp"),
+    "索引與檢索": ("索引", "coverage", "googlebot", "canonical", "檢索未索引"),
+    "搜尋表現分析": ("ctr", "曝光", "點擊", "serp", "search console"),
+    "GA與數據追蹤": ("ga", "ga4", "追蹤", "歸因", "direct"),
+    "Discover與AMP": ("discover", "amp", "news"),
+    "內容策略": ("內容", "文章", "eeat", "供給", "更新"),
+    "連結策略": ("連結", "內部連結", "錨點"),
+    "平台策略": ("平台", "作者", "/user", "路徑"),
+    "演算法與趨勢": ("演算法", "趨勢", "ai", "gemini", "perplexity"),
+}
+
+
+def _as_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if item]
+    if isinstance(value, (tuple, set)):
+        return [str(item) for item in value if item]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _qa_categories(qa: dict) -> list[str]:
+    categories = _as_list(qa.get("categories"))
+    if categories:
+        return categories
+    category = str(qa.get("primary_category") or qa.get("category") or "").strip()
+    return [category] if category else []
+
+
+def _qa_intents(qa: dict) -> list[str]:
+    return _as_list(qa.get("intent_labels"))
+
+
+def _qa_scenarios(qa: dict) -> list[str]:
+    return _as_list(qa.get("scenario_tags"))
+
+
+def _question_signature(question: str) -> str:
+    text = re.sub(r"[^\w\u4e00-\u9fff]+", "", question.lower())
+    return text[:80]
+
+
+def _infer_query_labels(query: str, label_hints: dict[str, tuple[str, ...]]) -> set[str]:
+    query_lower = query.lower()
+    labels: set[str] = set()
+    for label, hints in label_hints.items():
+        if any(hint in query_lower for hint in hints):
+            labels.add(label)
+    return labels
+
+
+def _serving_tier_prior(
+    qa: dict,
+    query_lower: str,
+    canonical_bonus: float,
+    supporting_bonus: float,
+    booster_penalty: float,
+) -> float:
+    tier = str(qa.get("serving_tier", "canonical")).lower()
+    base = {
+        "canonical": canonical_bonus,
+        "supporting": supporting_bonus,
+        "booster": -abs(booster_penalty),
+    }.get(tier, 0.0)
+
+    if tier == "booster":
+        target_queries = _as_list(qa.get("booster_target_queries"))
+        if any(target.lower() in query_lower for target in target_queries if target):
+            return base + 0.9
+    return base
+
+
+def _keyword_search(
+    query: str,
+    qas: list[dict],
+    top_k: int = 5,
+    candidate_k: int = 30,
+    canonical_bonus: float = 0.8,
+    supporting_bonus: float = 0.3,
+    booster_penalty: float = 0.6,
+) -> list[tuple[dict, float]]:
+    """Metadata-aware keyword retrieval with diversity rerank."""
+    tokens = expand_query_tokens(query)
+    query_lower = query.lower()
+    query_intents = _infer_query_labels(query, _QUERY_INTENT_HINTS)
+    query_scenarios = _infer_query_labels(query, _QUERY_SCENARIO_HINTS)
+    query_categories = _infer_query_labels(query, _QUERY_CATEGORY_HINTS)
+
+    scored: list[tuple[dict, float]] = []
     for qa in qas:
-        kw_tokens = set(kw.lower() for kw in qa.get("keywords", []))
+        kw_tokens = {kw.lower() for kw in _as_list(qa.get("keywords"))}
+        phrase_tokens = {phrase.lower() for phrase in _as_list(qa.get("retrieval_phrases"))}
         q_tokens = set(qa.get("question", "").lower().split())
         a_tokens = set(qa.get("answer", "").lower().split())
-        score = (
-            len(tokens & kw_tokens) * 3
-            + len(tokens & q_tokens) * 2
-            + len(tokens & a_tokens) * 1
+        surface_tokens = set(str(qa.get("retrieval_surface_text", "")).lower().split())
+
+        categories = set(_qa_categories(qa))
+        intents = set(_qa_intents(qa))
+        scenarios = set(_qa_scenarios(qa))
+
+        lexical_score = (
+            len(tokens & kw_tokens) * 3.2
+            + len(tokens & phrase_tokens) * 2.3
+            + len(tokens & q_tokens) * 2.0
+            + len(tokens & a_tokens) * 0.8
+            + len(tokens & surface_tokens) * 1.2
         )
-        if score > 0:
+        score = (
+            lexical_score
+            + len(query_categories & categories) * 2.2
+            + len(query_intents & intents) * 1.8
+            + len(query_scenarios & scenarios) * 1.6
+            + _serving_tier_prior(
+                qa,
+                query_lower,
+                canonical_bonus=canonical_bonus,
+                supporting_bonus=supporting_bonus,
+                booster_penalty=booster_penalty,
+            )
+        )
+
+        hard_negative_terms = _as_list(qa.get("hard_negative_terms"))
+        if any(term and term.lower() in query_lower for term in hard_negative_terms):
+            score -= 0.6
+
+        if lexical_score > 0 and score > 0:
             scored.append((qa, float(score)))
 
-    return sorted(scored, key=lambda x: -x[1])[:top_k]
+    candidates = sorted(scored, key=lambda x: -x[1])[: max(candidate_k, top_k)]
+    selected: list[tuple[dict, float]] = []
+
+    while candidates and len(selected) < top_k:
+        selected_sigs = {_question_signature(item[0].get("question", "")) for item in selected}
+        selected_categories = {cat for item, _ in selected for cat in _qa_categories(item)}
+        selected_intents = {intent for item, _ in selected for intent in _qa_intents(item)}
+
+        best_idx = 0
+        best_score = float("-inf")
+
+        for idx, (qa, base_score) in enumerate(candidates):
+            adjusted = base_score
+            sig = _question_signature(qa.get("question", ""))
+            if sig in selected_sigs:
+                adjusted -= 2.4
+
+            qa_categories = set(_qa_categories(qa))
+            if qa_categories and qa_categories.isdisjoint(selected_categories):
+                adjusted += 0.5
+            elif qa_categories:
+                adjusted -= 0.15
+
+            qa_intents = set(_qa_intents(qa))
+            if qa_intents and qa_intents.isdisjoint(selected_intents):
+                adjusted += 0.35
+
+            if adjusted > best_score:
+                best_score = adjusted
+                best_idx = idx
+
+        if best_score == float("-inf"):
+            break
+        selected.append((candidates[best_idx][0], float(best_score)))
+        candidates.pop(best_idx)
+
+    return selected
+
+
+def _derive_expected_case_metadata(case: dict) -> tuple[list[str], list[str], list[str], bool]:
+    expected_categories = list(dict.fromkeys(_as_list(case.get("expected_categories"))))
+    expected_intents = _as_list(case.get("expected_intents"))
+    expected_scenarios = _as_list(case.get("expected_scenarios"))
+    booster_sensitive = bool(case.get("booster_sensitive", len(expected_categories) >= 2))
+    return expected_categories, expected_intents, expected_scenarios, booster_sensitive
 
 
 @observe(name="qa_tools.eval_retrieval_local")
 def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
     """規則式 Retrieval 評估（KW Hit Rate / MRR / Cat Hit Rate），輸出 top-1 供 LLM 判斷。"""
     top_k = getattr(args, "top_k", 5)
+    candidate_k = getattr(args, "candidate_k", 30)
     use_enriched = getattr(args, "use_enriched", False)
+    save_failure_report = getattr(args, "save_failure_report", "")
+    canonical_bonus = float(getattr(args, "canonical_bonus", 0.8))
+    supporting_bonus = float(getattr(args, "supporting_bonus", 0.3))
+    booster_penalty = float(getattr(args, "booster_penalty", 0.6))
 
     if not GOLDEN_RETRIEVAL_PATH.exists():
         print(f"golden_retrieval.json 不存在：{GOLDEN_RETRIEVAL_PATH}", file=sys.stderr)
@@ -641,15 +821,32 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
         raise CLIError(1)
 
     case_results: list[dict] = []
+    failure_buckets: dict[str, int] = {
+        "keyword_surface_miss": 0,
+        "category_miss": 0,
+        "dual_intent_miss": 0,
+        "duplicate_noise": 0,
+        "booster_leakage": 0,
+        "ranking_miss": 0,
+        "pass": 0,
+    }
 
     for case in golden_cases:
         query = case.get("query", "")
         if not query:
             continue
         expected_kws = [kw.lower() for kw in case.get("expected_keywords", [])]
-        expected_cats = case.get("expected_categories", [])
+        expected_cats, expected_intents, expected_scenarios, booster_sensitive = _derive_expected_case_metadata(case)
 
-        results = _keyword_search(query, qas, top_k=top_k)
+        results = _keyword_search(
+            query,
+            qas,
+            top_k=top_k,
+            candidate_k=candidate_k,
+            canonical_bonus=canonical_bonus,
+            supporting_bonus=supporting_bonus,
+            booster_penalty=booster_penalty,
+        )
         retrieved = [r[0] for r in results]
         retrieved_scores = [r[1] for r in results]
 
@@ -661,43 +858,95 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
         kw_hits = sum(1 for kw in expected_kws if _kw_fuzzy_hit(kw, all_retrieved_kws))
         kw_hit_rate = kw_hits / len(expected_kws) if expected_kws else 0
 
-        # Category Hit Rate
-        retrieved_cats = {qa.get("category", "") for qa in retrieved}
+        # Category Hit Rate（支援 multi-category）
+        retrieved_cats = {cat for qa in retrieved for cat in _qa_categories(qa)}
         cat_hits = len(retrieved_cats & set(expected_cats))
         cat_hit_rate = cat_hits / len(expected_cats) if expected_cats else 0
+
+        # Intent Coverage
+        retrieved_intents = {intent for qa in retrieved for intent in _qa_intents(qa)}
+        intent_hits = len(retrieved_intents & set(expected_intents))
+        intent_coverage = intent_hits / len(expected_intents) if expected_intents else 0
 
         # MRR: 找第一個 category 命中的位置
         first_relevant_rank = 0
         for rank, qa in enumerate(retrieved, 1):
-            if qa.get("category", "") in expected_cats:
+            if set(_qa_categories(qa)) & set(expected_cats):
                 first_relevant_rank = rank
                 break
         mrr = 1 / first_relevant_rank if first_relevant_rank > 0 else 0
 
         # Precision@K: top_k 中有幾個 QA 的 category 在 expected_cats
         relevant_in_topk = sum(
-            1 for qa in retrieved if qa.get("category", "") in set(expected_cats)
+            1 for qa in retrieved if set(_qa_categories(qa)) & set(expected_cats)
         )
         precision_at_k = relevant_in_topk / top_k if top_k > 0 else 0.0
+
+        boosterless = [qa for qa in retrieved if str(qa.get("serving_tier", "canonical")).lower() != "booster"]
+        relevant_non_booster = sum(1 for qa in boosterless if set(_qa_categories(qa)) & set(expected_cats))
+        boosterless_precision_at_k = relevant_non_booster / len(boosterless) if boosterless else 0.0
+
+        signatures = [_question_signature(qa.get("question", "")) for qa in retrieved]
+        unique_signatures = len(set(signatures))
+        duplicate_rate_at_k = 1 - (unique_signatures / len(signatures)) if signatures else 0.0
+
+        booster_topk = [qa for qa in retrieved if str(qa.get("serving_tier", "canonical")).lower() == "booster"]
+        booster_top1 = bool(retrieved and str(retrieved[0].get("serving_tier", "canonical")).lower() == "booster")
+        canonical_top1 = bool(retrieved and str(retrieved[0].get("serving_tier", "canonical")).lower() == "canonical")
+        booster_top1_share = 1.0 if booster_top1 else 0.0
+        booster_topk_share = len(booster_topk) / len(retrieved) if retrieved else 0.0
 
         # F1 Score
         p = precision_at_k
         r = cat_hit_rate
         f1_score = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
 
+        dual_category_recall_at_k = cat_hit_rate if len(expected_cats) >= 2 else None
+        multi_label_f1_at_k = f1_score if len(expected_cats) >= 2 else None
+
+        if duplicate_rate_at_k > 0.30:
+            failure_bucket = "duplicate_noise"
+        elif booster_sensitive and booster_topk_share >= 0.6 and precision_at_k < 0.6:
+            failure_bucket = "booster_leakage"
+        elif len(expected_cats) >= 2 and cat_hit_rate < 1.0:
+            failure_bucket = "dual_intent_miss"
+        elif cat_hit_rate == 0:
+            failure_bucket = "category_miss"
+        elif kw_hit_rate < 0.6:
+            failure_bucket = "keyword_surface_miss"
+        elif mrr < 1.0:
+            failure_bucket = "ranking_miss"
+        else:
+            failure_bucket = "pass"
+        failure_buckets[failure_bucket] += 1
+
         top1 = retrieved[0] if retrieved else {}
         case_results.append({
             "scenario": case.get("scenario", ""),
             "query": query,
+            "expected_categories": expected_cats,
+            "expected_intents": expected_intents,
+            "expected_scenarios": expected_scenarios,
+            "booster_sensitive": booster_sensitive,
             "keyword_hit_rate": round(kw_hit_rate, 2),
             "category_hit_rate": round(cat_hit_rate, 2),
+            "intent_coverage_at_k": round(intent_coverage, 2),
             "mrr": round(mrr, 2),
             "precision_at_k": round(precision_at_k, 2),
+            "boosterless_precision_at_k": round(boosterless_precision_at_k, 2),
             "recall_at_k": round(cat_hit_rate, 2),
             "f1_score": round(f1_score, 2),
+            "dual_category_recall_at_k": round(dual_category_recall_at_k, 2) if dual_category_recall_at_k is not None else None,
+            "multi_label_f1_at_k": round(multi_label_f1_at_k, 2) if multi_label_f1_at_k is not None else None,
+            "duplicate_rate_at_k": round(duplicate_rate_at_k, 2),
+            "booster_topk_share": round(booster_topk_share, 2),
+            "booster_top1_share": round(booster_top1_share, 2),
+            "canonical_top1_rate": 1.0 if canonical_top1 else 0.0,
+            "failure_bucket": failure_bucket,
             "top1_question": top1.get("question", ""),
             "top1_answer": top1.get("answer", "")[:500],
-            "top1_category": top1.get("category", ""),
+            "top1_category": top1.get("primary_category") or top1.get("category", ""),
+            "top1_serving_tier": top1.get("serving_tier", "canonical"),
             "top1_score": retrieved_scores[0] if retrieved_scores else 0,
             "top_k_questions": [qa.get("question", "")[:60] for qa in retrieved],
         })
@@ -713,6 +962,27 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
     avg_precision_at_k = sum(c["precision_at_k"] for c in case_results) / len(case_results)
     avg_recall_at_k = sum(c["recall_at_k"] for c in case_results) / len(case_results)
     avg_f1_score = sum(c["f1_score"] for c in case_results) / len(case_results)
+    avg_boosterless_precision = sum(c["boosterless_precision_at_k"] for c in case_results) / len(case_results)
+    avg_duplicate_rate = sum(c["duplicate_rate_at_k"] for c in case_results) / len(case_results)
+    avg_canonical_top1 = sum(c["canonical_top1_rate"] for c in case_results) / len(case_results)
+    avg_booster_top1 = sum(c["booster_top1_share"] for c in case_results) / len(case_results)
+    avg_intent_coverage = sum(c["intent_coverage_at_k"] for c in case_results) / len(case_results)
+    dual_cases = [c for c in case_results if c["dual_category_recall_at_k"] is not None]
+    avg_dual_recall = (
+        sum(float(c["dual_category_recall_at_k"]) for c in dual_cases) / len(dual_cases)
+        if dual_cases else 0.0
+    )
+    avg_multi_label_f1 = (
+        sum(float(c["multi_label_f1_at_k"]) for c in dual_cases) / len(dual_cases)
+        if dual_cases else 0.0
+    )
+
+    single_label_cases = [c for c in case_results if len(c.get("expected_categories", [])) <= 1]
+    dual_label_cases = [c for c in case_results if len(c.get("expected_categories", [])) >= 2]
+    booster_sensitive_cases = [c for c in case_results if c.get("booster_sensitive")]
+
+    def _slice_avg(cases: list[dict], key: str) -> float:
+        return round(sum(float(case[key]) for case in cases) / len(cases), 2) if cases else 0.0
 
     engine_label = "keyword-enriched" if use_enriched else "keyword"
     output = {
@@ -724,6 +994,32 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
         "avg_precision_at_k": round(avg_precision_at_k, 2),
         "avg_recall_at_k": round(avg_recall_at_k, 2),
         "avg_f1_score": round(avg_f1_score, 2),
+        "avg_dual_category_recall_at_k": round(avg_dual_recall, 2),
+        "avg_multi_label_f1_at_k": round(avg_multi_label_f1, 2),
+        "avg_boosterless_precision_at_k": round(avg_boosterless_precision, 2),
+        "avg_duplicate_rate_at_k": round(avg_duplicate_rate, 2),
+        "avg_intent_coverage_at_k": round(avg_intent_coverage, 2),
+        "canonical_top1_rate": round(avg_canonical_top1, 2),
+        "booster_top1_share": round(avg_booster_top1, 2),
+        "slice_metrics": {
+            "single_label": {
+                "cases": len(single_label_cases),
+                "precision_at_k": _slice_avg(single_label_cases, "precision_at_k"),
+                "mrr": _slice_avg(single_label_cases, "mrr"),
+            },
+            "dual_label": {
+                "cases": len(dual_label_cases),
+                "precision_at_k": _slice_avg(dual_label_cases, "precision_at_k"),
+                "dual_category_recall_at_k": _slice_avg(dual_label_cases, "recall_at_k"),
+                "multi_label_f1_at_k": _slice_avg(dual_label_cases, "f1_score"),
+            },
+            "booster_sensitive": {
+                "cases": len(booster_sensitive_cases),
+                "precision_at_k": _slice_avg(booster_sensitive_cases, "precision_at_k"),
+                "boosterless_precision_at_k": _slice_avg(booster_sensitive_cases, "boosterless_precision_at_k"),
+            },
+        },
+        "failure_buckets": failure_buckets,
         "note": "llm_top1_relevant 需由 Claude Code 逐一判斷",
         "case_details": case_results,
     }
@@ -733,6 +1029,26 @@ def cmd_eval_retrieval_local(args: argparse.Namespace) -> None:
     score_event("f1_score", avg_f1_score)
     score_event("kw_hit_rate", avg_kw_hit)
     score_event("mrr", avg_mrr)
+
+    if save_failure_report:
+        report_path = Path(save_failure_report)
+        report_payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "metrics": {
+                "avg_precision_at_k": round(avg_precision_at_k, 4),
+                "avg_dual_category_recall_at_k": round(avg_dual_recall, 4),
+                "avg_multi_label_f1_at_k": round(avg_multi_label_f1, 4),
+                "avg_boosterless_precision_at_k": round(avg_boosterless_precision, 4),
+                "avg_duplicate_rate_at_k": round(avg_duplicate_rate, 4),
+            },
+            "failure_buckets": failure_buckets,
+            "slice_metrics": output["slice_metrics"],
+            "top_failures": sorted(
+                [case for case in case_results if case["failure_bucket"] != "pass"],
+                key=lambda item: item["precision_at_k"],
+            )[:12],
+        }
+        _write_atomic(report_path, report_payload)
 
     print(json.dumps(output, ensure_ascii=False, indent=2))
 
@@ -880,7 +1196,8 @@ def cmd_eval_save(args: argparse.Namespace) -> None:
             else:
                 print(f"\n未更新基準線（delta={delta:+.2f} < 0.05）")
     else:
-        print("（無基準線可比較）")
+        print("\n基準線比較：")
+        print("  （無基準線可比較）")
 
 
 # ──────────────────────────────────────────────────────
@@ -1019,7 +1336,12 @@ def main() -> None:
 
     p_ret_local = sub.add_parser("eval-retrieval-local", help="規則式 Retrieval 評估（無 OpenAI）")
     p_ret_local.add_argument("--top-k", type=int, default=5, help="每個 case 取 top-K（預設 5）")
+    p_ret_local.add_argument("--candidate-k", type=int, default=30, help="候選池大小（預設 30）")
+    p_ret_local.add_argument("--canonical-bonus", type=float, default=0.8, help="canonical prior bonus（預設 0.8）")
+    p_ret_local.add_argument("--supporting-bonus", type=float, default=0.3, help="supporting prior bonus（預設 0.3）")
+    p_ret_local.add_argument("--booster-penalty", type=float, default=0.6, help="booster prior penalty（預設 0.6）")
     p_ret_local.add_argument("--use-enriched", action="store_true", help="使用 qa_enriched.json（含 synonym/freshness）")
+    p_ret_local.add_argument("--save-failure-report", default="", help="輸出失敗切片報告 JSON 路徑")
 
     p_save = sub.add_parser("eval-save", help="儲存 Claude Code 評估結果")
     p_save.add_argument("--input", required=True, help="評估結果 JSON 路徑")

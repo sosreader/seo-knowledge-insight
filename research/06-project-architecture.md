@@ -142,8 +142,9 @@ Notion 會議紀錄（87 份，2023–2026）
   clean_qa_quality.py：規則式移除泛問題 / 模板答案 / 混語 placeholder
   restore_rewritten_qas.py：question-only salvage，回補可挽救模板題
   sync_curated_qa_from_raw.py：用最新 raw answer / metadata 對齊 curated 集合
-  add_retrieval_boosters.py：補 11 筆 curated-manual retrieval boosters
-    ↓ output/qa_final.json（目前 serving artifact，283 筆）
+  add_retrieval_boosters.py：補 18 筆 curated-manual retrieval boosters
+  enrich_qa.py：回填 `categories` / `intent_labels` / `scenario_tags` / `serving_tier` / `retrieval_surface_text`
+    ↓ output/qa_final.json（serving artifact） + output/qa_enriched.json（retrieval metadata artifact，約 290 筆）
 
 [Step 4] generate_report.py — RAG 週報生成
   資料：Google Sheets 指標（TSV）
@@ -195,7 +196,7 @@ Notion 會議紀錄（87 份，2023–2026）
   Local Mode：無 OpenAI API key 時自動降級（search→keyword-only，chat→context-only）
   endpoint（9 個 router，42 端點，v2.12～v3.4）：
     - routes/qa.ts           — GET /qa, /qa/categories, /qa/{id}（hex+int）
-    - routes/search.ts       — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；v2.11 over-retrieve + rerank）
+    - routes/search.ts       — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；若帶 `extraction_model`，先 `top_k × 3` over-retrieve 再 filter）
     - routes/chat.ts         — POST /chat（mode: agent|rag|context-only；v2.29 request-level mode 參數，三層優先：Request > Server AGENT_ENABLED > auto；v2.11 rerank 可啟用）
     - routes/reports.ts      — GET /reports, /reports/{id}, POST /reports/generate
     - routes/sessions.ts     — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages（context-only fallback）, DELETE /sessions/{id}
@@ -204,11 +205,11 @@ Notion 會議紀錄（87 份，2023–2026）
     - routes/synonyms.ts     — GET /synonyms, POST /synonyms, PUT /synonyms/{term}, DELETE /synonyms/{term}（雙層設計：28 靜態術語 + 32 新增（v2.11）+ custom JSON）
     - routes/meeting-prep.ts — GET /meeting-prep（列表）, GET /meeting-prep/maturity-trend（趨勢時間序列）, GET /meeting-prep/:date（單篇，fuzzy match）
   核心模組：
-    - store/qa-store.ts：QAStore（讀 qa_final.json + embedding 向量，embedding optional）
+    - store/qa-store.ts：QAStore（讀 qa_final.json / qa_enriched.json + embedding 向量，embedding optional）
     - store/session-store.ts：FileSessionStore（Repository Pattern）
     - store/learning-store.ts：LearningStore（feedback + miss 記錄）
     - store/synonyms-store.ts：SynonymsStore（雙層設計：28 基礎術語 + 31 補充術語（v2.11）= 59 靜態術語 + output/synonym_custom.json 自訂覆蓋，v2.10 新增）
-    - store/search-engine.ts：SearchEngine（hybrid search + keyword boost + keywordOnlySearch）
+    - store/search-engine.ts：SearchEngine（hybrid search + keyword boost + metadata-aware rerank + keywordOnlySearch）
     - utils/npy-reader.ts：NumPy .npy 檔案解析（numpy 相容）
     - utils/cosine-similarity.ts：向量運算（Float32Array）
     - utils/keyword-boost.ts：4 層關鍵字匹配
@@ -234,9 +235,38 @@ Notion 會議紀錄（87 份，2023–2026）
     - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port；8 維度推送 Laminar `report-quality` group；含 report_action_maturity_labeled）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / synonyms / meeting-prep / api-response
-  測試：Vitest（58 個 test files，608 tests passing）
+  測試：Vitest（58 個 test files，613 tests passing）
   部署：Lambda + Function URL（arm64，~$0/月）/ docker-compose（本地開發）
             ↓ http://localhost:8002 (開發) 或 https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/ (生產)
+
+### Retrieval Data Dimensions 架構增量（2026-03-15）
+
+這次不是單純新增幾筆 booster，而是把 retrieval 的資料表示層與 runtime ranking 一起升級：
+
+1. `scripts/enrich_qa.py` 在 serving artifact 上回填多維度欄位。
+2. `scripts/migrate_to_supabase.py` 可選擇把 extended retrieval fields 一起遷移到 Supabase。
+3. `scripts/qa_tools.py` 與 `evals/eval_retrieval.py` 把 dual-label / boosterless / duplicate / failure bucket 變成正式評估輸出。
+4. `api/src/store/search-engine.ts` 與 `api/src/store/supabase-qa-store.ts` 在 runtime path 使用這批欄位做 scoring 與 diversity rerank。
+
+核心資料欄位：
+
+- `primary_category`
+- `categories`
+- `intent_labels`
+- `scenario_tags`
+- `serving_tier`
+- `retrieval_phrases`
+- `retrieval_surface_text`
+- `content_granularity`
+- `evidence_scope`
+- `booster_target_queries`
+- `hard_negative_terms`
+
+這讓系統能區分三件過去混在一起的問題：
+
+- category / intent coverage 不足
+- ranking 被近重複答案汙染
+- booster 雖補弱案例，但同時污染一般 query 的 top-k
 
 ## v2.11 — RAG 迭代改進計畫：Synonym 擴充 + Contextual Embeddings + Reranker（2026-03-05）
 

@@ -43,6 +43,17 @@ interface MatchRow {
   synonyms: string[];
   freshness_score: number;
   search_hit_count: number;
+  primary_category?: string | null;
+  categories?: string[] | null;
+  intent_labels?: string[] | null;
+  scenario_tags?: string[] | null;
+  serving_tier?: string | null;
+  retrieval_phrases?: string[] | null;
+  retrieval_surface_text?: string | null;
+  content_granularity?: string | null;
+  evidence_scope?: string[] | null;
+  booster_target_queries?: string[] | null;
+  hard_negative_terms?: string[] | null;
   similarity: number;
 }
 
@@ -56,6 +67,8 @@ const OVER_RETRIEVE_FACTOR = 3;
 const KW_BOOST_CONFIG = { boost: 0.1, maxHits: 3, partial: 0.05 } as const;
 const SEMANTIC_WEIGHT = 0.7;
 const SYNONYM_BOOST = 0.05;
+const MAX_QUERY_TOKENS = 100;
+const MAX_METADATA_TEXT_LENGTH = 2000;
 
 function rowToQAItem(row: QARow): QAItem {
   return {
@@ -80,6 +93,18 @@ function rowToQAItem(row: QARow): QAItem {
     source_url: row.source_url ?? "",
     extraction_model: row.extraction_model ?? undefined,
     maturity_relevance: (row.maturity_relevance as "L1" | "L2" | "L3" | "L4") ?? undefined,
+    primary_category: row.primary_category ?? row.category ?? "",
+    categories: row.categories ?? (row.category ? [row.category] : []),
+    intent_labels: row.intent_labels ?? [],
+    scenario_tags: row.scenario_tags ?? [],
+    serving_tier: row.serving_tier ?? "canonical",
+    retrieval_phrases: row.retrieval_phrases ?? row.keywords ?? [],
+    retrieval_surface_text:
+      row.retrieval_surface_text ?? [row.question, row.answer, ...(row.keywords ?? [])].join("\n"),
+    content_granularity: row.content_granularity ?? undefined,
+    evidence_scope: row.evidence_scope ?? [],
+    booster_target_queries: row.booster_target_queries ?? [],
+    hard_negative_terms: row.hard_negative_terms ?? [],
   };
 }
 
@@ -93,6 +118,130 @@ function computeSynonymBonus(query: string, synonyms: readonly string[]): number
     }
   }
   return 0;
+}
+
+function asList(value: readonly string[] | string | null | undefined): readonly string[] {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string" && value.trim().length > 0) return [value.trim()];
+  return [];
+}
+
+function tokenize(text: string): Set<string> {
+  return new Set(
+    text
+      .slice(0, MAX_METADATA_TEXT_LENGTH)
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((token) => token.length >= 2)
+      .slice(0, MAX_QUERY_TOKENS),
+  );
+}
+
+function inferQueryLabels(
+  query: string,
+  hintMap: Readonly<Record<string, readonly string[]>>,
+): ReadonlySet<string> {
+  const queryLower = query.toLowerCase();
+  const labels = new Set<string>();
+  for (const [label, hints] of Object.entries(hintMap)) {
+    if (hints.some((hint) => queryLower.includes(hint))) labels.add(label);
+  }
+  return labels;
+}
+
+const QUERY_INTENT_HINTS: Readonly<Record<string, readonly string[]>> = {
+  diagnosis: ["異常", "下滑", "原因", "診斷", "why", "根因"],
+  "root-cause": ["root cause", "根因", "canonical", "waf", "衝突"],
+  implementation: ["如何", "修正", "設定", "實作", "schema", "標記"],
+  measurement: ["ga", "ga4", "gsc", "ctr", "曝光", "點擊", "追蹤", "kpi"],
+  reporting: ["報表", "週報", "監測", "趨勢"],
+  "platform-decision": ["平台", "策略", "路徑", "作者"],
+};
+
+const QUERY_SCENARIO_HINTS: Readonly<Record<string, readonly string[]>> = {
+  discover: ["discover", "探索"],
+  "google-news": ["google news", "news", "新聞"],
+  "faq-rich-result": ["faq", "rich result", "搜尋外觀"],
+  "ga4-attribution": ["ga4", "歸因", "unassigned"],
+  "author-page": ["/user", "作者頁", "author"],
+  "image-seo": ["image", "圖片", "alt", "縮圖"],
+};
+
+const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> = {
+  "技術SEO": ["schema", "結構化資料", "core web vitals", "lcp", "cls", "ttfb", "amp"],
+  "索引與檢索": ["索引", "coverage", "googlebot", "canonical", "檢索未索引"],
+  "搜尋表現分析": ["ctr", "曝光", "點擊", "serp", "search console"],
+  "GA與數據追蹤": ["ga", "ga4", "追蹤", "歸因", "direct"],
+  "Discover與AMP": ["discover", "amp", "news"],
+  "內容策略": ["內容", "文章", "eeat", "供給", "更新"],
+  "連結策略": ["連結", "內部連結", "錨點"],
+  "平台策略": ["平台", "作者", "/user", "路徑"],
+  "演算法與趨勢": ["演算法", "趨勢", "ai", "gemini", "perplexity"],
+};
+
+function metadataScore(query: string, item: QAItem): number {
+  const queryLower = query.toLowerCase();
+  const queryTokens = tokenize(query);
+  const surfaceTokens = tokenize(item.retrieval_surface_text ?? "");
+  const queryCategories = inferQueryLabels(query, QUERY_CATEGORY_HINTS);
+  const queryIntents = inferQueryLabels(query, QUERY_INTENT_HINTS);
+  const queryScenarios = inferQueryLabels(query, QUERY_SCENARIO_HINTS);
+  const itemCategories = new Set(asList(item.categories));
+  const itemIntents = new Set(asList(item.intent_labels));
+  const itemScenarios = new Set(asList(item.scenario_tags));
+
+  const phraseBoost = computeKeywordBoostSingle(query, item.retrieval_phrases ?? [], KW_BOOST_CONFIG) * 2.0;
+  const surfaceBoost = [...queryTokens].filter((token) => surfaceTokens.has(token)).length * 0.03;
+  const categoryBoost = [...queryCategories].filter((label) => itemCategories.has(label)).length * 0.08;
+  const intentBoost = [...queryIntents].filter((label) => itemIntents.has(label)).length * 0.06;
+  const scenarioBoost = [...queryScenarios].filter((label) => itemScenarios.has(label)).length * 0.05;
+  const tier = (item.serving_tier ?? "canonical").toLowerCase();
+  const targetedBooster = asList(item.booster_target_queries).some((target) => queryLower.includes(target.toLowerCase()));
+  const tierScore = tier === "booster" ? (targetedBooster ? 0.05 : -0.08) : tier === "supporting" ? 0.02 : 0.08;
+  const hardNegativePenalty = asList(item.hard_negative_terms).some((term) => queryLower.includes(term.toLowerCase())) ? -0.05 : 0;
+
+  return phraseBoost + surfaceBoost + categoryBoost + intentBoost + scenarioBoost + tierScore + hardNegativePenalty;
+}
+
+function itemMatchesCategory(item: QAItem, category: string | null): boolean {
+  if (!category) return true;
+  const categories = asList(item.categories);
+  return categories.length > 0 ? categories.includes(category) : item.category === category;
+}
+
+function questionSignature(question: string): string {
+  return question.toLowerCase().replace(/[^\w\u4e00-\u9fff]+/g, "").slice(0, 120);
+}
+
+function rerankResults(results: ReadonlyArray<{ item: QAItem; score: number }>, topK: number): ReadonlyArray<{ item: QAItem; score: number }> {
+  const candidates = [...results];
+  const selected: Array<{ item: QAItem; score: number }> = [];
+
+  while (candidates.length > 0 && selected.length < topK) {
+    const selectedSigs = new Set(selected.map((result) => questionSignature(result.item.question)));
+    const selectedCategories = new Set(selected.flatMap((result) => asList(result.item.categories)));
+    const selectedIntents = new Set(selected.flatMap((result) => asList(result.item.intent_labels)));
+
+    let bestIndex = 0;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index]!;
+      let adjusted = candidate.score;
+      if (selectedSigs.has(questionSignature(candidate.item.question))) adjusted -= 0.25;
+      const categories = asList(candidate.item.categories);
+      if (categories.length > 0 && categories.every((category) => !selectedCategories.has(category))) adjusted += 0.06;
+      const intents = asList(candidate.item.intent_labels);
+      if (intents.length > 0 && intents.every((intent) => !selectedIntents.has(intent))) adjusted += 0.04;
+      if (adjusted > bestScore) {
+        bestScore = adjusted;
+        bestIndex = index;
+      }
+    }
+    if (!Number.isFinite(bestScore)) break;
+    selected.push({ item: candidates[bestIndex]!.item, score: bestScore });
+    candidates.splice(bestIndex, 1);
+  }
+  return selected;
 }
 
 export class SupabaseQAStore {
@@ -132,7 +281,7 @@ export class SupabaseQAStore {
     for (let page = 0; page < MAX_PAGES; page++) {
       const rows = await supabaseSelect<QARow>(
         "qa_items",
-        `?select=id,seq,question,answer,keywords,confidence,category,difficulty,evergreen,source_title,source_date,source_type,source_collection,source_url,is_merged,extraction_model,maturity_relevance,synonyms,freshness_score,search_hit_count&order=seq.asc&limit=${PAGE_SIZE}&offset=${offset}`,
+        `?select=id,seq,question,answer,keywords,confidence,category,difficulty,evergreen,source_title,source_date,source_type,source_collection,source_url,is_merged,extraction_model,maturity_relevance,synonyms,freshness_score,search_hit_count,primary_category,categories,intent_labels,scenario_tags,serving_tier,retrieval_phrases,retrieval_surface_text,content_granularity,evidence_scope,booster_target_queries,hard_negative_terms&order=seq.asc&limit=${PAGE_SIZE}&offset=${offset}`,
         LOAD_TIMEOUT_MS,
       );
 
@@ -184,14 +333,18 @@ export class SupabaseQAStore {
     const reranked = candidates.map((row) => {
       const kwBoost = computeKeywordBoostSingle(query, row.keywords ?? [], KW_BOOST_CONFIG);
       const synonymBonus = computeSynonymBonus(query, row.synonyms ?? []);
-      const base = row.similarity * SEMANTIC_WEIGHT + kwBoost + synonymBonus;
+      const item = rowToQAItem(row);
+      const base = row.similarity * SEMANTIC_WEIGHT + kwBoost + synonymBonus + metadataScore(query, item);
       const score = base * (row.freshness_score ?? 1.0);
-      return { item: rowToQAItem(row), score };
+      return { item, score };
     });
 
-    return reranked
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
+    return rerankResults(
+      reranked
+        .filter((result) => itemMatchesCategory(result.item, category))
+        .sort((a, b) => b.score - a.score),
+      topK,
+    )
       .filter((r) => r.score >= minScore);
   }
 
@@ -207,7 +360,7 @@ export class SupabaseQAStore {
     const queryLower = query.toLowerCase();
 
     const scored = this.items
-      .filter((item) => !category || item.category === category)
+      .filter((item) => itemMatchesCategory(item, category))
       .map((item) => {
         const kwBoost = computeKeywordBoostSingle(query, item.keywords, KW_BOOST_CONFIG);
         const synonymBonus = computeSynonymBonus(query, item.synonyms);
@@ -216,14 +369,13 @@ export class SupabaseQAStore {
           item.answer.toLowerCase().includes(queryLower)
             ? 0.05
             : 0;
-        const score = (kwBoost + synonymBonus + textMatch) * (item.freshness_score ?? 1.0);
+        const score = (kwBoost + synonymBonus + textMatch + metadataScore(query, item)) * (item.freshness_score ?? 1.0);
         return { item, score };
       })
       .filter((r) => r.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK);
+      .sort((a, b) => b.score - a.score);
 
-    return scored;
+    return rerankResults(scored, topK);
   }
 
   listQa(params: ListQaParams): { items: readonly QAItem[]; total: number } {

@@ -3,7 +3,21 @@
     "hit_rate": 0.95,
     "mrr": 0.90,
     "keyword_hit_rate": 0.70,
-    "precision_at_k": 0.75
+    "precision_at_k": 0.65,
+    "dual_category_recall_at_k": 0.75,
+    "multi_label_f1_at_k": 0.68,
+    "boosterless_precision_at_k": 0.60,
+    "ndcg_at_k": 0.75
+  },
+  "retrieval_stable": {
+    "hit_rate": 0.95,
+    "mrr": 0.90,
+    "keyword_hit_rate": 0.75,
+    "precision_at_k": 0.72,
+    "dual_category_recall_at_k": 0.82,
+    "multi_label_f1_at_k": 0.75,
+    "boosterless_precision_at_k": 0.65,
+    "ndcg_at_k": 0.80
   },
   "extraction": {
     "qa_count_in_range": 0.80,

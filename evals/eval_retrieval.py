@@ -68,6 +68,8 @@ _dataset = [
         "target": {
             "expected_keywords": item["expected_keywords"],
             "expected_categories": item.get("expected_categories", []),
+            "expected_intents": item.get("expected_intents", []),
+            "booster_sensitive": item.get("booster_sensitive", False),
             "scenario": item["scenario"],
         },
     }
@@ -262,6 +264,14 @@ def keyword_hit_rate(output: dict, target: dict) -> float:
     return hits / len(expected_kws)
 
 
+def _result_categories(result: dict) -> set[str]:
+    categories = result.get("categories")
+    if isinstance(categories, list) and categories:
+        return {str(cat) for cat in categories if cat}
+    category = result.get("primary_category") or result.get("category", "")
+    return {str(category)} if category else set()
+
+
 def top1_category_match(output: dict, target: dict) -> float:
     """1 if the top-1 result's category is in expected_categories, else 0."""
     results: list[dict] = output.get("results", [])
@@ -270,7 +280,7 @@ def top1_category_match(output: dict, target: dict) -> float:
     if not expected_cats or not results:
         return 0.0
 
-    return 1.0 if results[0].get("category", "") in expected_cats else 0.0
+    return 1.0 if _result_categories(results[0]) & set(expected_cats) else 0.0
 
 
 def top5_category_coverage(output: dict, target: dict) -> float:
@@ -281,7 +291,7 @@ def top5_category_coverage(output: dict, target: dict) -> float:
     if not expected_cats or not results:
         return 0.0
 
-    matches = sum(1 for r in results if r.get("category", "") in expected_cats)
+    matches = sum(1 for r in results if _result_categories(r) & set(expected_cats))
     return matches / len(results)
 
 
@@ -289,7 +299,7 @@ def hit_rate(output: dict, target: dict) -> float:
     """1 if at least one top-K result's category is in expected_categories."""
     results: list[dict] = output.get("results", [])
     expected_cats: set[str] = set(target.get("expected_categories", []))
-    return 1.0 if any(r.get("category", "") in expected_cats for r in results) else 0.0
+    return 1.0 if any(_result_categories(r) & expected_cats for r in results) else 0.0
 
 
 def mrr(output: dict, target: dict) -> float:
@@ -297,7 +307,7 @@ def mrr(output: dict, target: dict) -> float:
     results: list[dict] = output.get("results", [])
     expected_cats: set[str] = set(target.get("expected_categories", []))
     for rank, r in enumerate(results, start=1):
-        if r.get("category", "") in expected_cats:
+        if _result_categories(r) & expected_cats:
             return 1.0 / rank
     return 0.0
 
@@ -308,7 +318,7 @@ def precision_at_k(output: dict, target: dict) -> float:
     expected_cats: set[str] = set(target.get("expected_categories", []))
     if not results:
         return 0.0
-    relevant = sum(1 for r in results if r.get("category", "") in expected_cats)
+    relevant = sum(1 for r in results if _result_categories(r) & expected_cats)
     return relevant / len(results)
 
 
@@ -318,8 +328,40 @@ def recall_at_k(output: dict, target: dict) -> float:
     expected_cats: set[str] = set(target.get("expected_categories", []))
     if not expected_cats:
         return 1.0
-    retrieved_cats = {r.get("category", "") for r in results}
+    retrieved_cats = {cat for result in results for cat in _result_categories(result)}
     return len(retrieved_cats & expected_cats) / len(expected_cats)
+
+
+def dual_category_recall_at_k(output: dict, target: dict) -> float:
+    """Recall@K for dual-label scenarios. Non-dual cases return 1.0 (neutral)."""
+    expected_cats: set[str] = set(target.get("expected_categories", []))
+    if len(expected_cats) < 2:
+        return 1.0
+    return recall_at_k(output, target)
+
+
+def multi_label_f1_at_k(output: dict, target: dict) -> float:
+    """F1 over multi-label category precision/recall in top-K."""
+    p = precision_at_k(output, target)
+    r = recall_at_k(output, target)
+    return 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+
+
+def boosterless_precision_at_k(output: dict, target: dict) -> float:
+    """Precision@K computed after excluding booster tier items."""
+    results: list[dict] = output.get("results", [])
+    expected_cats: set[str] = set(target.get("expected_categories", []))
+    if not results:
+        return 0.0
+
+    non_booster = [
+        result for result in results
+        if str(result.get("serving_tier", "canonical")).lower() != "booster"
+    ]
+    if not non_booster:
+        return 0.0
+    relevant = sum(1 for result in non_booster if _result_categories(result) & expected_cats)
+    return relevant / len(non_booster)
 
 
 def ndcg_at_k(output: dict, target: dict) -> float:
@@ -334,10 +376,11 @@ def ndcg_at_k(output: dict, target: dict) -> float:
     found_cats: set[str] = set()
     dcg = 0.0
     for rank, r in enumerate(results, start=1):
-        cat = r.get("category", "")
-        if cat in expected_cats and cat not in found_cats:
+        cats = _result_categories(r)
+        new_hits = (cats & expected_cats) - found_cats
+        if new_hits:
             dcg += 1.0 / math.log2(rank + 1)
-            found_cats.add(cat)
+            found_cats.update(new_hits)
 
     n_perfect = min(len(expected_cats), len(results))
     idcg = sum(1.0 / math.log2(i + 2) for i in range(n_perfect))
@@ -354,6 +397,9 @@ _EVALUATOR_MAP = {
     "mrr": mrr,
     "precision_at_k": precision_at_k,
     "recall_at_k": recall_at_k,
+    "dual_category_recall_at_k": dual_category_recall_at_k,
+    "multi_label_f1_at_k": multi_label_f1_at_k,
+    "boosterless_precision_at_k": boosterless_precision_at_k,
     "ndcg_at_k": ndcg_at_k,
 }
 

@@ -141,6 +141,47 @@ print(response.choices[0].finish_reason)
 - **Actionable**：A 提供具體可執行建議（Completeness 的核心要求）
 - **Faithfulness**：A 的內容來自原始文件，不是 AI 自行補充（Accuracy 的核心要求）
 
+### Retrieval Data Dimensions 評估口徑（2026-03-15）
+
+Retrieval eval 現在分成「過渡 gate」與「穩定 gate」兩層，避免 schema / rerank 剛升級時直接拿舊 precision baseline 做硬比較。
+
+新增正式指標：
+
+| 指標 | 用途 |
+|------|------|
+| `dual_category_recall_at_k` | dual-label case 是否同時覆蓋多個 category |
+| `multi_label_f1_at_k` | multi-label precision / recall 的調和平均 |
+| `boosterless_precision_at_k` | 排除 booster 後，canonical / supporting corpus 的真實純度 |
+| `ndcg_at_k` | 考慮 ranking 位置的相關度品質 |
+| `canonical_top1_rate` | top-1 是否由 canonical corpus 提供 |
+| `duplicate_rate_at_k` | top-k 是否被近重複答案汙染 |
+| `intent_coverage_at_k` | top-k 是否覆蓋 query 需要的 intent |
+
+目前過渡 gate 寫在 `eval/eval_thresholds.json`：
+
+- `precision_at_k >= 0.65`
+- `dual_category_recall_at_k >= 0.75`
+- `multi_label_f1_at_k >= 0.68`
+- `boosterless_precision_at_k >= 0.60`
+- `ndcg_at_k >= 0.75`
+
+穩定 gate（`retrieval_stable`）則要求：
+
+- `precision_at_k >= 0.72`
+- `dual_category_recall_at_k >= 0.82`
+- `multi_label_f1_at_k >= 0.75`
+- `boosterless_precision_at_k >= 0.65`
+- `ndcg_at_k >= 0.80`
+
+這套口徑的重點是把 improvement 拆開看：是 corpus coverage 改善、是 ranking / rerank 改善，還是 booster 只把分數硬拉高。因此 `slice_metrics` 與 `failure_buckets` 也成為正式輸出，而不是 debug-only artifact。
+
+### Two-tier gate 的使用時機
+
+- `retrieval`：過渡 gate。當 schema、rerank、retrieval surface 剛升級時先用這層追蹤方向，避免一開始就被舊 baseline 卡住。
+- `retrieval_stable`：穩定 gate。當連續數輪 eval 都穩定通過過渡 gate，且沒有出現 MRR / NDCG 回退或 booster inflation，才把它當成 production bar。
+
+實務上，若只過 `retrieval` 但沒過 `retrieval_stable`，表示系統方向正確，但還不能視為 fully stabilized；此時應繼續觀察 slice metrics，而不是立即宣稱 migration 完成。
+
 ### 成熟度評估維度（v3.3–v3.4）
 
 v3.3 起，成熟度模型（L1-L4）成為評估體系的新橫切維度：
