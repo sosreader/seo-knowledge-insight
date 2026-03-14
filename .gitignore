@@ -24,6 +24,8 @@ output/.versions/step*/
 
 # Python virtual environment
 .venv/
+*.egg-info/
+.vscode/settings.json
 
 # Playwright MCP server cache
 .playwright-mcp/
