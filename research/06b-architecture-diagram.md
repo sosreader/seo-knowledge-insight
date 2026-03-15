@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v3.4+，2026-03-14）
+## 架構圖（最新：v3.5，2026-03-16）
 
 ```mermaid
 flowchart TD
@@ -13,6 +13,9 @@ flowchart TD
     MED_SRC["Medium RSS<br/>genehong.medium.com"] --> S1M
     ITH_SRC["iThome 鐵人賽<br/>30 篇 SC KPI 系列"] --> S1I
     GC_SRC["Google Search Central<br/>Case Studies (12 篇)"] --> S1G
+    AHR_SRC["Ahrefs Blog<br/>WP API（L4 focus, 271 篇）"] --> S1E
+    SEJ_SRC["Search Engine Journal<br/>RSS（3 篇）"] --> S1F
+    GM_SRC["Growth Memo<br/>Substack RSS（14 篇）"] --> S1G2
 
     subgraph Pipeline["離線知識蒸餾 Pipeline"]
         PF[utils/pipeline_deps.py<br/>preflight_check<br/>StepDependency 宣告式檢查] -.->|每個 Script 啟動前| S1
@@ -24,10 +27,16 @@ flowchart TD
         S1M[Step 1b: fetch_medium.py<br/>RSS → Markdown] --> MD_MED[raw_data/medium_markdown/*.md]
         S1I[Step 1c: fetch_ithelp.py<br/>HTML → Markdown] --> MD_ITH[raw_data/ithelp_markdown/*.md]
         S1G[Step 1d: fetch_google_cases.py<br/>HTML → Markdown] --> MD_GC[raw_data/google_cases_markdown/*.md]
+        S1E[Step 1e: fetch_ahrefs.py<br/>WP API → Markdown + _sanitize_slug] --> MD_AHR[raw_data/ahrefs_markdown/*.md]
+        S1F[Step 1f: fetch_sej.py<br/>RSS → Markdown + _sanitize_slug] --> MD_SEJ[raw_data/sej_markdown/*.md]
+        S1G2[Step 1g: fetch_growthmemo.py<br/>Substack RSS → Markdown + _sanitize_slug] --> MD_GM[raw_data/growthmemo_markdown/*.md]
         MD --> S2[Step 2: extract_qa.py<br/>gpt-5.2 萃取 Q&A<br/>+ Attribution Tag 補充<br/>DIR_COLLECTION_MAP 自動偵測來源<br/>+ extraction_model / extraction_timestamp]
         MD_MED --> S2
         MD_ITH --> S2
         MD_GC --> S2
+        MD_AHR --> S2
+        MD_SEJ --> S2
+        MD_GM --> S2
         S2 --> RAW[output/qa_all_raw.json<br/>source_type + source_collection 標記]
         RAW --> S3[Step 3: dedupe_classify.py<br/>Collection-Scoped Dedup<br/>各 collection 內部獨立去重]
         S3 --> QABASE[Step 3 基線快照<br/>歷史上曾產出 1,323 / 1,317 筆]
@@ -61,12 +70,12 @@ flowchart TD
 
     FE -->|"seoInsight.api.ts<br/>seoFetch（port 8002）"| HAPI
 
-    subgraph Hono_API["API Layer v3.4（Hono + TypeScript，port 8002，Local Mode + Laminar）"]
+    subgraph Hono_API["API Layer v3.5（Hono + TypeScript，port 8002，Local Mode + Laminar）"]
         QA --> HAPI["SEO Insight API<br/>Hono + TypeScript<br/>QAStore / SupabaseQAStore（factory pattern）"]
         EMB -.->|"optional（Local Mode 不需要）"| HAPI
         SE -.->|hybrid_search / keywordOnlySearch| HAPI
         HAPI --> HMID["middleware/<br/>auth.ts（X-API-Key）<br/>rate-limit.ts（chat:20 search/qa:60 reports/gen:5 eval:60/min）<br/>cors.ts + error-handler.ts"]
-        HMID --> HEP["9 個 Router + health（v3.4，42 端點）<br/>qa.ts — GET /qa, /qa/categories, /qa/collections, /qa/{id}（hex+int + maturity filter）<br/>search.ts — POST /search（mode: hybrid|keyword；maturity boost / rerank）<br/>chat.ts — POST /chat（mode: agent|rag|context-only）<br/>reports.ts — GET/POST /reports（本地 + OpenAI 雙模式）<br/>sessions.ts — CRUD /sessions + messages（mode-aware fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — source-docs / metrics / trends / llm-usage 等<br/>synonyms.ts — GET/POST /synonyms, PUT/DELETE /synonyms/{term}<br/>meeting-prep.ts — GET /meeting-prep, /meeting-prep/maturity-trend, /meeting-prep/{date}"]
+        HMID --> HEP["10 個 Router + health（v3.5，42 端點）<br/>qa.ts — GET /qa, /qa/categories, /qa/collections, /qa/{id}（hex+int + maturity filter）<br/>search.ts — POST /search（mode: hybrid|keyword；maturity boost / rerank）<br/>chat.ts — POST /chat（mode: agent|rag|context-only）<br/>reports.ts — GET/POST /reports（本地 + OpenAI 雙模式）<br/>sessions.ts — CRUD /sessions + messages（mode-aware fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — source-docs / metrics / trends / llm-usage 等<br/>synonyms.ts — GET/POST /synonyms, PUT/DELETE /synonyms/{term}<br/>meeting-prep.ts — GET /meeting-prep, /meeting-prep/maturity-trend, /meeting-prep/{date}"]
         HEP --> HENV["ApiResponse[T]<br/>Zod schema validation<br/>data / error / meta"]
         HEP -->|not_relevant / helpful| LS
         HEP -->|"pipeline/eval proxy"| QT

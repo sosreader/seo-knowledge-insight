@@ -229,7 +229,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - agent/types.ts：AgentConfig, ToolResult, AgentResponse, AgentDeps interface
     - agent/tool-definitions.ts：4 tool Zod schema + getOpenAITools()（OpenAI function calling format）
     - agent/tool-executor.ts：Tool dispatch + Zod validation + 15s timeout + error sanitization
-    - agent/agent-loop.ts：while-loop + 4 終止條件（stop/max_turns/timeout/loop_detection）+ ALLOWED_TOOLS whitelist + JSON.parse guard
+    - agent/agent-loop.ts：while-loop + 4 終止條件（stop/max_turns/timeout/loop_detection）+ ALLOWED_TOOLS whitelist + JSON.parse guard + maturityLevel 參數（v3.5，注入 buildMaturityContext()）
     - agent/agent-deps.ts：qaStore → AgentDeps 橋接（Dependency Injection）
   評估工具：
     - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port；8 維度推送 Laminar `report-quality` group；含 report_action_maturity_labeled）

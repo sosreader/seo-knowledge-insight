@@ -41,16 +41,16 @@
 
 ---
 
-## 最新狀態（2026-03-15，v3.4+）
+## 最新狀態（2026-03-16，v3.5）
 
-這個 index 不再維護完整即時指標表；最新狀態以 [06a-architecture-changelog.md](./06a-architecture-changelog.md) 與各主題研究文件為準。2026-03-15 目前已確認的關鍵狀態如下：
+這個 index 不再維護完整即時指標表；最新狀態以 [06a-architecture-changelog.md](./06a-architecture-changelog.md) 與各主題研究文件為準。2026-03-16 目前已確認的關鍵狀態如下：
 
 | 指標        | 數值                                                      | 說明                                                                                                                                                    |
 | ----------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Q&A 總量    | **1,809 筆**                                              | 目前 serving / enrichment artifact 的最新規模                                                                                                           |
 | L4 佔比     | **155 / 1809 = 8.57%**                                    | 2026-03-15 classifier refinement 後重新驗證                                                                                                             |
 | Python 測試 | **430 passed, 1 warning**                                 | 全量 pytest 驗證                                                                                                                                        |
-| API 測試    | **628 passed / 58 files**                                 | Hono TypeScript Vitest 驗證                                                                                                                             |
+| API 測試    | **660 passed / 61 files**                                 | Hono TypeScript Vitest 驗證                                                                                                                             |
 | 重要新能力  | local fallback / retrieval dimensions / maturity backfill | 詳見 [08-local-fallback.md](./08-local-fallback.md)、[09-retrieval-dimensions.md](./09-retrieval-dimensions.md)、[03-evaluation.md](./03-evaluation.md) |
 
 ---

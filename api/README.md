@@ -256,7 +256,7 @@ Client → Function URL / localhost:8002
 | GET    | `/api/v1/pipeline/source-docs`                           | 列出所有來源文件（支援 filter + pagination）                     | ✓    | 60/min     |
 | GET    | `/api/v1/pipeline/source-docs/:collection/:file/preview` | 來源文件 Markdown 預覽                                           | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/metrics`                               | 取得 Pipeline metrics                                            | ✓    | 60/min     |
-| POST   | `/api/v1/pipeline/metrics/save`                          | 儲存指標快照                                                     | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/metrics/save`                          | 儲存指標快照（支援 `maturity` JSONB 欄位）                       | ✓    | 60/min     |
 | GET    | `/api/v1/pipeline/metrics/snapshots`                     | 列出指標快照清單                                                 | ✓    | 60/min     |
 | DELETE | `/api/v1/pipeline/metrics/snapshots/:id`                 | 刪除指定快照                                                     | ✓    | 60/min     |
 | GET    | `/api/v1/pipeline/metrics/trends`                        | Timeseries 異常偵測（MA deviation / decline / trend）            | ✓    | 60/min     |
@@ -390,7 +390,7 @@ api/
 │   │   ├── types.ts            # AgentConfig, ToolResult, AgentResponse, AgentDeps
 │   │   ├── tool-definitions.ts # 4 tool Zod schemas + getOpenAITools()
 │   │   ├── tool-executor.ts    # Tool dispatch + validation + 15s timeout
-│   │   ├── agent-loop.ts       # while-loop + 終止條件 + source 收集
+│   │   ├── agent-loop.ts       # while-loop + 終止條件 + source 收集 + maturityLevel 注入
 │   │   └── agent-deps.ts       # qaStore → AgentDeps 橋接（DI）
 │   ├── services/
 │   │   ├── embedding.ts      # OpenAI embedding 服務
