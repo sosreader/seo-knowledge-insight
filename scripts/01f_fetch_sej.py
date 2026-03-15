@@ -107,6 +107,12 @@ def _save_index(index: list[dict]) -> None:
     )
 
 
+def _sanitize_slug(slug: str) -> str:
+    """Strip path separators and dangerous characters from slug."""
+    slug = re.sub(r"[^\w\-]", "", slug)
+    return slug[:200]
+
+
 def _slug_from_url(url: str) -> str:
     """Extract slug from SEJ article URL."""
     path = urlparse(url).path.rstrip("/")
@@ -313,7 +319,14 @@ def fetch_sej_articles(
             source_collection=SOURCE_COLLECTION,
         )
 
-        md_path = OUTPUT_DIR / f"{slug}.md"
+        safe_slug = _sanitize_slug(slug)
+        if not safe_slug:
+            logger.warning("Slug sanitized to empty for %s, skipping", slug)
+            continue
+        md_path = OUTPUT_DIR / f"{safe_slug}.md"
+        if not md_path.resolve().is_relative_to(OUTPUT_DIR.resolve()):
+            logger.error("Path traversal detected for slug %r, skipping", slug)
+            continue
         md_path.write_text(full_md, encoding="utf-8")
 
         # Update index

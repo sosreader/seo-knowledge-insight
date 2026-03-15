@@ -83,6 +83,7 @@ export const crawledNotIndexedRequestSchema = z
 export const metricsSaveSchema = z.object({
   metrics: z.any(),
   crawled_not_indexed: z.any().optional(),
+  maturity: z.record(z.string(), z.string()).optional(),
   source: z.string().max(500),
   tab: z.string().min(1).max(50).regex(/^[\w\s\u4e00-\u9fff-]+$/u, "tab must be alphanumeric, CJK, or spaces"),
   label: z.string().max(60),
@@ -104,6 +105,7 @@ export interface MetricsSnapshotMeta {
 
 export interface MetricsSnapshot extends MetricsSnapshotMeta {
   readonly metrics: Record<string, unknown>;
+  readonly maturity?: Readonly<Record<string, string>>;
 }
 
 // --- Response types ---

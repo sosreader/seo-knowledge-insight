@@ -125,14 +125,25 @@ export async function agentChat(
   history: ReadonlyArray<{ role: string; content: string }> | null,
   deps: AgentDeps,
   configOverride?: Partial<AgentConfig>,
+  maturityLevel?: string | null,
 ): Promise<AgentResponse> {
   const cfg = { ...DEFAULT_CONFIG, ...configOverride };
   const startMs = Date.now();
   const allToolCalls: ToolResult[] = [];
 
+  // Build system prompt — inject maturity context when provided
+  let systemPrompt = SYSTEM_PROMPT;
+  if (maturityLevel) {
+    const { buildMaturityContext, parseMaturityLevel } = await import("../utils/maturity.js");
+    const parsed = parseMaturityLevel(maturityLevel);
+    if (parsed) {
+      systemPrompt = `${SYSTEM_PROMPT}\n\n${buildMaturityContext(parsed)}`;
+    }
+  }
+
   // Build initial messages
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
   ];
 
   if (history) {

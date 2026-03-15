@@ -45,10 +45,7 @@ from utils.pipeline_version import record_artifact
 from scripts.dedupe_helpers import _cosine_similarity_matrix
 
 
-def compute_stable_id(source_file: str, question: str) -> str:
-    """基於內容的確定性 ID，跨次執行不變。"""
-    content = f"{source_file}::{question[:120]}"
-    return hashlib.sha256(content.encode()).hexdigest()[:16]
+from utils.stable_id import compute_stable_id
 
 
 def compute_stable_id_from_sources(source_ids: list[str]) -> str:

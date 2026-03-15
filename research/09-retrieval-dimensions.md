@@ -173,7 +173,7 @@
 - `QUERY_SCENARIO_HINTS`
 - `QUERY_CATEGORY_HINTS`
 
-這三組 hints 都定義在 `api/src/store/supabase-qa-store.ts`，是 runtime ranking 可直接修改的 heuristic 字典。若要擴充新場景，正確做法不是只改 query hints，而是讓 offline enrichment 也同步產生對應的 `intent_labels` / `scenario_tags` / `categories`，否則 query 端新增提示詞，item 端仍缺 metadata，效果會很有限。
+這三組 hints 定義在 `api/src/store/search-engine.ts`（v3.5 從 `supabase-qa-store.ts` 抽出統一 export，`supabase-qa-store.ts` 改為 import 共用），是 runtime ranking 可直接修改的 heuristic 字典。若要擴充新場景，正確做法不是只改 query hints，而是讓 offline enrichment 也同步產生對應的 `intent_labels` / `scenario_tags` / `categories`，否則 query 端新增提示詞，item 端仍缺 metadata，效果會很有限。
 
 原因很務實：
 
@@ -239,3 +239,15 @@ Retrieval dimensions 的本質，是把原本隱含在人類 SEO 顧問腦中的
 - 有沒有明確不該命中的 query
 
 一旦這些訊號能進入 artifact 與 schema，搜尋品質就不再只靠 embedding 模型本身，而能開始做真正領域化的 ranking。
+
+---
+
+## 9. Migration 011：Snapshot Maturity Column
+
+`supabase/migrations/011_snapshot_maturity_column.sql` 為 `metrics_snapshots` 增加：
+
+- `maturity JSONB`：儲存成熟度維度資訊（`Record<string, string>`）
+
+用途：`POST /api/v1/pipeline/metrics/save` 現可接受 `maturity` 欄位，儲存至快照。Report generator 從 snapshot 讀取成熟度維度，實現「存快照帶入 maturity → 生成報告時不需額外傳參」的工作流。
+
+這是 010 retrieval metadata columns 的延伸：010 針對 `qa_items`（搜尋排序用），011 針對 `metrics_snapshots`（報告生成用）。兩者都遵循相同的 runtime fallback 策略 — column 不存在時不會導致 API 啟動失敗。

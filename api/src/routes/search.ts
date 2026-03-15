@@ -145,10 +145,14 @@ searchRoute.post("/", async (c) => {
     });
   };
 
+  const hasPostFilter =
+    !!extraction_model || !!primary_category || !!intent_label ||
+    !!scenario_tag || !!serving_tier || !!evidence_scope;
+
   if (hasOpenAI()) {
     try {
       const embedding = await getEmbedding(query);
-      const retrievalTopK = extraction_model
+      const retrievalTopK = hasPostFilter
         ? top_k * MODEL_FILTER_OVERFETCH
         : top_k;
       const hits = await qaStore.hybridSearch(
@@ -188,7 +192,7 @@ searchRoute.post("/", async (c) => {
   }
 
   // Native TypeScript keyword search — in-memory, no OpenAI required
-  const retrievalTopK = extraction_model
+  const retrievalTopK = hasPostFilter
     ? top_k * MODEL_FILTER_OVERFETCH
     : top_k;
   const hits = qaStore.keywordSearch(query, retrievalTopK, category ?? null);

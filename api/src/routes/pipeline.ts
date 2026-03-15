@@ -364,7 +364,7 @@ pipelineRoute.post("/metrics/save", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  const { metrics, crawled_not_indexed, source, tab, label, weeks } = parsed.data;
+  const { metrics, crawled_not_indexed, maturity, source, tab, label, weeks } = parsed.data;
   const id = generateSnapshotId();
   const created_at = new Date().toISOString();
 
@@ -377,6 +377,7 @@ pipelineRoute.post("/metrics/save", async (c) => {
     weeks,
     metrics,
     ...(crawled_not_indexed ? { crawled_not_indexed } : {}),
+    ...(maturity ? { maturity } : {}),
   } as MetricsSnapshot;
 
   if (supabaseSnapshotStore) {

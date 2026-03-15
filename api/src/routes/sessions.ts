@@ -37,13 +37,20 @@ function toSummary(s: Session): SessionSummaryOut {
   };
 }
 
+/** Expose only known-safe metadata fields (allowlist). */
+function safeMetadata(metadata: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!metadata?.maturity_level) return undefined;
+  return { maturity_level: metadata.maturity_level };
+}
+
 function toDetail(s: Session): SessionDetailOut {
+  const meta = safeMetadata(s.metadata);
   return {
     id: s.id,
     title: s.title,
     created_at: s.created_at,
     updated_at: s.updated_at,
-    ...(s.metadata && Object.keys(s.metadata).length > 0 ? { metadata: s.metadata } : {}),
+    ...(meta ? { metadata: meta } : {}),
     messages: s.messages.map((m) => ({
       role: m.role,
       content: m.content,
@@ -164,6 +171,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
           history.length > 0 ? history : null,
           deps,
           { maxTurns: config.AGENT_MAX_TURNS, timeoutMs: config.AGENT_TIMEOUT_MS },
+          effectiveMaturity,
         );
         result = {
           answer: agentResult.answer,

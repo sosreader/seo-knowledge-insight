@@ -93,12 +93,15 @@ function buildPipelineStatusFromStore(): PipelineStatusResponse {
     collections.map((c) => [c.source_collection, c.count]),
   );
 
-  const notionCount = collectionCountMap.get("notion-seo-meetings") ?? 0;
+  const notionCount = collectionCountMap.get("notion-seo-meetings") ?? collectionCountMap.get("seo-meetings") ?? 0;
   const mediumCount =
     (collectionCountMap.get("medium-genehong") ?? 0) +
     (collectionCountMap.get("genehong-medium") ?? 0);
-  const ithelpCount = collectionCountMap.get("ithelp-gsc-kpi") ?? 0;
+  const ithelpCount = collectionCountMap.get("ithelp-gsc-kpi") ?? collectionCountMap.get("ithelp-sc-kpi") ?? 0;
   const googleCount = collectionCountMap.get("google-case-studies") ?? 0;
+  const ahrefsCount = collectionCountMap.get("ahrefs-blog") ?? 0;
+  const sejCount = collectionCountMap.get("sej") ?? 0;
+  const growthmemoCount = collectionCountMap.get("growth-memo") ?? 0;
 
   const steps: PipelineStepStatus[] = [
     {
@@ -126,6 +129,24 @@ function buildPipelineStatusFromStore(): PipelineStatusResponse {
       detail: `${googleCount} 筆 Q&A（來自 Google Cases）`,
     },
     {
+      name: "fetch-ahrefs",
+      label: "Ahrefs 擷取",
+      count: ahrefsCount,
+      detail: `${ahrefsCount} 筆 Q&A（來自 Ahrefs Blog）`,
+    },
+    {
+      name: "fetch-sej",
+      label: "SEJ 擷取",
+      count: sejCount,
+      detail: `${sejCount} 筆 Q&A（來自 Search Engine Journal）`,
+    },
+    {
+      name: "fetch-growthmemo",
+      label: "Growth Memo 擷取",
+      count: growthmemoCount,
+      detail: `${growthmemoCount} 筆 Q&A（來自 Growth Memo）`,
+    },
+    {
       name: "extract-qa",
       label: "Q&A 萃取",
       count: totalCount,
@@ -150,9 +171,12 @@ function buildPipelineStatusFromFiles(): PipelineStatusResponse {
   const mediumMdCount = countMdFiles(paths.rawMediumMdDir);
   const ithelpMdCount = countMdFiles(paths.rawIthelpMdDir);
   const googleMdCount = countMdFiles(paths.rawGoogleCasesMdDir);
+  const ahrefsMdCount = countMdFiles(paths.rawAhrefsMdDir);
+  const sejMdCount = countMdFiles(paths.rawSejMdDir);
+  const growthmemoMdCount = countMdFiles(paths.rawGrowthmemoMdDir);
 
   const totalExtracted = countQAPerMeeting();
-  const totalMd = mdCount + mediumMdCount + ithelpMdCount + googleMdCount;
+  const totalMd = mdCount + mediumMdCount + ithelpMdCount + googleMdCount + ahrefsMdCount + sejMdCount + growthmemoMdCount;
   const finalCount = countQAFinal();
 
   const steps: PipelineStepStatus[] = [
@@ -179,6 +203,24 @@ function buildPipelineStatusFromFiles(): PipelineStatusResponse {
       label: "Google 個案擷取",
       count: googleMdCount,
       detail: `${googleMdCount} 篇個案研究`,
+    },
+    {
+      name: "fetch-ahrefs",
+      label: "Ahrefs 擷取",
+      count: ahrefsMdCount,
+      detail: `${ahrefsMdCount} 篇文章`,
+    },
+    {
+      name: "fetch-sej",
+      label: "SEJ 擷取",
+      count: sejMdCount,
+      detail: `${sejMdCount} 篇文章`,
+    },
+    {
+      name: "fetch-growthmemo",
+      label: "Growth Memo 擷取",
+      count: growthmemoMdCount,
+      detail: `${growthmemoMdCount} 篇文章`,
     },
     {
       name: "extract-qa",
@@ -327,6 +369,9 @@ export function getCollectionDirMap(): Readonly<Record<string, { dir: string; so
     "genehong-medium": { dir: paths.rawMediumMdDir, sourceType: "article" },
     "ithelp-sc-kpi": { dir: paths.rawIthelpMdDir, sourceType: "article" },
     "google-case-studies": { dir: paths.rawGoogleCasesMdDir, sourceType: "article" },
+    "ahrefs-blog": { dir: paths.rawAhrefsMdDir, sourceType: "article" },
+    "sej": { dir: paths.rawSejMdDir, sourceType: "article" },
+    "growth-memo": { dir: paths.rawGrowthmemoMdDir, sourceType: "article" },
   };
 }
 

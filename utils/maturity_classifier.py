@@ -150,9 +150,6 @@ def classify_maturity_level(
 
     for term in L4_KEYWORDS:
         if term in full_text:
-            # Guard: 「預期」不是「預測」，「預設」不是「預測」
-            if term == "預測" and "預測" not in full_text and ("預期" in full_text or "預設" in full_text):
-                continue
             scores["L4"] += 2
 
     for term in L3_KEYWORDS:

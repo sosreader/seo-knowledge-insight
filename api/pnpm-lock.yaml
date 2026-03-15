@@ -13,22 +13,22 @@ importers:
         version: 0.39.0
       '@hono/node-server':
         specifier: ^1.19.10
-        version: 1.19.10(hono@4.12.5)
+        version: 1.19.10(hono@4.12.8)
       '@hono/zod-validator':
         specifier: ^0.7.6
-        version: 0.7.6(hono@4.12.5)(zod@4.3.6)
+        version: 0.7.6(hono@4.12.8)(zod@4.3.6)
       '@lmnr-ai/lmnr':
         specifier: ^0.8.14
         version: 0.8.14
       '@scalar/hono-api-reference':
         specifier: ^0.10.0
-        version: 0.10.0(hono@4.12.5)
+        version: 0.10.0(hono@4.12.8)
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
       hono:
-        specifier: ^4.12.5
-        version: 4.12.5
+        specifier: ^4.12.7
+        version: 4.12.8
       openai:
         specifier: ^6.25.0
         version: 6.25.0(zod@4.3.6)
@@ -1330,8 +1330,8 @@ packages:
   help-me@5.0.0:
     resolution: {integrity: sha512-7xgomUX6ADmcYzFik0HzAxh/73YlKR9bmFzf51CZwR+b6YtzU2m0u49hQCqV6SvlqIqsaxovfwdvbnsw3b/zpg==}
 
-  hono@4.12.5:
-    resolution: {integrity: sha512-3qq+FUBtlTHhtYxbxheZgY8NIFnkkC/MR8u5TTsr7YZ3wixryQ3cCwn3iZbg8p8B88iDBBAYSfZDS75t8MN7Vg==}
+  hono@4.12.8:
+    resolution: {integrity: sha512-VJCEvtrezO1IAR+kqEYnxUOoStaQPGrCmX3j4wDTNOcD1uRPFpGlwQUIW8niPuvHXaTUxeOUl5MMDGrl+tmO9A==}
     engines: {node: '>=16.9.0'}
 
   html-escaper@2.0.2:
@@ -2097,13 +2097,13 @@ snapshots:
       protobufjs: 7.5.4
       yargs: 17.7.2
 
-  '@hono/node-server@1.19.10(hono@4.12.5)':
+  '@hono/node-server@1.19.10(hono@4.12.8)':
     dependencies:
-      hono: 4.12.5
+      hono: 4.12.8
 
-  '@hono/zod-validator@0.7.6(hono@4.12.5)(zod@4.3.6)':
+  '@hono/zod-validator@0.7.6(hono@4.12.8)(zod@4.3.6)':
     dependencies:
-      hono: 4.12.5
+      hono: 4.12.8
       zod: 4.3.6
 
   '@jridgewell/gen-mapping@0.3.13':
@@ -2657,10 +2657,10 @@ snapshots:
 
   '@scalar/helpers@0.3.0': {}
 
-  '@scalar/hono-api-reference@0.10.0(hono@4.12.5)':
+  '@scalar/hono-api-reference@0.10.0(hono@4.12.8)':
     dependencies:
       '@scalar/core': 0.4.0
-      hono: 4.12.5
+      hono: 4.12.8
 
   '@scalar/types@0.7.0':
     dependencies:
@@ -3181,7 +3181,7 @@ snapshots:
 
   help-me@5.0.0: {}
 
-  hono@4.12.5: {}
+  hono@4.12.8: {}
 
   html-escaper@2.0.2: {}
 

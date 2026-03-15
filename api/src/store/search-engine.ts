@@ -68,7 +68,7 @@ const DEFAULT_CONFIG: SearchEngineConfig = {
 const MAX_QUERY_TOKENS = 100;
 const MAX_METADATA_TEXT_LENGTH = 2000;
 
-const QUERY_INTENT_HINTS: Readonly<Record<string, readonly string[]>> = {
+export const QUERY_INTENT_HINTS: Readonly<Record<string, readonly string[]>> = {
   diagnosis: ["異常", "下滑", "原因", "診斷", "why", "根因"],
   "root-cause": ["root cause", "根因", "canonical", "waf", "衝突"],
   implementation: ["如何", "修正", "設定", "實作", "schema", "標記"],
@@ -89,7 +89,7 @@ const QUERY_INTENT_HINTS: Readonly<Record<string, readonly string[]>> = {
   "platform-decision": ["平台", "策略", "路徑", "作者"],
 };
 
-const QUERY_SCENARIO_HINTS: Readonly<Record<string, readonly string[]>> = {
+export const QUERY_SCENARIO_HINTS: Readonly<Record<string, readonly string[]>> = {
   discover: ["discover", "探索"],
   "google-news": ["google news", "news", "新聞"],
   "faq-rich-result": ["faq", "rich result", "搜尋外觀"],
@@ -178,7 +178,7 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
     ],
   };
 
-function asList(
+export function asList(
   value: readonly string[] | string | null | undefined,
 ): readonly string[] {
   if (Array.isArray(value)) return value.filter(Boolean);
@@ -200,14 +200,14 @@ function qaIntents(qa: Pick<QADict, "intent_labels">): readonly string[] {
   return asList(qa.intent_labels);
 }
 
-function questionSignature(question: string): string {
+export function questionSignature(question: string): string {
   return question
     .toLowerCase()
     .replace(/[^\w\u4e00-\u9fff]+/g, "")
     .slice(0, 120);
 }
 
-function tokenize(text: string): Set<string> {
+export function tokenize(text: string): Set<string> {
   const tokens = text
     .slice(0, MAX_METADATA_TEXT_LENGTH)
     .toLowerCase()
@@ -217,7 +217,7 @@ function tokenize(text: string): Set<string> {
   return new Set(tokens);
 }
 
-function inferQueryLabels(
+export function inferQueryLabels(
   query: string,
   hintMap: Readonly<Record<string, readonly string[]>>,
 ): ReadonlySet<string> {
