@@ -10,7 +10,7 @@ REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（No
 - Zod schema validation（環境變數 + 請求參數）
 - Local Mode graceful degradation（無 OpenAI 時自動降級）
 - Supabase pgvector hybrid search（自動偵測，fallback 檔案模式）
-- Lambda + Function URL 部署（arm64，~$0/月，支援 Response Streaming）
+- Lambda + Function URL 部署（arm64，~$0/月，production 採 buffered mode）
 - 純 TypeScript 架構——metrics-parser + report-llm 已消除 Lambda Python 依賴
 - 安全加固：SSRF whitelist (pipeline schema)、auth fail-fast (production 503)、HTTP security headers middleware、session UUID validation
 - CRAG 3-tier quality gate（correct / ambiguous / incorrect 三級檢索品質閘門）
@@ -148,6 +148,8 @@ Client → Function URL / localhost:8002
 - **Agent mode**（`AGENT_ENABLED=true` 或 `auto` + 有 OpenAI key）：LLM 自主決定 tool calling（search / get_qa_detail / list_categories / get_stats），多輪收集資訊後回答
 - **RAG mode**（有 OpenAI key，agent 未啟用；或 request `mode: "rag"`）：單次檢索相關 Q&A + GPT 生成回答
 - **Context-only mode**（無 OpenAI key）：僅回傳相關 Q&A 內容
+
+> `POST /api/v1/chat/stream` 在本地 Node.js 開發模式可用；目前 Lambda production 使用 buffered handler，若呼叫此端點會回 `501`，請改用 `POST /api/v1/chat`。
 
 **CRAG Quality Gate（v3.0）：** 檢索結果經 3-tier 品質閘門評估：
 

@@ -268,6 +268,98 @@ Notion 會議紀錄（87 份，2023–2026）
 - ranking 被近重複答案汙染
 - booster 雖補弱案例，但同時污染一般 query 的 top-k
 
+### L4 External Sources 與本地 fallback 實作快照（2026-03-14）
+
+這次 L4 比例提升，不是單靠新增外部文章來源，而是同時補齊了「來源接入」、「無 OpenAI fallback」與「成熟度欄位回填」三條路徑。
+
+**來源接入已完成**：
+
+- `scripts/02_extract_qa.py` 已納入 Ahrefs / SEJ / Growth Memo raw markdown 目錄。
+- `scripts/list_pipeline_state.py` 已能辨識 `output/qa_per_article/`，不再只看 `output/qa_per_meeting/`。
+- `merge_per_meeting_jsons()` 現在會合併 meeting + article 兩種 extraction artifact，避免外部來源 fetch 完成卻長期停留在「未進入 Step 2」的假象。
+
+**無 OpenAI key 的本地 fallback 已成正式路徑**：
+
+- `utils/openai_helper.py` 新增 local embedding / merge / classify fallback。
+- `scripts/03_dedupe_classify.py` 在缺少 `OPENAI_API_KEY` 時，不再因 remote-only preflight 或 sleep/rate-limit 卡死。
+- `scripts/extract_ahrefs_slice_local.py` 補上 timeout、fast retry、heuristic fallback，處理 Ahrefs 長文 extraction timeout。
+
+這代表 pipeline 不再把「沒有 OpenAI key」視為整條鏈不可執行，而是退化成較慢、較保守、但可完成的本地流程。
+
+### 成熟度回填才是 L4 比例達標的真正槓桿（2026-03-14）
+
+本輪分析確認，L4 不足的主因不只是 external-source coverage，而是大量既有 QA 缺少 `maturity_relevance`。
+
+回填前觀察：
+
+- `qa_final.json` 有 1,468 筆 `maturity_relevance = NULL`
+- 若只看來源擴充，L4 比例仍不足以穩定過門檻
+
+因此改為在 enrichment 階段補齊成熟度：
+
+- `scripts/enrich_qa.py` 在缺值時呼叫 `utils.maturity_classifier.classify_maturity_level()`
+- 回填位置同時包含 top-level `maturity_relevance` 與 `_enrichment.maturity_relevance`
+- `scripts/migrate_to_supabase.py` 也同步優先帶 top-level 或 `_enrichment` 的成熟度欄位
+
+重建 `output/qa_enriched.json` 後的本地分布：
+
+- `NULL 775`
+- `L1 58`
+- `L2 602`
+- `L3 264`
+- `L4 110`
+
+**結論**：本地 artifact 已達 `110 / 1809 = 6.08%`，L4 目標不是靠單一 booster 或單一來源拉高，而是靠 metadata completeness 修復後才真正達標。
+
+### 本地 artifact 與 production Supabase 目前是兩個不同狀態
+
+這次最容易混淆的地方，是「本地資料已完成」不等於「production schema 已對齊」。目前必須明確分開理解：
+
+**本地已完成**：
+
+- external-source extraction 可跑通
+- retrieval golden dataset 已擴至 40 cases
+- `qa_enriched.json` 的 maturity backfill 已完成
+- L4 ratio 已在本地 artifact 達標
+
+**production 仍靠 fallback 穩定運作**：
+
+- production `qa_items` 缺少 `primary_category` 等 retrieval metadata 欄位
+- `api/src/store/supabase-qa-store.ts` 啟動時先試 extended schema，缺欄位時 fallback 到 base schema select
+- `api/src/store/supabase-client.ts` 已補上 response body，讓 PostgREST / RPC 錯誤可直接定位到缺欄位問題
+
+因此現在的 production 搜尋恢復，代表 app-layer resilience 生效，不代表 DB schema migration 已完成。
+
+### Classifier refinement 把成熟度回填從「補值」收斂成「可解釋規則」（2026-03-15）
+
+在 2026-03-14 完成 maturity backfill 之後，隔天又做了一輪 classifier 收斂，原因是當時雖然 L4 ratio 已達標，但 AI Search 類題目仍存在兩種風險：
+
+- 真正屬於高階策略的 AIO / GEO 題可能被低估
+- 單純解釋型的 AI Overview 題可能被過度抬升
+
+因此 `utils/maturity_classifier.py` 這次不是單純加關鍵字，而是改成比較接近「signal composition」的規則：
+
+- 補進 `ai overview`、`ai search`、`geo`、`aeo`、`llm seo`、`品牌可見度`、`scenario planning`、`citation growth` 等 L4 詞彙
+- 新增 `AI_SEARCH_TERMS` 與 `L4_STRATEGY_TERMS`，只有 AI Search 訊號與策略訊號共現時才額外加分
+- 補上 `預期` / `預設` guard，避免被誤判成 `預測` 類 advanced signal
+
+對應的 regression tests 也一起補齊：
+
+- AI Search 品牌可見度策略題應判成 `L4`
+- AI SEO 預算 / scenario planning 題應判成 `L4`
+- 「什麼是 AI Overview？」維持 `L1`
+- `預期排名會下降嗎？` 不可被誤升成 `L4`
+
+重新跑 enrichment 後，本地 `qa_enriched.json` 分布更新為：
+
+- `NULL 748`
+- `L1 55`
+- `L2 595`
+- `L3 256`
+- `L4 155`
+
+也就是 L4 ratio 從前一天的 `110 / 1809 = 6.08%` 提升到 `155 / 1809 = 8.57%`。這個提升的解讀不應是「規則放寬」，而是 classifier 終於能把 AI Search / GEO 類高階策略題與基礎 AI 解釋題清楚分開。
+
 ## v2.11 — RAG 迭代改進計畫：Synonym 擴充 + Contextual Embeddings + Reranker（2026-03-05）
 
 ### 核心新增

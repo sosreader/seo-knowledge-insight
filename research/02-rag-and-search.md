@@ -154,7 +154,7 @@ final_score
 
 這讓 top-1 仍追求最相關單筆，但 top-k 會刻意補第二面向，而不是塞滿近似答案。
 
-### Retrieval Data Dimensions 離線成效（35 golden cases）
+### Retrieval Data Dimensions 離線成效（40 golden cases）
 
 | 指標 | Baseline | Phase 4 |
 |------|----------|---------|
@@ -164,6 +164,8 @@ final_score
 | Multi-label F1@K | — | 0.97 |
 | Canonical Top-1 Rate | — | 0.37 |
 | MRR | 0.92 | 0.99 |
+
+這 5 個新增 case 主要來自 Ahrefs 的 AI Search / AI Overviews 研究，因此這組數字代表的不只是一般 SEO query 的穩定度，也包含較高成熟度、較偏策略層問題的 retrieval 表現。
 
 ### 知識庫規模成長歷程
 
