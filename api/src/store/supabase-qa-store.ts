@@ -15,7 +15,12 @@
 
 import { supabaseRpc, supabaseSelect } from "./supabase-client.js";
 import { computeKeywordBoostSingle } from "../utils/keyword-boost.js";
-import { filterAndPaginateQa, categoriesFromItems, collectionsFromItems, type ListQaParams } from "./qa-filter.js";
+import {
+  filterAndPaginateQa,
+  categoriesFromItems,
+  collectionsFromItems,
+  type ListQaParams,
+} from "./qa-filter.js";
 import type { QAItem } from "./qa-store.js";
 
 /** Timeout for initial load — longer than default to handle cold Supabase. */
@@ -69,6 +74,55 @@ const SEMANTIC_WEIGHT = 0.7;
 const SYNONYM_BOOST = 0.05;
 const MAX_QUERY_TOKENS = 100;
 const MAX_METADATA_TEXT_LENGTH = 2000;
+const BASE_SELECT_COLUMNS = [
+  "id",
+  "seq",
+  "question",
+  "answer",
+  "keywords",
+  "confidence",
+  "category",
+  "difficulty",
+  "evergreen",
+  "source_title",
+  "source_date",
+  "source_type",
+  "source_collection",
+  "source_url",
+  "is_merged",
+  "extraction_model",
+  "maturity_relevance",
+  "synonyms",
+  "freshness_score",
+  "search_hit_count",
+] as const;
+const EXTENDED_SELECT_COLUMNS = [
+  ...BASE_SELECT_COLUMNS,
+  "primary_category",
+  "categories",
+  "intent_labels",
+  "scenario_tags",
+  "serving_tier",
+  "retrieval_phrases",
+  "retrieval_surface_text",
+  "content_granularity",
+  "evidence_scope",
+  "booster_target_queries",
+  "hard_negative_terms",
+] as const;
+
+function buildSelectQuery(
+  columns: readonly string[],
+  pageSize: number,
+  offset: number,
+): string {
+  return `?select=${columns.join(",")}&order=seq.asc&limit=${pageSize}&offset=${offset}`;
+}
+
+function isMissingColumnError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /column\s+qa_items\.[a-z_]+\s+does not exist/i.test(error.message);
+}
 
 function rowToQAItem(row: QARow): QAItem {
   return {
@@ -92,7 +146,8 @@ function rowToQAItem(row: QARow): QAItem {
     source_collection: row.source_collection ?? "seo-meetings",
     source_url: row.source_url ?? "",
     extraction_model: row.extraction_model ?? undefined,
-    maturity_relevance: (row.maturity_relevance as "L1" | "L2" | "L3" | "L4") ?? undefined,
+    maturity_relevance:
+      (row.maturity_relevance as "L1" | "L2" | "L3" | "L4") ?? undefined,
     primary_category: row.primary_category ?? row.category ?? "",
     categories: row.categories ?? (row.category ? [row.category] : []),
     intent_labels: row.intent_labels ?? [],
@@ -100,7 +155,8 @@ function rowToQAItem(row: QARow): QAItem {
     serving_tier: row.serving_tier ?? "canonical",
     retrieval_phrases: row.retrieval_phrases ?? row.keywords ?? [],
     retrieval_surface_text:
-      row.retrieval_surface_text ?? [row.question, row.answer, ...(row.keywords ?? [])].join("\n"),
+      row.retrieval_surface_text ??
+      [row.question, row.answer, ...(row.keywords ?? [])].join("\n"),
     content_granularity: row.content_granularity ?? undefined,
     evidence_scope: row.evidence_scope ?? [],
     booster_target_queries: row.booster_target_queries ?? [],
@@ -108,7 +164,10 @@ function rowToQAItem(row: QARow): QAItem {
   };
 }
 
-function computeSynonymBonus(query: string, synonyms: readonly string[]): number {
+function computeSynonymBonus(
+  query: string,
+  synonyms: readonly string[],
+): number {
   if (!synonyms || synonyms.length === 0) return 0;
   const queryLower = query.toLowerCase();
   for (const syn of synonyms) {
@@ -120,9 +179,12 @@ function computeSynonymBonus(query: string, synonyms: readonly string[]): number
   return 0;
 }
 
-function asList(value: readonly string[] | string | null | undefined): readonly string[] {
+function asList(
+  value: readonly string[] | string | null | undefined,
+): readonly string[] {
   if (Array.isArray(value)) return value.filter(Boolean);
-  if (typeof value === "string" && value.trim().length > 0) return [value.trim()];
+  if (typeof value === "string" && value.trim().length > 0)
+    return [value.trim()];
   return [];
 }
 
@@ -168,15 +230,23 @@ const QUERY_SCENARIO_HINTS: Readonly<Record<string, readonly string[]>> = {
 };
 
 const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> = {
-  "技術SEO": ["schema", "結構化資料", "core web vitals", "lcp", "cls", "ttfb", "amp"],
-  "索引與檢索": ["索引", "coverage", "googlebot", "canonical", "檢索未索引"],
-  "搜尋表現分析": ["ctr", "曝光", "點擊", "serp", "search console"],
-  "GA與數據追蹤": ["ga", "ga4", "追蹤", "歸因", "direct"],
-  "Discover與AMP": ["discover", "amp", "news"],
-  "內容策略": ["內容", "文章", "eeat", "供給", "更新"],
-  "連結策略": ["連結", "內部連結", "錨點"],
-  "平台策略": ["平台", "作者", "/user", "路徑"],
-  "演算法與趨勢": ["演算法", "趨勢", "ai", "gemini", "perplexity"],
+  技術SEO: [
+    "schema",
+    "結構化資料",
+    "core web vitals",
+    "lcp",
+    "cls",
+    "ttfb",
+    "amp",
+  ],
+  索引與檢索: ["索引", "coverage", "googlebot", "canonical", "檢索未索引"],
+  搜尋表現分析: ["ctr", "曝光", "點擊", "serp", "search console"],
+  GA與數據追蹤: ["ga", "ga4", "追蹤", "歸因", "direct"],
+  Discover與AMP: ["discover", "amp", "news"],
+  內容策略: ["內容", "文章", "eeat", "供給", "更新"],
+  連結策略: ["連結", "內部連結", "錨點"],
+  平台策略: ["平台", "作者", "/user", "路徑"],
+  演算法與趨勢: ["演算法", "趨勢", "ai", "gemini", "perplexity"],
 };
 
 function metadataScore(query: string, item: QAItem): number {
@@ -190,48 +260,103 @@ function metadataScore(query: string, item: QAItem): number {
   const itemIntents = new Set(asList(item.intent_labels));
   const itemScenarios = new Set(asList(item.scenario_tags));
 
-  const phraseBoost = computeKeywordBoostSingle(query, item.retrieval_phrases ?? [], KW_BOOST_CONFIG) * 2.0;
-  const surfaceBoost = [...queryTokens].filter((token) => surfaceTokens.has(token)).length * 0.03;
-  const categoryBoost = [...queryCategories].filter((label) => itemCategories.has(label)).length * 0.08;
-  const intentBoost = [...queryIntents].filter((label) => itemIntents.has(label)).length * 0.06;
-  const scenarioBoost = [...queryScenarios].filter((label) => itemScenarios.has(label)).length * 0.05;
+  const phraseBoost =
+    computeKeywordBoostSingle(
+      query,
+      item.retrieval_phrases ?? [],
+      KW_BOOST_CONFIG,
+    ) * 2.0;
+  const surfaceBoost =
+    [...queryTokens].filter((token) => surfaceTokens.has(token)).length * 0.03;
+  const categoryBoost =
+    [...queryCategories].filter((label) => itemCategories.has(label)).length *
+    0.08;
+  const intentBoost =
+    [...queryIntents].filter((label) => itemIntents.has(label)).length * 0.06;
+  const scenarioBoost =
+    [...queryScenarios].filter((label) => itemScenarios.has(label)).length *
+    0.05;
   const tier = (item.serving_tier ?? "canonical").toLowerCase();
-  const targetedBooster = asList(item.booster_target_queries).some((target) => queryLower.includes(target.toLowerCase()));
-  const tierScore = tier === "booster" ? (targetedBooster ? 0.05 : -0.08) : tier === "supporting" ? 0.02 : 0.08;
-  const hardNegativePenalty = asList(item.hard_negative_terms).some((term) => queryLower.includes(term.toLowerCase())) ? -0.05 : 0;
+  const targetedBooster = asList(item.booster_target_queries).some((target) =>
+    queryLower.includes(target.toLowerCase()),
+  );
+  const tierScore =
+    tier === "booster"
+      ? targetedBooster
+        ? 0.05
+        : -0.08
+      : tier === "supporting"
+        ? 0.02
+        : 0.08;
+  const hardNegativePenalty = asList(item.hard_negative_terms).some((term) =>
+    queryLower.includes(term.toLowerCase()),
+  )
+    ? -0.05
+    : 0;
 
-  return phraseBoost + surfaceBoost + categoryBoost + intentBoost + scenarioBoost + tierScore + hardNegativePenalty;
+  return (
+    phraseBoost +
+    surfaceBoost +
+    categoryBoost +
+    intentBoost +
+    scenarioBoost +
+    tierScore +
+    hardNegativePenalty
+  );
 }
 
 function itemMatchesCategory(item: QAItem, category: string | null): boolean {
   if (!category) return true;
   const categories = asList(item.categories);
-  return categories.length > 0 ? categories.includes(category) : item.category === category;
+  return categories.length > 0
+    ? categories.includes(category)
+    : item.category === category;
 }
 
 function questionSignature(question: string): string {
-  return question.toLowerCase().replace(/[^\w\u4e00-\u9fff]+/g, "").slice(0, 120);
+  return question
+    .toLowerCase()
+    .replace(/[^\w\u4e00-\u9fff]+/g, "")
+    .slice(0, 120);
 }
 
-function rerankResults(results: ReadonlyArray<{ item: QAItem; score: number }>, topK: number): ReadonlyArray<{ item: QAItem; score: number }> {
+function rerankResults(
+  results: ReadonlyArray<{ item: QAItem; score: number }>,
+  topK: number,
+): ReadonlyArray<{ item: QAItem; score: number }> {
   const candidates = [...results];
   const selected: Array<{ item: QAItem; score: number }> = [];
 
   while (candidates.length > 0 && selected.length < topK) {
-    const selectedSigs = new Set(selected.map((result) => questionSignature(result.item.question)));
-    const selectedCategories = new Set(selected.flatMap((result) => asList(result.item.categories)));
-    const selectedIntents = new Set(selected.flatMap((result) => asList(result.item.intent_labels)));
+    const selectedSigs = new Set(
+      selected.map((result) => questionSignature(result.item.question)),
+    );
+    const selectedCategories = new Set(
+      selected.flatMap((result) => asList(result.item.categories)),
+    );
+    const selectedIntents = new Set(
+      selected.flatMap((result) => asList(result.item.intent_labels)),
+    );
 
     let bestIndex = 0;
     let bestScore = Number.NEGATIVE_INFINITY;
     for (let index = 0; index < candidates.length; index += 1) {
       const candidate = candidates[index]!;
       let adjusted = candidate.score;
-      if (selectedSigs.has(questionSignature(candidate.item.question))) adjusted -= 0.25;
+      if (selectedSigs.has(questionSignature(candidate.item.question)))
+        adjusted -= 0.25;
       const categories = asList(candidate.item.categories);
-      if (categories.length > 0 && categories.every((category) => !selectedCategories.has(category))) adjusted += 0.06;
+      if (
+        categories.length > 0 &&
+        categories.every((category) => !selectedCategories.has(category))
+      )
+        adjusted += 0.06;
       const intents = asList(candidate.item.intent_labels);
-      if (intents.length > 0 && intents.every((intent) => !selectedIntents.has(intent))) adjusted += 0.04;
+      if (
+        intents.length > 0 &&
+        intents.every((intent) => !selectedIntents.has(intent))
+      )
+        adjusted += 0.04;
       if (adjusted > bestScore) {
         bestScore = adjusted;
         bestIndex = index;
@@ -277,13 +402,35 @@ export class SupabaseQAStore {
     const MAX_PAGES = 100;
     const allItems: QAItem[] = [];
     let offset = 0;
+    let selectColumns: readonly string[] = EXTENDED_SELECT_COLUMNS;
 
     for (let page = 0; page < MAX_PAGES; page++) {
-      const rows = await supabaseSelect<QARow>(
-        "qa_items",
-        `?select=id,seq,question,answer,keywords,confidence,category,difficulty,evergreen,source_title,source_date,source_type,source_collection,source_url,is_merged,extraction_model,maturity_relevance,synonyms,freshness_score,search_hit_count,primary_category,categories,intent_labels,scenario_tags,serving_tier,retrieval_phrases,retrieval_surface_text,content_granularity,evidence_scope,booster_target_queries,hard_negative_terms&order=seq.asc&limit=${PAGE_SIZE}&offset=${offset}`,
-        LOAD_TIMEOUT_MS,
-      );
+      let rows: QARow[];
+      try {
+        rows = await supabaseSelect<QARow>(
+          "qa_items",
+          buildSelectQuery(selectColumns, PAGE_SIZE, offset),
+          LOAD_TIMEOUT_MS,
+        );
+      } catch (error) {
+        if (
+          offset === 0 &&
+          selectColumns === EXTENDED_SELECT_COLUMNS &&
+          isMissingColumnError(error)
+        ) {
+          console.warn(
+            "SupabaseQAStore: qa_items is missing extended retrieval columns; falling back to base schema",
+          );
+          selectColumns = BASE_SELECT_COLUMNS;
+          rows = await supabaseSelect<QARow>(
+            "qa_items",
+            buildSelectQuery(selectColumns, PAGE_SIZE, offset),
+            LOAD_TIMEOUT_MS,
+          );
+        } else {
+          throw error;
+        }
+      }
 
       if (rows.length === 0) break;
       allItems.push(...rows.map(rowToQAItem));
@@ -296,7 +443,9 @@ export class SupabaseQAStore {
     this.seqIndex = new Map(allItems.map((item) => [item.seq, item]));
     this._loaded = true;
 
-    console.log(`SupabaseQAStore loaded: ${this.items.length} items from Supabase`);
+    console.log(
+      `SupabaseQAStore loaded: ${this.items.length} items from Supabase`,
+    );
   }
 
   getById(qaId: string): QAItem | undefined {
@@ -331,10 +480,18 @@ export class SupabaseQAStore {
 
     // Re-rank: keyword boost + synonym + freshness
     const reranked = candidates.map((row) => {
-      const kwBoost = computeKeywordBoostSingle(query, row.keywords ?? [], KW_BOOST_CONFIG);
+      const kwBoost = computeKeywordBoostSingle(
+        query,
+        row.keywords ?? [],
+        KW_BOOST_CONFIG,
+      );
       const synonymBonus = computeSynonymBonus(query, row.synonyms ?? []);
       const item = rowToQAItem(row);
-      const base = row.similarity * SEMANTIC_WEIGHT + kwBoost + synonymBonus + metadataScore(query, item);
+      const base =
+        row.similarity * SEMANTIC_WEIGHT +
+        kwBoost +
+        synonymBonus +
+        metadataScore(query, item);
       const score = base * (row.freshness_score ?? 1.0);
       return { item, score };
     });
@@ -344,8 +501,7 @@ export class SupabaseQAStore {
         .filter((result) => itemMatchesCategory(result.item, category))
         .sort((a, b) => b.score - a.score),
       topK,
-    )
-      .filter((r) => r.score >= minScore);
+    ).filter((r) => r.score >= minScore);
   }
 
   /**
@@ -362,14 +518,20 @@ export class SupabaseQAStore {
     const scored = this.items
       .filter((item) => itemMatchesCategory(item, category))
       .map((item) => {
-        const kwBoost = computeKeywordBoostSingle(query, item.keywords, KW_BOOST_CONFIG);
+        const kwBoost = computeKeywordBoostSingle(
+          query,
+          item.keywords,
+          KW_BOOST_CONFIG,
+        );
         const synonymBonus = computeSynonymBonus(query, item.synonyms);
         const textMatch =
           item.question.toLowerCase().includes(queryLower) ||
           item.answer.toLowerCase().includes(queryLower)
             ? 0.05
             : 0;
-        const score = (kwBoost + synonymBonus + textMatch + metadataScore(query, item)) * (item.freshness_score ?? 1.0);
+        const score =
+          (kwBoost + synonymBonus + textMatch + metadataScore(query, item)) *
+          (item.freshness_score ?? 1.0);
         return { item, score };
       })
       .filter((r) => r.score > 0)
@@ -386,7 +548,11 @@ export class SupabaseQAStore {
     return categoriesFromItems(this.items);
   }
 
-  collections(): ReadonlyArray<{ source_collection: string; source_type: string; count: number }> {
+  collections(): ReadonlyArray<{
+    source_collection: string;
+    source_type: string;
+    count: number;
+  }> {
     return collectionsFromItems(this.items);
   }
 

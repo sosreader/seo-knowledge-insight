@@ -81,9 +81,13 @@ describe("supabase-client", () => {
     });
 
     it("throws on HTTP error", async () => {
-      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => "rpc body",
+      });
       await expect(supabaseRpc("bad_fn", {})).rejects.toThrow(
-        "Supabase RPC bad_fn failed (500)",
+        "Supabase RPC bad_fn failed (500): rpc body",
       );
     });
   });
@@ -104,9 +108,13 @@ describe("supabase-client", () => {
     });
 
     it("throws on HTTP error", async () => {
-      mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: async () => "select body",
+      });
       await expect(supabaseSelect("nonexistent")).rejects.toThrow(
-        "Supabase SELECT nonexistent failed (404)",
+        "Supabase SELECT nonexistent failed (404): select body",
       );
     });
   });
@@ -145,9 +153,9 @@ describe("supabase-client", () => {
         text: async () => "conflict",
       });
 
-      await expect(
-        supabaseInsert("qa_items", [{ id: "dup" }]),
-      ).rejects.toThrow("Supabase INSERT qa_items failed (409): conflict");
+      await expect(supabaseInsert("qa_items", [{ id: "dup" }])).rejects.toThrow(
+        "Supabase INSERT qa_items failed (409): conflict",
+      );
     });
   });
 

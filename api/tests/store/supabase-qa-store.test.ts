@@ -59,7 +59,8 @@ const FAKE_ROWS = FAKE_ITEMS.map((item) => ({
   scenario_tags: [...(item.scenario_tags ?? [])],
   serving_tier: item.serving_tier ?? "canonical",
   retrieval_phrases: [...(item.retrieval_phrases ?? item.keywords)],
-  retrieval_surface_text: item.retrieval_surface_text ?? `${item.question}\n${item.answer}`,
+  retrieval_surface_text:
+    item.retrieval_surface_text ?? `${item.question}\n${item.answer}`,
   content_granularity: item.content_granularity ?? null,
   evidence_scope: [...(item.evidence_scope ?? [])],
   booster_target_queries: [...(item.booster_target_queries ?? [])],
@@ -87,6 +88,45 @@ describe("SupabaseQAStore", () => {
   it("loads items from Supabase at startup", () => {
     expect(store.loaded).toBe(true);
     expect(store.count).toBe(FAKE_ITEMS.length);
+  });
+
+  it("falls back to base schema when extended retrieval columns are missing", async () => {
+    const legacyRows = FAKE_ROWS.map((row) => {
+      const {
+        primary_category,
+        categories,
+        intent_labels,
+        scenario_tags,
+        serving_tier,
+        retrieval_phrases,
+        retrieval_surface_text,
+        content_granularity,
+        evidence_scope,
+        booster_target_queries,
+        hard_negative_terms,
+        ...legacy
+      } = row;
+      return legacy;
+    });
+    mockSupabaseSelect.mockReset();
+    mockSupabaseSelect
+      .mockRejectedValueOnce(
+        new Error(
+          'Supabase SELECT qa_items failed (400): {"code":"42703","message":"column qa_items.primary_category does not exist"}',
+        ),
+      )
+      .mockResolvedValueOnce(legacyRows);
+
+    const legacyStore = new SupabaseQAStore();
+    await legacyStore.load();
+
+    expect(mockSupabaseSelect).toHaveBeenCalledTimes(2);
+    expect(legacyStore.loaded).toBe(true);
+    expect(legacyStore.count).toBe(FAKE_ITEMS.length);
+    const first = legacyStore.getById(FAKE_ITEMS[0]!.id);
+    expect(first).toBeDefined();
+    expect(first!.primary_category).toBe(first!.category);
+    expect(first!.categories).toEqual([first!.category]);
   });
 
   it("getById returns correct item", () => {
@@ -190,12 +230,19 @@ describe("SupabaseQAStore", () => {
     mockSupabaseRpc.mockResolvedValueOnce(mockCandidates);
 
     const queryEmbedding = new Float32Array(1536).fill(0.1);
-    const results = await store.hybridSearch("LCP performance", queryEmbedding, 3);
+    const results = await store.hybridSearch(
+      "LCP performance",
+      queryEmbedding,
+      3,
+    );
 
-    expect(mockSupabaseRpc).toHaveBeenCalledWith("match_qa_items", expect.objectContaining({
-      match_count: 9, // topK=3 * OVER_RETRIEVE_FACTOR=3
-      filter_category: null,
-    }));
+    expect(mockSupabaseRpc).toHaveBeenCalledWith(
+      "match_qa_items",
+      expect.objectContaining({
+        match_count: 9, // topK=3 * OVER_RETRIEVE_FACTOR=3
+        filter_category: null,
+      }),
+    );
     expect(results.length).toBeGreaterThan(0);
     for (const r of results) {
       expect(r.score).toBeGreaterThanOrEqual(0);
@@ -212,15 +259,18 @@ describe("SupabaseQAStore", () => {
     mockSupabaseRpc.mockResolvedValueOnce([]);
     await store.hybridSearch("SEO", new Float32Array(1536), 5, "SEO Technical");
 
-    expect(mockSupabaseRpc).toHaveBeenCalledWith("match_qa_items", expect.objectContaining({
-      filter_category: "SEO Technical",
-    }));
+    expect(mockSupabaseRpc).toHaveBeenCalledWith(
+      "match_qa_items",
+      expect.objectContaining({
+        filter_category: "SEO Technical",
+      }),
+    );
   });
 
   it("hybridSearch rethrows RPC error", async () => {
     mockSupabaseRpc.mockRejectedValueOnce(new Error("Network error"));
     await expect(
-      store.hybridSearch("test", new Float32Array(1536), 5)
+      store.hybridSearch("test", new Float32Array(1536), 5),
     ).rejects.toThrow("Network error");
   });
 

@@ -12,11 +12,22 @@ import { createAgentDeps } from "../agent/agent-deps.js";
 
 export const chatRoute = new Hono();
 
+function isLambdaRuntime(): boolean {
+  return (
+    !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV
+  );
+}
+
 function contextOnlyResponse(message: string) {
   const startMs = Date.now();
   const hits = qaStore.keywordSearch(message, config.CHAT_CONTEXT_K);
   const sources = hits.map(({ item, score }) => itemToSource(item, score));
-  const metadata = { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - startMs };
+  const metadata = {
+    provider: "local",
+    mode: "context-only",
+    retrieval_count: sources.length,
+    duration_ms: Date.now() - startMs,
+  };
   return { answer: null, sources, mode: "context-only" as const, metadata };
 }
 
@@ -28,14 +39,22 @@ chatRoute.post("/", async (c) => {
     return c.json(fail("Invalid request body"), 400);
   }
 
-  const { message, history, mode: requestMode, maturity_level: maturityLevel } = parsed.data;
+  const {
+    message,
+    history,
+    mode: requestMode,
+    maturity_level: maturityLevel,
+  } = parsed.data;
 
   if (!hasOpenAI()) {
     const result = contextOnlyResponse(message);
     return c.json(ok(result));
   }
 
-  const historyDicts = history.map((h) => ({ role: h.role, content: h.content }));
+  const historyDicts = history.map((h) => ({
+    role: h.role,
+    content: h.content,
+  }));
   const effectiveMode = resolveMode(requestMode);
 
   try {
@@ -46,24 +65,42 @@ chatRoute.post("/", async (c) => {
         message,
         historyDicts.length > 0 ? historyDicts : null,
         deps,
-        { maxTurns: config.AGENT_MAX_TURNS, timeoutMs: config.AGENT_TIMEOUT_MS },
+        {
+          maxTurns: config.AGENT_MAX_TURNS,
+          timeoutMs: config.AGENT_TIMEOUT_MS,
+        },
       );
-      return c.json(ok({
+      return c.json(
+        ok({
+          answer: result.answer,
+          sources: result.sources,
+          mode: result.mode,
+          metadata: result.metadata,
+        }),
+      );
+    }
+
+    // Full mode: single-pass RAG
+    const result = await ragChat(
+      message,
+      historyDicts.length > 0 ? historyDicts : null,
+      maturityLevel ?? null,
+    );
+    return c.json(
+      ok({
         answer: result.answer,
         sources: result.sources,
         mode: result.mode,
         metadata: result.metadata,
-      }));
-    }
-
-    // Full mode: single-pass RAG
-    const result = await ragChat(message, historyDicts.length > 0 ? historyDicts : null, maturityLevel ?? null);
-    return c.json(ok({ answer: result.answer, sources: result.sources, mode: result.mode, metadata: result.metadata }));
+      }),
+    );
   } catch (err: unknown) {
     // OpenAI auth/quota errors — fall back to context-only mode
     const status = (err as { status?: number }).status;
     if (status === 401 || status === 403 || status === 429) {
-      console.warn(`OpenAI API error (${status}), falling back to context-only mode`);
+      console.warn(
+        `OpenAI API error (${status}), falling back to context-only mode`,
+      );
       const result = contextOnlyResponse(message);
       return c.json(ok(result));
     }
@@ -97,7 +134,19 @@ chatRoute.post("/stream", async (c) => {
     return c.json(ok(result));
   }
 
-  const historyDicts = history.map((h) => ({ role: h.role, content: h.content }));
+  if (isLambdaRuntime()) {
+    return c.json(
+      fail(
+        "Streaming is not available in Lambda production. Use POST /api/v1/chat instead.",
+      ),
+      501,
+    );
+  }
+
+  const historyDicts = history.map((h) => ({
+    role: h.role,
+    content: h.content,
+  }));
 
   return streamSSE(c, async (stream) => {
     let eventId = 0;
