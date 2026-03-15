@@ -4,7 +4,12 @@ import {
   buildMaturityContext,
   applyMaturityBoost,
   buildReportMaturityBlock,
+  getDimensionForMetric,
+  buildMaturityUpgradeLabel,
+  buildMaturityCallout,
   MATURITY_LEVEL_DESCRIPTIONS,
+  DIMENSIONS,
+  METRIC_MATURITY_DIMENSION_MAP,
 } from "../../src/utils/maturity.js";
 import { FAKE_ITEMS } from "../setup.js";
 
@@ -165,6 +170,101 @@ describe("maturity utils", () => {
     it("handles empty maturity data", () => {
       const block = buildReportMaturityBlock({});
       expect(block).toContain("成熟度參考");
+    });
+  });
+
+  describe("DIMENSIONS and METRIC_MATURITY_DIMENSION_MAP", () => {
+    it("DIMENSIONS has 4 entries with matching keys", () => {
+      expect(DIMENSIONS).toHaveLength(4);
+      const keys = DIMENSIONS.map((d) => d.key);
+      expect(keys).toEqual(["strategy", "process", "keywords", "metrics"]);
+    });
+
+    it("METRIC_MATURITY_DIMENSION_MAP values are valid dimensions", () => {
+      const validDims = new Set(DIMENSIONS.map((d) => d.key));
+      for (const dim of Object.values(METRIC_MATURITY_DIMENSION_MAP)) {
+        expect(validDims.has(dim)).toBe(true);
+      }
+    });
+  });
+
+  describe("getDimensionForMetric", () => {
+    it("returns dimension for exact metric names", () => {
+      expect(getDimensionForMetric("AMP Article")).toBe("process");
+      expect(getDimensionForMetric("CTR")).toBe("keywords");
+      expect(getDimensionForMetric("有效 (Coverage)")).toBe("metrics");
+      expect(getDimensionForMetric("Organic Search (工作階段)")).toBe("metrics");
+    });
+
+    it("returns dimension via substring match", () => {
+      expect(getDimensionForMetric("AMP Article (pages)")).toBe("process");
+    });
+
+    it("returns null for unknown metrics", () => {
+      expect(getDimensionForMetric("Random Metric")).toBeNull();
+      expect(getDimensionForMetric("")).toBeNull();
+    });
+
+    it("maps Google News to process", () => {
+      expect(getDimensionForMetric("Google News")).toBe("process");
+    });
+
+    it("maps 曝光 to keywords", () => {
+      expect(getDimensionForMetric("曝光")).toBe("keywords");
+    });
+  });
+
+  describe("buildMaturityUpgradeLabel", () => {
+    const maturity = { strategy: "L2", process: "L1", keywords: "L3", metrics: "L4" };
+
+    it("returns bold upgrade label for non-L4 dimension", () => {
+      const label = buildMaturityUpgradeLabel("strategy", maturity);
+      expect(label).toBe("**[策略 L2→L3]**");
+    });
+
+    it("returns correct next level for L1", () => {
+      const label = buildMaturityUpgradeLabel("process", maturity);
+      expect(label).toBe("**[流程 L1→L2]**");
+    });
+
+    it("returns null for L4 dimension (no upgrade target)", () => {
+      const label = buildMaturityUpgradeLabel("metrics", maturity);
+      expect(label).toBeNull();
+    });
+
+    it("returns null for missing dimension", () => {
+      const label = buildMaturityUpgradeLabel("strategy", { process: "L2" });
+      expect(label).toBeNull();
+    });
+
+    it("returns null for invalid level format", () => {
+      const label = buildMaturityUpgradeLabel("strategy", { strategy: "LNaN" });
+      expect(label).toBeNull();
+    });
+  });
+
+  describe("buildMaturityCallout", () => {
+    it("returns blockquote with all dimensions", () => {
+      const callout = buildMaturityCallout({
+        strategy: "L2",
+        process: "L2",
+        keywords: "L3",
+        metrics: "L2",
+      });
+      expect(callout).toBe("> 成熟度參考：策略 L2 / 流程 L2 / 關鍵字 L3 / 指標 L2");
+    });
+
+    it("returns null for empty maturity", () => {
+      expect(buildMaturityCallout({})).toBeNull();
+    });
+
+    it("returns null for invalid level values only", () => {
+      expect(buildMaturityCallout({ strategy: "invalid", process: "LNaN" })).toBeNull();
+    });
+
+    it("handles partial maturity data", () => {
+      const callout = buildMaturityCallout({ strategy: "L1", keywords: "L4" });
+      expect(callout).toBe("> 成熟度參考：策略 L1 / 關鍵字 L4");
     });
   });
 });

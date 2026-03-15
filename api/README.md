@@ -1,10 +1,10 @@
-# Hono TypeScript API (v3.3)
+# Hono TypeScript API (v3.5)
 
 REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（Node.js server / AWS Lambda）。
 
 **特點：**
 
-- 10 個路由器（Routers）、42 個 API endpoints、628 個測試（58 檔案，coverage 80%+）
+- 10 個路由器（Routers）、42 個 API endpoints、660 個測試（61 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
@@ -298,6 +298,13 @@ Client → Function URL / localhost:8002
 }
 ```
 
+**Request body（optional fields）**：
+
+- `snapshot_id: string` — 指標快照 ID（YYYYMMDD-HHMMSS 格式）
+- `use_openai: boolean` — 使用 OpenAI 模式生成
+- `maturity_context: Record<string, string>` — 成熟度維度等級（如 `{strategy: "L2", process: "L2"}`）。優先序：`snapshot.maturity > maturity_context > null`
+- `situation_analysis`, `traffic_analysis`, `technical_analysis`, `intent_analysis`, `action_analysis`: LLM 分析注入（各 max 2000 字元）
+
 **欄位說明**：
 
 - `cache_hit: boolean` — 是否命中快取。若 `true` 表示該報告已存在（相同 metrics hash），直接回傳既有內容；若 `false` 表示新生成報告
@@ -434,7 +441,7 @@ api/
 │   ├── feedback-to-golden.ts  # 使用者回饋 → golden dataset 候選
 │   ├── sync-db.ts             # Reports + Sessions → Supabase 同步
 │   └── eval-semantic.ts       # Retrieval eval（keyword/hybrid/rerank）
-├── tests/                      # 58 個測試檔案，628 tests
+├── tests/                      # 61 個測試檔案，660 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
@@ -675,10 +682,10 @@ pnpm test:watch               # 監視模式
 pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
-**測試套件統計（v3.4）：**
+**測試套件統計（v3.5）：**
 
-- 總測試數：628 個（58 個測試檔案）
-- 通過：628/628 (100%)
+- 總測試數：660 個（61 個測試檔案）
+- 通過：659/660 (1 pre-existing pipeline steps count mismatch)
 - 覆蓋率：80%+
 
 ---

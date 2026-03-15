@@ -329,7 +329,7 @@ const paths: Record<string, Record<string, unknown>> = {
         {
           name: "sort_by",
           in: "query",
-          schema: { type: "string", enum: ["source_date"] },
+          schema: { type: "string", enum: ["source_date", "confidence"] },
         },
         {
           name: "sort_order",
@@ -564,6 +564,11 @@ const paths: Record<string, Record<string, unknown>> = {
           technical_analysis: { type: "string", maxLength: 2000 },
           intent_analysis: { type: "string", maxLength: 2000 },
           action_analysis: { type: "string", maxLength: 2000 },
+          maturity_context: {
+            type: "object",
+            additionalProperties: { type: "string" },
+            description: "Maturity dimension levels (e.g. {strategy: 'L2', process: 'L2'}). Overridden by snapshot.maturity if present.",
+          },
         },
       }),
       responses: {

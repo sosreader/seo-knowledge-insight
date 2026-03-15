@@ -12,7 +12,11 @@ import { join } from "node:path";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
 import type { QAItem } from "../store/qa-store.js";
-import { buildReportMaturityBlock } from "../utils/maturity.js";
+import {
+  buildMaturityCallout,
+  buildMaturityUpgradeLabel,
+  getDimensionForMetric,
+} from "../utils/maturity.js";
 
 // ── Industry Research Citations ────────────────────────────────────────
 // Pre-loaded constants referencing peer-reviewed / industry studies.
@@ -651,6 +655,14 @@ function buildPriorityActions(
 ): string {
   const lines: string[] = [`${SECTION_HEADINGS[4]}本週優先行動清單\n`];
 
+  // Maturity callout — compact 1-line blockquote before action list
+  if (maturity && Object.keys(maturity).length > 0) {
+    const callout = buildMaturityCallout(maturity);
+    if (callout) {
+      lines.push(callout, "");
+    }
+  }
+
   const highPriority: string[] = [];
   const midPriority: string[] = [];
   const lowPriority: string[] = [];
@@ -667,6 +679,18 @@ function buildPriorityActions(
     if (howTip) {
       item += `\n  > KB 建議：${howTip}`;
     }
+
+    // Inject maturity upgrade label when dimension matches
+    if (maturity) {
+      const dim = getDimensionForMetric(m.name);
+      if (dim) {
+        const label = buildMaturityUpgradeLabel(dim, maturity);
+        if (label) {
+          item += ` ${label}`;
+        }
+      }
+    }
+
     highPriority.push(item);
   }
 
@@ -709,10 +733,6 @@ function buildPriorityActions(
     greenItems,
     "",
   );
-
-  if (maturity && Object.keys(maturity).length > 0) {
-    lines.push("### 成熟度對標\n", buildReportMaturityBlock(maturity), "");
-  }
 
   if (llmAnalysis) {
     lines.push("### 行動優先序 AI 判讀\n", llmAnalysis, "");

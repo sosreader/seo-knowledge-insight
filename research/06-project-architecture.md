@@ -215,7 +215,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - utils/keyword-boost.ts：4 層關鍵字匹配
     - utils/cjk-tokenizer.ts：CJK 分詞（2-gram + 單字，中文 keyword search 支援）
     - utils/mode-detect.ts：hasOpenAI() / hasSupabase() / isAgentEnabled() / resolveMode() helper（mode 偵測 + 三層優先順序解析）
-    - utils/maturity.ts：parseMaturityLevel() / buildMaturityContext() / applyMaturityBoost() / buildReportMaturityBlock()（成熟度 L1-L4 跨系統工具）
+    - utils/maturity.ts：parseMaturityLevel() / buildMaturityContext() / applyMaturityBoost() / buildReportMaturityBlock() / getDimensionForMetric() / buildMaturityUpgradeLabel() / buildMaturityCallout()（成熟度 L1-L4 跨系統工具；DIMENSIONS / METRIC_MATURITY_DIMENSION_MAP 常數）
     - services/embedding.ts：OpenAI embedding wrapper
     - services/rag-chat.ts：RAG 問答（需要 OpenAI API key；v2.11 支援 reranker）
     - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
@@ -1764,7 +1764,7 @@ output/qa_final.md
 
 ### 新增模組
 
-- `api/src/utils/maturity.ts`：成熟度工具函式（`parseMaturityLevel`、`buildMaturityContext`、`applyMaturityBoost`、`buildReportMaturityBlock`）
+- `api/src/utils/maturity.ts`：成熟度工具函式（`parseMaturityLevel`、`buildMaturityContext`、`applyMaturityBoost`、`buildReportMaturityBlock`、`getDimensionForMetric`、`buildMaturityUpgradeLabel`、`buildMaturityCallout`；`DIMENSIONS`、`METRIC_MATURITY_DIMENSION_MAP` 常數）
 - `utils/maturity_classifier.py`：rule-based L1-L4 分類器（Python，backfill + pipeline 共用）
 - `scripts/backfill_maturity_relevance.py`：Supabase 回填腳本（`--dry-run` / `--execute` / `--verify`）
 - `supabase/migrations/009_maturity_relevance.sql`：`qa_items.maturity_relevance` TEXT + B-tree index + `sessions.metadata` JSONB
@@ -1797,7 +1797,7 @@ output/qa_final.md
 
 - `rag-chat.ts`：`buildMaturityContext()` 注入 system prompt；有 maturity 時 skip response cache
 - `rag-chat-stream.ts`：同步 maturity context 注入（streaming 路徑）
-- `report-generator-local.ts`：S5 `buildPriorityActions()` 加 maturity 參考區塊 + `[LX→LY]` 升級標籤
+- `report-generator-local.ts`：S5 `buildPriorityActions()` 重構——移除舊「成熟度對標」區塊，改用 `buildMaturityCallout()` blockquote（行動清單前方）+ `buildMaturityUpgradeLabel()` 行內標籤（高優先行動尾部）
 
 ### Pipeline 整合
 
@@ -1807,6 +1807,9 @@ output/qa_final.md
 
 ### OpenAPI + 測試
 
-- `openapi.ts`：v2.29→v3.4.0；QAItem/SearchResult +`maturity_relevance`；Chat/Search/Session +`maturity_level`
-- API tests：582→608（58 files）；新增 `tests/utils/maturity.test.ts`（20 tests）
+- `openapi.ts`：v2.29→v3.4.0→v3.5；QAItem/SearchResult +`maturity_relevance`；Chat/Search/Session +`maturity_level`；Reports/generate +`maturity_context`
+- `schemas/report.ts`：`maturity_context: z.record(z.string(), z.string()).optional()`（v3.5）
+- `routes/reports.ts`：`effectiveMaturity` 優先序 snapshot > request > null（v3.5）
+- `.claude/commands/generate-report.md`：Step A3 自動偵測 meeting-prep maturity + `--maturity`/`--no-maturity` flag（v3.5）
+- API tests：582→608→660（58→61 files）；新增 `tests/utils/maturity.test.ts`（36 tests）、`tests/services/report-generator-local.test.ts`（7 tests）、`tests/schemas/report.test.ts`（3 tests）
 - Python tests：`tests/test_maturity_classifier.py`（13 tests）
