@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import functools
 import json
+import logging
 import math
 import os
 import re
@@ -18,6 +19,8 @@ from collections import Counter
 from openai import OpenAI
 
 import config
+
+_logger = logging.getLogger(__name__)
 from utils.observability import observe
 from utils.synonym_dict import expand_query_tokens
 
@@ -401,7 +404,7 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
             miss_texts.append(text)
 
     if cached_map:
-        print(f"   📦 embedding cache: {len(cached_map)}/{len(valid_texts)} hits")
+        _logger.debug("embedding cache: %d/%d hits", len(cached_map), len(valid_texts))
 
     # ── API 呼叫（僅補 miss）────────────────────────────
     all_miss_embeddings: list[list[float]] = []
@@ -494,8 +497,7 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
 
     # ── Cache key: sorted (question, answer) pairs ─────────────────
     # 排序以保證相同組合不同順序仍命中 cache
-    import json as _json
-    group_key = _json.dumps(
+    group_key = json.dumps(
         sorted(
             [{"q": qa["question"], "a": qa["answer"]} for qa in qa_group],
             key=lambda x: x["q"],

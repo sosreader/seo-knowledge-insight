@@ -51,9 +51,7 @@ REWRITE_MAP: dict[str, str] = {
 }
 
 
-def compute_stable_id(source_file: str, question: str) -> str:
-    content = f'{source_file}::{question[:120]}'
-    return hashlib.sha256(content.encode()).hexdigest()[:16]
+from utils.stable_id import compute_stable_id
 
 
 def rewrite_question(question: str) -> str:

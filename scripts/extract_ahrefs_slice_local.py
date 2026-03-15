@@ -211,7 +211,8 @@ def _derive_maturity_level(question: str, answer: str, keywords: list[str]) -> s
 
         level = classify_maturity_level(keywords, question, answer)
         return level or "L2"
-    except Exception:
+    except Exception as exc:
+        logger.warning("maturity classifier failed, defaulting to L2: %s", exc)
         return "L2"
 
 

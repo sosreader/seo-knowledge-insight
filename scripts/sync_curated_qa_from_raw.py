@@ -19,9 +19,7 @@ except ModuleNotFoundError:
 from scripts.clean_qa_quality import export_markdown
 
 
-def compute_stable_id(source_file: str, question: str) -> str:
-    content = f'{source_file}::{question[:120]}'
-    return hashlib.sha256(content.encode()).hexdigest()[:16]
+from utils.stable_id import compute_stable_id
 
 
 def normalize_question(text: str) -> str:
