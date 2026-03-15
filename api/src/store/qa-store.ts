@@ -72,6 +72,7 @@ interface RawQAData {
     source_collection?: string;
     source_url?: string;
     extraction_model?: string;
+    maturity_relevance?: string;
     primary_category?: string;
     categories?: string[];
     intent_labels?: string[];
@@ -168,7 +169,7 @@ export class QAStore {
       source_collection: qa.source_collection ?? "seo-meetings",
       source_url: qa.source_url ?? qa._enrichment?.source_url ?? qa._enrichment?.notion_url ?? "",
       extraction_model: qa.extraction_model,
-      maturity_relevance: qa._enrichment?.maturity_relevance as "L1" | "L2" | "L3" | "L4" | undefined,
+      maturity_relevance: (qa.maturity_relevance ?? qa._enrichment?.maturity_relevance) as "L1" | "L2" | "L3" | "L4" | undefined,
       primary_category: qa.primary_category ?? qa.category ?? "",
       categories: qa.categories ?? (qa.category ? [qa.category] : []),
       intent_labels: qa.intent_labels ?? [],

@@ -12,6 +12,7 @@ interface SnapshotRow {
   readonly tab: string;
   readonly weeks: number;
   readonly metrics: Record<string, unknown>;
+  readonly maturity?: Record<string, string>;
   readonly created_at: string;
 }
 
@@ -46,6 +47,7 @@ export class SupabaseSnapshotStore {
       tab: r.tab,
       weeks: r.weeks,
       metrics: r.metrics,
+      ...(r.maturity ? { maturity: r.maturity } : {}),
     };
   }
 
@@ -59,6 +61,7 @@ export class SupabaseSnapshotStore {
         tab: snapshot.tab,
         weeks: snapshot.weeks,
         metrics: snapshot.metrics,
+        ...(snapshot.maturity ? { maturity: snapshot.maturity } : {}),
         created_at: snapshot.created_at,
       }],
       { upsert: true, onConflict: "id" },

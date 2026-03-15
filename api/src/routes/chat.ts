@@ -69,6 +69,7 @@ chatRoute.post("/", async (c) => {
           maxTurns: config.AGENT_MAX_TURNS,
           timeoutMs: config.AGENT_TIMEOUT_MS,
         },
+        maturityLevel,
       );
       return c.json(
         ok({

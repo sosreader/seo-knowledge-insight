@@ -34,6 +34,7 @@ CREATE OR REPLACE FUNCTION increment_search_hit_count(qa_ids TEXT[])
 RETURNS VOID
 LANGUAGE sql
 SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
   UPDATE qa_items
   SET search_hit_count = COALESCE(search_hit_count, 0) + 1

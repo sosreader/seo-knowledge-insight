@@ -25,7 +25,7 @@
     "@lmnr-ai/lmnr": "^0.8.14",
     "@scalar/hono-api-reference": "^0.10.0",
     "dotenv": "^17.3.1",
-    "hono": "^4.12.5",
+    "hono": "^4.12.7",
     "openai": "^6.25.0",
     "uuid": "^13.0.0",
     "zod": "^4.3.6"

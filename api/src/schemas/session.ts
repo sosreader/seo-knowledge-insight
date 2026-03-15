@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maturityLevelSchema } from "../utils/maturity.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -11,7 +12,7 @@ export const createSessionSchema = z.object({
 export const sendMessageSchema = z.object({
   message: z.string().min(1).max(2000),
   mode: z.enum(["agent", "rag"]).optional(),
-  maturity_level: z.enum(["L1", "L2", "L3", "L4"]).optional(),
+  maturity_level: maturityLevelSchema.optional(),
 });
 
 export const sessionListParamsSchema = z.object({

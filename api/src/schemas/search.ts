@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maturityLevelSchema } from "../utils/maturity.js";
 
 export const searchRequestSchema = z.object({
   query: z.string().min(1).max(500),
@@ -6,7 +7,7 @@ export const searchRequestSchema = z.object({
   category: z.string().optional(),
   primary_category: z.string().optional(),
   extraction_model: z.string().optional(),
-  maturity_level: z.enum(["L1", "L2", "L3", "L4"]).optional(),
+  maturity_level: maturityLevelSchema.optional(),
   intent_label: z.string().optional(),
   scenario_tag: z.string().optional(),
   serving_tier: z.string().optional(),

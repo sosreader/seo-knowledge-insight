@@ -28,6 +28,15 @@ import {
   novelQueryTermBoost,
   queryTerms,
 } from "./query-term-utils.js";
+import {
+  asList,
+  tokenize,
+  inferQueryLabels,
+  questionSignature,
+  QUERY_CATEGORY_HINTS,
+  QUERY_INTENT_HINTS,
+  QUERY_SCENARIO_HINTS,
+} from "./search-engine.js";
 
 /** Timeout for initial load — longer than default to handle cold Supabase. */
 const LOAD_TIMEOUT_MS = 25_000;
@@ -78,8 +87,6 @@ const OVER_RETRIEVE_FACTOR = 3;
 const KW_BOOST_CONFIG = { boost: 0.1, maxHits: 3, partial: 0.05 } as const;
 const SEMANTIC_WEIGHT = 0.7;
 const SYNONYM_BOOST = 0.05;
-const MAX_QUERY_TOKENS = 100;
-const MAX_METADATA_TEXT_LENGTH = 2000;
 const BASE_SELECT_COLUMNS = [
   "id",
   "seq",
@@ -185,146 +192,7 @@ function computeSynonymBonus(
   return 0;
 }
 
-function asList(
-  value: readonly string[] | string | null | undefined,
-): readonly string[] {
-  if (Array.isArray(value)) return value.filter(Boolean);
-  if (typeof value === "string" && value.trim().length > 0)
-    return [value.trim()];
-  return [];
-}
-
-function tokenize(text: string): Set<string> {
-  return new Set(
-    text
-      .slice(0, MAX_METADATA_TEXT_LENGTH)
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((token) => token.length >= 2)
-      .slice(0, MAX_QUERY_TOKENS),
-  );
-}
-
-function inferQueryLabels(
-  query: string,
-  hintMap: Readonly<Record<string, readonly string[]>>,
-): ReadonlySet<string> {
-  const queryLower = query.toLowerCase();
-  const labels = new Set<string>();
-  for (const [label, hints] of Object.entries(hintMap)) {
-    if (hints.some((hint) => queryLower.includes(hint))) labels.add(label);
-  }
-  return labels;
-}
-
-const QUERY_INTENT_HINTS: Readonly<Record<string, readonly string[]>> = {
-  diagnosis: ["異常", "下滑", "原因", "診斷", "why", "根因"],
-  "root-cause": ["root cause", "根因", "canonical", "waf", "衝突"],
-  implementation: ["如何", "修正", "設定", "實作", "schema", "標記"],
-  measurement: [
-    "ga",
-    "ga4",
-    "gsc",
-    "ctr",
-    "曝光",
-    "點擊",
-    "追蹤",
-    "kpi",
-    "ratio",
-    "share",
-    "佔比",
-  ],
-  reporting: ["報表", "週報", "監測", "趨勢"],
-  "platform-decision": ["平台", "策略", "路徑", "作者"],
-};
-
-const QUERY_SCENARIO_HINTS: Readonly<Record<string, readonly string[]>> = {
-  discover: ["discover", "探索"],
-  "google-news": ["google news", "news", "新聞"],
-  "faq-rich-result": ["faq", "rich result", "搜尋外觀"],
-  "ga4-attribution": ["ga4", "歸因", "unassigned"],
-  "author-page": ["/user", "作者頁", "author"],
-  "image-seo": ["image", "圖片", "alt", "縮圖"],
-  "core-web-vitals": [
-    "core web vitals",
-    "cwv",
-    "lcp",
-    "cls",
-    "行動版",
-    "手機體驗",
-  ],
-  "video-seo": ["videoobject", "video appearance", "影片", "video"],
-  "sitemap-api": ["sitemap", "url inspection", "inspection api", "cms api"],
-  "ai-referral-traffic": [
-    "chatgpt",
-    "perplexity",
-    "gemini",
-    "ai 流量",
-    "流量佔比",
-  ],
-};
-
-const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> = {
-  技術SEO: [
-    "schema",
-    "結構化資料",
-    "core web vitals",
-    "lcp",
-    "cls",
-    "ttfb",
-    "amp",
-    "videoobject",
-    "video appearance",
-    "sitemap",
-    "url inspection",
-    "inspection api",
-    "mobile seo",
-    "行動版",
-    "手機",
-    "json-ld",
-  ],
-  索引與檢索: ["索引", "coverage", "googlebot", "canonical", "檢索未索引"],
-  搜尋表現分析: [
-    "ctr",
-    "曝光",
-    "點擊",
-    "serp",
-    "search console",
-    "kpi",
-    "品牌",
-    "非品牌",
-    "brand",
-    "non-brand",
-  ],
-  GA與數據追蹤: [
-    "ga",
-    "ga4",
-    "追蹤",
-    "歸因",
-    "direct",
-    "chatgpt",
-    "perplexity",
-    "gemini",
-    "ratio",
-    "share",
-    "佔比",
-  ],
-  Discover與AMP: ["discover", "amp", "news"],
-  內容策略: ["內容", "文章", "eeat", "供給", "更新"],
-  連結策略: ["連結", "內部連結", "錨點"],
-  平台策略: ["平台", "作者", "/user", "路徑", "cms"],
-  演算法與趨勢: [
-    "演算法",
-    "趨勢",
-    "ai",
-    "gemini",
-    "perplexity",
-    "chatgpt",
-    "ai overview",
-    "ai search",
-    "llm",
-  ],
-};
+// asList, tokenize, inferQueryLabels, QUERY_*_HINTS imported from search-engine.ts
 
 function metadataScore(query: string, item: QAItem): number {
   const queryLower = query.toLowerCase();
@@ -394,12 +262,7 @@ function itemMatchesCategory(item: QAItem, category: string | null): boolean {
     : item.category === category;
 }
 
-function questionSignature(question: string): string {
-  return question
-    .toLowerCase()
-    .replace(/[^\w\u4e00-\u9fff]+/g, "")
-    .slice(0, 120);
-}
+// questionSignature imported from search-engine.ts
 
 function rerankResults(
   results: ReadonlyArray<{ item: QAItem; score: number }>,

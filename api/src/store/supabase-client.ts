@@ -16,7 +16,9 @@ export interface SupabaseClientConfig {
 async function readErrorBody(resp: Response): Promise<string> {
   try {
     const body = await resp.text();
-    return body ? `: ${body}` : "";
+    // Sanitize: truncate to prevent leaking internal schema details
+    const safe = body ? body.slice(0, 200) : "";
+    return safe ? `: ${safe}` : "";
   } catch {
     return "";
   }

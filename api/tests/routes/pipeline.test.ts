@@ -18,6 +18,9 @@ const markdownDir = join(rawDataDir, "markdown");
 const mediumMdDir = join(rawDataDir, "medium_markdown");
 const ithelpMdDir = join(rawDataDir, "ithelp_markdown");
 const googleCasesMdDir = join(rawDataDir, "google_cases_markdown");
+const ahrefsMdDir = join(rawDataDir, "ahrefs_markdown");
+const sejMdDir = join(rawDataDir, "sej_markdown");
+const growthmemoMdDir = join(rawDataDir, "growthmemo_markdown");
 const qaPerMeetingDir = join(outputDir, "qa_per_meeting");
 const qaPerArticleDir = join(outputDir, "qa_per_article");
 const metricsSnapshotsDir = join(outputDir, "metrics_snapshots");
@@ -42,6 +45,9 @@ vi.mock("../../src/config.js", () => ({
     rawMediumMdDir: mediumMdDir,
     rawIthelpMdDir: ithelpMdDir,
     rawGoogleCasesMdDir: googleCasesMdDir,
+    rawAhrefsMdDir: ahrefsMdDir,
+    rawSejMdDir: sejMdDir,
+    rawGrowthmemoMdDir: growthmemoMdDir,
     fetchLogsDir,
     qaJsonPath: join(outputDir, "qa_final.json"),
     qaEnrichedJsonPath: join(outputDir, "qa_enriched.json"),
@@ -96,6 +102,9 @@ function setupTestData() {
   mkdirSync(mediumMdDir, { recursive: true });
   mkdirSync(ithelpMdDir, { recursive: true });
   mkdirSync(googleCasesMdDir, { recursive: true });
+  mkdirSync(ahrefsMdDir, { recursive: true });
+  mkdirSync(sejMdDir, { recursive: true });
+  mkdirSync(growthmemoMdDir, { recursive: true });
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(fetchLogsDir, { recursive: true });
   mkdirSync(qaPerMeetingDir, { recursive: true });
@@ -150,6 +159,27 @@ function setupTestData() {
   writeFileSync(
     join(googleCasesMdDir, "vidio-case-study.md"),
     "# Vidio Case Study\n\nAnother Google case study.",
+    "utf-8"
+  );
+
+  // Markdown files — Ahrefs (1 article)
+  writeFileSync(
+    join(ahrefsMdDir, "seo-basics.md"),
+    "# SEO Basics\n\nAhrefs blog article.",
+    "utf-8"
+  );
+
+  // Markdown files — SEJ (1 article)
+  writeFileSync(
+    join(sejMdDir, "google-update.md"),
+    "# Google Update\n\nSEJ article.",
+    "utf-8"
+  );
+
+  // Markdown files — Growth Memo (1 article)
+  writeFileSync(
+    join(growthmemoMdDir, "growth-trends.md"),
+    "# Growth Trends\n\nGrowth Memo article.",
     "utf-8"
   );
 
@@ -225,9 +255,9 @@ describe("GET /api/v1/pipeline/status", () => {
     const res = await app.request("/api/v1/pipeline/status");
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.data.steps).toHaveLength(6);
+    expect(body.data.steps).toHaveLength(9);
 
-    const [fetchNotion, fetchMedium, fetchIthelp, fetchGoogle, extract, dedupe] =
+    const [fetchNotion, fetchMedium, fetchIthelp, fetchGoogle, fetchAhrefs, fetchSej, fetchGrowthmemo, extract, dedupe] =
       body.data.steps;
     expect(fetchNotion.name).toBe("fetch-notion");
     expect(fetchNotion.count).toBe(2); // 2 meeting markdown files
@@ -237,9 +267,15 @@ describe("GET /api/v1/pipeline/status", () => {
     expect(fetchIthelp.count).toBe(1); // 1 ithelp markdown file
     expect(fetchGoogle.name).toBe("fetch-google");
     expect(fetchGoogle.count).toBe(2); // 2 google case study files
+    expect(fetchAhrefs.name).toBe("fetch-ahrefs");
+    expect(fetchAhrefs.count).toBe(1); // 1 ahrefs markdown file
+    expect(fetchSej.name).toBe("fetch-sej");
+    expect(fetchSej.count).toBe(1); // 1 sej markdown file
+    expect(fetchGrowthmemo.name).toBe("fetch-growthmemo");
+    expect(fetchGrowthmemo.count).toBe(1); // 1 growthmemo markdown file
     expect(extract.name).toBe("extract-qa");
     expect(extract.count).toBe(2); // 2 qa JSONs in qa_per_meeting/
-    expect(extract.detail).toContain("2 / 7"); // 2 extracted out of 7 total
+    expect(extract.detail).toContain("2 / 10"); // 2 extracted out of 10 total
     expect(dedupe.name).toBe("dedupe-classify");
     expect(dedupe.count).toBe(2); // 2 qa_final items
   });
@@ -304,9 +340,9 @@ describe("GET /api/v1/pipeline/source-docs", () => {
     const res = await app.request("/api/v1/pipeline/source-docs");
     expect(res.status).toBe(200);
     const body = await res.json();
-    // 2 meetings + 2 medium + 1 ithelp + 2 google = 7
-    expect(body.data.total).toBe(7);
-    expect(body.data.items).toHaveLength(7);
+    // 2 meetings + 2 medium + 1 ithelp + 2 google + 1 ahrefs + 1 sej + 1 growthmemo = 10
+    expect(body.data.total).toBe(10);
+    expect(body.data.items).toHaveLength(10);
     expect(body.data.offset).toBe(0);
     expect(body.data.limit).toBe(20);
   });
@@ -315,8 +351,8 @@ describe("GET /api/v1/pipeline/source-docs", () => {
     const res = await app.request("/api/v1/pipeline/source-docs?source_type=article");
     expect(res.status).toBe(200);
     const body = await res.json();
-    // 2 medium + 1 ithelp + 2 google = 5
-    expect(body.data.total).toBe(5);
+    // 2 medium + 1 ithelp + 2 google + 1 ahrefs + 1 sej + 1 growthmemo = 8
+    expect(body.data.total).toBe(8);
     expect(body.data.items.every((i: { source_type: string }) => i.source_type === "article")).toBe(true);
   });
 
@@ -348,7 +384,7 @@ describe("GET /api/v1/pipeline/source-docs", () => {
     const res = await app.request("/api/v1/pipeline/source-docs?limit=3&offset=2");
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.data.total).toBe(7);
+    expect(body.data.total).toBe(10);
     expect(body.data.items).toHaveLength(3);
     expect(body.data.offset).toBe(2);
     expect(body.data.limit).toBe(3);

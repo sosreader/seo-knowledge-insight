@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maturityLevelSchema } from "../utils/maturity.js";
 
 export const historyMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
@@ -9,7 +10,7 @@ export const chatRequestSchema = z.object({
   message: z.string().min(1).max(2000),
   history: z.array(historyMessageSchema).max(20).default([]),
   mode: z.enum(["agent", "rag"]).optional(),
-  maturity_level: z.enum(["L1", "L2", "L3", "L4"]).optional(),
+  maturity_level: maturityLevelSchema.optional(),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
