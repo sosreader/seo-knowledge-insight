@@ -22,6 +22,12 @@ import {
   type ListQaParams,
 } from "./qa-filter.js";
 import type { QAItem } from "./qa-store.js";
+import {
+  categoryDiversityBoost,
+  matchedQueryTerms,
+  novelQueryTermBoost,
+  queryTerms,
+} from "./query-term-utils.js";
 
 /** Timeout for initial load — longer than default to handle cold Supabase. */
 const LOAD_TIMEOUT_MS = 25_000;
@@ -199,23 +205,6 @@ function tokenize(text: string): Set<string> {
   );
 }
 
-function queryTerms(text: string): readonly string[] {
-  return text
-    .toLowerCase()
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2);
-}
-
-function matchedQueryTerms(text: string, terms: readonly string[]): ReadonlySet<string> {
-  const haystack = text.toLowerCase();
-  const matched = new Set<string>();
-  for (const term of terms) {
-    if (haystack.includes(term)) matched.add(term);
-  }
-  return matched;
-}
-
 function inferQueryLabels(
   query: string,
   hintMap: Readonly<Record<string, readonly string[]>>,
@@ -232,7 +221,19 @@ const QUERY_INTENT_HINTS: Readonly<Record<string, readonly string[]>> = {
   diagnosis: ["異常", "下滑", "原因", "診斷", "why", "根因"],
   "root-cause": ["root cause", "根因", "canonical", "waf", "衝突"],
   implementation: ["如何", "修正", "設定", "實作", "schema", "標記"],
-  measurement: ["ga", "ga4", "gsc", "ctr", "曝光", "點擊", "追蹤", "kpi", "ratio", "share", "佔比"],
+  measurement: [
+    "ga",
+    "ga4",
+    "gsc",
+    "ctr",
+    "曝光",
+    "點擊",
+    "追蹤",
+    "kpi",
+    "ratio",
+    "share",
+    "佔比",
+  ],
   reporting: ["報表", "週報", "監測", "趨勢"],
   "platform-decision": ["平台", "策略", "路徑", "作者"],
 };
@@ -244,10 +245,23 @@ const QUERY_SCENARIO_HINTS: Readonly<Record<string, readonly string[]>> = {
   "ga4-attribution": ["ga4", "歸因", "unassigned"],
   "author-page": ["/user", "作者頁", "author"],
   "image-seo": ["image", "圖片", "alt", "縮圖"],
-  "core-web-vitals": ["core web vitals", "cwv", "lcp", "cls", "行動版", "手機體驗"],
+  "core-web-vitals": [
+    "core web vitals",
+    "cwv",
+    "lcp",
+    "cls",
+    "行動版",
+    "手機體驗",
+  ],
   "video-seo": ["videoobject", "video appearance", "影片", "video"],
   "sitemap-api": ["sitemap", "url inspection", "inspection api", "cms api"],
-  "ai-referral-traffic": ["chatgpt", "perplexity", "gemini", "ai 流量", "流量佔比"],
+  "ai-referral-traffic": [
+    "chatgpt",
+    "perplexity",
+    "gemini",
+    "ai 流量",
+    "流量佔比",
+  ],
 };
 
 const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> = {
@@ -270,13 +284,46 @@ const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> = {
     "json-ld",
   ],
   索引與檢索: ["索引", "coverage", "googlebot", "canonical", "檢索未索引"],
-  搜尋表現分析: ["ctr", "曝光", "點擊", "serp", "search console", "kpi", "品牌", "非品牌", "brand", "non-brand"],
-  GA與數據追蹤: ["ga", "ga4", "追蹤", "歸因", "direct", "chatgpt", "perplexity", "gemini", "ratio", "share", "佔比"],
+  搜尋表現分析: [
+    "ctr",
+    "曝光",
+    "點擊",
+    "serp",
+    "search console",
+    "kpi",
+    "品牌",
+    "非品牌",
+    "brand",
+    "non-brand",
+  ],
+  GA與數據追蹤: [
+    "ga",
+    "ga4",
+    "追蹤",
+    "歸因",
+    "direct",
+    "chatgpt",
+    "perplexity",
+    "gemini",
+    "ratio",
+    "share",
+    "佔比",
+  ],
   Discover與AMP: ["discover", "amp", "news"],
   內容策略: ["內容", "文章", "eeat", "供給", "更新"],
   連結策略: ["連結", "內部連結", "錨點"],
   平台策略: ["平台", "作者", "/user", "路徑", "cms"],
-  演算法與趨勢: ["演算法", "趨勢", "ai", "gemini", "perplexity", "chatgpt", "ai overview", "ai search", "llm"],
+  演算法與趨勢: [
+    "演算法",
+    "趨勢",
+    "ai",
+    "gemini",
+    "perplexity",
+    "chatgpt",
+    "ai overview",
+    "ai search",
+    "llm",
+  ],
 };
 
 function metadataScore(query: string, item: QAItem): number {
@@ -375,7 +422,9 @@ function rerankResults(
       selected.flatMap((result) => asList(result.item.intent_labels)),
     );
     const selectedTerms = new Set(
-      selected.flatMap((result) => [...matchedQueryTerms(result.item.retrieval_surface_text ?? "", terms)]),
+      selected.flatMap((result) => [
+        ...matchedQueryTerms(result.item.retrieval_surface_text ?? "", terms),
+      ]),
     );
 
     let bestIndex = 0;
@@ -387,18 +436,24 @@ function rerankResults(
         adjusted -= 0.25;
       const categories = asList(candidate.item.categories);
       const uncoveredQueryCategories = categories.filter(
-        (category) => queryCategories.has(category) && !selectedCategories.has(category),
+        (category) =>
+          queryCategories.has(category) && !selectedCategories.has(category),
       ).length;
-      adjusted += Math.min(uncoveredQueryCategories * 0.12, 0.12);
+      adjusted += categoryDiversityBoost(uncoveredQueryCategories);
       const intents = asList(candidate.item.intent_labels);
       if (
         intents.length > 0 &&
         intents.every((intent) => !selectedIntents.has(intent))
       )
         adjusted += 0.04;
-      const candidateTerms = matchedQueryTerms(candidate.item.retrieval_surface_text ?? "", terms);
-      const novelTerms = [...candidateTerms].filter((term) => !selectedTerms.has(term)).length;
-      adjusted += Math.min(novelTerms * 0.02, 0.08);
+      const candidateTerms = matchedQueryTerms(
+        candidate.item.retrieval_surface_text ?? "",
+        terms,
+      );
+      const novelTerms = [...candidateTerms].filter(
+        (term) => !selectedTerms.has(term),
+      ).length;
+      adjusted += novelQueryTermBoost(novelTerms, terms.length);
       if (adjusted > bestScore) {
         bestScore = adjusted;
         bestIndex = index;
