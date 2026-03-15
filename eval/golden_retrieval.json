@@ -243,5 +243,64 @@
     "expected_keywords": ["外部連結", "交換連結", "連結", "風險"],
     "expected_categories": ["連結策略"],
     "description": "iThome 文章來源：Search Console 連結分布偵測交換連結"
+  },
+  {
+    "scenario": "AI Overview 品牌可見度因子",
+    "query": "AI Overview 品牌可見度 品牌提及 品牌錨文本 反向連結 影響因子",
+    "expected_keywords": [
+      "AI Overview",
+      "品牌可見度",
+      "品牌提及",
+      "品牌錨文本",
+      "反向連結"
+    ],
+    "expected_categories": ["連結策略", "搜尋表現分析"],
+    "description": "Ahrefs 研究來源：品牌提及與品牌錨文本對 AI Overview 可見度的影響"
+  },
+  {
+    "scenario": "AI Overviews 觸發因素與安全區查詢",
+    "query": "AI Overviews 觸發因素 問題類查詞 資訊型意圖 安全區 查詢長度",
+    "expected_keywords": [
+      "AI Overviews",
+      "觸發因素",
+      "問題類查詞",
+      "資訊型意圖",
+      "查詢長度"
+    ],
+    "expected_categories": ["內容策略", "搜尋表現分析"],
+    "description": "Ahrefs 研究來源：AI Overviews 觸發條件、產業差異與相對安全查詢"
+  },
+  {
+    "scenario": "AI Overviews 對點擊率衝擊",
+    "query": "AI Overviews 點擊率 58% 排名位置 1 流量損失",
+    "expected_keywords": ["AI Overviews", "點擊率", "位置 1", "流量損失"],
+    "expected_categories": ["搜尋表現分析"],
+    "description": "Ahrefs 研究來源：AI Overviews 對排名位置 1 點擊率的量化衝擊"
+  },
+  {
+    "scenario": "AI 搜尋流量轉換率與策略調整",
+    "query": "AI 搜尋 轉換率 高於傳統搜尋 signups 策略調整",
+    "expected_keywords": [
+      "AI 搜尋",
+      "轉換率",
+      "傳統搜尋",
+      "signups",
+      "策略調整"
+    ],
+    "expected_categories": ["搜尋表現分析", "內容策略"],
+    "description": "Ahrefs 研究來源：AI Search 流量雖少但轉換率更高，需重設 SEO KPI"
+  },
+  {
+    "scenario": "國際頁面在 AI Search 的流量落差",
+    "query": "國際頁面 AI Search 流量 低於 Organic Search 多語言 非英語市場",
+    "expected_keywords": [
+      "國際頁面",
+      "AI Search",
+      "Organic Search",
+      "多語言",
+      "非英語市場"
+    ],
+    "expected_categories": ["演算法與趨勢"],
+    "description": "Ahrefs 研究來源：國際與非英語頁面在 AI Search 的流量表現顯著落後"
   }
 ]

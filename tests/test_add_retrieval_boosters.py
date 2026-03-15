@@ -17,8 +17,8 @@ def test_add_retrieval_boosters_adds_targeted_qas() -> None:
 
     updated, summary = add_retrieval_boosters(payload)
 
-    assert summary['boosters_added'] == 18
-    assert updated['total_count'] == 19
+    assert summary['boosters_added'] == 19
+    assert updated['total_count'] == 20
     questions = {qa['question'] for qa in updated['qa_database']}
     assert '當重要頁面的內部連結過少或分配不均時，應如何用 Site Audit 找出並優先補強連結架構？' in questions
     assert '在 Vocus 這類創作者平台上做 SEO 經營時，應如何規劃自訂網域、文章 URL 與方案頁索引策略，才能把平台流量轉成自己的搜尋資產？' in questions
@@ -36,6 +36,7 @@ def test_add_retrieval_boosters_adds_targeted_qas() -> None:
     assert '若要提升多語言影片在 Google 搜尋中的曝光，應如何結合 VideoObject、Key Moments 與語言版本策略？' in questions
     assert '要評估品牌關鍵字與非品牌流量是否同步成長，應優先看哪些指標與結構化資料訊號？' in questions
     assert '建立 Search Console KPI 指標體系時，應優先追蹤哪些流量、曝光與點擊訊號，才能判斷 SEO 改善是否有效？' in questions
+    assert '當 Search Console 顯示曝光明顯上升、點擊卻沒有同步成長時，應如何判斷是 SERP 版位變化、搜尋外觀改寫，還是 CTR 效率下滑？' in questions
     assert '實作影片 SEO 時，應如何導入 VideoObject 結構化資料並檢查影片索引，讓影片頁更容易被 Google 收錄？' in questions
     assert '若想用 Event 結構化資料提升活動頁搜尋流量，應如何擴大 schema 標記並用 Rich Results / Search Console 持續驗證？' in questions
 
@@ -47,4 +48,4 @@ def test_add_retrieval_boosters_is_idempotent() -> None:
 
     assert second['total_count'] == first['total_count']
     booster_entries = [qa for qa in second['qa_database'] if qa.get('manual_curation_tag') == BOOSTER_TAG]
-    assert len(booster_entries) == 18
+    assert len(booster_entries) == 19

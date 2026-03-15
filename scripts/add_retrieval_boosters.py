@@ -43,6 +43,7 @@ def build_booster_qas() -> list[dict[str, Any]]:
     multilingual_video_question = '若要提升多語言影片在 Google 搜尋中的曝光，應如何結合 VideoObject、Key Moments 與語言版本策略？'
     brand_nonbrand_question = '要評估品牌關鍵字與非品牌流量是否同步成長，應優先看哪些指標與結構化資料訊號？'
     search_console_kpi_question = '建立 Search Console KPI 指標體系時，應優先追蹤哪些流量、曝光與點擊訊號，才能判斷 SEO 改善是否有效？'
+    impression_click_gap_question = '當 Search Console 顯示曝光明顯上升、點擊卻沒有同步成長時，應如何判斷是 SERP 版位變化、搜尋外觀改寫，還是 CTR 效率下滑？'
     videoobject_question = '實作影片 SEO 時，應如何導入 VideoObject 結構化資料並檢查影片索引，讓影片頁更容易被 Google 收錄？'
     event_schema_question = '若想用 Event 結構化資料提升活動頁搜尋流量，應如何擴大 schema 標記並用 Rich Results / Search Console 持續驗證？'
 
@@ -443,6 +444,27 @@ def build_booster_qas() -> list[dict[str, Any]]:
                 },
             ],
             'stable_id': compute_stable_id('raw_data/google_cases_markdown/wix-case-study.md', search_console_kpi_question),
+            'manual_curation_tag': BOOSTER_TAG,
+            'manual_curation_reason': 'retrieval-scenario-booster',
+        },
+        {
+            'question': impression_click_gap_question,
+            'answer': '[What] 當 Search Console 出現曝光大幅上升、點擊卻沒有同步成長時，第一步不是直接改內容，而是先拆解成「排名覆蓋擴張」「SERP 外觀改變」「CTR 下滑」三種可能。 [Why] 曝光增加只代表頁面被更多查詢或更多版位看見，不等於使用者更願意點；若是 Google 改寫標題、SERP 出現更多 rich result、AIO 或其他外觀競爭，點擊可能被分流，即使曝光仍在成長。 [How] 先在 Search Console 依查詢、頁面與搜尋外觀分組，比較 impressions、clicks、CTR、average position 是否同時變動；若曝光升但平均排名下降或持平，通常是查詢覆蓋擴大導致 CTR 被稀釋；若排名接近不變但 CTR 掉，優先檢查標題改寫、meta、rich result 消失或 SERP 版位變化；最後再比對是否有 AIO、影片、圖片或其他模組把點擊帶走。 [Evidence] 專案既有 KPI 與 CTR QA 已指出，曝光與點擊必須拆開觀察；這筆 booster 進一步把 golden query 裡的「曝光上升、點擊未同步、SERP 版位變化、搜尋外觀」幾個訊號收斂成同一個搜尋表現分析流程。',
+            'keywords': ['曝光上升', '點擊未同步', 'SERP', '版位變化', '搜尋外觀', 'CTR', 'impressions', 'clicks'],
+            'confidence': 0.91,
+            'source_file': 'manual_curated/impression-click-gap-analysis.md',
+            'source_title': '曝光上升但點擊未同步的 SERP 診斷（manual curation）',
+            'source_date': '2026-03-15',
+            'source_url': '',
+            'source_type': 'article',
+            'source_collection': 'curated-manual',
+            'extraction_model': 'curated-manual',
+            'maturity_relevance': 'L2',
+            'category': '搜尋表現分析',
+            'difficulty': '中階',
+            'evergreen': True,
+            'is_merged': False,
+            'stable_id': compute_stable_id('manual_curated/impression-click-gap-analysis.md', impression_click_gap_question),
             'manual_curation_tag': BOOSTER_TAG,
             'manual_curation_reason': 'retrieval-scenario-booster',
         },
