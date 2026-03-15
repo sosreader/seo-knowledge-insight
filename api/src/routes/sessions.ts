@@ -43,6 +43,7 @@ function toDetail(s: Session): SessionDetailOut {
     title: s.title,
     created_at: s.created_at,
     updated_at: s.updated_at,
+    ...(s.metadata && Object.keys(s.metadata).length > 0 ? { metadata: s.metadata } : {}),
     messages: s.messages.map((m) => ({
       role: m.role,
       content: m.content,
@@ -117,7 +118,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     return c.json(fail("Session not found"), 404);
   }
 
-  const { message: userMessage, mode: requestMode } = parsed.data;
+  const { message: userMessage, mode: requestMode, maturity_level: requestMaturityLevel } = parsed.data;
 
   // 1. Save user message
   const userMsg = {
@@ -130,6 +131,15 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
   session = await sessionStore.addMessage(sessionId, userMsg);
   if (!session) {
     return c.json(fail("Failed to add message (session full or conflict)"), 409);
+  }
+
+  // 1b. Resolve maturity level: request > session > null
+  const sessionMaturity = session.metadata?.maturity_level ?? undefined;
+  const effectiveMaturity = requestMaturityLevel ?? sessionMaturity ?? null;
+
+  // 1c. Persist maturity_level to session on first use
+  if (requestMaturityLevel && requestMaturityLevel !== sessionMaturity) {
+    await sessionStore.updateMetadata(sessionId, { maturity_level: requestMaturityLevel });
   }
 
   // 2. Build history from existing messages (exclude the just-added user msg, cap at 20)
@@ -162,7 +172,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
           metadata: agentResult.metadata as unknown as Record<string, unknown>,
         };
       } else {
-        const ragResult = await ragChat(userMessage, history.length > 0 ? history : null);
+        const ragResult = await ragChat(userMessage, history.length > 0 ? history : null, effectiveMaturity);
         result = {
           answer: ragResult.answer,
           sources: ragResult.sources as unknown as Record<string, unknown>[],

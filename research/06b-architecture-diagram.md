@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v2.24，2026-03-06）
+## 架構圖（最新：v3.4+，2026-03-14）
 
 ```mermaid
 flowchart TD
@@ -30,12 +30,14 @@ flowchart TD
         MD_GC --> S2
         S2 --> RAW[output/qa_all_raw.json<br/>source_type + source_collection 標記]
         RAW --> S3[Step 3: dedupe_classify.py<br/>Collection-Scoped Dedup<br/>各 collection 內部獨立去重]
-        S3 --> QA[output/qa_final.json<br/>1,323 筆 + 10 分類]
+        S3 --> QABASE[Step 3 基線快照<br/>歷史上曾產出 1,323 / 1,317 筆]
+        QABASE --> CURATE[Step 3.5: curated QA 後處理鏈<br/>clean_qa_quality → restore_rewritten_qas<br/>→ sync_curated_qa_from_raw → add_retrieval_boosters]
+        CURATE --> QA[output/qa_final.json<br/>目前 serving artifact 283 筆<br/>question-only salvage + manual boosters]
         S3 --> EMB[output/qa_embeddings.npy<br/>跨 collection 統一向量]
     end
 
     subgraph Eval["評估層（Claude Code 本地評估 + LLM Judge）"]
-        GoldenSets["eval/ Golden Sets<br/>extraction(5) dedup(40) qa(50)<br/>report(5) retrieval(307) seo_analysis"]
+        GoldenSets["eval/ Golden Sets<br/>extraction(5) dedup(40) qa(50)<br/>report(5) retrieval(35) seo_analysis"]
         QA --> S5[Step 5: evaluate.py<br/>LLM-as-Judge<br/>4 維度評估 + 本地選項]
         EMB --> S5
         GoldenSets --> S5
@@ -59,12 +61,12 @@ flowchart TD
 
     FE -->|"seoInsight.api.ts<br/>seoFetch（port 8002）"| HAPI
 
-    subgraph Hono_API["API Layer v2.24（Hono + TypeScript，port 8002，Local Mode + Laminar）"]
+    subgraph Hono_API["API Layer v3.4（Hono + TypeScript，port 8002，Local Mode + Laminar）"]
         QA --> HAPI["SEO Insight API<br/>Hono + TypeScript<br/>QAStore / SupabaseQAStore（factory pattern）"]
         EMB -.->|"optional（Local Mode 不需要）"| HAPI
         SE -.->|hybrid_search / keywordOnlySearch| HAPI
         HAPI --> HMID["middleware/<br/>auth.ts（X-API-Key）<br/>rate-limit.ts（chat:20 search/qa:60 reports/gen:5 eval:60/min）<br/>cors.ts + error-handler.ts"]
-        HMID --> HEP["9 個 Router + health（v2.23，32 端點）<br/>qa.ts — GET /qa, /qa/categories, /qa/collections, /qa/{id}（hex+int）<br/>search.ts — POST /search（mode: hybrid|keyword；v2.11 over-retrieve+rerank）<br/>chat.ts — POST /chat（mode: full|context-only；v2.11 rerank 支援）<br/>reports.ts — GET/POST /reports（本地 + OpenAI 雙模式，cache_hit v2.23）<br/>sessions.ts — CRUD /sessions + messages（context-only fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — 16 端點（status/source-docs/metrics/snapshots 等）<br/>synonyms.ts — GET/POST /synonyms, PUT/DELETE /synonyms/{term}（v2.10）"]
+        HMID --> HEP["9 個 Router + health（v3.4，42 端點）<br/>qa.ts — GET /qa, /qa/categories, /qa/collections, /qa/{id}（hex+int + maturity filter）<br/>search.ts — POST /search（mode: hybrid|keyword；maturity boost / rerank）<br/>chat.ts — POST /chat（mode: agent|rag|context-only）<br/>reports.ts — GET/POST /reports（本地 + OpenAI 雙模式）<br/>sessions.ts — CRUD /sessions + messages（mode-aware fallback）<br/>feedback.ts — POST /feedback<br/>pipeline.ts — source-docs / metrics / trends / llm-usage 等<br/>synonyms.ts — GET/POST /synonyms, PUT/DELETE /synonyms/{term}<br/>meeting-prep.ts — GET /meeting-prep, /meeting-prep/maturity-trend, /meeting-prep/{date}"]
         HEP --> HENV["ApiResponse[T]<br/>Zod schema validation<br/>data / error / meta"]
         HEP -->|not_relevant / helpful| LS
         HEP -->|"pipeline/eval proxy"| QT

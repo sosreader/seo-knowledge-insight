@@ -24,6 +24,13 @@ function toSchema(item: QAItem) {
     source_collection: item.source_collection,
     source_url: item.source_url,
     extraction_model: item.extraction_model ?? null,
+    maturity_relevance: item.maturity_relevance ?? null,
+    primary_category: item.primary_category ?? item.category,
+    categories: item.categories ?? [item.category],
+    intent_labels: item.intent_labels ?? [],
+    scenario_tags: item.scenario_tags ?? [],
+    serving_tier: item.serving_tier ?? "canonical",
+    evidence_scope: item.evidence_scope ?? [],
     freshness_score: item.freshness_score,
   };
 }
@@ -59,12 +66,18 @@ qaRoute.get("/:item_id", (c) => {
 qaRoute.get("/", (c) => {
   const parsed = qaListParamsSchema.safeParse({
     category: c.req.query("category"),
+    primary_category: c.req.query("primary_category"),
     keyword: c.req.query("keyword"),
     difficulty: c.req.query("difficulty"),
     evergreen: c.req.query("evergreen"),
     source_type: c.req.query("source_type"),
     source_collection: c.req.query("source_collection"),
     extraction_model: c.req.query("extraction_model"),
+    maturity_relevance: c.req.query("maturity_relevance"),
+    intent_label: c.req.query("intent_label"),
+    scenario_tag: c.req.query("scenario_tag"),
+    serving_tier: c.req.query("serving_tier"),
+    evidence_scope: c.req.query("evidence_scope"),
     sort_by: c.req.query("sort_by"),
     sort_order: c.req.query("sort_order"),
     limit: c.req.query("limit"),

@@ -108,6 +108,65 @@ retrieved = [qa_pairs[i] for i in top_indices]
 
 > v2.24 資料層改為 Supabase pgvector，搜尋品質維持不變（pgvector over-retrieve → TS re-rank）。
 
+### Retrieval Data Dimensions 與 runtime rerank（2026-03-15）
+
+v2.24 之後，retrieval 問題不再只是「找不找得到」，而是「top-k 純度不足、dual-label coverage 不足、booster 汙染 top-k」。
+
+因此目前 runtime search 會把 QA item 視為多維度檢索單位，而不是只看單一 `category`：
+
+- `primary_category` + `categories`：支援 single-label / dual-label coverage
+- `intent_labels`：區分 diagnosis / implementation / measurement / reporting 等 query intent
+- `scenario_tags`：區分 discover / google-news / author-page / ga4-attribution 等場景
+- `serving_tier`：將 corpus 區分為 `canonical` / `supporting` / `booster`
+- `retrieval_phrases` / `retrieval_surface_text`：提供更適合 runtime scoring 的 retrieval surface
+
+### Retrieval metadata inference rules
+
+`scripts/enrich_qa.py` 目前以規則式 backfill 為主，不是人工逐筆標註：
+
+- `intent_labels`：掃描 normalized text 中的意圖關鍵詞，例如「異常 / 下滑 / 原因」映到 `diagnosis`，「如何 / 修正 / 設定」映到 `implementation`
+- `scenario_tags`：掃描場景詞，例如 `discover`、`google news`、`/user`、`ga4 attribution`
+- `categories`：保留原始 `category` 為 `primary_category`，再用 `CATEGORY_HINTS` 補第二、第三分類
+- `backfill_confidence`：命中 3 個以上 category 記為 `high`、2 個記為 `medium`、其餘記為 `low`
+- `serving_tier`：若 manual curation metadata 含 `booster` 則標為 `booster`；若 confidence 低則降為 `supporting`；其餘為 `canonical`
+
+因此 retrieval metadata 是「高覆蓋率、可審計、可逐步人工校正」的中介層，不是假設它一開始就等於完美 taxonomy。
+
+runtime ranking 公式可抽象化為：
+
+```text
+final_score
+  = freshness_score × (
+      semantic_weight × cosine_similarity
+      + keyword_boost
+      + synonym_bonus
+      + metadata_feature_score
+    )
+```
+
+其中 `metadata_feature_score` 由 phrase overlap、surface overlap、category / intent / scenario overlap、serving tier prior、hard negative penalty 組成。
+
+排序完成後，系統不直接取 top-k，而是先 over-retrieve，再做 diversity rerank：
+
+- duplicate question penalty
+- category diversity bonus
+- intent diversity bonus
+
+這讓 top-1 仍追求最相關單筆，但 top-k 會刻意補第二面向，而不是塞滿近似答案。
+
+### Retrieval Data Dimensions 離線成效（40 golden cases）
+
+| 指標 | Baseline | Phase 4 |
+|------|----------|---------|
+| Precision@K | 0.58 | 0.85 |
+| Boosterless Precision@K | — | 0.83 |
+| Dual Category Recall@K | — | 1.00 |
+| Multi-label F1@K | — | 0.97 |
+| Canonical Top-1 Rate | — | 0.37 |
+| MRR | 0.92 | 0.99 |
+
+這 5 個新增 case 主要來自 Ahrefs 的 AI Search / AI Overviews 研究，因此這組數字代表的不只是一般 SEO query 的穩定度，也包含較高成熟度、較偏策略層問題的 retrieval 表現。
+
 ### 知識庫規模成長歷程
 
 ```
@@ -614,6 +673,36 @@ cd api && npx tsx scripts/eval-semantic.ts --top-k 3 # 改變 top-K 參數
 - 語意等價但措詞不同的結果（如 "CTR" vs "點擊率"）
 - Discover 專屬情境（keyword 命中「流量」但非 Discover 導向的結果被降權）
 - 相關性梯度（部分相關 vs 完全相關，而非二元 relevant/irrelevant）
+
+### Maturity-Aware Ranking（v3.4）
+
+**策略**：Post-retrieve 乘法 boost，符合使用者成熟度的 QA 項目獲得 1.15× 分數加成。
+
+**核心實作**（`api/src/utils/maturity.ts`）：
+
+```typescript
+// opt-in：只在 maturity_level param 存在時生效
+const boostedHits = applyMaturityBoost(filteredHits, maturityLevel);
+// maturityLevel = null → 原始排序不變（同一 reference，零開銷）
+// maturityLevel = "L2" → item.maturity_relevance === "L2" 的 score × 1.15，重排
+```
+
+**設計決策**：
+- **opt-in 而非 auto-detect**：Lambda 上無 meeting-prep 檔案，不適合自動偵測
+- **post-retrieve 而非 pre-filter**：不排除其他等級的 QA，僅調整排序
+- **乘法 boost 而非加法**：與 synonym_boost / freshness_decay 相容，高分項目被提升幅度更大
+- **搜尋路徑**：`routes/search.ts` 呼叫 `applyMaturityBoost()` post-retrieve reranking
+- **聊天路徑**：`rag-chat.ts` 呼叫 `buildMaturityContext()` 注入 system prompt（不做 reranking，而是調整回答深度）
+
+**與現有 boost 的交互**：
+
+| Boost 類型 | 實作位置 | 應用階段 |
+|-----------|---------|---------|
+| Keyword boost | `SearchEngine` / `SupabaseQAStore` | Retrieve 時 |
+| Synonym boost | `SearchEngine._synonym_boost_vec` | Retrieve 時 |
+| Freshness decay | `SearchEngine._freshness_vec` | Retrieve 時 |
+| Claude rerank | `reranker.ts` | Post-retrieve |
+| **Maturity boost** | `maturity.ts` | **Post-rerank**（最後一層） |
 
 ### Synonym Expansion 評估維度（v2.13）
 

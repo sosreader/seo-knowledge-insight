@@ -47,6 +47,33 @@ def _extract_section(content: str, header: str) -> str:
     return after[: next_h.start()] if next_h else after
 
 
+def _report_action_maturity_labeled(content: str) -> float:
+    """Check if S5/S6 action items contain maturity level markers.
+
+    Special scoring:
+    - Has maturity reference line + >=1 label → 1.0
+    - No maturity reference line → 0.5 (acceptable: no meeting-prep report)
+    - Has reference line but no labels → 0.0
+    """
+    # Try to find the action section by title first, then fall back to section number
+    s_action = _extract_section(content, "優先行動清單")
+    if not s_action:
+        # Fall back to section numbers: S6 (7-section fallback) or S5 (API mode)
+        s_action = _extract_section(content, "## 六、") or _extract_section(content, "## 五、")
+    if not s_action:
+        return 0.5  # No action section found, degrade gracefully
+
+    labels = re.findall(
+        r"\[(?:策略|流程|關鍵字|指標)\s*L[1-4]→L[1-4]\]", s_action
+    )
+    has_ref_line = "成熟度參考" in s_action
+    if has_ref_line and len(labels) >= 1:
+        return 1.0
+    if not has_ref_line:
+        return 0.5  # No meeting-prep report available → degraded OK
+    return 0.0
+
+
 def evaluate_report(content: str, alert_names: list[str]) -> dict[str, float]:
     if not content.strip():
         return {
@@ -101,6 +128,9 @@ def evaluate_report(content: str, alert_names: list[str]) -> dict[str, float]:
 
     llm_augmented = 1.0 if ("AI 輔助" in content or "AI 解讀" in content) else 0.0
 
+    # 8. report_action_maturity_labeled
+    maturity_labeled = _report_action_maturity_labeled(content)
+
     return {
         "report_section_coverage": round(section_coverage, 4),
         "report_kb_citations": round(kb_citation_count, 4),
@@ -109,6 +139,7 @@ def evaluate_report(content: str, alert_names: list[str]) -> dict[str, float]:
         "report_alert_coverage": round(alert_coverage, 4),
         "report_overall": round(overall, 4),
         "report_llm_augmented": llm_augmented,
+        "report_action_maturity_labeled": maturity_labeled,
     }
 
 

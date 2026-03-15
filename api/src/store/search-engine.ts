@@ -8,12 +8,22 @@
  *   final_score = base * freshness_score
  */
 
-import { normalizeL2, normalizeRows, matrixDotVector } from "../utils/cosine-similarity.js";
+import {
+  normalizeL2,
+  normalizeRows,
+  matrixDotVector,
+} from "../utils/cosine-similarity.js";
 import {
   computeKeywordBoostSingle,
   computeKeywordBoostMatrix,
   type KeywordBoostConfig,
 } from "../utils/keyword-boost.js";
+import {
+  categoryDiversityBoost,
+  matchedQueryTerms,
+  novelQueryTermBoost,
+  queryTerms,
+} from "./query-term-utils.js";
 
 export interface QADict {
   readonly id: string;
@@ -21,6 +31,15 @@ export interface QADict {
   readonly answer: string;
   readonly keywords: readonly string[];
   readonly category: string;
+  readonly primary_category?: string;
+  readonly categories?: readonly string[];
+  readonly intent_labels?: readonly string[];
+  readonly scenario_tags?: readonly string[];
+  readonly serving_tier?: string;
+  readonly retrieval_phrases?: readonly string[];
+  readonly retrieval_surface_text?: string;
+  readonly booster_target_queries?: readonly string[];
+  readonly hard_negative_terms?: readonly string[];
   readonly _enrichment?: {
     readonly synonyms?: readonly string[];
     readonly freshness_score?: number;
@@ -45,6 +64,315 @@ const DEFAULT_CONFIG: SearchEngineConfig = {
   kwBoost: { boost: 0.1, maxHits: 3, partial: 0.05 },
   overRetrieveFactor: 3,
 };
+
+const MAX_QUERY_TOKENS = 100;
+const MAX_METADATA_TEXT_LENGTH = 2000;
+
+const QUERY_INTENT_HINTS: Readonly<Record<string, readonly string[]>> = {
+  diagnosis: ["異常", "下滑", "原因", "診斷", "why", "根因"],
+  "root-cause": ["root cause", "根因", "canonical", "waf", "衝突"],
+  implementation: ["如何", "修正", "設定", "實作", "schema", "標記"],
+  measurement: [
+    "ga",
+    "ga4",
+    "gsc",
+    "ctr",
+    "曝光",
+    "點擊",
+    "追蹤",
+    "kpi",
+    "ratio",
+    "share",
+    "佔比",
+  ],
+  reporting: ["報表", "週報", "監測", "趨勢"],
+  "platform-decision": ["平台", "策略", "路徑", "作者"],
+};
+
+const QUERY_SCENARIO_HINTS: Readonly<Record<string, readonly string[]>> = {
+  discover: ["discover", "探索"],
+  "google-news": ["google news", "news", "新聞"],
+  "faq-rich-result": ["faq", "rich result", "搜尋外觀"],
+  "ga4-attribution": ["ga4", "歸因", "unassigned"],
+  "author-page": ["/user", "作者頁", "author"],
+  "image-seo": ["image", "圖片", "alt", "縮圖"],
+  "core-web-vitals": [
+    "core web vitals",
+    "cwv",
+    "lcp",
+    "cls",
+    "行動版",
+    "手機體驗",
+  ],
+  "video-seo": ["videoobject", "video appearance", "影片", "video"],
+  "sitemap-api": ["sitemap", "url inspection", "inspection api", "cms api"],
+  "ai-referral-traffic": [
+    "chatgpt",
+    "perplexity",
+    "gemini",
+    "ai 流量",
+    "流量佔比",
+  ],
+};
+
+export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
+  {
+    技術SEO: [
+      "schema",
+      "結構化資料",
+      "core web vitals",
+      "lcp",
+      "cls",
+      "ttfb",
+      "amp",
+      "videoobject",
+      "video appearance",
+      "sitemap",
+      "url inspection",
+      "inspection api",
+      "mobile seo",
+      "行動版",
+      "手機",
+      "json-ld",
+    ],
+    索引與檢索: ["索引", "coverage", "googlebot", "canonical", "檢索未索引"],
+    搜尋表現分析: [
+      "ctr",
+      "曝光",
+      "點擊",
+      "serp",
+      "search console",
+      "kpi",
+      "品牌",
+      "非品牌",
+      "brand",
+      "non-brand",
+    ],
+    GA與數據追蹤: [
+      "ga",
+      "ga4",
+      "追蹤",
+      "歸因",
+      "direct",
+      "chatgpt",
+      "perplexity",
+      "gemini",
+      "ratio",
+      "share",
+      "佔比",
+    ],
+    Discover與AMP: ["discover", "amp", "news"],
+    內容策略: ["內容", "文章", "eeat", "供給", "更新"],
+    連結策略: ["連結", "內部連結", "錨點"],
+    平台策略: ["平台", "作者", "/user", "路徑", "cms"],
+    演算法與趨勢: [
+      "演算法",
+      "趨勢",
+      "ai",
+      "gemini",
+      "perplexity",
+      "chatgpt",
+      "ai overview",
+      "ai search",
+      "llm",
+    ],
+  };
+
+function asList(
+  value: readonly string[] | string | null | undefined,
+): readonly string[] {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string" && value.trim().length > 0)
+    return [value.trim()];
+  return [];
+}
+
+function qaCategories(
+  qa: Pick<QADict, "categories" | "primary_category" | "category">,
+): readonly string[] {
+  const categories = asList(qa.categories);
+  if (categories.length > 0) return categories;
+  const primary = qa.primary_category ?? qa.category;
+  return primary ? [primary] : [];
+}
+
+function qaIntents(qa: Pick<QADict, "intent_labels">): readonly string[] {
+  return asList(qa.intent_labels);
+}
+
+function questionSignature(question: string): string {
+  return question
+    .toLowerCase()
+    .replace(/[^\w\u4e00-\u9fff]+/g, "")
+    .slice(0, 120);
+}
+
+function tokenize(text: string): Set<string> {
+  const tokens = text
+    .slice(0, MAX_METADATA_TEXT_LENGTH)
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((token) => token.length >= 2)
+    .slice(0, MAX_QUERY_TOKENS);
+  return new Set(tokens);
+}
+
+function inferQueryLabels(
+  query: string,
+  hintMap: Readonly<Record<string, readonly string[]>>,
+): ReadonlySet<string> {
+  const queryLower = query.toLowerCase();
+  const labels = new Set<string>();
+  for (const [label, hints] of Object.entries(hintMap)) {
+    if (hints.some((hint) => queryLower.includes(hint))) {
+      labels.add(label);
+    }
+  }
+  return labels;
+}
+
+function intersectionSize(
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>,
+): number {
+  let hits = 0;
+  for (const item of left) {
+    if (right.has(item)) hits += 1;
+  }
+  return hits;
+}
+
+function servingTierPrior(query: string, qa: QADict): number {
+  const tier = (qa.serving_tier ?? "canonical").toLowerCase();
+  if (tier === "booster") {
+    const targets = asList(qa.booster_target_queries);
+    const isTargeted = targets.some((target) =>
+      query.toLowerCase().includes(target.toLowerCase()),
+    );
+    return isTargeted ? 0.05 : -0.08;
+  }
+  if (tier === "supporting") return 0.02;
+  return 0.08;
+}
+
+function metadataFeatureScore(query: string, qa: QADict): number {
+  const terms = queryTerms(query);
+  const queryTokens = tokenize(query);
+  const surfaceTokens = tokenize(qa.retrieval_surface_text ?? "");
+  const queryCategories = inferQueryLabels(query, QUERY_CATEGORY_HINTS);
+  const queryIntents = inferQueryLabels(query, QUERY_INTENT_HINTS);
+  const queryScenarios = inferQueryLabels(query, QUERY_SCENARIO_HINTS);
+
+  const phraseBoost =
+    computeKeywordBoostSingle(
+      query,
+      asList(qa.retrieval_phrases),
+      DEFAULT_CONFIG.kwBoost,
+    ) * 2.0;
+  const surfaceBoost = intersectionSize(queryTokens, surfaceTokens) * 0.03;
+  const categoryBoost =
+    intersectionSize(queryCategories, new Set(qaCategories(qa))) * 0.08;
+  const intentBoost =
+    intersectionSize(queryIntents, new Set(qaIntents(qa))) * 0.06;
+  const scenarioBoost =
+    intersectionSize(queryScenarios, new Set(asList(qa.scenario_tags))) * 0.05;
+  const exactTermBoost =
+    matchedQueryTerms(qa.retrieval_surface_text ?? "", terms).size * 0.04;
+  const hardNegativePenalty = asList(qa.hard_negative_terms).some((term) =>
+    query.toLowerCase().includes(term.toLowerCase()),
+  )
+    ? -0.05
+    : 0;
+
+  return (
+    phraseBoost +
+    surfaceBoost +
+    categoryBoost +
+    intentBoost +
+    scenarioBoost +
+    exactTermBoost +
+    servingTierPrior(query, qa) +
+    hardNegativePenalty
+  );
+}
+
+function matchesCategoryFilter(qa: QADict, category: string | null): boolean {
+  if (!category) return true;
+  return qaCategories(qa).includes(category);
+}
+
+function rerankCandidates(
+  results: readonly SearchResult[],
+  topK: number,
+  query: string,
+): readonly SearchResult[] {
+  const candidates = [...results];
+  const selected: SearchResult[] = [];
+  const terms = queryTerms(query);
+  const queryCategories = inferQueryLabels(query, QUERY_CATEGORY_HINTS);
+
+  while (candidates.length > 0 && selected.length < topK) {
+    const selectedSigs = new Set(
+      selected.map((item) => questionSignature(item.qa.question)),
+    );
+    const selectedCategories = new Set(
+      selected.flatMap((item) => qaCategories(item.qa)),
+    );
+    const selectedIntents = new Set(
+      selected.flatMap((item) => qaIntents(item.qa)),
+    );
+    const selectedTerms = new Set(
+      selected.flatMap((item) => [
+        ...matchedQueryTerms(item.qa.retrieval_surface_text ?? "", terms),
+      ]),
+    );
+
+    let bestIndex = 0;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index]!;
+      let adjustedScore = candidate.score;
+      const signature = questionSignature(candidate.qa.question);
+      if (selectedSigs.has(signature)) adjustedScore -= 0.25;
+
+      const categories = qaCategories(candidate.qa);
+      const uncoveredQueryCategories = categories.filter(
+        (category) =>
+          queryCategories.has(category) && !selectedCategories.has(category),
+      ).length;
+      adjustedScore += categoryDiversityBoost(uncoveredQueryCategories);
+
+      const intents = qaIntents(candidate.qa);
+      if (
+        intents.length > 0 &&
+        intents.every((intent) => !selectedIntents.has(intent))
+      ) {
+        adjustedScore += 0.04;
+      }
+
+      const candidateTerms = matchedQueryTerms(
+        candidate.qa.retrieval_surface_text ?? "",
+        terms,
+      );
+      const novelTerms = [...candidateTerms].filter(
+        (term) => !selectedTerms.has(term),
+      ).length;
+      adjustedScore += novelQueryTermBoost(novelTerms, terms.length);
+
+      if (adjustedScore > bestScore) {
+        bestScore = adjustedScore;
+        bestIndex = index;
+      }
+    }
+
+    if (!Number.isFinite(bestScore)) break;
+    selected.push({ qa: candidates[bestIndex]!.qa, score: bestScore });
+    candidates.splice(bestIndex, 1);
+  }
+
+  return selected;
+}
 
 export class SearchEngine {
   private readonly qaPairs: readonly QADict[];
@@ -82,7 +410,8 @@ export class SearchEngine {
     this.synonymBoostVec = new Float32Array(rows);
     for (let i = 0; i < rows; i++) {
       const synonyms = qaPairs[i]!._enrichment?.synonyms;
-      this.synonymBoostVec[i] = synonyms && synonyms.length > 0 ? this.config.synonymBoost : 0;
+      this.synonymBoostVec[i] =
+        synonyms && synonyms.length > 0 ? this.config.synonymBoost : 0;
     }
 
     // Pre-compute freshness vector
@@ -107,14 +436,14 @@ export class SearchEngine {
     // Category mask
     if (category) {
       for (let i = 0; i < this.rows; i++) {
-        if (this.qaPairs[i]!.category !== category) {
+        if (!matchesCategoryFilter(this.qaPairs[i]!, category)) {
           scores[i] = -1;
         }
       }
     }
 
     // Get top-K indices
-    const indices = topKIndices(scores, topK);
+    const indices = topKIndices(scores, topK * this.config.overRetrieveFactor);
 
     const results: SearchResult[] = [];
     for (const idx of indices) {
@@ -122,7 +451,7 @@ export class SearchEngine {
         results.push({ qa: this.qaPairs[idx]!, score: scores[idx]! });
       }
     }
-    return results;
+    return rerankCandidates(results, topK, query);
   }
 
   /**
@@ -130,7 +459,12 @@ export class SearchEngine {
    */
   private hybridScores(query: string, queryEmb: Float32Array): Float32Array {
     const qNorm = normalizeL2(queryEmb);
-    const semanticScores = matrixDotVector(this.embNorm, qNorm, this.rows, this.cols);
+    const semanticScores = matrixDotVector(
+      this.embNorm,
+      qNorm,
+      this.rows,
+      this.cols,
+    );
 
     const scores = new Float32Array(this.rows);
     for (let i = 0; i < this.rows; i++) {
@@ -141,9 +475,13 @@ export class SearchEngine {
       );
 
       const synonymBonus = this.computeSynonymBonusSingle(query, i);
+      const featureScore = metadataFeatureScore(query, this.qaPairs[i]!);
 
       const base =
-        semanticScores[i]! * this.config.semanticWeight + kwBoost + synonymBonus;
+        semanticScores[i]! * this.config.semanticWeight +
+        kwBoost +
+        synonymBonus +
+        featureScore;
 
       scores[i] = base * this.freshnessVec[i]!;
     }
@@ -178,7 +516,13 @@ export class SearchEngine {
     category: string | null = null,
     minScore: number = 0.1,
   ): readonly SearchResult[] {
-    return this.search(query, queryEmbedding, topK * this.config.overRetrieveFactor, category, minScore);
+    return this.search(
+      query,
+      queryEmbedding,
+      topK * this.config.overRetrieveFactor,
+      category,
+      minScore,
+    );
   }
 
   /**
@@ -199,21 +543,24 @@ export class SearchEngine {
         this.config.kwBoost,
       );
       const synonymBonus = this.computeSynonymBonusSingle(query, i);
-      scores[i] = (kwBoost + synonymBonus) * this.freshnessVec[i]!;
+      const featureScore = metadataFeatureScore(query, this.qaPairs[i]!);
+      scores[i] =
+        (kwBoost + synonymBonus + featureScore) * this.freshnessVec[i]!;
     }
 
     if (category) {
       for (let i = 0; i < this.rows; i++) {
-        if (this.qaPairs[i]!.category !== category) {
+        if (!matchesCategoryFilter(this.qaPairs[i]!, category)) {
           scores[i] = -1;
         }
       }
     }
 
-    const indices = topKIndices(scores, topK);
-    return indices
+    const indices = topKIndices(scores, topK * this.config.overRetrieveFactor);
+    const results = indices
       .filter((idx) => scores[idx]! >= minScore)
       .map((idx) => ({ qa: this.qaPairs[idx]!, score: scores[idx]! }));
+    return rerankCandidates(results, topK, query);
   }
 }
 

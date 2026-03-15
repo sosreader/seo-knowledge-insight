@@ -7,13 +7,127 @@ OpenAI API 封裝
 """
 from __future__ import annotations
 
+import hashlib
 import functools
 import json
+import math
+import os
+import re
+from collections import Counter
 
 from openai import OpenAI
 
 import config
 from utils.observability import observe
+from utils.synonym_dict import expand_query_tokens
+
+
+_LOCAL_EMBED_DIM = 256
+_CATEGORY_RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("索引與檢索", ("索引", "檢索", "canonical", "robots", "sitemap", "crawl budget", "已檢索未索引", "duplicate", "重複內容")),
+    ("連結策略", ("backlink", "反向連結", "內部連結", "外部連結", "anchor", "disavow", "錨文字", "link building")),
+    ("搜尋表現分析", ("ctr", "曝光", "點擊", "排名", "serp", "search console", "impression", "click", "position")),
+    ("內容策略", ("內容", "title", "meta", "keyword", "關鍵字", "eeat", "topic cluster", "content marketing", "內容策略")),
+    ("Discover與AMP", ("discover", "amp", "top stories", "焦點新聞")),
+    ("技術SEO", ("technical seo", "core web vitals", "lcp", "cls", "schema", "structured data", "速度", "https", "hreflang", "pagespeed", "爬蟲")),
+    ("GA與數據追蹤", ("ga4", "analytics", "事件", "追蹤", "歸因", "session", "工作階段")),
+    ("平台策略", ("vocus", "自訂網域", "站內搜尋", "方案頁", "平台")),
+    ("演算法與趨勢", ("algorithm", "核心更新", "helpful content", "ai overview", "ai search", "sge", "chatgpt", "grok", "llmo", "trend", "演算法", "趨勢")),
+]
+_ADVANCED_MARKERS = (
+    "canonical", "robots", "schema", "structured data", "lcp", "cls", "ga4",
+    "crawl", "disavow", "hreflang", "api", "embedding", "ai overview", "chatgpt",
+)
+_RAW_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9\-_/]{1,}|[\u4e00-\u9fff]")
+_TIME_SENSITIVE_MARKERS = (
+    "2023", "2024", "2025", "2026", "update", "核心更新", "演算法", "ai overview",
+    "sge", "study", "research", "experiment", "統計", "研究", "實驗", "trend",
+)
+
+
+def _has_openai_key() -> bool:
+    return bool(os.getenv("OPENAI_API_KEY", "").strip())
+
+
+def _local_embed_text(text: str, dim: int = _LOCAL_EMBED_DIM) -> list[float]:
+    lowered = text.lower()
+    raw_counts = Counter(_RAW_TOKEN_RE.findall(lowered))
+    expanded_tokens = expand_query_tokens(lowered)
+    vector = [0.0] * dim
+    for token, count in raw_counts.items():
+        bucket = int(hashlib.sha256(token.encode("utf-8")).hexdigest(), 16) % dim
+        vector[bucket] += float(count)
+
+    for token in expanded_tokens:
+        if token in raw_counts:
+            continue
+        bucket = int(hashlib.sha256(token.encode("utf-8")).hexdigest(), 16) % dim
+        vector[bucket] += 0.5
+
+    norm = math.sqrt(sum(value * value for value in vector))
+    if norm == 0:
+        return vector
+    return [value / norm for value in vector]
+
+
+def _merge_keywords(qa_group: list[dict]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for qa in qa_group:
+        for keyword in qa.get("keywords", []):
+            normalized = keyword.strip()
+            if not normalized:
+                continue
+            lowered = normalized.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            merged.append(normalized)
+            if len(merged) >= 7:
+                return merged
+    return merged[:7]
+
+
+def _merge_answers_locally(qa_group: list[dict]) -> str:
+    answers = [qa.get("answer", "").strip() for qa in qa_group if qa.get("answer", "").strip()]
+    if not answers:
+        return ""
+
+    base_answer = max(answers, key=len)
+    supplements: list[str] = []
+    base_normalized = re.sub(r"\s+", " ", base_answer)
+    for answer in sorted(answers, key=len, reverse=True):
+        if answer == base_answer:
+            continue
+        normalized = re.sub(r"\s+", " ", answer)
+        if normalized in base_normalized or base_normalized in normalized:
+            continue
+        supplements.append(answer)
+        if len(supplements) >= 2:
+            break
+
+    if not supplements:
+        return base_answer
+    return base_answer + "\n\n補充：" + "\n\n".join(supplements)
+
+
+def _classify_qa_locally(question: str, answer: str) -> dict:
+    combined = f"{question}\n{answer}".lower()
+    scored = []
+    for category, markers in _CATEGORY_RULES:
+        score = sum(1 for marker in markers if marker in combined)
+        scored.append((score, category))
+    score, category = max(scored, key=lambda item: item[0])
+    if score == 0:
+        category = "其他"
+
+    difficulty = "進階" if len(answer) >= 180 or any(marker in combined for marker in _ADVANCED_MARKERS) else "基礎"
+    evergreen = not any(marker in combined for marker in _TIME_SENSITIVE_MARKERS)
+    return {
+        "category": category,
+        "difficulty": difficulty,
+        "evergreen": evergreen,
+    }
 
 
 @functools.lru_cache(maxsize=1)
@@ -252,6 +366,18 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     """
     from utils.pipeline_cache import cache_get, cache_set
 
+    if not _has_openai_key():
+        result: list[list[float]] = []
+        for text in texts:
+            cached = cache_get("embedding", text, model="local-embed-v1")
+            if cached is not None:
+                result.append(cached)
+                continue
+            embedding = _local_embed_text(text)
+            cache_set("embedding", text, embedding, model="local-embed-v1")
+            result.append(embedding)
+        return result
+
     client = _client()
 
     # 過濾空字串，記住原始位置
@@ -344,6 +470,25 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
     qa_group: [{question, answer, source_title, source_date, ...}, ...]
     """
     from utils.pipeline_cache import cache_get, cache_set
+
+    if not _has_openai_key():
+        source_dates = sorted({qa.get("source_date", "") for qa in qa_group if qa.get("source_date", "")})
+        best_question = max(qa_group, key=lambda qa: (len(qa.get("question", "")), len(qa.get("answer", ""))))
+        return {
+            "question": best_question.get("question", ""),
+            "answer": _merge_answers_locally(qa_group),
+            "keywords": _merge_keywords(qa_group),
+            "source_dates": source_dates,
+            "merged_from": [
+                {
+                    "source_title": qa.get("source_title", ""),
+                    "source_date": qa.get("source_date", ""),
+                    "source_file": qa.get("source_file", ""),
+                    "stable_id": qa.get("stable_id", ""),
+                }
+                for qa in qa_group
+            ],
+        }
 
     client = _client()
 
@@ -566,6 +711,11 @@ def classify_qa(question: str, answer: str) -> dict:
     cached = cache_get("classify", cache_key, model=config.CLASSIFY_MODEL)
     if cached is not None:
         return cached
+
+    if not _has_openai_key():
+        result = _classify_qa_locally(question, answer)
+        cache_set("classify", cache_key, result, model="local-heuristic")
+        return result
 
     client = _client()
 

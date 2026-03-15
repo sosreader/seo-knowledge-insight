@@ -13,6 +13,7 @@
 - **Collection-Scoped 去重合併** — 各 collection 內部獨立去重，跨 collection 保留（支援多來源知識不互相覆蓋）
 - **智能分類標籤** — 10 個分類（技術 SEO、內容策略、連結建設等），用 `gpt-5-mini` 自動標記難度與時效性
 - **雙層 metadata** — `source_type`（meeting/article）+ `source_collection`（seo-meetings/genehong-medium/ithelp-sc-kpi/google-case-studies）
+- **Retrieval 維度 metadata** — `primary_category`、`categories`、`intent_labels`、`scenario_tags`、`serving_tier`、`retrieval_phrases`、`booster_target_queries`
 - **目前規模** — 1,323 筆 Q&A（4 個 collection：notion-seo-meetings 584、medium-genehong 511、ithelp-gsc-kpi 185、google-case-studies 43）
 
 ### 2. 每週 SEO 週報生成（步驟 4）
@@ -33,18 +34,19 @@
 ### 3. Q&A 品質評估（步驟 5）
 
 - **五維度 LLM-as-Judge** — Relevance、Accuracy、Completeness、Granularity、Faithfulness（各 1–5 分）
-- **Retrieval 品質指標** — Hit Rate 100%、MRR 0.88、Recall@K 77.5%、NDCG@K 0.72（v2.12 基準，20 golden cases）
+- **Retrieval 品質指標** — Retrieval Data Dimensions phase baseline `precision_at_k=0.58` → Phase 4 `precision_at_k=0.85`、`boosterless_precision_at_k=0.83`、`canonical_top1_rate=0.37`、`MRR=0.99`（40 golden cases）
 - **分類準確度檢驗** — Category、Difficulty、Evergreen 標籤驗證
 - **對標基準線** — 自動與歷史 eval 比較進度（v2.0: Relevance 5.00、Accuracy 4.30、Completeness 3.95）
 
 ### 4. REST API 服務（Hono + TypeScript，`api/`）
 
 - **語意搜尋** — `POST /api/v1/search`（有 OpenAI: hybrid search，無 OpenAI: 原生 keyword search 自動降級）
+- **Runtime retrieval rerank** — top-K 前先 over-retrieve，使用 category / intent / scenario / serving tier / duplicate suppression 做 metadata-aware rerank
 - **RAG 問答** — `POST /api/v1/chat`（三模式：Agent mode / Full RAG + GPT / Context-only 自動降級）+ `POST /api/v1/chat/stream`（SSE streaming）
 - **Q&A 管理** — `GET /api/v1/qa/*`（列表、詳情、分類查詢，使用穩定的 16-char hex ID 或 seq number）
 - **週報管理** — `GET/POST /api/v1/reports/*`（列表、詳情、生成）
 - **對話管理** — `GET/POST/DELETE /api/v1/sessions/*`（CRUD、訊息歷史）
-- **Pipeline 管理** — `/api/v1/pipeline/*`（17 endpoints：狀態、會議、來源文件、指標、快照、趨勢分析、觸發 fetch/fetch-articles/extract/dedupe）
+- **Pipeline 管理** — `/api/v1/pipeline/*`（18 endpoints：狀態、會議、來源文件、指標、快照、趨勢分析、觸發 fetch/fetch-articles/extract/dedupe）
 - **同義詞管理** — `/api/v1/synonyms/*`（4 endpoints：列表、新增、更新、刪除；雙層設計：靜態+自訂）
 - **API 安全** — API Key 認證（`X-API-Key` header）、Rate Limit（chat 20/min、search/qa 60/min）、Zod schema validation
 - **API 文件** — 啟動 dev server 後存取：
@@ -54,11 +56,13 @@
 #### RAG 迭代改進（v2.11 新增）
 
 **Phase 2：Contextual Embeddings**
+
 - `scripts/_generate_context.py` — 用 Claude Haiku 離線生成 QA 情境 context（150–300 字/筆）
 - `output/qa_context.json` — 預生成的 situating context（無運行時成本）
 - 搜尋和 chat 時可利用 context 豐富檢索結果
 
 **Phase 3：Re-ranking 服務**（可選，需要 `ANTHROPIC_API_KEY`）
+
 - `api/src/services/reranker.ts` — Claude Haiku reranker service
   - 初期 over-retrieve K×3 候選
   - 用 XML 結構化 prompt 重排序、評分
@@ -66,7 +70,14 @@
   - 錯誤時自動 fallback 至原始排序
 - **實際效果**：Hit Rate 100%、MRR 0.88（v2.12 基準）
 
+**Phase 3.5：Retrieval Data Dimensions（2026-03-15）**
+
+- `scripts/enrich_qa.py` 回填 `categories`、`intent_labels`、`scenario_tags`、`serving_tier`、`retrieval_phrases`、`retrieval_surface_text`
+- `api/src/store/search-engine.ts` 與 `api/src/store/supabase-qa-store.ts` 將上述欄位接入 runtime hybrid / keyword search
+- `POST /api/v1/search` 若帶 `extraction_model`，會先以 `top_k × 3` over-retrieve，再做 model filter 與 maturity boost，避免 post-filter 導致回傳數不足
+
 **Phase 4：Context Relevance 評估（v2.12 新增）**
+
 - `api/src/services/context-relevance.ts` — Claude Haiku LLM judge
   - 評估 query 與 retrieved contexts 的語意相關性
   - 輸出 0–1 分（0 = 完全不相關，1 = 完全相關）+ per-context 細分評分
@@ -75,6 +86,7 @@
 - eval endpoints 已於 v2.18 移除（改用離線 Laminar eval + CI 自動化）
 
 **環境變數（v2.11）**：
+
 ```env
 ANTHROPIC_API_KEY=sk-ant-...     # 用於 Reranker（可選）
 CONTEXT_EMBEDDING_WEIGHT=0.6     # Context 加權（預設 0.6）
@@ -89,6 +101,16 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 | Recall@K | 80% |
 | F1 Score | 0.73 |
 | MRR | 0.88 |
+
+Retrieval Data Dimensions phase gate（2026-03-15，40 cases，top-k=5）：
+| 指標 | Baseline | Phase 4 |
+|------|----------|---------|
+| Precision@K | 0.58 | 0.85 |
+| Boosterless Precision@K | — | 0.83 |
+| Dual Category Recall@K | — | 1.00 |
+| Multi-label F1@K | — | 0.97 |
+| Canonical Top-1 Rate | — | 0.37 |
+| MRR | 0.92 | 0.99 |
 
 ### 5. Claude Code 模式（不需要 OpenAI API Key）
 
@@ -110,6 +132,7 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 - **自動監控三環節** — Retrieval 品質、Q&A Extraction、RAG Chat 端到端表現
 - **無需額外 API** — 基於 Laminar SDK，純 Python/SQL 邏輯，不消耗 OpenAI tokens
 - **儀表板可視化** — 所有指標匯總至 Laminar 後台（laminar.sh/app/evals）
+- **Meeting-Prep 評估（v3.2）** — 三層架構：Layer 1 結構 eval（11 evaluators，`evals/eval_meeting_prep_structure.py`）、Layer 2 grounding eval（5 evaluators，`evals/eval_meeting_prep_grounding.py`）、Layer 3 LLM-as-Judge（`/evaluate-meeting-prep-quality`）；共 13 個 Laminar eval groups
 
 ---
 
@@ -123,66 +146,70 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 
 ### Pipeline 建構
 
-| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
-| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| Step 1a — Notion 擷取       | `make fetch-notion`                               | 由 `/pipeline-local` 整合執行                       | `POST /api/v1/pipeline/fetch`               |
-| Step 1b-d — 文章擷取        | `make fetch-articles`                             | 由 `/pipeline-local` 整合執行                       | `POST /api/v1/pipeline/fetch-articles`      |
-| Step 2 — Q&A 萃取           | `make extract-qa`                                 | `/extract-qa`（不需要 OpenAI）                      | `POST /api/v1/pipeline/extract-qa`          |
-| Step 3 — 去重 + 分類        | `make dedupe-classify`                            | `/dedupe-classify`（不需要 OpenAI）                 | `POST /api/v1/pipeline/dedupe-classify`     |
-| Step 4 — 週報生成           | `make generate-report`                            | `/generate-report <URL>`（不需要 OpenAI）           | `POST /api/v1/reports/generate`（支援兩種模式：snapshot_id 本地 / metrics_url OpenAI） |
-| Step 5 — Q&A 品質評估       | `make evaluate-qa`                                | `/evaluate-qa-local`（不需要 OpenAI）               | 無對應 — 屬長時間離線作業                    |
-| Step 5a — 語意 Reranker 評估| `make eval-semantic` / `make eval-semantic-k3`   | 無獨立指令                                          | 無對應 — 對比三種模式（keyword/hybrid/rerank）|
-| Step 5b — Laminar Eval Run | `make eval-laminar`                               | 無獨立指令                                          | 無對應 — keyword baseline，推送 Dashboard   |
-| Step 5c — Provider 評估     | 無獨立指令                                        | `/evaluate-provider <目錄>`（不需要 OpenAI）        | 無對應 — 屬長時間離線作業                    |
-| Steps 1–4 — 知識庫建構      | `make pipeline`                                   | `/pipeline-local`（不需要 OpenAI）                  | 無對應 — 請依序呼叫上方個別端點               |
-| Steps 1–5 — 完整 Pipeline   | `python scripts/run_pipeline.py`                  | `/run-pipeline`（需要 OpenAI）                      | 無對應 — 請依序呼叫上方個別端點               |
+| 功能                         | CLI 腳本                                       | Claude Code 指令                             | REST API                                                                               |
+| ---------------------------- | ---------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Step 1a — Notion 擷取        | `make fetch-notion`                            | 由 `/pipeline-local` 整合執行                | `POST /api/v1/pipeline/fetch`                                                          |
+| Step 1b-d — 文章擷取         | `make fetch-articles`                          | 由 `/pipeline-local` 整合執行                | `POST /api/v1/pipeline/fetch-articles`                                                 |
+| Step 2 — Q&A 萃取            | `make extract-qa`                              | `/extract-qa`（不需要 OpenAI）               | `POST /api/v1/pipeline/extract-qa`                                                     |
+| Step 3 — 去重 + 分類         | `make dedupe-classify`                         | `/dedupe-classify`（不需要 OpenAI）          | `POST /api/v1/pipeline/dedupe-classify`                                                |
+| Step 4 — 週報生成            | `make generate-report`                         | `/generate-report <URL>`（不需要 OpenAI）    | `POST /api/v1/reports/generate`（支援兩種模式：snapshot_id 本地 / metrics_url OpenAI） |
+| Step 5 — Q&A 品質評估        | `make evaluate-qa`                             | `/evaluate-qa-local`（不需要 OpenAI）        | 無對應 — 屬長時間離線作業                                                              |
+| Step 5a — 語意 Reranker 評估 | `make eval-semantic` / `make eval-semantic-k3` | 無獨立指令                                   | 無對應 — 對比三種模式（keyword/hybrid/rerank）                                         |
+| Step 5b — Laminar Eval Run   | `make eval-laminar`                            | 無獨立指令                                   | 無對應 — keyword baseline，推送 Dashboard                                              |
+| Step 5c — Provider 評估      | 無獨立指令                                     | `/evaluate-provider <目錄>`（不需要 OpenAI） | 無對應 — 屬長時間離線作業                                                              |
+| Steps 1–4 — 知識庫建構       | `make pipeline`                                | `/pipeline-local`（不需要 OpenAI）           | 無對應 — 請依序呼叫上方個別端點                                                        |
+| Steps 1–5 — 完整 Pipeline    | `python scripts/run_pipeline.py`               | `/run-pipeline`（需要 OpenAI）               | 無對應 — 請依序呼叫上方個別端點                                                        |
 
 ### Pipeline 監控
 
-| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
-| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| Pipeline 狀態               | `make status`                                     | 無獨立指令                                          | `GET /api/v1/pipeline/status`               |
-| 待處理列表                  | `make list-unprocessed`                           | 無獨立指令                                          | `GET /api/v1/pipeline/unprocessed`          |
-| 會議列表                    | 無獨立指令                                        | 無獨立指令                                          | `GET /api/v1/pipeline/meetings`             |
-| 會議預覽                    | 無獨立指令 — 直接讀 `raw_data/markdown/*.md`      | 無獨立指令 — 直接讀檔案                              | `GET /api/v1/pipeline/meetings/{id}/preview`|
-| 來源文件列表                | 無獨立指令                                        | 無獨立指令                                          | `GET /api/v1/pipeline/source-docs`（支援 filter） |
-| 來源文件預覽                | 無獨立指令 — 直接讀檔案                            | 無獨立指令 — 直接讀檔案                              | `GET /api/v1/pipeline/source-docs/:collection/:file/preview` |
-| Fetch 日誌                  | 無獨立指令 — 讀 `output/fetch_logs/`              | 無獨立指令 — 直接讀檔案                              | `GET /api/v1/pipeline/logs`                 |
-| 指標解析                    | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/pipeline/metrics`             |
-| 指標快照管理                | 無獨立指令                                        | 無獨立指令                                          | `POST /api/v1/pipeline/metrics/save`、`GET /api/v1/pipeline/metrics/snapshots`、`DELETE /api/v1/pipeline/metrics/snapshots/{id}` |
+| 功能          | CLI 腳本                                     | Claude Code 指令        | REST API                                                                                                                         |
+| ------------- | -------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Pipeline 狀態 | `make status`                                | 無獨立指令              | `GET /api/v1/pipeline/status`                                                                                                    |
+| 待處理列表    | `make list-unprocessed`                      | 無獨立指令              | `GET /api/v1/pipeline/unprocessed`                                                                                               |
+| 會議列表      | 無獨立指令                                   | 無獨立指令              | `GET /api/v1/pipeline/meetings`                                                                                                  |
+| 會議預覽      | 無獨立指令 — 直接讀 `raw_data/markdown/*.md` | 無獨立指令 — 直接讀檔案 | `GET /api/v1/pipeline/meetings/{id}/preview`                                                                                     |
+| 來源文件列表  | 無獨立指令                                   | 無獨立指令              | `GET /api/v1/pipeline/source-docs`（支援 filter）                                                                                |
+| 來源文件預覽  | 無獨立指令 — 直接讀檔案                      | 無獨立指令 — 直接讀檔案 | `GET /api/v1/pipeline/source-docs/:collection/:file/preview`                                                                     |
+| Fetch 日誌    | 無獨立指令 — 讀 `output/fetch_logs/`         | 無獨立指令 — 直接讀檔案 | `GET /api/v1/pipeline/logs`                                                                                                      |
+| 指標解析      | 無獨立指令                                   | 無獨立指令              | `POST /api/v1/pipeline/metrics`                                                                                                  |
+| 指標快照管理  | 無獨立指令                                   | 無獨立指令              | `POST /api/v1/pipeline/metrics/save`、`GET /api/v1/pipeline/metrics/snapshots`、`DELETE /api/v1/pipeline/metrics/snapshots/{id}` |
 
 ### 搜尋與問答
 
-| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
-| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| 知識庫搜尋                  | `python scripts/qa_tools.py search --query "..."` | `/search <問題>`（不需要 OpenAI）                   | `POST /api/v1/search`                       |
-| RAG 問答                    | 無對應 — 需維護多輪歷史狀態                       | `/chat`（不需要 OpenAI）                            | `POST /api/v1/chat`                         |
-| Agentic RAG 問答            | 無對應                                            | `/chat-agent`（不需要 OpenAI，多輪自主搜尋）        | `POST /api/v1/chat`（`AGENT_ENABLED=true`） |
-| 對話管理（CRUD）            | 無對應                                            | 無對應                                              | `GET/POST/DELETE /api/v1/sessions/*`        |
-| 使用者回饋                  | 無對應                                            | 無對應                                              | `POST /api/v1/feedback`                     |
+| 功能             | CLI 腳本                                          | Claude Code 指令                             | REST API                                    |
+| ---------------- | ------------------------------------------------- | -------------------------------------------- | ------------------------------------------- |
+| 知識庫搜尋       | `python scripts/qa_tools.py search --query "..."` | `/search <問題>`（不需要 OpenAI）            | `POST /api/v1/search`                       |
+| RAG 問答         | 無對應 — 需維護多輪歷史狀態                       | `/chat`（不需要 OpenAI）                     | `POST /api/v1/chat`                         |
+| Agentic RAG 問答 | 無對應                                            | `/chat-agent`（不需要 OpenAI，多輪自主搜尋） | `POST /api/v1/chat`（`AGENT_ENABLED=true`） |
+| 對話管理（CRUD） | 無對應                                            | 無對應                                       | `GET/POST/DELETE /api/v1/sessions/*`        |
+| 使用者回饋       | 無對應                                            | 無對應                                       | `POST /api/v1/feedback`                     |
 
 ### 資料查詢
 
-| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
-| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| Q&A 列表查詢                | 無獨立指令 — 讀 `output/qa_final.json`            | 無對應 — 屬結構化過濾，REST 更適合                   | `GET /api/v1/qa`                            |
-| 單筆 Q&A 詳情               | 無獨立指令 — 讀 `output/qa_final.json`            | 無對應 — 屬 ID 查詢，REST 更適合                     | `GET /api/v1/qa/{id}`（hex 或 seq）         |
-| 所有分類                    | 無獨立指令 — 讀 `output/qa_final.json`            | 無對應 — 屬聚合查詢，REST 更適合                     | `GET /api/v1/qa/categories`                 |
-| 資料集列表                  | 無獨立指令                                        | 無對應                                              | `GET /api/v1/qa/collections`                |
-| 週報列表                    | 無獨立指令 — 掃描 `output/report_*.md`            | 無對應                                              | `GET /api/v1/reports`                       |
-| 單篇週報詳情                | 無獨立指令 — 讀 `output/report_YYYYMMDD.md`       | 無對應                                              | `GET /api/v1/reports/{date}`                |
+| 功能          | CLI 腳本                                    | Claude Code 指令                   | REST API                            |
+| ------------- | ------------------------------------------- | ---------------------------------- | ----------------------------------- |
+| Q&A 列表查詢  | 無獨立指令 — 讀 `output/qa_final.json`      | 無對應 — 屬結構化過濾，REST 更適合 | `GET /api/v1/qa`                    |
+| 單筆 Q&A 詳情 | 無獨立指令 — 讀 `output/qa_final.json`      | 無對應 — 屬 ID 查詢，REST 更適合   | `GET /api/v1/qa/{id}`（hex 或 seq） |
+| 所有分類      | 無獨立指令 — 讀 `output/qa_final.json`      | 無對應 — 屬聚合查詢，REST 更適合   | `GET /api/v1/qa/categories`         |
+| 資料集列表    | 無獨立指令                                  | 無對應                             | `GET /api/v1/qa/collections`        |
+| 週報列表      | 無獨立指令 — 掃描 `output/report_*.md`      | 無對應                             | `GET /api/v1/reports`               |
+| 單篇週報詳情  | 無獨立指令 — 讀 `output/report_YYYYMMDD.md` | 無對應                             | `GET /api/v1/reports/{date}`        |
 
 ### 離線評估工具（v2.18 eval route 移除）
 
-| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | 說明                                    |
-| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| Q&A Retrieval 評估          | `make evaluate-qa`（含 `--eval-retrieval`）        | `/evaluate-qa-local`（含 Retrieval）                 | Keyword Hit Rate、MRR、Precision@K、Recall@K、F1 — 離線評估 |
-| 語意 + Reranker 對比         | `make eval-semantic`（三模式）、`make eval-semantic-k3`（top-k=3）| 無獨立指令 | 三種檢索模式（keyword/hybrid/hybrid+rerank）的品質對比     |
-| Laminar 正式 Eval Run       | `make eval-laminar`（推送 Dashboard）             | 無獨立指令                                          | 離線 Laminar dataset，5 指標推送儀表板 |
-| 週報品質評估                | `python scripts/_eval_report.py <report_path>`   | 無獨立指令                                          | 7 維度規則式評分 — section_coverage、kb_citations、...；推送 Laminar |
-| 跨 Provider 評估             | 無獨立指令                                        | `/evaluate-provider <目錄>`（不需要 OpenAI）        | LLM Provider SEO 洞察品質評估（Grounding、Actionability、Relevance、Topic Coverage） |
-| Faithfulness 評估           | 無獨立指令                                        | `/evaluate-faithfulness-local`                      | RAGAS：Answer 是否有幻覺（Claude Code as Judge）|
-| Context Precision 評估      | 無獨立指令                                        | `/evaluate-context-precision-local`                 | RAGAS：Retrieved contexts 相關性評估 |
+| 功能                              | CLI 腳本                                                           | Claude Code 指令                             | 說明                                                                                                                                    |
+| --------------------------------- | ------------------------------------------------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Q&A Retrieval 評估                | `make evaluate-qa`（含 `--eval-retrieval`）                        | `/evaluate-qa-local`（含 Retrieval）         | Keyword Hit Rate、MRR、Precision@K、Recall@K、F1 — 離線評估                                                                             |
+| 語意 + Reranker 對比              | `make eval-semantic`（三模式）、`make eval-semantic-k3`（top-k=3） | 無獨立指令                                   | 三種檢索模式（keyword/hybrid/hybrid+rerank）的品質對比                                                                                  |
+| Laminar 正式 Eval Run             | `make eval-laminar`（推送 Dashboard）                              | 無獨立指令                                   | 離線 Laminar dataset，5 指標推送儀表板                                                                                                  |
+| 週報品質評估                      | `python scripts/_eval_report.py <report_path>`                     | 無獨立指令                                   | 7 維度規則式評分 — section_coverage、kb_citations、...；推送 Laminar                                                                    |
+| 跨 Provider 評估                  | 無獨立指令                                                         | `/evaluate-provider <目錄>`（不需要 OpenAI） | LLM Provider SEO 洞察品質評估（Grounding、Actionability、Relevance、Topic Coverage）                                                    |
+| Faithfulness 評估                 | 無獨立指令                                                         | `/evaluate-faithfulness-local`               | RAGAS：Answer 是否有幻覺（Claude Code as Judge）                                                                                        |
+| Context Precision 評估            | 無獨立指令                                                         | `/evaluate-context-precision-local`          | RAGAS：Retrieved contexts 相關性評估                                                                                                    |
+| Meeting-Prep 結構 eval（L1）      | `make evaluate-meeting-prep-structure`                             | 無獨立指令                                   | 11 evaluators：section_completeness、metadata_valid、eeat_score_format 等；推送 Laminar `meeting_prep_structure` group                  |
+| Meeting-Prep Grounding eval（L2） | `make evaluate-meeting-prep-grounding`                             | 無獨立指令                                   | 5 evaluators：citation_id_resolution、citation_count_in_range、inline_citation_coverage 等；推送 Laminar `meeting_prep_grounding` group |
+| Meeting-Prep 合併（L1+L2）        | `make evaluate-meeting-prep`                                       | 無獨立指令                                   | 執行 L1 + L2 兩層評估                                                                                                                   |
+| Meeting-Prep LLM Judge（L3）      | 無獨立指令                                                         | `/evaluate-meeting-prep-quality`             | 5 維度 LLM-as-Judge（Claude Code as Judge，不需要 OpenAI）                                                                              |
 
 ### Laminar Eval Groups ↔ 來源腳本 ↔ 評估對象
 
@@ -267,25 +294,27 @@ flowchart LR
 
 **Eval Groups 速查表**：
 
-| Laminar Group | 來源腳本 | 觸發方式 | 評估對象 | 指標 |
-|---------------|---------|---------|---------|------|
-| `retrieval_quality` | `evals/eval_retrieval.py` | CI 自動（每次 push） | 關鍵字搜尋 | keyword_hit_rate, top1_category, top5_coverage |
-| `keyword-retrieval` | `_eval_laminar.py` | `make eval-laminar` | 關鍵字搜尋 | hit_rate, mrr, precision, recall, f1, ndcg, top1_cat, top5_cov |
-| `retrieval-enhancement` | `_eval_laminar.py --group` | `make eval-laminar` | 同義詞增強搜尋 | synonym_coverage, kw_hit_with_synonyms, freshness_rank |
-| `report-quality` | `_eval_report.py` | 手動 | 週報生成 | section_coverage, kb_links, research_cited |
-| `report-quality-eval` | `_eval_laminar.py --mode report` | `make eval-laminar` | 週報生成 | section_coverage, kb_links, research_cited, overall |
-| `extraction_quality` | `evals/eval_extraction.py` | CI 自動（graceful skip） | Q&A 萃取 | qa_count_in_range, keyword_coverage, no_admin, avg_confidence |
-| `enrichment_quality` | `evals/eval_enrichment.py` | 手動 | 離線 enrichment | kw_hit_with_synonyms, freshness_rank, synonym_coverage |
-| `chat_quality` | `evals/eval_chat.py` | 手動 | RAG 問答 | answer_keyword_coverage, top_source_category |
-| `data-quality` | `_eval_data_quality.py` | ETL CI / 手動 | 資料集整體 | qa_count, avg_confidence, category_distribution |
+| Laminar Group            | 來源腳本                               | 觸發方式                                    | 評估對象                  | 指標                                                                                                                                  |
+| ------------------------ | -------------------------------------- | ------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `retrieval_quality`      | `evals/eval_retrieval.py`              | CI 自動（每次 push）                        | 關鍵字搜尋                | keyword_hit_rate, top1_category, top5_coverage                                                                                        |
+| `keyword-retrieval`      | `_eval_laminar.py`                     | `make eval-laminar`                         | 關鍵字搜尋                | hit_rate, mrr, precision, recall, f1, ndcg, top1_cat, top5_cov                                                                        |
+| `retrieval-enhancement`  | `_eval_laminar.py --group`             | `make eval-laminar`                         | 同義詞增強搜尋            | synonym_coverage, kw_hit_with_synonyms, freshness_rank                                                                                |
+| `report-quality`         | `_eval_report.py`                      | 手動                                        | 週報生成                  | section_coverage, kb_links, research_cited                                                                                            |
+| `report-quality-eval`    | `_eval_laminar.py --mode report`       | `make eval-laminar`                         | 週報生成                  | section_coverage, kb_links, research_cited, overall                                                                                   |
+| `extraction_quality`     | `evals/eval_extraction.py`             | CI 自動（graceful skip）                    | Q&A 萃取                  | qa_count_in_range, keyword_coverage, no_admin, avg_confidence                                                                         |
+| `enrichment_quality`     | `evals/eval_enrichment.py`             | 手動                                        | 離線 enrichment           | kw_hit_with_synonyms, freshness_rank, synonym_coverage                                                                                |
+| `chat_quality`           | `evals/eval_chat.py`                   | 手動                                        | RAG 問答                  | answer_keyword_coverage, top_source_category                                                                                          |
+| `data-quality`           | `_eval_data_quality.py`                | ETL CI / 手動                               | 資料集整體                | qa_count, avg_confidence, category_distribution                                                                                       |
+| `meeting_prep_structure` | `evals/eval_meeting_prep_structure.py` | `make evaluate-meeting-prep-structure` / CI | Meeting-Prep 報告結構     | section_completeness, metadata_valid, citation_block_valid, question_count_valid, eeat_score_format, maturity_level_format 等 11 指標 |
+| `meeting_prep_grounding` | `evals/eval_meeting_prep_grounding.py` | `make evaluate-meeting-prep-grounding` / CI | Meeting-Prep 引用與接地性 | citation_id_resolution, citation_category_consistency, citation_count_in_range, s4_four_sources_populated, inline_citation_coverage   |
 
 > **注意**：Dashboard 中的 `v2.12-fixed`、`v2.12-1317items`、`retrieval-eval-20...` 等為歷史一次性 run（測試或版本驗證），不是固定 group。
 
 ### 系統
 
-| 功能                        | CLI 腳本                                          | Claude Code 指令                                    | REST API                                    |
-| --------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| 健康檢查                    | 無對應                                            | 無對應                                              | `GET /health`                               |
+| 功能     | CLI 腳本 | Claude Code 指令 | REST API      |
+| -------- | -------- | ---------------- | ------------- |
+| 健康檢查 | 無對應   | 無對應           | `GET /health` |
 
 **REST API** — 需要先啟動 `cd api && pnpm dev`（port 8002），並在 header 帶 `X-API-Key`（生產環境）。
 
@@ -338,7 +367,9 @@ seo-knowledge-insight/
 │   ├── __init__.py              # Package 初始化
 │   ├── eval_retrieval.py        # Retrieval 品質評估（keyword hit rate 等）
 │   ├── eval_extraction.py       # Q&A 萃取品質評估
-│   └── eval_chat.py             # RAG chat 端到端品質評估
+│   ├── eval_chat.py             # RAG chat 端到端品質評估
+│   ├── eval_meeting_prep_structure.py  # Meeting-Prep Layer 1 結構 eval（11 evaluators）
+│   └── eval_meeting_prep_grounding.py  # Meeting-Prep Layer 2 grounding eval（5 evaluators）
 ├── raw_data/                    # 原始資料（source of truth）
 │   ├── notion_json/             # Notion API 回傳的原始 JSON
 │   ├── markdown/                # Notion 會議 Markdown（87 份）
@@ -705,8 +736,8 @@ python scripts/run_pipeline.py --step generate-report
 | **本週 SEO 狀況概覽** | 2-3 句總結本週最重要變化                                              |
 | **重點指標分析**      | 核心指標（曝光/點擊/CTR/Coverage/Organic Search 等）數值與趨勢        |
 | **異常值與潛在原因**  | 月趨勢超過 ±15% 或週趨勢超過 ±20% 的指標，結合 Q&A 知識庫解釋可能原因 |
-| **本週行動建議**      | 2-3 條具體 Todo（附 Notion 連結指向原始會議紀錄）                      |
-| **相關 SEO 知識補充** | 從 Q&A 知識庫節錄最相關的 1-2 個問答（含原始會議紀錄連結）             |
+| **本週行動建議**      | 2-3 條具體 Todo（附 Notion 連結指向原始會議紀錄）                     |
+| **相關 SEO 知識補充** | 從 Q&A 知識庫節錄最相關的 1-2 個問答（含原始會議紀錄連結）            |
 
 ### 知識庫來源
 
@@ -982,10 +1013,10 @@ $$
         "synonyms": ["JavaScript rendering", "JS SEO", "..."],
         "freshness_score": 0.9076, // half_life=540d, min=0.5
         "search_hit_count": 3, // 來自 access_logs 統計
-        "notion_url": "https://www.notion.so/SEO-_2024-05-02-052d1af93b5b4de688e0ac006848ed45"
-      }
-    }
-  ]
+        "notion_url": "https://www.notion.so/SEO-_2024-05-02-052d1af93b5b4de688e0ac006848ed45",
+      },
+    },
+  ],
 }
 ```
 
@@ -1133,42 +1164,43 @@ api/src/
 
 #### Core（QA / Search / Chat）
 
-| Method   | Path                           | 說明                                                                                 | Rate Limit |
-| -------- | ------------------------------ | ------------------------------------------------------------------------------------ | ---------- |
-| `GET`    | `/health`                      | 健康檢查，回傳 `{status, timestamp, version}`                                        | 無限制     |
-| `POST`   | `/api/v1/search`               | 混合搜尋，body: `{query, top_k?, category?}`；回傳含 `mode: "hybrid" \| "keyword"`   | 60/min     |
-| `POST`   | `/api/v1/chat`                 | RAG 問答，body: `{message, history?}`；回傳含 `mode: "full" \| "context-only"`        | 20/min     |
-| `GET`    | `/api/v1/qa`                   | 列表查詢，query: `category`, `keyword`, `difficulty`, `evergreen`, `source_type`, `source_collection`, `limit`, `offset` | 60/min     |
-| `GET`    | `/api/v1/qa/categories`        | 所有分類（依數量降序）                                                               | 60/min     |
-| `GET`    | `/api/v1/qa/collections`       | 所有 collection 清單（含 source_type + count）                                        | 60/min     |
-| `GET`    | `/api/v1/qa/{id}`              | 單筆 Q&A（支援 16-char hex stable_id 或 integer seq）                                 | 60/min     |
+| Method | Path                     | 說明                                                                                                                     | Rate Limit |
+| ------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| `GET`  | `/health`                | 健康檢查，回傳 `{status, timestamp, version}`                                                                            | 無限制     |
+| `POST` | `/api/v1/search`         | 混合搜尋，body: `{query, top_k?, category?}`；回傳含 `mode: "hybrid" \| "keyword"`                                       | 60/min     |
+| `POST` | `/api/v1/chat`           | RAG 問答，body: `{message, history?}`；回傳含 `mode: "full" \| "context-only"`                                           | 20/min     |
+| `GET`  | `/api/v1/qa`             | 列表查詢，query: `category`, `keyword`, `difficulty`, `evergreen`, `source_type`, `source_collection`, `limit`, `offset` | 60/min     |
+| `GET`  | `/api/v1/qa/categories`  | 所有分類（依數量降序）                                                                                                   | 60/min     |
+| `GET`  | `/api/v1/qa/collections` | 所有 collection 清單（含 source_type + count）                                                                           | 60/min     |
+| `GET`  | `/api/v1/qa/{id}`        | 單筆 Q&A（支援 16-char hex stable_id 或 integer seq）                                                                    | 60/min     |
 
 #### Reports / Sessions / Feedback
 
-| Method   | Path                              | 說明                                    | Rate Limit |
-| -------- | --------------------------------- | --------------------------------------- | ---------- |
-| `GET`    | `/api/v1/reports`                 | 週報列表（newest first）                | 60/min     |
-| `GET`    | `/api/v1/reports/{date}`          | 單篇週報 Markdown（YYYYMMDD）           | 60/min     |
-| `POST`   | `/api/v1/reports/generate`        | 觸發週報生成（支援 3 種模式，詳見下方） | 5/min      |
-| `GET`    | `/api/v1/sessions`                | 對話列表（分頁）                        | 60/min     |
-| `POST`   | `/api/v1/sessions`                | 建立對話                                | 60/min     |
-| `GET`    | `/api/v1/sessions/{id}`           | 對話詳情（含訊息歷史）                  | 60/min     |
-| `POST`   | `/api/v1/sessions/{id}/messages`  | 新增訊息並取得 RAG 回覆（支援 context-only 降級） | 20/min     |
-| `DELETE` | `/api/v1/sessions/{id}`           | 刪除對話                                | 60/min     |
-| `POST`   | `/api/v1/feedback`                | 使用者回饋（helpful / not_relevant）     | 60/min     |
+| Method   | Path                             | 說明                                              | Rate Limit |
+| -------- | -------------------------------- | ------------------------------------------------- | ---------- |
+| `GET`    | `/api/v1/reports`                | 週報列表（newest first）                          | 60/min     |
+| `GET`    | `/api/v1/reports/{date}`         | 單篇週報 Markdown（YYYYMMDD）                     | 60/min     |
+| `POST`   | `/api/v1/reports/generate`       | 觸發週報生成（支援 3 種模式，詳見下方）           | 5/min      |
+| `GET`    | `/api/v1/sessions`               | 對話列表（分頁）                                  | 60/min     |
+| `POST`   | `/api/v1/sessions`               | 建立對話                                          | 60/min     |
+| `GET`    | `/api/v1/sessions/{id}`          | 對話詳情（含訊息歷史）                            | 60/min     |
+| `POST`   | `/api/v1/sessions/{id}/messages` | 新增訊息並取得 RAG 回覆（支援 context-only 降級） | 20/min     |
+| `DELETE` | `/api/v1/sessions/{id}`          | 刪除對話                                          | 60/min     |
+| `POST`   | `/api/v1/feedback`               | 使用者回饋（helpful / not_relevant）              | 60/min     |
 
 **週報生成模式（`POST /api/v1/reports/generate`，v2.23）**
 
 四層生成模式支援前端無 OpenAI 情況下自動 fallback：
 
-| 模式 | 需求 | 請求參數 | 說明 |
-|------|------|---------|------|
-| `template` | `snapshot_id` | — | 本地模板引擎：情勢快照、流量信號、技術 SEO、行動清單（<1s） |
-| `hybrid` | `snapshot_id` + 5 維度分析欄位 | — | 模板 + LLM 5 維度增強（前端注入 `situation_analysis` 等） |
-| `openai` | `snapshot_id` + `use_openai: true` | OPENAI_API_KEY | Python `04_generate_report.py --snapshot`：ECC 6 維度、Health Score、Perplexity [N] 引用 |
-| `claude-code` | `/generate-report` 指令 | — | Claude Code 語意推理（互動式，非 API 觸發） |
+| 模式          | 需求                               | 請求參數       | 說明                                                                                     |
+| ------------- | ---------------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
+| `template`    | `snapshot_id`                      | —              | 本地模板引擎：情勢快照、流量信號、技術 SEO、行動清單（<1s）                              |
+| `hybrid`      | `snapshot_id` + 5 維度分析欄位     | —              | 模板 + LLM 5 維度增強（前端注入 `situation_analysis` 等）                                |
+| `openai`      | `snapshot_id` + `use_openai: true` | OPENAI_API_KEY | Python `04_generate_report.py --snapshot`：ECC 6 維度、Health Score、Perplexity [N] 引用 |
+| `claude-code` | `/generate-report` 指令            | —              | Claude Code 語意推理（互動式，非 API 觸發）                                              |
 
 **前端 OpenAI 模式切換（v2.23）**：
+
 - UI：「OpenAI 模式」checkbox（勾選後搭配 snapshot_id 走 OpenAI 生成）
 - `openai` 模式：需先儲存指標快照（獲得 `snapshot_id`），才能觸發 Python 後端
 - Loading UX：spinner + elapsed timer + mode-aware 訊息（「準備指標中...」→「呼叫 LLM 中...」→「完成」）
@@ -1176,22 +1208,23 @@ api/src/
 
 #### Pipeline 管理
 
-| Method | Path                                     | 說明                            | Rate Limit |
-| ------ | ---------------------------------------- | ------------------------------- | ---------- |
-| `GET`  | `/api/v1/pipeline/status`                | 各步驟完成狀態（6 步驟）         | 60/min     |
-| `GET`  | `/api/v1/pipeline/meetings`              | 會議列表（含 metadata）          | 60/min     |
-| `GET`  | `/api/v1/pipeline/meetings/{id}/preview` | Markdown 預覽                   | 60/min     |
-| `GET`  | `/api/v1/pipeline/unprocessed`           | 待處理的 Markdown 列表（含 source_collection） | 60/min |
-| `GET`  | `/api/v1/pipeline/logs`                  | Fetch 歷史日誌                  | 60/min     |
-| `POST` | `/api/v1/pipeline/fetch`                 | 觸發 Notion 增量擷取            | 60/min     |
-| `POST` | `/api/v1/pipeline/fetch-articles`        | 觸發外部文章擷取（Medium + iThome + Google Cases） | 60/min  |
-| `POST` | `/api/v1/pipeline/extract-qa`            | 觸發 Q&A 萃取                   | 60/min     |
-| `POST` | `/api/v1/pipeline/dedupe-classify`       | 觸發去重 + 分類                  | 60/min     |
-| `POST` | `/api/v1/pipeline/metrics`               | 解析 SEO 指標（Google Sheets/TSV）| 60/min    |
+| Method | Path                                     | 說明                                               | Rate Limit |
+| ------ | ---------------------------------------- | -------------------------------------------------- | ---------- |
+| `GET`  | `/api/v1/pipeline/status`                | 各步驟完成狀態（6 步驟）                           | 60/min     |
+| `GET`  | `/api/v1/pipeline/meetings`              | 會議列表（含 metadata）                            | 60/min     |
+| `GET`  | `/api/v1/pipeline/meetings/{id}/preview` | Markdown 預覽                                      | 60/min     |
+| `GET`  | `/api/v1/pipeline/unprocessed`           | 待處理的 Markdown 列表（含 source_collection）     | 60/min     |
+| `GET`  | `/api/v1/pipeline/logs`                  | Fetch 歷史日誌                                     | 60/min     |
+| `POST` | `/api/v1/pipeline/fetch`                 | 觸發 Notion 增量擷取                               | 60/min     |
+| `POST` | `/api/v1/pipeline/fetch-articles`        | 觸發外部文章擷取（Medium + iThome + Google Cases） | 60/min     |
+| `POST` | `/api/v1/pipeline/extract-qa`            | 觸發 Q&A 萃取                                      | 60/min     |
+| `POST` | `/api/v1/pipeline/dedupe-classify`       | 觸發去重 + 分類                                    | 60/min     |
+| `POST` | `/api/v1/pipeline/metrics`               | 解析 SEO 指標（Google Sheets/TSV）                 | 60/min     |
 
 #### Eval 評估（v2.18 移除 REST endpoints，改用離線 CI）
 
 > Eval endpoints 已於 v2.18 移除。評估改為離線執行：
+>
 > - **CI 自動化**：`eval.yml` 每次 push main 觸發 Laminar retrieval eval（Supabase fallback）
 > - **本機**：`make eval-laminar`、`make eval-semantic`
 > - **Claude Code**：`/evaluate-qa-local`、`/evaluate-faithfulness-local`
@@ -1234,12 +1267,12 @@ git push origin main  # 觸發 GitHub Actions → 自動部署到 Lambda
 
 **GitHub Actions 自動化流程：**
 
-| Workflow | 觸發條件 | 做什麼 |
-|----------|---------|--------|
-| `deploy-ts-api.yml` | push `api/**` 到 main | typecheck → test → build → deploy Lambda |
-| `etl-and-deploy.yml` | 每週一 09:00 UTC / 手動 | ETL → Supabase migrate → eval → quality gate → deploy |
-| `test-api-ts.yml` | push/PR `api/**` | typecheck → test → build（不部署） |
-| `eval.yml` | push/PR main | Laminar retrieval eval（Supabase fallback）+ extraction eval（CI graceful skip） |
+| Workflow             | 觸發條件                | 做什麼                                                                           |
+| -------------------- | ----------------------- | -------------------------------------------------------------------------------- |
+| `deploy-ts-api.yml`  | push `api/**` 到 main   | typecheck → test → build → deploy Lambda                                         |
+| `etl-and-deploy.yml` | 每週一 09:00 UTC / 手動 | ETL → Supabase migrate → eval → quality gate → deploy                            |
+| `test-api-ts.yml`    | push/PR `api/**`        | typecheck → test → build（不部署）                                               |
+| `eval.yml`           | push/PR main            | Laminar retrieval eval（Supabase fallback）+ extraction eval（CI graceful skip） |
 
 **手動部署（緊急用）：**
 
@@ -1253,43 +1286,43 @@ aws lambda update-function-code --function-name seo-insight-api \
 
 **Lambda 設定**：
 
-| 項目 | 值 | 說明 |
-|------|-----|------|
-| Function | `seo-insight-api` | arm64, Node.js 22 |
-| Memory | 512 MB | 冷啟動 ~3s，執行 ~50ms |
-| Timeout | 30s | RAG chat 需要較長回應時間 |
-| Reserved Concurrency | 10 | 基本限流（in-process rate limit 在 Lambda 無效） |
-| Function URL | HTTPS auto, auth: NONE | Hono 層 API Key 驗證 |
-| Tracing (X-Ray) | PassThrough | 未啟用（用 Laminar 替代） |
-| Provisioned Concurrency | 無 | 不需要（低流量，冷啟動可接受） |
-| Layers | 無 | tsup 全量打包，不依賴 Layer |
-| DLQ / VPC | 無 | 純 HTTP API，不需要 |
-| IAM | `seo-insight-deployer` | lambda:UpdateFunctionCode + GetFunction |
+| 項目                    | 值                     | 說明                                             |
+| ----------------------- | ---------------------- | ------------------------------------------------ |
+| Function                | `seo-insight-api`      | arm64, Node.js 22                                |
+| Memory                  | 512 MB                 | 冷啟動 ~3s，執行 ~50ms                           |
+| Timeout                 | 30s                    | RAG chat 需要較長回應時間                        |
+| Reserved Concurrency    | 10                     | 基本限流（in-process rate limit 在 Lambda 無效） |
+| Function URL            | HTTPS auto, auth: NONE | Hono 層 API Key 驗證                             |
+| Tracing (X-Ray)         | PassThrough            | 未啟用（用 Laminar 替代）                        |
+| Provisioned Concurrency | 無                     | 不需要（低流量，冷啟動可接受）                   |
+| Layers                  | 無                     | tsup 全量打包，不依賴 Layer                      |
+| DLQ / VPC               | 無                     | 純 HTTP API，不需要                              |
+| IAM                     | `seo-insight-deployer` | lambda:UpdateFunctionCode + GetFunction          |
 
 **費用預估（~$0/月）：**
 
-| 資源 | 免費額度 | 預估用量 | 費用 |
-|------|---------|---------|------|
-| Lambda 請求 | 100 萬次/月 | < 1,000 次 | $0 |
-| Lambda 計算 | 40 萬 GB-秒/月 | < 500 GB-秒 | $0 |
-| Function URL | 無額外費用 | — | $0 |
-| CloudWatch Logs | 5 GB/月 | < 100 MB | $0 |
-| Supabase（Free Plan） | 500 MB DB + 1 GB 傳輸 | 1,323 rows | $0 |
+| 資源                  | 免費額度              | 預估用量    | 費用 |
+| --------------------- | --------------------- | ----------- | ---- |
+| Lambda 請求           | 100 萬次/月           | < 1,000 次  | $0   |
+| Lambda 計算           | 40 萬 GB-秒/月        | < 500 GB-秒 | $0   |
+| Function URL          | 無額外費用            | —           | $0   |
+| CloudWatch Logs       | 5 GB/月               | < 100 MB    | $0   |
+| Supabase（Free Plan） | 500 MB DB + 1 GB 傳輸 | 1,323 rows  | $0   |
 
 > 查看實際費用：[AWS Cost Explorer](https://console.aws.amazon.com/costmanagement/home#/cost-explorer)（Filter by Service: Lambda）
 > 查看免費額度用量：[AWS Free Tier](https://console.aws.amazon.com/billing/home#/freetier)
 
 **所需 GitHub Secrets：**
 
-| Secret                                        | 說明                                                         |
-| --------------------------------------------- | ------------------------------------------------------------ |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user `seo-insight-deployer`                              |
-| `OPENAI_API_KEY`                              | OpenAI API key                                               |
-| `SEO_API_KEY`                                 | API 認證金鑰                                                 |
-| `SUPABASE_URL` / `SUPABASE_ANON_KEY`         | Supabase REST API                                            |
-| `SUPABASE_SERVICE_KEY`                        | Supabase service role（migration 用，bypass RLS）            |
-| `NOTION_API_KEY` / `NOTION_DATABASE_ID`      | Notion API（ETL pipeline 用）                                |
-| `LMNR_PROJECT_API_KEY`                        | Laminar 追蹤（選配）                                         |
+| Secret                                        | 說明                                              |
+| --------------------------------------------- | ------------------------------------------------- |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user `seo-insight-deployer`                   |
+| `OPENAI_API_KEY`                              | OpenAI API key                                    |
+| `SEO_API_KEY`                                 | API 認證金鑰                                      |
+| `SUPABASE_URL` / `SUPABASE_ANON_KEY`          | Supabase REST API                                 |
+| `SUPABASE_SERVICE_KEY`                        | Supabase service role（migration 用，bypass RLS） |
+| `NOTION_API_KEY` / `NOTION_DATABASE_ID`       | Notion API（ETL pipeline 用）                     |
+| `LMNR_PROJECT_API_KEY`                        | Laminar 追蹤（選配）                              |
 
 > GitHub Variable: `AWS_REGION` = `ap-northeast-1`（CI/CD 已 hardcode，此 variable 為備用）
 
@@ -1297,31 +1330,31 @@ aws lambda update-function-code --function-name seo-insight-api \
 
 ### 環境變數（`api/`）
 
-| 變數                     | 預設值                   | 說明                                                              |
-| ------------------------ | ------------------------ | ----------------------------------------------------------------- |
-| `PORT`                   | `8002`                   | 伺服器埠號                                                        |
+| 變數                     | 預設值                   | 說明                                                                    |
+| ------------------------ | ------------------------ | ----------------------------------------------------------------------- |
+| `PORT`                   | `8002`                   | 伺服器埠號                                                              |
 | `OPENAI_API_KEY`         | `""`（空字串）           | 選填；有值→hybrid search + RAG chat，無值→keyword search + context-only |
-| `OPENAI_MODEL`           | `gpt-5.2`                | RAG chat 模型（需 OPENAI_API_KEY）                                 |
-| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding 模型（需 OPENAI_API_KEY）                                |
-| `SEO_API_KEY`            | —                        | API 認證金鑰（生產必填）                                           |
-| `CORS_ORIGINS`           | `http://localhost:3000`  | 逗號分隔多個 origin                                                |
-| `CHAT_CONTEXT_K`         | `5`                      | RAG chat 帶入的 context 筆數                                       |
-| `RATE_LIMIT_DEFAULT`     | `60`                     | 預設速率限制（/min）                                               |
-| `RATE_LIMIT_CHAT`        | `20`                     | 聊天速率限制（/min）                                               |
-| `RATE_LIMIT_GENERATE`    | `5`                      | 週報生成速率限制（/min）                                           |
-| `SUPABASE_URL`           | `""`（空字串）           | Supabase REST URL（設定後啟用 pgvector 模式）                      |
-| `SUPABASE_ANON_KEY`      | `""`（空字串）           | Supabase anon key（RLS SELECT）                                    |
-| `CHAT_MODEL`             | `gpt-5.2`                | RAG Chat 問答模型（獨立於 OPENAI_MODEL）                           |
-| `ANTHROPIC_API_KEY`      | `""`（空字串）           | Reranker + Context Relevance（auto 模式偵測）                       |
+| `OPENAI_MODEL`           | `gpt-5.2`                | RAG chat 模型（需 OPENAI_API_KEY）                                      |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding 模型（需 OPENAI_API_KEY）                                     |
+| `SEO_API_KEY`            | —                        | API 認證金鑰（生產必填）                                                |
+| `CORS_ORIGINS`           | `http://localhost:3000`  | 逗號分隔多個 origin                                                     |
+| `CHAT_CONTEXT_K`         | `5`                      | RAG chat 帶入的 context 筆數                                            |
+| `RATE_LIMIT_DEFAULT`     | `60`                     | 預設速率限制（/min）                                                    |
+| `RATE_LIMIT_CHAT`        | `20`                     | 聊天速率限制（/min）                                                    |
+| `RATE_LIMIT_GENERATE`    | `5`                      | 週報生成速率限制（/min）                                                |
+| `SUPABASE_URL`           | `""`（空字串）           | Supabase REST URL（設定後啟用 pgvector 模式）                           |
+| `SUPABASE_ANON_KEY`      | `""`（空字串）           | Supabase anon key（RLS SELECT）                                         |
+| `CHAT_MODEL`             | `gpt-5.2`                | RAG Chat 問答模型（獨立於 OPENAI_MODEL）                                |
+| `ANTHROPIC_API_KEY`      | `""`（空字串）           | Reranker + Context Relevance（auto 模式偵測）                           |
 
 ### Local Mode（無 OpenAI API Key）
 
 API 伺服器可在完全不設定 `OPENAI_API_KEY` 的情況下運作。此時 search 和 chat 端點自動降級：
 
-| 端點 | 有 OpenAI（Hybrid Mode） | 無 OpenAI（Local Mode） |
-|------|--------------------------|------------------------|
-| `POST /search` | 語意 + 關鍵字 + 同義詞 + 時效性，`mode: "hybrid"` | 原生 TypeScript keyword search（<5ms），`mode: "keyword"` |
-| `POST /chat` | RAG 檢索 + GPT 生成回答，`mode: "full"` | keyword 檢索 + 回傳 sources，`answer: null`，`mode: "context-only"` |
+| 端點           | 有 OpenAI（Hybrid Mode）                          | 無 OpenAI（Local Mode）                                             |
+| -------------- | ------------------------------------------------- | ------------------------------------------------------------------- |
+| `POST /search` | 語意 + 關鍵字 + 同義詞 + 時效性，`mode: "hybrid"` | 原生 TypeScript keyword search（<5ms），`mode: "keyword"`           |
+| `POST /chat`   | RAG 檢索 + GPT 生成回答，`mode: "full"`           | keyword 檢索 + 回傳 sources，`answer: null`，`mode: "context-only"` |
 
 其他端點（qa、reports、sessions、pipeline、eval）不依賴 OpenAI，兩種模式下行為相同。
 
@@ -1361,6 +1394,7 @@ python evals/eval_chat.py
 ```
 
 **Group 設計**：
+
 - 預設 `--group "keyword-retrieval"` 讓所有 eval run 進同一 group
 - Laminar Dashboard 上可畫趨勢折線圖，追蹤 5 個指標變化
 - `concurrency_limit=1`：每次單個 run，避免並發上傳失敗
@@ -1374,11 +1408,11 @@ https://laminar.sh/app/evals
 
 ### 評估維度
 
-| 評估類型                | 檔案                           | 測試集                         | 評估指標（v2.12）                                      |
-| ----------------------- | ------------------------------ | ------------------------------ | ------------------------------------------------------ |
-| **Retrieval 品質**      | `scripts/_eval_laminar.py`     | golden_retrieval.json (20 筆)  | Precision@K、Recall@K、F1 Score、Hit Rate、MRR         |
-| **Extraction 品質**     | `evals/eval_extraction.py`     | golden_extraction.json         | Q&A 計數、Keyword Coverage、無管理內容                 |
-| **Chat 品質**           | `evals/eval_chat.py`           | 前 10 retrieval scenarios      | 回答長度、來源涵蓋、關鍵字匹配                         |
+| 評估類型            | 檔案                       | 測試集                        | 評估指標（v2.12）                              |
+| ------------------- | -------------------------- | ----------------------------- | ---------------------------------------------- |
+| **Retrieval 品質**  | `scripts/_eval_laminar.py` | golden_retrieval.json (20 筆) | Precision@K、Recall@K、F1 Score、Hit Rate、MRR |
+| **Extraction 品質** | `evals/eval_extraction.py` | golden_extraction.json        | Q&A 計數、Keyword Coverage、無管理內容         |
+| **Chat 品質**       | `evals/eval_chat.py`       | 前 10 retrieval scenarios     | 回答長度、來源涵蓋、關鍵字匹配                 |
 
 ---
 

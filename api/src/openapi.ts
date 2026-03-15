@@ -5,7 +5,7 @@
  * Each path matches the routes in src/routes/*.ts.
  */
 
-const API_VERSION = "2.29.0";
+const API_VERSION = "3.4.0";
 
 type OpenAPISpec = Record<string, unknown>;
 
@@ -39,7 +39,11 @@ const schemas: Record<string, Record<string, unknown>> = {
   QAItem: {
     type: "object",
     properties: {
-      id: { type: "string", description: "16-char hex stable ID", example: "a1b2c3d4e5f67890" },
+      id: {
+        type: "string",
+        description: "16-char hex stable ID",
+        example: "a1b2c3d4e5f67890",
+      },
       seq: { type: "integer", description: "Sequential number" },
       question: { type: "string" },
       answer: { type: "string" },
@@ -55,6 +59,14 @@ const schemas: Record<string, Record<string, unknown>> = {
       source_type: { type: "string", enum: ["meeting", "article"] },
       source_collection: { type: "string" },
       source_url: { type: "string" },
+      extraction_model: { type: "string", nullable: true },
+      maturity_relevance: {
+        type: "string",
+        enum: ["L1", "L2", "L3", "L4"],
+        nullable: true,
+        description: "SEO maturity level relevance",
+      },
+      freshness_score: { type: "number" },
     },
   },
   SearchResult: {
@@ -73,6 +85,11 @@ const schemas: Record<string, Record<string, unknown>> = {
       source_collection: { type: "string" },
       source_url: { type: "string" },
       extraction_model: { type: "string", nullable: true },
+      maturity_relevance: {
+        type: "string",
+        enum: ["L1", "L2", "L3", "L4"],
+        nullable: true,
+      },
       score: { type: "number" },
     },
   },
@@ -80,7 +97,12 @@ const schemas: Record<string, Record<string, unknown>> = {
     type: "object",
     required: ["message"],
     properties: {
-      message: { type: "string", minLength: 1, maxLength: 2000, example: "What is Core Web Vitals?" },
+      message: {
+        type: "string",
+        minLength: 1,
+        maxLength: 2000,
+        example: "What is Core Web Vitals?",
+      },
       history: {
         type: "array",
         maxItems: 20,
@@ -92,7 +114,16 @@ const schemas: Record<string, Record<string, unknown>> = {
           },
         },
       },
-      mode: { type: "string", enum: ["agent", "rag"], description: "Chat mode (auto-detected if omitted)" },
+      mode: {
+        type: "string",
+        enum: ["agent", "rag"],
+        description: "Chat mode (auto-detected if omitted)",
+      },
+      maturity_level: {
+        type: "string",
+        enum: ["L1", "L2", "L3", "L4"],
+        description: "Client SEO maturity level for response depth tuning",
+      },
     },
   },
   ChatResponse: {
@@ -210,7 +241,11 @@ const schemas: Record<string, Record<string, unknown>> = {
   MetricsSnapshotMeta: {
     type: "object",
     properties: {
-      id: { type: "string", pattern: "^[0-9]{8}-[0-9]{6}$", example: "20260307-120000" },
+      id: {
+        type: "string",
+        pattern: "^[0-9]{8}-[0-9]{6}$",
+        example: "20260307-120000",
+      },
       created_at: { type: "string", format: "date-time" },
       label: { type: "string" },
       source: { type: "string" },
@@ -245,14 +280,17 @@ const paths: Record<string, Record<string, unknown>> = {
       operationId: "healthCheck",
       security: [],
       responses: {
-        "200": jsonContent({
-          type: "object",
-          properties: {
-            status: { type: "string", example: "healthy" },
-            timestamp: { type: "string", format: "date-time" },
-            version: { type: "string" },
+        "200": jsonContent(
+          {
+            type: "object",
+            properties: {
+              status: { type: "string", example: "healthy" },
+              timestamp: { type: "string", format: "date-time" },
+              version: { type: "string" },
+            },
           },
-        }, "Server is healthy"),
+          "Server is healthy",
+        ),
       },
     },
   },
@@ -265,26 +303,63 @@ const paths: Record<string, Record<string, unknown>> = {
       operationId: "listQA",
       parameters: [
         { name: "category", in: "query", schema: { type: "string" } },
-        { name: "keyword", in: "query", schema: { type: "string", maxLength: 100 } },
-        { name: "difficulty", in: "query", schema: { type: "string", enum: ["basic", "advanced"] } },
-        { name: "evergreen", in: "query", schema: { type: "string", enum: ["true", "false"] } },
+        {
+          name: "keyword",
+          in: "query",
+          schema: { type: "string", maxLength: 100 },
+        },
+        {
+          name: "difficulty",
+          in: "query",
+          schema: { type: "string", enum: ["basic", "advanced"] },
+        },
+        {
+          name: "evergreen",
+          in: "query",
+          schema: { type: "string", enum: ["true", "false"] },
+        },
         { name: "source_type", in: "query", schema: { type: "string" } },
         { name: "source_collection", in: "query", schema: { type: "string" } },
-        { name: "sort_by", in: "query", schema: { type: "string", enum: ["source_date"] } },
-        { name: "sort_order", in: "query", schema: { type: "string", enum: ["asc", "desc"], default: "desc" } },
-        { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
-        { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
+        {
+          name: "maturity_relevance",
+          in: "query",
+          schema: { type: "string", enum: ["L1", "L2", "L3", "L4"] },
+          description: "Filter by maturity level",
+        },
+        {
+          name: "sort_by",
+          in: "query",
+          schema: { type: "string", enum: ["source_date", "confidence"] },
+        },
+        {
+          name: "sort_order",
+          in: "query",
+          schema: { type: "string", enum: ["asc", "desc"], default: "desc" },
+        },
+        {
+          name: "limit",
+          in: "query",
+          schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+        },
+        {
+          name: "offset",
+          in: "query",
+          schema: { type: "integer", minimum: 0, default: 0 },
+        },
       ],
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            items: { type: "array", items: ref("QAItem") },
-            total: { type: "integer" },
-            offset: { type: "integer" },
-            limit: { type: "integer" },
-          },
-        }), "Paginated QA list"),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              items: { type: "array", items: ref("QAItem") },
+              total: { type: "integer" },
+              offset: { type: "integer" },
+              limit: { type: "integer" },
+            },
+          }),
+          "Paginated QA list",
+        ),
       },
     },
   },
@@ -294,10 +369,14 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "List all categories",
       operationId: "listCategories",
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: { categories: { type: "array", items: { type: "string" } } },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              categories: { type: "array", items: { type: "string" } },
+            },
+          }),
+        ),
       },
     },
   },
@@ -307,22 +386,24 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "List all source collections",
       operationId: "listCollections",
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            collections: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  source_type: { type: "string" },
-                  source_collection: { type: "string" },
-                  count: { type: "integer" },
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              collections: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    source_type: { type: "string" },
+                    source_collection: { type: "string" },
+                    count: { type: "integer" },
+                  },
                 },
               },
             },
-          },
-        })),
+          }),
+        ),
       },
     },
   },
@@ -332,7 +413,13 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Get QA item by ID",
       operationId: "getQAById",
       parameters: [
-        { name: "item_id", in: "path", required: true, schema: { type: "string" }, description: "Hex stable_id (16 chars) or integer seq" },
+        {
+          name: "item_id",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+          description: "Hex stable_id (16 chars) or integer seq",
+        },
       ],
       responses: {
         "200": jsonContent(apiResponse(ref("QAItem")), "QA item found"),
@@ -347,25 +434,40 @@ const paths: Record<string, Record<string, unknown>> = {
       tags: ["Search"],
       summary: "Search QA knowledge base",
       operationId: "search",
-      requestBody: jsonContent({
-        type: "object",
-        required: ["query"],
-        properties: {
-          query: { type: "string", minLength: 1, maxLength: 500, example: "Core Web Vitals" },
-          top_k: { type: "integer", minimum: 1, maximum: 20, default: 5 },
-          category: { type: "string" },
-          extraction_model: { type: "string", example: "claude-code" },
-        },
-      }, "Search parameters"),
-      responses: {
-        "200": jsonContent(apiResponse({
+      requestBody: jsonContent(
+        {
           type: "object",
+          required: ["query"],
           properties: {
-            results: { type: "array", items: ref("SearchResult") },
-            total: { type: "integer" },
-            mode: { type: "string", enum: ["hybrid", "keyword"] },
+            query: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              example: "Core Web Vitals",
+            },
+            top_k: { type: "integer", minimum: 1, maximum: 20, default: 5 },
+            category: { type: "string" },
+            extraction_model: { type: "string", example: "claude-code" },
+            maturity_level: {
+              type: "string",
+              enum: ["L1", "L2", "L3", "L4"],
+              description: "Boost results matching this maturity level",
+            },
           },
-        })),
+        },
+        "Search parameters",
+      ),
+      responses: {
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              results: { type: "array", items: ref("SearchResult") },
+              total: { type: "integer" },
+              mode: { type: "string", enum: ["hybrid", "keyword"] },
+            },
+          }),
+        ),
       },
     },
   },
@@ -376,9 +478,15 @@ const paths: Record<string, Record<string, unknown>> = {
       tags: ["Chat"],
       summary: "RAG chat (single-turn or agent mode)",
       operationId: "chat",
-      requestBody: jsonContent(ref("ChatRequest"), "Chat message with optional history"),
+      requestBody: jsonContent(
+        ref("ChatRequest"),
+        "Chat message with optional history",
+      ),
       responses: {
-        "200": jsonContent(apiResponse(ref("ChatResponse")), "Chat response with sources"),
+        "200": jsonContent(
+          apiResponse(ref("ChatResponse")),
+          "Chat response with sources",
+        ),
       },
     },
   },
@@ -390,13 +498,15 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "List all weekly reports",
       operationId: "listReports",
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            items: { type: "array", items: ref("ReportSummary") },
-            total: { type: "integer" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              items: { type: "array", items: ref("ReportSummary") },
+              total: { type: "integer" },
+            },
+          }),
+        ),
       },
     },
   },
@@ -406,19 +516,27 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Get report by date",
       operationId: "getReport",
       parameters: [
-        { name: "date", in: "path", required: true, schema: { type: "string", pattern: "^\\d{8}(?:_[0-9a-f]{8})?$" }, description: "YYYYMMDD or YYYYMMDD_hash8" },
+        {
+          name: "date",
+          in: "path",
+          required: true,
+          schema: { type: "string", pattern: "^\\d{8}(?:_[0-9a-f]{8})?$" },
+          description: "YYYYMMDD or YYYYMMDD_hash8",
+        },
       ],
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            date: { type: "string" },
-            filename: { type: "string" },
-            content: { type: "string" },
-            size_bytes: { type: "integer" },
-            meta: ref("ReportMeta"),
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              date: { type: "string" },
+              filename: { type: "string" },
+              content: { type: "string" },
+              size_bytes: { type: "integer" },
+              meta: ref("ReportMeta"),
+            },
+          }),
+        ),
         "404": jsonContent(apiResponse({ type: "null" }), "Report not found"),
       },
     },
@@ -428,12 +546,17 @@ const paths: Record<string, Record<string, unknown>> = {
       tags: ["Reports"],
       summary: "Generate weekly report",
       operationId: "generateReport",
-      description: "Supports three modes: local (snapshot_id), OpenAI (snapshot_id + use_openai), legacy (metrics_url)",
+      description:
+        "Supports three modes: local (snapshot_id), OpenAI (snapshot_id + use_openai), legacy (metrics_url)",
       requestBody: jsonContent({
         type: "object",
         properties: {
           snapshot_id: { type: "string", pattern: "^[0-9]{8}-[0-9]{6}$" },
-          metrics_url: { type: "string", format: "uri", description: "Google Sheets URL" },
+          metrics_url: {
+            type: "string",
+            format: "uri",
+            description: "Google Sheets URL",
+          },
           weeks: { type: "integer", minimum: 1, maximum: 12 },
           use_openai: { type: "boolean" },
           situation_analysis: { type: "string", maxLength: 2000 },
@@ -441,18 +564,25 @@ const paths: Record<string, Record<string, unknown>> = {
           technical_analysis: { type: "string", maxLength: 2000 },
           intent_analysis: { type: "string", maxLength: 2000 },
           action_analysis: { type: "string", maxLength: 2000 },
+          maturity_context: {
+            type: "object",
+            additionalProperties: { type: "string" },
+            description: "Maturity dimension levels (e.g. {strategy: 'L2', process: 'L2'}). Overridden by snapshot.maturity if present.",
+          },
         },
       }),
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            date: { type: "string" },
-            filename: { type: "string" },
-            size_bytes: { type: "integer" },
-            cache_hit: { type: "boolean" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              date: { type: "string" },
+              filename: { type: "string" },
+              size_bytes: { type: "integer" },
+              cache_hit: { type: "boolean" },
+            },
+          }),
+        ),
       },
     },
   },
@@ -464,17 +594,27 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "List chat sessions",
       operationId: "listSessions",
       parameters: [
-        { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
-        { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
+        {
+          name: "limit",
+          in: "query",
+          schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+        },
+        {
+          name: "offset",
+          in: "query",
+          schema: { type: "integer", minimum: 0, default: 0 },
+        },
       ],
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            items: { type: "array", items: ref("SessionSummary") },
-            total: { type: "integer" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              items: { type: "array", items: ref("SessionSummary") },
+              total: { type: "integer" },
+            },
+          }),
+        ),
       },
     },
     post: {
@@ -498,7 +638,12 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Get session with messages",
       operationId: "getSession",
       parameters: [
-        { name: "session_id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        {
+          name: "session_id",
+          in: "path",
+          required: true,
+          schema: { type: "string", format: "uuid" },
+        },
       ],
       responses: {
         "200": jsonContent(apiResponse(ref("SessionDetail"))),
@@ -510,16 +655,23 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Delete a session",
       operationId: "deleteSession",
       parameters: [
-        { name: "session_id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        {
+          name: "session_id",
+          in: "path",
+          required: true,
+          schema: { type: "string", format: "uuid" },
+        },
       ],
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            deleted: { type: "boolean" },
-            session_id: { type: "string" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              deleted: { type: "boolean" },
+              session_id: { type: "string" },
+            },
+          }),
+        ),
         "404": jsonContent(apiResponse({ type: "null" }), "Session not found"),
       },
     },
@@ -530,7 +682,12 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Send message in session",
       operationId: "sendMessage",
       parameters: [
-        { name: "session_id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        {
+          name: "session_id",
+          in: "path",
+          required: true,
+          schema: { type: "string", format: "uuid" },
+        },
       ],
       requestBody: jsonContent({
         type: "object",
@@ -538,18 +695,26 @@ const paths: Record<string, Record<string, unknown>> = {
         properties: {
           message: { type: "string", minLength: 1, maxLength: 2000 },
           mode: { type: "string", enum: ["agent", "rag"] },
+          maturity_level: {
+            type: "string",
+            enum: ["L1", "L2", "L3", "L4"],
+            description:
+              "Client maturity level (persisted to session on first use)",
+          },
         },
       }),
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            answer: { type: "string", nullable: true },
-            sources: { type: "array", items: { type: "object" } },
-            mode: { type: "string" },
-            session: ref("SessionDetail"),
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              answer: { type: "string", nullable: true },
+              sources: { type: "array", items: { type: "object" } },
+              mode: { type: "string" },
+              session: ref("SessionDetail"),
+            },
+          }),
+        ),
       },
     },
   },
@@ -567,18 +732,31 @@ const paths: Record<string, Record<string, unknown>> = {
           query: { type: "string", minLength: 1, maxLength: 500 },
           qa_id: { type: "string", pattern: "^[0-9a-f]{16}$" },
           feedback: { type: "string", enum: ["helpful", "not_relevant"] },
+          feedback_category: {
+            type: "string",
+            enum: [
+              "wrong_answer",
+              "missing_info",
+              "wrong_source",
+              "outdated",
+              "too_basic",
+              "too_advanced",
+            ],
+          },
           top_score: { type: "number" },
         },
       }),
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            recorded: { type: "boolean" },
-            qa_id: { type: "string" },
-            feedback: { type: "string" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              recorded: { type: "boolean" },
+              qa_id: { type: "string" },
+              feedback: { type: "string" },
+            },
+          }),
+        ),
       },
     },
   },
@@ -590,10 +768,12 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "List all synonym entries",
       operationId: "listSynonyms",
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "array",
-          items: ref("SynonymEntry"),
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "array",
+            items: ref("SynonymEntry"),
+          }),
+        ),
       },
     },
     post: {
@@ -605,12 +785,20 @@ const paths: Record<string, Record<string, unknown>> = {
         required: ["term", "synonyms"],
         properties: {
           term: { type: "string", minLength: 1, maxLength: 100 },
-          synonyms: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 50 },
+          synonyms: {
+            type: "array",
+            items: { type: "string" },
+            minItems: 1,
+            maxItems: 50,
+          },
         },
       }),
       responses: {
         "201": jsonContent(apiResponse(ref("SynonymEntry")), "Synonym created"),
-        "409": jsonContent(apiResponse({ type: "null" }), "Term already exists"),
+        "409": jsonContent(
+          apiResponse({ type: "null" }),
+          "Term already exists",
+        ),
       },
     },
   },
@@ -620,13 +808,23 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Update synonym",
       operationId: "updateSynonym",
       parameters: [
-        { name: "term", in: "path", required: true, schema: { type: "string" } },
+        {
+          name: "term",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
       ],
       requestBody: jsonContent({
         type: "object",
         required: ["synonyms"],
         properties: {
-          synonyms: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 50 },
+          synonyms: {
+            type: "array",
+            items: { type: "string" },
+            minItems: 1,
+            maxItems: 50,
+          },
         },
       }),
       responses: {
@@ -639,14 +837,27 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Delete custom synonym",
       operationId: "deleteSynonym",
       parameters: [
-        { name: "term", in: "path", required: true, schema: { type: "string" } },
+        {
+          name: "term",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
       ],
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: { deleted: { type: "boolean" }, term: { type: "string" } },
-        })),
-        "403": jsonContent(apiResponse({ type: "null" }), "Cannot delete built-in synonym"),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              deleted: { type: "boolean" },
+              term: { type: "string" },
+            },
+          }),
+        ),
+        "403": jsonContent(
+          apiResponse({ type: "null" }),
+          "Cannot delete built-in synonym",
+        ),
         "404": jsonContent(apiResponse({ type: "null" }), "Term not found"),
       },
     },
@@ -659,12 +870,14 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Pipeline step completion status",
       operationId: "getPipelineStatus",
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            steps: { type: "array", items: ref("PipelineStepStatus") },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              steps: { type: "array", items: ref("PipelineStepStatus") },
+            },
+          }),
+        ),
       },
     },
   },
@@ -674,13 +887,15 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "List Notion meetings",
       operationId: "listMeetings",
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            items: { type: "array", items: { type: "object" } },
-            total: { type: "integer" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              items: { type: "array", items: { type: "object" } },
+              total: { type: "integer" },
+            },
+          }),
+        ),
       },
     },
   },
@@ -690,18 +905,25 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Preview meeting markdown",
       operationId: "previewMeeting",
       parameters: [
-        { name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        {
+          name: "id",
+          in: "path",
+          required: true,
+          schema: { type: "string", format: "uuid" },
+        },
       ],
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            title: { type: "string" },
-            content: { type: "string" },
-            size_bytes: { type: "integer" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              title: { type: "string" },
+              content: { type: "string" },
+              size_bytes: { type: "integer" },
+            },
+          }),
+        ),
         "404": jsonContent(apiResponse({ type: "null" }), "Meeting not found"),
       },
     },
@@ -712,23 +934,45 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "List source documents",
       operationId: "listSourceDocs",
       parameters: [
-        { name: "source_type", in: "query", schema: { type: "string", enum: ["meeting", "article"] } },
+        {
+          name: "source_type",
+          in: "query",
+          schema: { type: "string", enum: ["meeting", "article"] },
+        },
         { name: "source_collection", in: "query", schema: { type: "string" } },
-        { name: "keyword", in: "query", schema: { type: "string", maxLength: 200 } },
-        { name: "is_processed", in: "query", schema: { type: "string", enum: ["true", "false"] } },
-        { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
-        { name: "offset", in: "query", schema: { type: "integer", default: 0 } },
+        {
+          name: "keyword",
+          in: "query",
+          schema: { type: "string", maxLength: 200 },
+        },
+        {
+          name: "is_processed",
+          in: "query",
+          schema: { type: "string", enum: ["true", "false"] },
+        },
+        {
+          name: "limit",
+          in: "query",
+          schema: { type: "integer", default: 20 },
+        },
+        {
+          name: "offset",
+          in: "query",
+          schema: { type: "integer", default: 0 },
+        },
       ],
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            items: { type: "array", items: ref("SourceDocEntry") },
-            total: { type: "integer" },
-            offset: { type: "integer" },
-            limit: { type: "integer" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              items: { type: "array", items: ref("SourceDocEntry") },
+              total: { type: "integer" },
+              offset: { type: "integer" },
+              limit: { type: "integer" },
+            },
+          }),
+        ),
       },
     },
   },
@@ -738,20 +982,32 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Preview source document",
       operationId: "previewSourceDoc",
       parameters: [
-        { name: "collection", in: "path", required: true, schema: { type: "string" } },
-        { name: "file", in: "path", required: true, schema: { type: "string" } },
+        {
+          name: "collection",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+        {
+          name: "file",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
       ],
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            file: { type: "string" },
-            title: { type: "string" },
-            collection: { type: "string" },
-            content: { type: "string" },
-            size_bytes: { type: "integer" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              file: { type: "string" },
+              title: { type: "string" },
+              collection: { type: "string" },
+              content: { type: "string" },
+              size_bytes: { type: "integer" },
+            },
+          }),
+        ),
         "404": jsonContent(apiResponse({ type: "null" }), "File not found"),
       },
     },
@@ -762,13 +1018,15 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "List unprocessed markdown files",
       operationId: "listUnprocessed",
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            items: { type: "array", items: { type: "object" } },
-            total: { type: "integer" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              items: { type: "array", items: { type: "object" } },
+              total: { type: "integer" },
+            },
+          }),
+        ),
       },
     },
   },
@@ -778,17 +1036,23 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Fetch history logs",
       operationId: "getFetchLogs",
       parameters: [
-        { name: "limit", in: "query", schema: { type: "integer", default: 200, maximum: 1000 } },
+        {
+          name: "limit",
+          in: "query",
+          schema: { type: "integer", default: 200, maximum: 1000 },
+        },
       ],
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            files: { type: "array", items: { type: "string" } },
-            entries: { type: "array", items: { type: "object" } },
-            total: { type: "integer" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              files: { type: "array", items: { type: "string" } },
+              entries: { type: "array", items: { type: "object" } },
+              total: { type: "integer" },
+            },
+          }),
+        ),
       },
     },
   },
@@ -811,27 +1075,30 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/fetch-articles": {
     post: {
       tags: ["Pipeline"],
-      summary: "Trigger external article fetch (Medium + iThome + Google Cases)",
+      summary:
+        "Trigger external article fetch (Medium + iThome + Google Cases)",
       operationId: "triggerFetchArticles",
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            success: { type: "boolean" },
-            results: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  source: { type: "string" },
-                  success: { type: "boolean" },
-                  output: { type: "string" },
-                  duration_ms: { type: "integer" },
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              results: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    source: { type: "string" },
+                    success: { type: "boolean" },
+                    output: { type: "string" },
+                    duration_ms: { type: "integer" },
+                  },
                 },
               },
             },
-          },
-        })),
+          }),
+        ),
       },
     },
   },
@@ -879,7 +1146,11 @@ const paths: Record<string, Record<string, unknown>> = {
         type: "object",
         required: ["source"],
         properties: {
-          source: { type: "string", format: "uri", description: "Google Sheets URL" },
+          source: {
+            type: "string",
+            format: "uri",
+            description: "Google Sheets URL",
+          },
           tab: { type: "string", default: "vocus" },
         },
       }),
@@ -905,14 +1176,17 @@ const paths: Record<string, Record<string, unknown>> = {
         },
       }),
       responses: {
-        "201": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            created_at: { type: "string" },
-            label: { type: "string" },
-          },
-        }), "Snapshot saved"),
+        "201": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              created_at: { type: "string" },
+              label: { type: "string" },
+            },
+          }),
+          "Snapshot saved",
+        ),
       },
     },
   },
@@ -922,13 +1196,15 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "List metrics snapshots",
       operationId: "listSnapshots",
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            items: { type: "array", items: ref("MetricsSnapshotMeta") },
-            total: { type: "integer" },
-          },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              items: { type: "array", items: ref("MetricsSnapshotMeta") },
+              total: { type: "integer" },
+            },
+          }),
+        ),
       },
     },
   },
@@ -938,13 +1214,23 @@ const paths: Record<string, Record<string, unknown>> = {
       summary: "Delete metrics snapshot",
       operationId: "deleteSnapshot",
       parameters: [
-        { name: "id", in: "path", required: true, schema: { type: "string", pattern: "^[0-9]{8}-[0-9]{6}$" } },
+        {
+          name: "id",
+          in: "path",
+          required: true,
+          schema: { type: "string", pattern: "^[0-9]{8}-[0-9]{6}$" },
+        },
       ],
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: { deleted: { type: "boolean" }, id: { type: "string" } },
-        })),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              deleted: { type: "boolean" },
+              id: { type: "string" },
+            },
+          }),
+        ),
         "404": jsonContent(apiResponse({ type: "null" }), "Snapshot not found"),
       },
     },
@@ -954,25 +1240,56 @@ const paths: Record<string, Record<string, unknown>> = {
       tags: ["Pipeline"],
       summary: "Analyze crawled-not-indexed path segments",
       operationId: "analyzeCrawledNotIndexed",
-      description: "Parse and analyze Google Search Console 'Crawled - currently not indexed' data by path segment. Supports URL mode (Google Sheets) and raw TSV mode (inline data).",
+      description:
+        "Parse and analyze Google Search Console 'Crawled - currently not indexed' data by path segment. Supports URL mode (Google Sheets) and raw TSV mode (inline data).",
       requestBody: jsonContent({
         type: "object",
         properties: {
-          source: { type: "string", format: "uri", description: "Google Sheets published CSV URL (mutually exclusive with raw_tsv)" },
-          raw_tsv: { type: "string", minLength: 10, maxLength: 50000, description: "Raw TSV data string (mutually exclusive with source)" },
-          tab: { type: "string", default: "vocus", description: "Sheet tab name (only used with source)" },
+          source: {
+            type: "string",
+            format: "uri",
+            description:
+              "Google Sheets published CSV URL (mutually exclusive with raw_tsv)",
+          },
+          raw_tsv: {
+            type: "string",
+            minLength: 10,
+            maxLength: 50000,
+            description: "Raw TSV data string (mutually exclusive with source)",
+          },
+          tab: {
+            type: "string",
+            default: "vocus",
+            description: "Sheet tab name (only used with source)",
+          },
         },
       }),
       responses: {
-        "200": jsonContent(apiResponse({
-          type: "object",
-          properties: {
-            data: { type: "object", description: "Parsed crawled-not-indexed result (domain, not_indexed_total, paths, etc.)" },
-            insight: { type: "object", description: "Analysis insight (overall_severity, domain_change_pct, not_indexed_change_pct, worsening/improving/stable paths, summary_text)" },
-            markdown: { type: "string", description: "Formatted Markdown analysis report" },
-          },
-        })),
-        "400": jsonContent(apiResponse({ type: "null" }), "Invalid request (provide either source or raw_tsv)"),
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              data: {
+                type: "object",
+                description:
+                  "Parsed crawled-not-indexed result (domain, not_indexed_total, paths, etc.)",
+              },
+              insight: {
+                type: "object",
+                description:
+                  "Analysis insight (overall_severity, domain_change_pct, not_indexed_change_pct, worsening/improving/stable paths, summary_text)",
+              },
+              markdown: {
+                type: "string",
+                description: "Formatted Markdown analysis report",
+              },
+            },
+          }),
+        ),
+        "400": jsonContent(
+          apiResponse({ type: "null" }),
+          "Invalid request (provide either source or raw_tsv)",
+        ),
       },
     },
   },
@@ -984,7 +1301,8 @@ export function buildOpenAPISpec(): OpenAPISpec {
     info: {
       title: "SEO Knowledge Insight API",
       version: API_VERSION,
-      description: "SEO knowledge base API with RAG chat, search, reports, and pipeline management.",
+      description:
+        "SEO knowledge base API with RAG chat, search, reports, and pipeline management.",
     },
     servers: [
       { url: "http://localhost:8002", description: "Local development" },

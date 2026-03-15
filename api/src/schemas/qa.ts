@@ -4,8 +4,12 @@ export const qaIdPattern = /^[0-9a-f]{16}$/;
 
 export const qaListParamsSchema = z.object({
   category: z.string().optional(),
+  primary_category: z.string().optional(),
   keyword: z.string().max(100).optional(),
-  difficulty: z.string().regex(/^(基礎|進階)$/).optional(),
+  difficulty: z
+    .string()
+    .regex(/^(基礎|進階)$/)
+    .optional(),
   evergreen: z
     .enum(["true", "false"])
     .transform((v) => v === "true")
@@ -13,7 +17,12 @@ export const qaListParamsSchema = z.object({
   source_type: z.string().optional(),
   source_collection: z.string().optional(),
   extraction_model: z.string().optional(),
-  sort_by: z.enum(["source_date"]).optional(),
+  maturity_relevance: z.enum(["L1", "L2", "L3", "L4"]).optional(),
+  intent_label: z.string().optional(),
+  scenario_tag: z.string().optional(),
+  serving_tier: z.string().optional(),
+  evidence_scope: z.string().optional(),
+  sort_by: z.enum(["source_date", "confidence"]).optional(),
   sort_order: z.enum(["asc", "desc"]).default("desc").optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),

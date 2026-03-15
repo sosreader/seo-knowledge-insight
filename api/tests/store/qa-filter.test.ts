@@ -177,6 +177,35 @@ describe("filterAndPaginateQa", () => {
     }
   });
 
+  it("filters by maturity_relevance", () => {
+    const { items } = filterAndPaginateQa(FAKE_ITEMS, {
+      maturity_relevance: "L1",
+      limit: 100,
+    });
+    expect(items.length).toBe(1);
+    expect(items[0]!.maturity_relevance).toBe("L1");
+  });
+
+  it("filters by maturity_relevance L4", () => {
+    const { items } = filterAndPaginateQa(FAKE_ITEMS, {
+      maturity_relevance: "L4",
+      limit: 100,
+    });
+    expect(items.length).toBe(1);
+    expect(items[0]!.maturity_relevance).toBe("L4");
+  });
+
+  it("excludes items without maturity_relevance when filter is set", () => {
+    const { items } = filterAndPaginateQa(FAKE_ITEMS, {
+      maturity_relevance: "L1",
+      limit: 100,
+    });
+    // FAKE_ITEMS[3] has undefined maturity_relevance — should be excluded
+    for (const item of items) {
+      expect(item.maturity_relevance).toBe("L1");
+    }
+  });
+
   it("does not mutate the original array", () => {
     const original = [...FAKE_ITEMS];
     filterAndPaginateQa(FAKE_ITEMS, {

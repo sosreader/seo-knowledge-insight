@@ -13,6 +13,15 @@ export interface SupabaseClientConfig {
   readonly anonKey: string;
 }
 
+async function readErrorBody(resp: Response): Promise<string> {
+  try {
+    const body = await resp.text();
+    return body ? `: ${body}` : "";
+  } catch {
+    return "";
+  }
+}
+
 /** Returns true when SUPABASE_URL + SUPABASE_ANON_KEY are set. */
 export function hasSupabase(): boolean {
   return Boolean(config.SUPABASE_URL && config.SUPABASE_ANON_KEY);
@@ -45,10 +54,13 @@ export async function supabaseRpc<T>(
   });
 
   if (!resp.ok) {
-    throw new Error(`Supabase RPC ${functionName} failed (${resp.status})`);
+    const body = await readErrorBody(resp);
+    throw new Error(
+      `Supabase RPC ${functionName} failed (${resp.status})${body}`,
+    );
   }
 
-  const data = await resp.json() as T[];
+  const data = (await resp.json()) as T[];
   return data;
 }
 
@@ -69,7 +81,8 @@ export async function supabaseSelect<T>(
   });
 
   if (!resp.ok) {
-    throw new Error(`Supabase SELECT ${table} failed (${resp.status})`);
+    const body = await readErrorBody(resp);
+    throw new Error(`Supabase SELECT ${table} failed (${resp.status})${body}`);
   }
 
   return resp.json() as Promise<T[]>;
@@ -104,7 +117,9 @@ export async function supabaseInsert<T>(
 
   if (!resp.ok) {
     const body = await resp.text();
-    throw new Error(`Supabase INSERT ${table} failed (${resp.status}): ${body}`);
+    throw new Error(
+      `Supabase INSERT ${table} failed (${resp.status}): ${body}`,
+    );
   }
 
   return resp.json() as Promise<T[]>;
@@ -121,13 +136,17 @@ export async function supabaseDelete(
   const url = `${config.SUPABASE_URL}/rest/v1/${table}${queryString}`;
   const resp = await fetch(url, {
     method: "DELETE",
-    headers: supabaseHeaders(config.SUPABASE_SERVICE_KEY || config.SUPABASE_ANON_KEY),
+    headers: supabaseHeaders(
+      config.SUPABASE_SERVICE_KEY || config.SUPABASE_ANON_KEY,
+    ),
     signal: AbortSignal.timeout(SUPABASE_TIMEOUT_MS),
   });
 
   if (!resp.ok) {
     const body = await resp.text();
-    throw new Error(`Supabase DELETE ${table} failed (${resp.status}): ${body}`);
+    throw new Error(
+      `Supabase DELETE ${table} failed (${resp.status}): ${body}`,
+    );
   }
 }
 

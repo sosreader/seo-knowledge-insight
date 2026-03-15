@@ -12,6 +12,11 @@ import { join } from "node:path";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
 import type { QAItem } from "../store/qa-store.js";
+import {
+  buildMaturityCallout,
+  buildMaturityUpgradeLabel,
+  getDimensionForMetric,
+} from "../utils/maturity.js";
 
 // ── Industry Research Citations ────────────────────────────────────────
 // Pre-loaded constants referencing peer-reviewed / industry studies.
@@ -646,8 +651,17 @@ function buildPriorityActions(
   up: readonly AlertMetric[],
   topQas: readonly QAItem[],
   llmAnalysis?: string | null,
+  maturity?: Readonly<Record<string, string>> | null,
 ): string {
   const lines: string[] = [`${SECTION_HEADINGS[4]}本週優先行動清單\n`];
+
+  // Maturity callout — compact 1-line blockquote before action list
+  if (maturity && Object.keys(maturity).length > 0) {
+    const callout = buildMaturityCallout(maturity);
+    if (callout) {
+      lines.push(callout, "");
+    }
+  }
 
   const highPriority: string[] = [];
   const midPriority: string[] = [];
@@ -665,6 +679,18 @@ function buildPriorityActions(
     if (howTip) {
       item += `\n  > KB 建議：${howTip}`;
     }
+
+    // Inject maturity upgrade label when dimension matches
+    if (maturity) {
+      const dim = getDimensionForMetric(m.name);
+      if (dim) {
+        const label = buildMaturityUpgradeLabel(dim, maturity);
+        if (label) {
+          item += ` ${label}`;
+        }
+      }
+    }
+
     highPriority.push(item);
   }
 
@@ -807,6 +833,7 @@ export async function generateReportLocal(
   llmAnalyses?: LlmAnalyses | null,
   weeks?: number | null,
   crawledNotIndexed?: import("./crawled-not-indexed-parser.js").CrawledNotIndexedResult | null,
+  maturity?: Readonly<Record<string, string>> | null,
 ): Promise<string> {
   const typedMetrics = metrics as Record<string, MetricData>;
   const alerts = detectAlerts(typedMetrics);
@@ -877,7 +904,7 @@ export async function generateReportLocal(
   }
 
   const s4 = buildIntentMapping(core, down, qaMap, analyses.intent);
-  const s5 = buildPriorityActions(down, up, topQas, analyses.action);
+  const s5 = buildPriorityActions(down, up, topQas, analyses.action, maturity);
   const s6 = buildAiVisibility();
   const s7 = buildKbCitations(topQas, tracker);
 

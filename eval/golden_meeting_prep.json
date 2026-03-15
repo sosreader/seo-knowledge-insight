@@ -1,0 +1,90 @@
+[
+  {
+    "id": "meeting_prep_20260306_ea576a4f",
+    "description": "基線：v3.3 重生，9 ALERT_DOWN（含 10 資料斷層），15 citations，15 提問，含 S8 成熟度表 + S10 [LX→LY] 標籤",
+    "report_path": "eval/fixtures/meeting_prep/meeting_prep_20260306_ea576a4f.md",
+    "snapshot_id": "20260306-184745",
+    "expected_structure": {
+      "section_count": 11,
+      "citation_count_range": [10, 30],
+      "question_total_range": [11, 17],
+      "question_by_type": {"A": [3, 5], "B": [4, 6], "C": [2, 3], "D": [2, 3]},
+      "s3_anomaly_subsections_min": 3,
+      "s5_layer_count": 5,
+      "s7_element_count": 7,
+      "s10_checklist_min": 5
+    },
+    "expected_grounding": {
+      "citation_id_resolution_min": 0.9,
+      "citation_category_consistency_min": 0.8,
+      "s4_row_count_min": 3
+    },
+    "notes": "v3.3 全 pipeline 重生（snapshot → 週報 → meeting-prep），S8 成熟度表 + S10 含 9 個 [LX→LY] 升級標籤"
+  },
+  {
+    "id": "meeting_prep_20260220_25caf520",
+    "description": "回測 Case 2：v3.3 重生，6 ALERT_DOWN（AMP/News/Discover/檢索未索引/CWV），11 citations，14 提問，含 S8 成熟度表 + S10 [LX→LY] 標籤",
+    "report_path": "eval/fixtures/meeting_prep/meeting_prep_20260220_25caf520.md",
+    "snapshot_id": "report_20260220",
+    "expected_structure": {
+      "section_count": 11,
+      "citation_count_range": [10, 30],
+      "question_total_range": [11, 17],
+      "question_by_type": {"A": [3, 5], "B": [4, 6], "C": [2, 3], "D": [2, 3]},
+      "s3_anomaly_subsections_min": 3,
+      "s5_layer_count": 5,
+      "s7_element_count": 7,
+      "s10_checklist_min": 5
+    },
+    "expected_grounding": {
+      "citation_id_resolution_min": 0.9,
+      "citation_category_consistency_min": 0.8,
+      "s4_row_count_min": 3
+    },
+    "notes": "v3.3 重生，週報萃取模式，S8 成熟度表 + S10 含 8 個 [LX→LY] 升級標籤"
+  },
+  {
+    "id": "meeting_prep_20260227_765384ce",
+    "description": "回測 Case 3：v3.3 重生，16 ALERT_DOWN（AMP -166%/Sessions -16%/AI 三平台崩退），11 citations，14 提問，含 S8 成熟度表 + S10 [LX→LY] 標籤",
+    "report_path": "eval/fixtures/meeting_prep/meeting_prep_20260227_765384ce.md",
+    "snapshot_id": "report_20260227_b47f1eb7",
+    "expected_structure": {
+      "section_count": 11,
+      "citation_count_range": [10, 30],
+      "question_total_range": [11, 17],
+      "question_by_type": {"A": [3, 5], "B": [4, 6], "C": [2, 3], "D": [2, 3]},
+      "s3_anomaly_subsections_min": 3,
+      "s5_layer_count": 5,
+      "s7_element_count": 7,
+      "s10_checklist_min": 5
+    },
+    "expected_grounding": {
+      "citation_id_resolution_min": 0.9,
+      "citation_category_consistency_min": 0.8,
+      "s4_row_count_min": 3
+    },
+    "notes": "v3.3 重生，Health Score 0，S8 成熟度表 + S10 含 11 個 [LX→LY] 升級標籤"
+  },
+  {
+    "id": "meeting_prep_20260309_49530993",
+    "description": "回測 Case 4：v3.3 重生，9 ALERT_DOWN（外部連結 -18%/AI 月降但週轉正），12 citations，15 提問，含 S8 成熟度表 + S10 [LX→LY] 標籤",
+    "report_path": "eval/fixtures/meeting_prep/meeting_prep_20260309_49530993.md",
+    "snapshot_id": "report_20260309_f4d6dcb9",
+    "expected_structure": {
+      "section_count": 11,
+      "citation_count_range": [10, 30],
+      "question_total_range": [11, 17],
+      "question_by_type": {"A": [3, 5], "B": [4, 6], "C": [2, 3], "D": [2, 3]},
+      "s3_anomaly_subsections_min": 3,
+      "s5_layer_count": 5,
+      "s7_element_count": 7,
+      "s10_checklist_min": 5
+    },
+    "expected_grounding": {
+      "citation_id_resolution_min": 0.9,
+      "citation_category_consistency_min": 0.8,
+      "s4_row_count_min": 3
+    },
+    "notes": "v3.3 重生，Health Score 10，S8 成熟度表 + S10 含 9 個 [LX→LY] 升級標籤"
+  }
+]

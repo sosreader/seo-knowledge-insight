@@ -23,8 +23,9 @@ Map<string, QAItem> 啟動載入      →  Supabase REST paginated fetch（metad
 Route 層零修改，只有 `hybridSearch()` 從 sync 改為 async。
 
 **Supabase 配置**：
+
 - Project: `eqrlomuujichshkbtoat`（ap-northeast-1）
-- Tables: `qa_items`（1,323 rows + vector(1536)）、`eval_runs`
+- Tables: `qa_items`（1,469 rows + vector(1536)）、`eval_runs`
 - RPC: `match_qa_items()`、`search_qa_items_keyword()`
 - Thin REST client（`supabase-client.ts`），不依賴 `@supabase/supabase-js`
 - MCP: `https://mcp.supabase.com/mcp?project_ref=eqrlomuujichshkbtoat`
@@ -33,14 +34,15 @@ Route 層零修改，只有 `hybridSearch()` 從 sync 改為 async。
 
 ```typescript
 // api/src/index.ts
-const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
+const isLambda =
+  !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
 
 let _initPromise: Promise<void> | null = null;
 
 export function initStores(): Promise<void> {
   if (!_initPromise) {
     _initPromise = _doInitStores().catch((err) => {
-      _initPromise = null;  // 失敗時 reset，下次 retry
+      _initPromise = null; // 失敗時 reset，下次 retry
       throw err;
     });
   }
@@ -56,6 +58,7 @@ if (process.env.NODE_ENV !== "test" && !isLambda) {
 ```
 
 **雙模式啟動**：
+
 - **Node.js 直接執行**：`initStores()` + `serve()`
 - **Lambda**：由 `lambda.ts` 呼叫 `initStores()`（cold start），不啟動 HTTP server
 - **Idempotency**：`_initPromise` 保證只初始化一次；失敗 reset 允許 retry
@@ -104,7 +107,10 @@ engine.search(query, queryVec, topK, category, minScore);
 
 ```typescript
 // api/src/services/rag-chat.ts
-async function ragChat(message: string, history: ChatMessage[]): Promise<RagResult> {
+async function ragChat(
+  message: string,
+  history: ChatMessage[],
+): Promise<RagResult> {
   // 1. 把問題 embed（OpenAI API）
   const queryVec = await getEmbedding(message);
 
@@ -121,7 +127,9 @@ async function ragChat(message: string, history: ChatMessage[]): Promise<RagResu
 
   // 4. GPT 生成回答
   const resp = await openai.chat.completions.create({
-    model: config.OPENAI_MODEL, messages, temperature: 0.3,
+    model: config.OPENAI_MODEL,
+    messages,
+    temperature: 0.3,
   });
   return { answer: resp.choices[0].message.content, sources };
 }
@@ -189,17 +197,17 @@ api/src/
 
 ### 技術棧
 
-| 層級 | 技術 | 版本 |
-|------|------|------|
-| Runtime | Node.js | >= 22 |
-| Framework | Hono | 4.x |
-| Server | @hono/node-server | 1.x |
-| Validation | Zod | 4.x |
-| Build | tsup | 8.x |
-| Dev | tsx watch | 4.x |
-| Test | Vitest | 4.x |
-| Package Manager | pnpm | 10.x |
-| Language | TypeScript | 5.9+ |
+| 層級            | 技術              | 版本  |
+| --------------- | ----------------- | ----- |
+| Runtime         | Node.js           | >= 22 |
+| Framework       | Hono              | 4.x   |
+| Server          | @hono/node-server | 1.x   |
+| Validation      | Zod               | 4.x   |
+| Build           | tsup              | 8.x   |
+| Dev             | tsx watch         | 4.x   |
+| Test            | Vitest            | 4.x   |
+| Package Manager | pnpm              | 10.x  |
+| Language        | TypeScript        | 5.9+  |
 
 ---
 
@@ -209,14 +217,15 @@ api/src/
 
 ### 21.1 部署選項演進
 
-| 方案                              | 複雜度 | 月費估算    | 適合場景                      |
-| --------------------------------- | ------ | ----------- | ----------------------------- |
-| ~~ECR + EC2 SSM~~（v0.3--v1.20） | 中     | ~$5-10      | 已淘汰（需管主機）            |
-| ~~ECR + App Runner~~（v2.3--v2.23）| 低    | ~$5-7       | 已淘汰（改用 Lambda 更便宜）  |
-| ECR + ECS Fargate                 | 高     | ~$20-30     | 需要 auto-scaling + ALB       |
-| **Lambda + Function URL（當前）** | **低** | **~$0**     | **Free tier 足夠低流量場景**  |
+| 方案                                | 複雜度 | 月費估算 | 適合場景                     |
+| ----------------------------------- | ------ | -------- | ---------------------------- |
+| ~~ECR + EC2 SSM~~（v0.3--v1.20）    | 中     | ~$5-10   | 已淘汰（需管主機）           |
+| ~~ECR + App Runner~~（v2.3--v2.23） | 低     | ~$5-7    | 已淘汰（改用 Lambda 更便宜） |
+| ECR + ECS Fargate                   | 高     | ~$20-30  | 需要 auto-scaling + ALB      |
+| **Lambda + Function URL（當前）**   | **低** | **~$0**  | **Free tier 足夠低流量場景** |
 
 **Lambda 遷移理由**：
+
 - **成本最優**：Free tier 含 100 萬次/月 + 400,000 GB-seconds，低流量場景月費 ~$0
 - **arm64**：比 x86_64 便宜 20%（Lambda 建立後不可更改架構，需刪除重建）
 - **Function URL**：免費內建 HTTPS endpoint，不需 API Gateway
@@ -249,20 +258,24 @@ import { handle } from "hono/aws-lambda";
 import { app, initStores } from "./index.js";
 import { flushLaminar } from "./utils/observability.js";
 
-const ready = initStores().catch((err) => {  // Cold start 初始化
+const ready = initStores().catch((err) => {
+  // Cold start 初始化
   console.error("Lambda cold start initStores failed:", err);
 });
 const honoHandler = handle(app);
 
 export const handler: typeof honoHandler = async (event, context) => {
-  await ready;                         // 確保 stores 載入完成
+  await ready; // 確保 stores 載入完成
   const response = await honoHandler(event, context);
-  await flushLaminar().catch((err) => console.warn("Laminar flush failed:", err));
+  await flushLaminar().catch((err) =>
+    console.warn("Laminar flush failed:", err),
+  );
   return response;
 };
 ```
 
 **設計重點**：
+
 - **Cold start pattern**：module-level `initStores()` promise，每次 invocation `await ready`
 - **Idempotency guard**（`index.ts`）：`_initPromise` 失敗時 reset 為 null，下次 retry
 - **`hono/aws-lambda`**：`handle()` 將 Hono app 轉為 Lambda handler
@@ -287,12 +300,14 @@ const LOAD_TIMEOUT_MS = 25_000;  // 啟動載入用較長 timeout
 ```
 
 **實測數據**：
-- Supabase 暖時：load 1,323 items ≈ 1.5-2 秒
+
+- Supabase 暖時：load 1,469 items ≈ 1.5-2 秒
 - Supabase 冷時：可能超過 10 秒 → 改用 25 秒 timeout
 
 #### Supabase RPC 函數注意事項
 
 `match_qa_items()` RPC 需注意：
+
 - **VOLATILE**（非 STABLE）：因為使用 `SET LOCAL ivfflat.probes = 5`
 - **search_path** 必須含 `extensions`：pgvector operators 在 extensions schema
 - **型別精確匹配**：`<=>` 回傳 `double precision`，function return type 若為 `real` 須 cast
@@ -301,23 +316,43 @@ const LOAD_TIMEOUT_MS = 25_000;  // 啟動載入用較長 timeout
 
 Lambda 無檔案系統，部分端點透過 Supabase fallback 提供資料：
 
-| 端點 | Lambda 資料來源 | 資料量 | 說明 |
-|------|----------------|--------|------|
-| `GET /qa` | SupabaseQAStore | 1,323 | pgvector + in-memory metadata |
-| `POST /search` | Supabase RPC `match_qa_items` | hybrid | pgvector + TS re-rank |
-| `POST /sessions/*/messages` | Supabase + OpenAI | RAG 回答 | 完整 RAG pipeline |
-| `GET /reports` | SupabaseReportStore | 31 | 完整 markdown content |
-| `GET /sessions` | SupabaseSessionStore | 8 | CRUD 完整 |
-| `GET /pipeline/status` | qaStore.collections | 6 步驟 | 從 QA metadata 計算 |
-| `GET /pipeline/source-docs` | **qaStore fallback** | 230 | `buildSourceDocsFromStore()` 從 QA metadata group by 反推 |
-| `GET /pipeline/metrics/snapshots` | SupabaseSnapshotStore | 2 | CRUD 完整 |
-| `GET /synonyms` | SupabaseSynonymsStore | 0 custom | 讀寫完整 |
-| `GET /pipeline/meetings` | 無（回傳空） | 0 | Notion JSON 為本地產物 |
-| `GET /pipeline/unprocessed` | 無（回傳空） | 0 | 待處理 markdown 為本地產物 |
-| `GET /pipeline/logs` | 無（回傳空） | 0 | fetch 日誌為本地產物 |
+| 端點                              | Lambda 資料來源               | 資料量   | 說明                                                      |
+| --------------------------------- | ----------------------------- | -------- | --------------------------------------------------------- |
+| `GET /qa`                         | SupabaseQAStore               | 1,469    | pgvector + in-memory metadata                             |
+| `POST /search`                    | Supabase RPC `match_qa_items` | hybrid   | pgvector + TS re-rank                                     |
+| `POST /sessions/*/messages`       | Supabase + OpenAI             | RAG 回答 | 完整 RAG pipeline                                         |
+| `GET /reports`                    | SupabaseReportStore           | 31       | 完整 markdown content                                     |
+| `GET /sessions`                   | SupabaseSessionStore          | 8        | CRUD 完整                                                 |
+| `GET /pipeline/status`            | qaStore.collections           | 6 步驟   | 從 QA metadata 計算                                       |
+| `GET /pipeline/source-docs`       | **qaStore fallback**          | 232      | `buildSourceDocsFromStore()` 從 QA metadata group by 反推 |
+| `GET /pipeline/metrics/snapshots` | SupabaseSnapshotStore         | 2        | CRUD 完整                                                 |
+| `GET /synonyms`                   | SupabaseSynonymsStore         | 0 custom | 讀寫完整                                                  |
+| `GET /pipeline/meetings`          | 無（回傳空）                  | 0        | Notion JSON 為本地產物                                    |
+| `GET /pipeline/unprocessed`       | 無（回傳空）                  | 0        | 待處理 markdown 為本地產物                                |
+| `GET /pipeline/logs`              | 無（回傳空）                  | 0        | fetch 日誌為本地產物                                      |
 
 **source-docs fallback 設計**：當 `buildSourceDocs()`（檔案掃描）回傳空且 `qaStore.count > 0` 時，
 自動切換至 `buildSourceDocsFromStore()`，從 `qaStore.allItems` 按 `(source_collection, source_title, source_date)` group by 反推來源文件清單。`is_processed` 恆為 true、`size_bytes` 為 0。
+
+#### Supabase PostgREST 批次操作注意事項（2026-03-12）
+
+**預設 Row Limit**：PostgREST 預設每次最多回傳 1,000 筆。需要處理超過 1,000 筆時，必須分批呼叫或加 `&limit=N` 參數。`backfill_extraction_model.py` 首次回填 1,375 筆時需執行兩次（1000 + 375）。
+
+**POST Upsert vs PATCH Update（BUG-007）**：
+
+```
+# 錯誤做法：POST upsert 會觸發所有 NOT NULL constraint
+requests.post(url, headers={"Prefer": "resolution=merge-duplicates"}, json={"id": x, "field": val})
+# → 422 NOT NULL violation on "question" column
+
+# 正確做法：PATCH + id filter 只更新指定欄位
+requests.patch(f"{url}?id=in.({id_list})", json={"field": val})
+# → 200/204 成功，不觸發其他欄位的 NOT NULL
+```
+
+原因：POST upsert 即使設定 `merge-duplicates`，PostgREST 仍會對所有 NOT NULL 欄位進行約束檢查。PATCH 只驗證被更新的欄位。
+
+**Supabase 資料清理**：刪除舊資料時用 batch DELETE + service_key（bypass RLS），確認 `content-range` header 回傳正確的總數後才操作。
 
 #### tsup 雙重 Build 設定
 
@@ -340,6 +375,7 @@ export default defineConfig([
 ```
 
 **ESM 注意事項**：
+
 - Lambda zip 內需含 `package.json` with `"type": "module"`，否則 `.js` 被當 CJS 載入
 - `noExternal: [/.*/]` 將所有 npm 依賴打入 bundle → zip 只需 `lambda.js` + `package.json`
 - CJS 依賴（如 `dotenv`）在 ESM bundle 中需要 `createRequire` shim 提供全域 `require`
@@ -349,9 +385,13 @@ export default defineConfig([
 
 ```typescript
 // api/src/middleware/rate-limit.ts
-const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
+const isLambda =
+  !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
 // Lambda 每個執行環境有獨立 Map → in-memory rate limit 無效
-if (isLambda) { await next(); return; }
+if (isLambda) {
+  await next();
+  return;
+}
 ```
 
 > Lambda 環境不做 in-memory rate limiting。需要限流時應使用 API Gateway throttling 或外部 store。
@@ -391,11 +431,11 @@ CMD ["node", "dist/index.js"]
 > **已完成 Phase 2**：資料層已遷移至 Supabase pgvector，Lambda 不需要檔案。
 > 以下為歷史參考（Phase 1 過渡方案）。
 
-| 方案                     | 複雜度 | 資料更新方式           | 適用階段     |
-| ------------------------ | ------ | ---------------------- | ------------ |
-| 打包進 Docker image      | 最低   | 重建 image             | Phase 1 過渡 |
-| S3 啟動時下載            | 低     | 上傳 S3，重啟容器      | Phase 1      |
-| **Supabase (pgvector)**  | **中** | **API 即時寫入**       | **Phase 2（v2.24 完成）** |
+| 方案                    | 複雜度 | 資料更新方式      | 適用階段                  |
+| ----------------------- | ------ | ----------------- | ------------------------- |
+| 打包進 Docker image     | 最低   | 重建 image        | Phase 1 過渡              |
+| S3 啟動時下載           | 低     | 上傳 S3，重啟容器 | Phase 1                   |
+| **Supabase (pgvector)** | **中** | **API 即時寫入**  | **Phase 2（v2.24 完成）** |
 
 **Phase 2 Supabase 遷移計畫**：
 
@@ -460,10 +500,10 @@ CREATE INDEX ON qa_items USING gin (to_tsvector('simple', question || ' ' || ans
 
 `eval.yml` 在每次 push main 時自動執行兩個 Laminar eval：
 
-| Eval | CI 行為 | 資料來源 |
-|------|---------|---------|
-| `eval_retrieval.py` | 正常執行 | 本地 `qa_final.json` → 無則 fallback Supabase REST API |
-| `eval_extraction.py` | Graceful skip（exit 0） | 需要本地 `output/qa_per_meeting/`，CI 無此資料 |
+| Eval                 | CI 行為                 | 資料來源                                               |
+| -------------------- | ----------------------- | ------------------------------------------------------ |
+| `eval_retrieval.py`  | 正常執行                | 本地 `qa_final.json` → 無則 fallback Supabase REST API |
+| `eval_extraction.py` | Graceful skip（exit 0） | 需要本地 `output/qa_per_meeting/`，CI 無此資料         |
 
 **Retrieval eval Supabase fallback**（`evals/eval_retrieval.py`）：
 
@@ -482,25 +522,26 @@ CI 環境需要 `SUPABASE_URL` + `SUPABASE_ANON_KEY` secrets。
 
 ### 21.6 GitHub Actions Secrets
 
-| Secret                     | 用途                                         |
-| -------------------------- | -------------------------------------------- |
-| `AWS_ACCESS_KEY_ID`        | AWS IAM 認證（`seo-insight-deployer` user）  |
-| `AWS_SECRET_ACCESS_KEY`    | AWS IAM 認證                                 |
-| `LMNR_PROJECT_API_KEY`     | Laminar eval + tracing                       |
-| `OPENAI_API_KEY`           | OpenAI API（RAG chat 需要）                  |
-| `SEO_API_KEY`              | API 認證金鑰                                 |
-| `SUPABASE_URL`             | Supabase REST API URL                        |
-| `SUPABASE_ANON_KEY`        | Supabase anon key（RLS SELECT）              |
+| Secret                  | 用途                                        |
+| ----------------------- | ------------------------------------------- |
+| `AWS_ACCESS_KEY_ID`     | AWS IAM 認證（`seo-insight-deployer` user） |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM 認證                                |
+| `LMNR_PROJECT_API_KEY`  | Laminar eval + tracing                      |
+| `OPENAI_API_KEY`        | OpenAI API（RAG chat 需要）                 |
+| `SEO_API_KEY`           | API 認證金鑰                                |
+| `SUPABASE_URL`          | Supabase REST API URL                       |
+| `SUPABASE_ANON_KEY`     | Supabase anon key（RLS SELECT）             |
 
 ### 21.7 AWS 服務與 IAM 設定
 
 **需要開通的 AWS 服務**：
 
-| 服務           | 用途                  | 費用         |
-| -------------- | --------------------- | ------------ |
-| **Lambda**     | 無伺服器函式運行      | ~$0/月（free tier） |
+| 服務       | 用途             | 費用                |
+| ---------- | ---------------- | ------------------- |
+| **Lambda** | 無伺服器函式運行 | ~$0/月（free tier） |
 
 **Lambda 函式設定**：
+
 - Function: `seo-insight-api`
 - Architecture: **arm64**（比 x86_64 便宜 20%）
 - Runtime: Node.js 22
@@ -511,10 +552,70 @@ CI 環境需要 `SUPABASE_URL` + `SUPABASE_ANON_KEY` secrets。
 - Region: ap-northeast-1
 
 **IAM User -- `seo-insight-deployer`（GitHub Actions 用）**：
+
 - `lambda:UpdateFunctionCode`
 - `lambda:GetFunction`
 
 > **注意**：Lambda 架構建立後不可更改。需更換架構時必須刪除函式後重建。
+
+### 21.7.1 Production Recovery Snapshot（2026-03-14）
+
+這次 production 問題的關鍵，不是單一 deploy 失敗，而是 Lambda runtime 路徑與 Supabase schema 狀態同時落後於本地程式碼。
+
+**Lambda 路徑最終決策**：
+
+- `api/src/lambda.ts` 從 `streamHandle(app)` 改回 buffered `handle(app)`
+- Lambda Function URL invoke mode 也恢復為 `BUFFERED`
+- redeploy 後 `/health` 恢復 healthy
+- `/api/v1/chat/stream` 在 Lambda production 明確回 `501`，避免 production 500；本地 dev streaming 行為保留
+
+這代表目前的部署原則是：
+
+- production 先追求穩定的 buffered request/response
+- streaming 能力只在本地或未來更適合的執行環境再重新打開
+
+**Supabase 生產故障根因**：
+
+- production `qa_items` 缺少 `primary_category` 等 retrieval metadata 欄位
+- 啟動時 extended schema select 直接失敗，導致最初 `/api/v1/search` 無法正常載入 QA corpus
+
+目前的修復方式不是立刻改資料庫，而是先讓 app 能自我降級：
+
+- `api/src/store/supabase-qa-store.ts`：extended schema select 失敗時，自動 fallback 到 base schema select
+- `api/src/store/supabase-client.ts`：SELECT / RPC 錯誤訊息包含 response body，讓缺欄位錯誤可直接在 logs 中定位
+
+修復後 production 狀態：
+
+- `/health` 正常
+- `/api/v1/search` 恢復可用
+- logs 可見 fallback warning，但 `QAStore loaded` 成功
+
+### 21.7.2 Migration 010 的狀態與限制
+
+目前已準備 `supabase/migrations/010_retrieval_metadata_columns.sql`，內容包括：
+
+- retrieval metadata columns
+- `increment_search_hit_count(TEXT[])` RPC
+
+但它**尚未套用到遠端 Supabase**。當前環境限制為：
+
+- 沒有 `supabase` CLI
+- 沒有 `psql`
+- `.env` 內沒有 direct Postgres connection string
+
+因此現在的 production 可視為「程式碼已相容新 schema、線上資料庫仍停在舊 schema、API 靠 fallback 維持服務」。
+
+這個狀態是可營運的，但不能被誤認為 migration 已完成。
+
+### 21.7.3 QA metadata sync 仍未完成的原因
+
+除了 schema 未對齊，目前 full `qa_items` upsert 也還沒能直接完成，原因不是單一腳本錯誤，而是資料形狀不一致：
+
+- 本地 artifact 有 `1809` 筆 QA
+- 本地 `qa_embeddings.npy` 目前為 `1790 x 256`
+- Supabase schema 期待 `vector(1536)`
+
+因此短期內若只需要把新 metadata 帶到 Supabase，較合理的方向不是硬做 full embedding upsert，而是額外做一條 metadata-only sync path。
 
 ### 21.8 docker-compose 本地開發
 
@@ -527,8 +628,8 @@ services:
     ports:
       - "8002:8002"
     volumes:
-      - ./output:/app/output:ro      # Q&A 資料 + embeddings（檔案模式）
-      - ./scripts:/app/scripts:ro    # 週報生成腳本
+      - ./output:/app/output:ro # Q&A 資料 + embeddings（檔案模式）
+      - ./scripts:/app/scripts:ro # 週報生成腳本
     environment:
       - PORT=8002
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
@@ -584,12 +685,12 @@ EC2 透過 volume mount 掛載資料檔，SSM 遠端執行部署命令。
 
 ### OWASP API Security Top 10（2023）修復狀態
 
-| API 風險                                             | 修復方式                                                        | 狀態      |
-| ---------------------------------------------------- | --------------------------------------------------------------- | --------- |
-| **API2:2023 -- Broken Authentication**               | `authMiddleware` + `X-API-Key` + `timingSafeEqual`              | OK |
-| **API4:2023 -- Unrestricted Resource Consumption**   | `rateLimit()` sliding window：chat 20/min, default 60/min, generate 5/min | OK |
-| **API3:2023 -- Broken Object Property Authorization** | `errorHandler` 全域攔截，不洩漏 stack trace                     | OK |
-| **API1:2023 -- Broken Object Level Authorization**   | 所有 QA 資料公開（低風險，當前不需修復）                        | 可接受 |
+| API 風險                                              | 修復方式                                                                  | 狀態   |
+| ----------------------------------------------------- | ------------------------------------------------------------------------- | ------ |
+| **API2:2023 -- Broken Authentication**                | `authMiddleware` + `X-API-Key` + `timingSafeEqual`                        | OK     |
+| **API4:2023 -- Unrestricted Resource Consumption**    | `rateLimit()` sliding window：chat 20/min, default 60/min, generate 5/min | OK     |
+| **API3:2023 -- Broken Object Property Authorization** | `errorHandler` 全域攔截，不洩漏 stack trace                               | OK     |
+| **API1:2023 -- Broken Object Level Authorization**    | 所有 QA 資料公開（低風險，當前不需修復）                                  | 可接受 |
 
 ### Auth Middleware（`api/src/middleware/auth.ts`）
 
@@ -616,6 +717,7 @@ export function createAuthMiddleware(getApiKey: () => string) {
 ```
 
 **設計重點**：
+
 - `timingSafeEqual`：防止 timing attack（與 Python 版的 `hmac.compare_digest` 對應）
 - 開發模式（`SEO_API_KEY` 未設定）自動放行 + 警告
 - 認證掛在 `/api/v1/*` 路由群組，`/health` 不需認證
@@ -625,9 +727,10 @@ export function createAuthMiddleware(getApiKey: () => string) {
 ```typescript
 export function rateLimit(maxRequests: number, windowMs: number = 60_000) {
   return createMiddleware(async (c, next) => {
-    const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
-            ?? c.req.header("x-real-ip")
-            ?? "unknown";
+    const ip =
+      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+      c.req.header("x-real-ip") ??
+      "unknown";
     const key = `${ip}:${c.req.path}`;
     // Sliding window: 過濾 windowMs 內的 timestamps
     // 超過 maxRequests 回傳 429 + Retry-After header
@@ -636,6 +739,7 @@ export function rateLimit(maxRequests: number, windowMs: number = 60_000) {
 ```
 
 **設計重點**：
+
 - **Sliding window**：比 fixed window 更精確，避免邊界突發
 - **Per-IP per-path**：`/chat` 和 `/search` 獨立計算，互不影響
 - **自動清理**：每 5 分鐘清除過期 entry，防止記憶體洩漏
@@ -643,16 +747,16 @@ export function rateLimit(maxRequests: number, windowMs: number = 60_000) {
 
 **速率表**：
 
-| Endpoint                      | Limit         | 說明              |
-| ----------------------------- | ------------- | ----------------- |
-| `POST /api/v1/chat`           | 20/min per IP | 消耗 OpenAI token |
-| `POST /api/v1/search`         | 60/min per IP | 語意搜索          |
-| `GET /api/v1/qa/*`            | 60/min per IP | 列表查詢          |
-| `POST /api/v1/feedback`       | 60/min per IP | 回饋              |
-| `GET /api/v1/reports`         | 60/min per IP | 週報列表          |
+| Endpoint                        | Limit         | 說明               |
+| ------------------------------- | ------------- | ------------------ |
+| `POST /api/v1/chat`             | 20/min per IP | 消耗 OpenAI token  |
+| `POST /api/v1/search`           | 60/min per IP | 語意搜索           |
+| `GET /api/v1/qa/*`              | 60/min per IP | 列表查詢           |
+| `POST /api/v1/feedback`         | 60/min per IP | 回饋               |
+| `GET /api/v1/reports`           | 60/min per IP | 週報列表           |
 | `POST /api/v1/reports/generate` | 5/min per IP  | 週報生成（重量級） |
-| `GET /api/v1/sessions`        | 60/min per IP | 對話列表          |
-| `POST /api/v1/sessions/*`     | 20/min per IP | 對話操作          |
+| `GET /api/v1/sessions`          | 60/min per IP | 對話列表           |
+| `POST /api/v1/sessions/*`       | 20/min per IP | 對話操作           |
 
 命中限制時回傳 **429 Too Many Requests**（RFC 6585）。
 
@@ -660,8 +764,10 @@ export function rateLimit(maxRequests: number, windowMs: number = 60_000) {
 
 ```typescript
 export const errorHandler: ErrorHandler = (err, c) => {
-  console.error(`Unhandled error: ${err.message}`,
-    err.stack?.split("\n").slice(0, 5).join("\n"));
+  console.error(
+    `Unhandled error: ${err.message}`,
+    err.stack?.split("\n").slice(0, 5).join("\n"),
+  );
   return c.json(fail("Internal server error"), 500);
 };
 ```
@@ -698,33 +804,33 @@ export function fail(message: string): ApiResponse<null> { ... }
 
 > `api/src/config.ts` 使用 Zod schema 驗證所有環境變數，啟動時校驗失敗立即 `process.exit(1)`。
 
-| 變數                    | 預設值                  | 用途                                         |
-| ----------------------- | ---------------------- | -------------------------------------------- |
-| `PORT`                  | `8002`                 | HTTP 監聽 port                               |
-| `HOST`                  | `0.0.0.0`             | 監聽位址                                     |
-| `OPENAI_API_KEY`        | （空字串）             | OpenAI API（search + chat 需要）             |
-| `OPENAI_MODEL`          | `gpt-5.2`             | Chat completion 模型                         |
-| `OPENAI_EMBEDDING_MODEL`| `text-embedding-3-small` | Embedding 模型                             |
-| `SEO_API_KEY`           | （空字串）             | API Key 認證（空 = 開發模式，跳過驗證）      |
-| `ANTHROPIC_API_KEY`     | （空字串）             | Reranker + Context Relevance（v2.11+，auto 模式偵測） |
-| `CHAT_MODEL`            | `gpt-5.2`             | RAG Chat 問答模型（v2.22+，獨立於 OPENAI_MODEL）     |
-| `CONTEXT_EMBEDDING_WEIGHT` | `0.6`               | Contextual embedding 加權（v2.11+）                   |
-| `RERANKER_ENABLED`      | `auto`                 | Reranker 開關（auto/true/false，v2.11+）              |
-| `CORS_ORIGINS`          | `http://localhost:3000` | CORS 白名單（逗號分隔）                     |
-| `CHAT_CONTEXT_K`        | `5`                    | RAG 搜尋回傳 top-K 筆數                     |
-| `RATE_LIMIT_DEFAULT`    | `60`                   | 預設速率限制（次/分鐘）                     |
-| `RATE_LIMIT_CHAT`       | `20`                   | Chat 速率限制（次/分鐘）                    |
-| `RATE_LIMIT_GENERATE`   | `5`                    | 週報生成速率限制（次/分鐘）                 |
+| 變數                       | 預設值                   | 用途                                                  |
+| -------------------------- | ------------------------ | ----------------------------------------------------- |
+| `PORT`                     | `8002`                   | HTTP 監聽 port                                        |
+| `HOST`                     | `0.0.0.0`                | 監聽位址                                              |
+| `OPENAI_API_KEY`           | （空字串）               | OpenAI API（search + chat 需要）                      |
+| `OPENAI_MODEL`             | `gpt-5.2`                | Chat completion 模型                                  |
+| `OPENAI_EMBEDDING_MODEL`   | `text-embedding-3-small` | Embedding 模型                                        |
+| `SEO_API_KEY`              | （空字串）               | API Key 認證（空 = 開發模式，跳過驗證）               |
+| `ANTHROPIC_API_KEY`        | （空字串）               | Reranker + Context Relevance（v2.11+，auto 模式偵測） |
+| `CHAT_MODEL`               | `gpt-5.2`                | RAG Chat 問答模型（v2.22+，獨立於 OPENAI_MODEL）      |
+| `CONTEXT_EMBEDDING_WEIGHT` | `0.6`                    | Contextual embedding 加權（v2.11+）                   |
+| `RERANKER_ENABLED`         | `auto`                   | Reranker 開關（auto/true/false，v2.11+）              |
+| `CORS_ORIGINS`             | `http://localhost:3000`  | CORS 白名單（逗號分隔）                               |
+| `CHAT_CONTEXT_K`           | `5`                      | RAG 搜尋回傳 top-K 筆數                               |
+| `RATE_LIMIT_DEFAULT`       | `60`                     | 預設速率限制（次/分鐘）                               |
+| `RATE_LIMIT_CHAT`          | `20`                     | Chat 速率限制（次/分鐘）                              |
+| `RATE_LIMIT_GENERATE`      | `5`                      | 週報生成速率限制（次/分鐘）                           |
 
 ### 資料路徑
 
 ```typescript
 export const paths = {
-  qaJsonPath:         "output/qa_final.json",
-  qaEnrichedJsonPath: "output/qa_enriched.json",   // 優先載入
-  qaEmbeddingsPath:   "output/qa_embeddings.npy",
-  sessionsDir:        "output/sessions",
-  accessLogsDir:      "output/access_logs",
+  qaJsonPath: "output/qa_final.json",
+  qaEnrichedJsonPath: "output/qa_enriched.json", // 優先載入
+  qaEmbeddingsPath: "output/qa_embeddings.npy",
+  sessionsDir: "output/sessions",
+  accessLogsDir: "output/access_logs",
 };
 ```
 
@@ -747,9 +853,10 @@ Enriched 版本含 synonyms + freshness_score，支援更精確的 hybrid search
 
 ```typescript
 // api/src/utils/audit-logger.ts
-const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
-        ?? c.req.header("x-real-ip")
-        ?? "unknown";
+const ip =
+  c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+  c.req.header("x-real-ip") ??
+  "unknown";
 ```
 
 **注意**：Lambda Function URL 和 API Gateway 會設定 `X-Forwarded-For`，rate-limit middleware 和 audit logger 使用相同的 IP 取得邏輯。
@@ -771,19 +878,19 @@ const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
 
 ### 實作內容
 
-| 路徑 | 追蹤方式 | 模組 |
-|------|---------|------|
-| CLI 腳本（Python） | Laminar `@observe` + `init_laminar()` | `utils/observability.py` |
-| Claude Code 指令 | `log_execution()` → JSONL | `utils/execution_log.py` |
-| REST API（Hono） | `@lmnr-ai/lmnr@0.8.14` + `observe()` wrapper | `api/src/utils/observability.ts` |
+| 路徑               | 追蹤方式                                     | 模組                             |
+| ------------------ | -------------------------------------------- | -------------------------------- |
+| CLI 腳本（Python） | Laminar `@observe` + `init_laminar()`        | `utils/observability.py`         |
+| Claude Code 指令   | `log_execution()` → JSONL                    | `utils/execution_log.py`         |
+| REST API（Hono）   | `@lmnr-ai/lmnr@0.8.14` + `observe()` wrapper | `api/src/utils/observability.ts` |
 
 ### 追蹤的 span
 
-| Span | 模組 | 說明 |
-|------|------|------|
-| `rag_chat` | `services/rag-chat.ts` | RAG 問答完整流程 |
-| `get_embedding` | `services/embedding.ts` | OpenAI embedding 呼叫 |
-| OpenAI API calls | auto-instrument | `instrumentModules: { OpenAI }` |
+| Span             | 模組                    | 說明                            |
+| ---------------- | ----------------------- | ------------------------------- |
+| `rag_chat`       | `services/rag-chat.ts`  | RAG 問答完整流程                |
+| `get_embedding`  | `services/embedding.ts` | OpenAI embedding 呼叫           |
+| OpenAI API calls | auto-instrument         | `instrumentModules: { OpenAI }` |
 
 ### Online Scoring（4 evaluators）
 
@@ -896,9 +1003,9 @@ def my_step(input_data: str) -> dict:
 
 ### 環境變數
 
-| 變數                   | 用途                            | 必要性                              |
-| ---------------------- | ------------------------------- | ----------------------------------- |
-| `LMNR_PROJECT_API_KEY` | Laminar tracing + evals         | 無此 key 時 silently skip，不 crash |
+| 變數                   | 用途                    | 必要性                              |
+| ---------------------- | ----------------------- | ----------------------------------- |
+| `LMNR_PROJECT_API_KEY` | Laminar tracing + evals | 無此 key 時 silently skip，不 crash |
 
 </details>
 

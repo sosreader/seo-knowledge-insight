@@ -95,9 +95,34 @@ vi.mock("../../src/services/rag-chat.js", () => ({
 
 const mockAgentChat = vi.fn().mockResolvedValue({
   answer: "Agent mode answer",
-  sources: [{ id: "abc123", question: "What is SEO?", category: "basics", source_title: "Meeting 1", source_date: "2024-05-02", source_type: "meeting", source_collection: "seo-meetings", source_url: "", score: 0.85 }],
+  sources: [
+    {
+      id: "abc123",
+      question: "What is SEO?",
+      category: "basics",
+      source_title: "Meeting 1",
+      source_date: "2024-05-02",
+      source_type: "meeting",
+      source_collection: "seo-meetings",
+      source_url: "",
+      score: 0.85,
+    },
+  ],
   mode: "agent",
-  metadata: { model: "gpt-5.2", provider: "openai", mode: "agent", input_tokens: 200, output_tokens: 100, total_tokens: 300, duration_ms: 2000, retrieval_count: 1, reranker_used: false, tool_calls_count: 2, agent_turns: 2, tool_calls: [] },
+  metadata: {
+    model: "gpt-5.2",
+    provider: "openai",
+    mode: "agent",
+    input_tokens: 200,
+    output_tokens: 100,
+    total_tokens: 300,
+    duration_ms: 2000,
+    retrieval_count: 1,
+    reranker_used: false,
+    tool_calls_count: 2,
+    agent_turns: 2,
+    tool_calls: [],
+  },
 });
 
 vi.mock("../../src/agent/agent-loop.js", () => ({
@@ -200,7 +225,9 @@ describe("POST /api/v1/chat", () => {
   it("falls back to context-only on OpenAI 429 error", async () => {
     const original = config.OPENAI_API_KEY;
     (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
-    mockRagChat.mockRejectedValueOnce(Object.assign(new Error("rate limited"), { status: 429 }));
+    mockRagChat.mockRejectedValueOnce(
+      Object.assign(new Error("rate limited"), { status: 429 }),
+    );
 
     try {
       const app = buildApp();
@@ -221,7 +248,9 @@ describe("POST /api/v1/chat", () => {
   it("falls back to context-only on OpenAI 401 error", async () => {
     const original = config.OPENAI_API_KEY;
     (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
-    mockRagChat.mockRejectedValueOnce(Object.assign(new Error("unauthorized"), { status: 401 }));
+    mockRagChat.mockRejectedValueOnce(
+      Object.assign(new Error("unauthorized"), { status: 401 }),
+    );
 
     try {
       const app = buildApp();
@@ -432,18 +461,24 @@ describe("POST /api/v1/chat/stream", () => {
     (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
 
     // Mock ragChatStream to call callbacks
-    mockRagChatStream.mockImplementationOnce(async (_msg: string, _hist: unknown, callbacks: {
-      onSources: (s: unknown[]) => Promise<void>;
-      onToken: (t: string) => Promise<void>;
-      onMetadata: (m: unknown) => Promise<void>;
-      onDone: () => Promise<void>;
-    }) => {
-      await callbacks.onSources([{ id: "abc123", question: "What is SEO?" }]);
-      await callbacks.onToken("Hello");
-      await callbacks.onToken(" world");
-      await callbacks.onMetadata({ model: "gpt-4o-mini", mode: "rag" });
-      await callbacks.onDone();
-    });
+    mockRagChatStream.mockImplementationOnce(
+      async (
+        _msg: string,
+        _hist: unknown,
+        callbacks: {
+          onSources: (s: unknown[]) => Promise<void>;
+          onToken: (t: string) => Promise<void>;
+          onMetadata: (m: unknown) => Promise<void>;
+          onDone: () => Promise<void>;
+        },
+      ) => {
+        await callbacks.onSources([{ id: "abc123", question: "What is SEO?" }]);
+        await callbacks.onToken("Hello");
+        await callbacks.onToken(" world");
+        await callbacks.onMetadata({ model: "gpt-4o-mini", mode: "rag" });
+        await callbacks.onDone();
+      },
+    );
 
     try {
       const app = buildApp();
@@ -463,6 +498,34 @@ describe("POST /api/v1/chat/stream", () => {
       expect(text).toContain("Hello");
     } finally {
       (config as Record<string, unknown>).OPENAI_API_KEY = originalKey;
+    }
+  });
+
+  it("returns 501 in Lambda runtime when streaming is requested", async () => {
+    const originalKey = config.OPENAI_API_KEY;
+    const originalLambdaName = process.env.AWS_LAMBDA_FUNCTION_NAME;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+    process.env.AWS_LAMBDA_FUNCTION_NAME = "seo-insight-api";
+
+    try {
+      const app = buildApp();
+      const res = await app.request("/api/v1/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "What is SEO?" }),
+      });
+      expect(res.status).toBe(501);
+      const body = await res.json();
+      expect(body.error).toContain(
+        "Streaming is not available in Lambda production",
+      );
+    } finally {
+      (config as Record<string, unknown>).OPENAI_API_KEY = originalKey;
+      if (originalLambdaName === undefined) {
+        delete process.env.AWS_LAMBDA_FUNCTION_NAME;
+      } else {
+        process.env.AWS_LAMBDA_FUNCTION_NAME = originalLambdaName;
+      }
     }
   });
 });

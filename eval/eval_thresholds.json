@@ -3,10 +3,55 @@
     "hit_rate": 0.95,
     "mrr": 0.90,
     "keyword_hit_rate": 0.70,
-    "precision_at_k": 0.75
+    "precision_at_k": 0.65,
+    "dual_category_recall_at_k": 0.75,
+    "multi_label_f1_at_k": 0.68,
+    "boosterless_precision_at_k": 0.60,
+    "ndcg_at_k": 0.75
+  },
+  "retrieval_stable": {
+    "hit_rate": 0.95,
+    "mrr": 0.90,
+    "keyword_hit_rate": 0.75,
+    "precision_at_k": 0.72,
+    "dual_category_recall_at_k": 0.82,
+    "multi_label_f1_at_k": 0.75,
+    "boosterless_precision_at_k": 0.65,
+    "ndcg_at_k": 0.80
   },
   "extraction": {
     "qa_count_in_range": 0.80,
     "keyword_coverage": 0.70
+  },
+  "meeting_prep_structure": {
+    "section_completeness": 1.0,
+    "metadata_valid": 1.0,
+    "citation_block_valid": 1.0,
+    "question_count_valid": 1.0,
+    "question_source_annotated": 0.9,
+    "eeat_score_format": 1.0,
+    "maturity_level_format": 1.0,
+    "s3_hypothesis_structure": 0.8,
+    "s5_all_layers_present": 1.0,
+    "s7_seven_elements": 1.0,
+    "s10_checklist_present": 1.0,
+    "s8_meta_maturity_consistency": 1.0,
+    "s10_maturity_upgrade_labeled": 0.8
+  },
+  "meeting_prep_grounding": {
+    "citation_id_resolution": 0.9,
+    "citation_category_consistency": 0.8,
+    "citation_count_in_range": 1.0,
+    "s4_four_sources_populated": 0.8,
+    "inline_citation_coverage": 0.55
+  },
+  "maturity_classification": {
+    "accuracy": 0.80,
+    "adjacent_accuracy": 0.90,
+    "classification_rate": 0.85
+  },
+  "chat_maturity_quality": {
+    "appropriateness": 0.80,
+    "has_answer": 0.80
   }
 }

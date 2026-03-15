@@ -8,7 +8,7 @@
 import { supabaseSelect, supabaseHeaders, SUPABASE_TIMEOUT_MS } from "./supabase-client.js";
 import { config } from "../config.js";
 import { escapeHtml } from "../utils/sanitize.js";
-import type { Session, SessionMessage } from "./session-store.js";
+import type { Session, SessionMessage, SessionMetadata } from "./session-store.js";
 
 const MAX_MESSAGES_PER_SESSION = 100;
 
@@ -24,6 +24,7 @@ interface SessionRow {
   id: string;
   title: string;
   messages: readonly SessionMessage[];
+  metadata: SessionMetadata;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +34,7 @@ function rowToSession(row: SessionRow): Session {
     id: row.id,
     title: row.title,
     messages: row.messages ?? [],
+    metadata: row.metadata ?? {},
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -57,7 +59,7 @@ export class SupabaseSessionStore {
 
     const rows = await supabaseSelect<SessionRow>(
       "sessions",
-      `?select=id,title,messages,created_at,updated_at&order=updated_at.desc&limit=${limit}&offset=${offset}`,
+      `?select=id,title,messages,metadata,created_at,updated_at&order=updated_at.desc&limit=${limit}&offset=${offset}`,
     );
 
     return { sessions: rows.map(rowToSession), total };
@@ -66,7 +68,7 @@ export class SupabaseSessionStore {
   async getSession(sessionId: string): Promise<Session | null> {
     const rows = await supabaseSelect<SessionRow>(
       "sessions",
-      `?select=id,title,messages,created_at,updated_at&id=eq.${sessionId}&limit=1`,
+      `?select=id,title,messages,metadata,created_at,updated_at&id=eq.${sessionId}&limit=1`,
     );
     return rows.length > 0 ? rowToSession(rows[0]!) : null;
   }
@@ -76,6 +78,7 @@ export class SupabaseSessionStore {
     const body = {
       title: title ? sanitizeTitle(title) : "New Chat",
       messages: [],
+      metadata: {},
       created_at: now,
       updated_at: now,
     };
@@ -132,6 +135,36 @@ export class SupabaseSessionStore {
 
     if (!resp.ok) {
       throw new Error(`Failed to update session (${resp.status})`);
+    }
+
+    const rows = (await resp.json()) as SessionRow[];
+    return rows.length > 0 ? rowToSession(rows[0]!) : null;
+  }
+
+  async updateMetadata(
+    sessionId: string,
+    metadata: Partial<SessionMetadata>,
+  ): Promise<Session | null> {
+    const session = await this.getSession(sessionId);
+    if (!session) return null;
+
+    const merged = { ...(session.metadata ?? {}), ...metadata };
+
+    const resp = await fetch(
+      `${config.SUPABASE_URL}/rest/v1/sessions?id=eq.${sessionId}`,
+      {
+        method: "PATCH",
+        headers: { ...supabaseHeaders(), Prefer: "return=representation" },
+        body: JSON.stringify({
+          metadata: merged,
+          updated_at: nowIso(),
+        }),
+        signal: AbortSignal.timeout(SUPABASE_TIMEOUT_MS),
+      },
+    );
+
+    if (!resp.ok) {
+      throw new Error(`Failed to update session metadata (${resp.status})`);
     }
 
     const rows = (await resp.json()) as SessionRow[];

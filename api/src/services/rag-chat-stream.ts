@@ -13,6 +13,7 @@ import { itemToSource, type SourceItem, type MessageMetadata } from "../schemas/
 import { evaluateRetrievalQuality, validateCitations } from "./retrieval-gate.js";
 import { recordMiss } from "../store/learning-store.js";
 import { logLLMUsage } from "../utils/llm-usage-logger.js";
+import { buildMaturityContext, type MaturityLevel } from "../utils/maturity.js";
 
 const SYSTEM_PROMPT = `你是一位資深 SEO 顧問，根據以下 SEO 知識庫內容回答用戶的問題。
 回答時請：
@@ -76,6 +77,7 @@ export async function ragChatStream(
   message: string,
   history: ReadonlyArray<{ role: string; content: string }> | null,
   callbacks: StreamCallbacks,
+  maturityLevel: MaturityLevel | null = null,
 ): Promise<void> {
   const startMs = Date.now();
 
@@ -119,10 +121,13 @@ export async function ragChatStream(
 
     // 4. Build context + messages
     const context = formatContext(finalHits);
-    const systemPrompt =
-      retrievalQuality === "ambiguous"
-        ? SYSTEM_PROMPT + "\n\n注意：檢索結果的相似度偏低，回答時請格外謹慎，僅根據有把握的內容作答。"
-        : SYSTEM_PROMPT;
+    let systemPrompt = SYSTEM_PROMPT;
+    if (maturityLevel) {
+      systemPrompt += `\n\n--- 客戶成熟度脈絡 ---\n${buildMaturityContext(maturityLevel)}\n--- 脈絡結束 ---`;
+    }
+    if (retrievalQuality === "ambiguous") {
+      systemPrompt += "\n\n注意：檢索結果的相似度偏低，回答時請格外謹慎，僅根據有把握的內容作答。";
+    }
 
     const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
       { role: "system", content: systemPrompt },

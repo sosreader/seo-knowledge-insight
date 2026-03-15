@@ -1,0 +1,240 @@
+[
+  {
+    "question": "什麼是 SEO？搜尋引擎最佳化的基本概念",
+    "answer": "SEO 是搜尋引擎最佳化，簡單來說就是讓網站在 Google 搜尋結果中排名更高。可以先從理解搜尋引擎如何抓取和索引網頁開始。",
+    "keywords": ["SEO", "基礎", "搜尋引擎"],
+    "expected_maturity": "L1",
+    "rationale": "基礎概念解釋 + 什麼是 X 類問題"
+  },
+  {
+    "question": "如何選擇正確的關鍵字？關鍵字研究入門",
+    "answer": "關鍵字研究是 SEO 的基礎步驟。建議先使用免費工具如 Google Keyword Planner，輸入產品或服務相關詞彙，查看搜尋量和競爭度。",
+    "keywords": ["keyword research", "關鍵字研究", "入門"],
+    "expected_maturity": "L1",
+    "rationale": "入門級工具介紹 + 基礎步驟"
+  },
+  {
+    "question": "什麼是 title tag？如何寫好網頁標題",
+    "answer": "Title tag 是 HTML 中的標題標籤，顯示在瀏覽器標籤和搜尋結果中。簡單來說，好的 title 要包含目標關鍵字、控制在 60 字元以內。",
+    "keywords": ["title tag", "meta", "標題標籤"],
+    "expected_maturity": "L1",
+    "rationale": "HTML 基礎元素 + 簡單操作指引"
+  },
+  {
+    "question": "什麼是反向連結？為什麼 backlink 很重要",
+    "answer": "反向連結是其他網站連到你網站的連結。Google 將其視為信任票，有助於提升排名。第一步可以先確認現有的 backlink profile。",
+    "keywords": ["backlink", "反向連結", "SEO"],
+    "expected_maturity": "L1",
+    "rationale": "基礎概念 + 如何開始"
+  },
+  {
+    "question": "如何開始做 on-page SEO？頁面優化基礎",
+    "answer": "On-page SEO 包括優化標題、meta description、H1 標籤和圖片 alt text。這些是最基本的頁面優化動作，初學者可以從這裡開始。",
+    "keywords": ["on-page SEO", "頁面優化", "入門"],
+    "expected_maturity": "L1",
+    "rationale": "基礎操作列表 + 入門指引"
+  },
+  {
+    "question": "Google 是如何索引網頁的？索引機制基礎",
+    "answer": "Google 使用爬蟲（Googlebot）抓取網頁，然後建立索引。你可以在 Google Search Console 查看索引狀態。",
+    "keywords": ["Google 索引", "Googlebot", "搜尋引擎"],
+    "expected_maturity": "L1",
+    "rationale": "搜尋引擎基礎機制"
+  },
+  {
+    "question": "SEO 常用工具有哪些？新手推薦",
+    "answer": "入門推薦 Google Search Console（免費）和 Google Analytics。進階可用 Ahrefs 或 SEMrush。建議先熟悉免費工具再考慮付費。",
+    "keywords": ["SEO 工具", "GSC", "GA"],
+    "expected_maturity": "L1",
+    "rationale": "工具推薦 + 入門導向"
+  },
+  {
+    "question": "如何用 Google Search Console 追蹤 SEO 表現？",
+    "answer": "在 GSC 效能報表中，可追蹤點擊數、曝光次數、CTR 和平均排名。建議每週定期檢視，設定比較日期範圍來觀察趨勢。",
+    "keywords": ["Google Search Console", "追蹤", "指標"],
+    "expected_maturity": "L2",
+    "rationale": "系統化追蹤 + 定期流程"
+  },
+  {
+    "question": "Sitemap 和 robots.txt 如何正確設定？",
+    "answer": "Sitemap 應列出所有重要頁面並提交至 GSC。robots.txt 控制爬蟲存取，注意不要誤封重要頁面。設定後需在 GSC 驗證生效。",
+    "keywords": ["sitemap", "robots.txt", "技術SEO"],
+    "expected_maturity": "L2",
+    "rationale": "技術設定 + 流程建置"
+  },
+  {
+    "question": "Canonical 標籤怎麼用？避免重複內容",
+    "answer": "Canonical 標籤指定「正規版本」URL，防止重複內容稀釋排名。在所有帶參數的頁面加上 canonical 指向乾淨 URL。可在 GSC 的「系統選擇的 canonical」欄位驗證。",
+    "keywords": ["canonical", "重複內容", "hreflang"],
+    "expected_maturity": "L2",
+    "rationale": "標準技術設定 + 驗證流程"
+  },
+  {
+    "question": "如何規劃內部連結策略？",
+    "answer": "建立清楚的網站架構，重要頁面應在 3 次點擊內可達。使用 breadcrumb 導航和相關文章連結。定期用 Screaming Frog 檢查孤立頁面。",
+    "keywords": ["internal link", "內部連結", "網站架構"],
+    "expected_maturity": "L2",
+    "rationale": "結構化流程 + 工具追蹤"
+  },
+  {
+    "question": "Schema markup 結構化資料如何實作？",
+    "answer": "使用 JSON-LD 格式在 head 中加入 Schema.org 標記。常用類型包括 Article、FAQ、Product。部署後用 Google Rich Results Test 驗證。",
+    "keywords": ["schema markup", "結構化資料", "JSON-LD"],
+    "expected_maturity": "L2",
+    "rationale": "標準技術實作 + 驗證工具"
+  },
+  {
+    "question": "Core Web Vitals 各項指標怎麼改善？",
+    "answer": "LCP 優化圖片壓縮和伺服器回應；FID/INP 減少主執行緒阻塞；CLS 設定圖片尺寸避免版面跳動。在 GSC 和 PageSpeed Insights 追蹤。",
+    "keywords": ["Core Web Vitals", "LCP", "CLS", "performance"],
+    "expected_maturity": "L2",
+    "rationale": "指標追蹤 + 系統化改善"
+  },
+  {
+    "question": "搜尋意圖分析怎麼做？如何對映內容類型",
+    "answer": "將搜尋意圖分為 Informational、Navigational、Transactional、Commercial。分析 SERP 結果類型判斷 Google 認知的意圖，對映適合的內容格式。",
+    "keywords": ["search intent", "搜尋意圖", "SERP"],
+    "expected_maturity": "L2",
+    "rationale": "分析框架 + 內容策略對映"
+  },
+  {
+    "question": "競爭對手 SEO 分析怎麼做？",
+    "answer": "用 Ahrefs/SEMrush 分析競品的關鍵字排名、backlink profile 和內容策略。建立競爭分析追蹤表，每月更新比較。",
+    "keywords": ["競爭分析", "competitor analysis", "追蹤"],
+    "expected_maturity": "L2",
+    "rationale": "系統化分析 + 定期追蹤"
+  },
+  {
+    "question": "如何建立 SEO 內容行事曆？",
+    "answer": "根據關鍵字研究和搜尋量季節性，規劃每月內容主題。追蹤每篇文章的目標關鍵字、發布日期和排名表現。",
+    "keywords": ["content calendar", "內容行事曆", "內容策略"],
+    "expected_maturity": "L2",
+    "rationale": "流程建置 + 計畫性追蹤"
+  },
+  {
+    "question": "如何設計 A/B 測試來優化 SEO 標題和 meta description？",
+    "answer": "使用 Google Optimize 或自建實驗框架，對相同頁面群組測試不同標題。追蹤 CTR 變化，確保統計顯著性後才全面部署。建立自動化 dashboard 監控實驗進度。",
+    "keywords": ["A/B test", "A/B 測試", "CTR", "數據分析"],
+    "expected_maturity": "L3",
+    "rationale": "數據驅動實驗 + 自動化監控"
+  },
+  {
+    "question": "如何建立 SEO 自動化報告 dashboard？",
+    "answer": "整合 GSC API 和 GA4 Data API，建立自動化 dashboard。設定 KPI 閾值告警，當指標異常時自動通知。用 SOP 規範團隊每週檢視流程。",
+    "keywords": ["dashboard", "自動化", "SOP", "KPI"],
+    "expected_maturity": "L3",
+    "rationale": "自動化流程 + SOP 建立"
+  },
+  {
+    "question": "Log file analysis 怎麼做？分析 Googlebot 爬取行為",
+    "answer": "解析伺服器日誌，分析 Googlebot 的爬取頻率、狀態碼分布和路徑偏好。建立自動化分析 pipeline，每日生成爬取健康報告。整合 crawl budget 優化策略。",
+    "keywords": ["log analysis", "日誌分析", "crawl budget", "Googlebot"],
+    "expected_maturity": "L3",
+    "rationale": "進階分析 + 自動化 pipeline"
+  },
+  {
+    "question": "如何用數據分析驅動內容策略？Content Hub 建置",
+    "answer": "建立 content hub 架構，以 pillar page 為核心。用數據分析找出內容缺口，規劃 cluster content。追蹤各 hub 的 organic traffic 和排名趨勢。",
+    "keywords": ["content hub", "數據分析", "data-driven", "內容策略"],
+    "expected_maturity": "L3",
+    "rationale": "數據驅動決策 + 系統化架構"
+  },
+  {
+    "question": "Entity SEO 實體優化怎麼做？",
+    "answer": "建立品牌知識圖譜，強化 Google 對品牌實體的理解。整合 Schema markup、Wikipedia 引用和社群媒體 profile。用 API 自動化監控 Knowledge Panel 變化。",
+    "keywords": ["entity SEO", "實體SEO", "知識圖譜", "API 整合"],
+    "expected_maturity": "L3",
+    "rationale": "進階策略 + API 自動化"
+  },
+  {
+    "question": "SEO 分群分析怎麼做？頁面效能 segmentation",
+    "answer": "將頁面按模板、類別、發布日期分群。對每群分別追蹤排名、流量和轉換。用自動化工具偵測異常群組，建立分群專屬的優化 SOP。",
+    "keywords": ["segmentation", "分群", "自動化", "SOP"],
+    "expected_maturity": "L3",
+    "rationale": "分群分析 + 自動化 SOP"
+  },
+  {
+    "question": "進階 Schema markup 實作：FAQ + HowTo + Video",
+    "answer": "根據頁面類型選擇最適合的 Schema 類型組合。建立 Schema 模板引擎自動注入。用 API 監控 Rich Results 出現率和 CTR 影響。",
+    "keywords": ["advanced schema", "進階 schema", "自動化", "API"],
+    "expected_maturity": "L3",
+    "rationale": "進階技術 + 自動化引擎"
+  },
+  {
+    "question": "如何用機器學習預測 SEO 排名變化？",
+    "answer": "收集歷史排名、連結和內容數據，建立預測模型。使用時間序列分析預測流量趨勢。整合歸因分析判斷各因素對排名的影響權重。",
+    "keywords": ["machine learning", "predictive", "預測", "歸因分析"],
+    "expected_maturity": "L4",
+    "rationale": "預測模型 + 機器學習"
+  },
+  {
+    "question": "如何建立 AI 驅動的競爭情報系統？",
+    "answer": "使用 NLP 技術自動分析競爭對手內容策略變化。建立跨通路整合 dashboard，結合 SEO、SEM、社群數據。自動化測試框架定期驗證市場假設。",
+    "keywords": ["competitive intelligence", "AI-driven", "跨通路", "自動化測試"],
+    "expected_maturity": "L4",
+    "rationale": "AI 驅動 + 跨通路整合"
+  },
+  {
+    "question": "跨通路歸因分析：SEO 在整體行銷的貢獻度量",
+    "answer": "建立多觸點歸因模型（multi-touch attribution），量化 SEO 在整體轉換路徑中的貢獻。整合 CRM 數據和廣告平台數據，用預測模型計算 SEO 的增量價值。",
+    "keywords": ["attribution model", "multi-touch", "跨通路", "歸因分析"],
+    "expected_maturity": "L4",
+    "rationale": "多觸點歸因 + 預測模型"
+  },
+  {
+    "question": "Programmatic SEO 程式化 SEO 大規模頁面生成策略",
+    "answer": "設計資料驅動的頁面模板系統，自動生成數千個長尾頁面。整合 API 動態更新內容，用 AI 確保每頁的獨特價值。監控索引率和品質指標。",
+    "keywords": ["programmatic SEO", "程式化 SEO", "自動化", "AI-powered"],
+    "expected_maturity": "L4",
+    "rationale": "程式化大規模 + AI 驅動"
+  },
+  {
+    "question": "如何用 AI 輔助 SEO 內容生成與品質管控？",
+    "answer": "建立 AI 內容生成 pipeline，結合人工審核機制。用預測模型評估內容排名潛力，自動化品質評分系統確保 E-E-A-T 標準。跨通路分發策略最大化觸及。",
+    "keywords": ["AI-driven", "AI-powered", "predictive", "跨通路"],
+    "expected_maturity": "L4",
+    "rationale": "AI 生成 + 預測品質管控"
+  },
+  {
+    "question": "SEO 預測性分析與自動化決策系統",
+    "answer": "結合歷史數據和機器學習建立排名預測引擎。自動偵測演算法更新影響，即時調整策略。跨團隊整合 SEO 決策到產品開發流程。",
+    "keywords": ["predictive", "machine learning", "forecasting", "自動化"],
+    "expected_maturity": "L4",
+    "rationale": "預測引擎 + 跨團隊整合"
+  },
+  {
+    "question": "全站 SEO 自動化測試框架設計",
+    "answer": "建立端到端 SEO 自動化測試框架，涵蓋技術審計、內容品質和排名監控。用 CI/CD 整合，每次部署自動驗證 SEO 指標未退化。結合競爭情報自動調整測試基準。",
+    "keywords": ["automated testing framework", "自動化測試", "CI/CD", "competitive intelligence"],
+    "expected_maturity": "L4",
+    "rationale": "自動化測試框架 + CI/CD + 競爭情報"
+  },
+  {
+    "question": "如何建立 SEO 排名預測模型？",
+    "answer": "收集歷史排名、連結數量和內容品質數據，建立排名預測模型。用流量預測判斷關鍵字投資的增量價值，結合跨通路整合數據做資源分配決策。",
+    "keywords": ["排名預測", "流量預測", "增量價值", "跨通路整合"],
+    "expected_maturity": "L4",
+    "rationale": "中文 L4 keywords — 排名預測 + 增量價值"
+  },
+  {
+    "question": "跨通路歸因模型如何量化 SEO 的貢獻？",
+    "answer": "建立多觸點歸因模型，追蹤使用者從自然搜尋首次觸及到最終轉換的完整路徑。整合 GA4 和 CRM 數據，計算 SEO 渠道的增量價值和歸因權重。",
+    "keywords": ["歸因模型", "multi-touch", "增量價值", "跨通路"],
+    "expected_maturity": "L4",
+    "rationale": "跨通路歸因 + multi-touch"
+  },
+  {
+    "question": "如何用數據分析找出流量下降的根因？",
+    "answer": "在 GSC 按頁面模板分群，交叉比對排名和 CTR 數據。用 dashboard 追蹤趨勢變化，建立分群分析 SOP。",
+    "keywords": ["數據分析", "分群", "dashboard", "SOP"],
+    "expected_maturity": "L3",
+    "rationale": "L3 邊界 — 有數據分析和 SOP，但無預測/跨通路/AI"
+  },
+  {
+    "question": "SEO 自動化測試如何整合到 CI/CD 流程？",
+    "answer": "建立 SEO regression testing 框架，在每次部署前自動檢查 canonical、meta robots、結構化資料和 Core Web Vitals。用競爭情報系統追蹤競品變化，動態調整測試基準線。",
+    "keywords": ["regression testing", "seo 自動化測試", "CI/CD", "競爭情報系統"],
+    "expected_maturity": "L4",
+    "rationale": "中文自動化測試 + 競爭情報系統"
+  }
+]

@@ -11,6 +11,7 @@ export const generateRequestSchema = z.object({
   crawled_not_indexed_analysis: z.string().max(2000).optional(),
   intent_analysis: z.string().max(2000).optional(),
   action_analysis: z.string().max(2000).optional(),
+  maturity_context: z.record(z.string(), z.string()).optional(),
 });
 
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;

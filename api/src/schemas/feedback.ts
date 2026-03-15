@@ -5,6 +5,8 @@ export const feedbackCategorySchema = z.enum([
   "missing_info",
   "wrong_source",
   "outdated",
+  "too_basic",
+  "too_advanced",
 ]);
 
 export const feedbackRequestSchema = z.object({

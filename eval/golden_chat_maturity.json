@@ -1,0 +1,92 @@
+[
+  {
+    "query": "網站流量最近下降了，該怎麼辦？",
+    "maturity_level": "L1",
+    "expected_traits": {
+      "should_contain": ["GSC", "Google Search Console", "第一步", "檢查", "開始"],
+      "should_not_contain": ["歸因分析", "預測模型", "多觸點", "pipeline", "自動化測試框架"]
+    },
+    "description": "L1 用戶問流量下降 — 應給入門級診斷步驟"
+  },
+  {
+    "query": "網站流量最近下降了，該怎麼辦？",
+    "maturity_level": "L3",
+    "expected_traits": {
+      "should_contain": ["分群", "數據", "分析", "趨勢"],
+      "should_not_contain": []
+    },
+    "description": "L3 用戶問同一問題 — 應給數據驅動分析建議"
+  },
+  {
+    "query": "如何改善網站的 Core Web Vitals？",
+    "maturity_level": "L1",
+    "expected_traits": {
+      "should_contain": ["PageSpeed", "圖片", "壓縮"],
+      "should_not_contain": ["自動化監控", "CI/CD", "regression"]
+    },
+    "description": "L1 用戶問 CWV — 應給基礎操作指引"
+  },
+  {
+    "query": "如何改善網站的 Core Web Vitals？",
+    "maturity_level": "L3",
+    "expected_traits": {
+      "should_contain": ["監控", "追蹤", "自動化"],
+      "should_not_contain": []
+    },
+    "description": "L3 用戶問同一問題 — 應涵蓋自動化監控"
+  },
+  {
+    "query": "E-E-A-T 怎麼強化？",
+    "maturity_level": "L1",
+    "expected_traits": {
+      "should_contain": ["作者", "署名", "經歷"],
+      "should_not_contain": ["知識圖譜", "entity", "NLP", "多觸點"]
+    },
+    "description": "L1 用戶問 E-E-A-T — 應給基礎署名建議"
+  },
+  {
+    "query": "E-E-A-T 怎麼強化？",
+    "maturity_level": "L3",
+    "expected_traits": {
+      "should_contain": ["Schema", "結構化"],
+      "should_not_contain": []
+    },
+    "description": "L3 用戶問同一問題 — 應涵蓋進階 Schema 策略"
+  },
+  {
+    "query": "索引覆蓋率下降怎麼處理？",
+    "maturity_level": "L1",
+    "expected_traits": {
+      "should_contain": ["GSC", "索引", "檢查"],
+      "should_not_contain": ["log analysis", "crawl budget 模型", "pipeline"]
+    },
+    "description": "L1 用戶問索引問題 — 基礎 GSC 檢查"
+  },
+  {
+    "query": "索引覆蓋率下降怎麼處理？",
+    "maturity_level": "L3",
+    "expected_traits": {
+      "should_contain": ["分析", "日誌"],
+      "should_not_contain": []
+    },
+    "description": "L3 用戶問同一問題 — 進階 log analysis"
+  },
+  {
+    "query": "怎麼提升網站的 CTR？",
+    "maturity_level": "L1",
+    "expected_traits": {
+      "should_contain": ["標題", "title", "描述"],
+      "should_not_contain": ["A/B 測試框架", "統計顯著性", "自動化"]
+    },
+    "description": "L1 用戶問 CTR — 基礎標題優化"
+  },
+  {
+    "query": "怎麼提升網站的 CTR？",
+    "maturity_level": "L3",
+    "expected_traits": {
+      "should_contain": ["A/B", "測試", "數據"],
+      "should_not_contain": []
+    },
+    "description": "L3 用戶問同一問題 — A/B 測試框架"
+  }
+]

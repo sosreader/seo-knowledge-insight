@@ -106,14 +106,15 @@ eval.tsx、useEvalDashboard.ts 及四個 Eval 組件（EvalMetricsCards/EvalProv
 
 本專案 pipeline 遵循經典 **ETL（Extract → Transform → Load）** 模式：
 
-| ETL 階段 | Pipeline 步驟 | 說明 |
-|----------|--------------|------|
-| **Extract** | Step 1：fetch | 從 Notion / Medium / iThome / Google Cases 擷取原始 Markdown |
-| **Transform** | Step 2：extract-qa | LLM 萃取 Q&A pairs |
-| | Step 3：dedupe-classify | 去重 + 分類 + embedding 向量化 |
-| **Load** | Step 3 產出 → Supabase | `qa_final.json` 寫入 pgvector，供 RAG 搜尋使用 |
-| （應用層） | Step 4：generate-report | RAG 週報生成（異常偵測 → Hybrid Search → LLM 生成） |
-| （評估層） | Step 5：evaluate | LLM-as-Judge 品質評估 |
+| ETL 階段      | Pipeline 步驟                      | 說明                                                                                 |
+| ------------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
+| **Extract**   | Step 1：fetch                      | 從 Notion / Medium / iThome / Google Cases 擷取原始 Markdown                         |
+| **Transform** | Step 2：extract-qa                 | LLM 萃取 Q&A pairs                                                                   |
+|               | Step 3：dedupe-classify            | 去重 + 分類 + embedding 向量化                                                       |
+|               | Step 3.5：curated-postprocess      | deterministic quality filter + question-only salvage + raw sync + retrieval boosters |
+| **Load**      | curated `qa_final.json` → Supabase | 目前以後處理後的 `qa_final.json` 作為 serving artifact，供 RAG 搜尋使用              |
+| （應用層）    | Step 4：generate-report            | RAG 週報生成（異常偵測 → Hybrid Search → LLM 生成）                                  |
+| （評估層）    | Step 5：evaluate                   | LLM-as-Judge 品質評估                                                                |
 
 ```
 Notion 會議紀錄（87 份，2023–2026）
@@ -134,8 +135,16 @@ Notion 會議紀錄（87 份，2023–2026）
         或 Claude Code 本地語意去重（不需要 OpenAI）
   分類：gpt-5-mini 貼 10 種標籤 + difficulty + evergreen
         或 Claude Code 本地評分式關鍵字分類（不需要 OpenAI）
-  產出：1,317 筆去重後 Q&A（去除 96 組重複）+ 1536 維 embedding 向量
-            ↓ output/qa_final.json + qa_embeddings.npy
+  產出：歷史上曾生成 1,317 筆去重後 Q&A（v2.12 基線）+ 1536 維 embedding 向量
+    ↓ Step 3 基線快照 / qa_embeddings.npy
+
+[Step 3.5] curated QA 後處理鏈 — serving dataset 整理
+  clean_qa_quality.py：規則式移除泛問題 / 模板答案 / 混語 placeholder
+  restore_rewritten_qas.py：question-only salvage，回補可挽救模板題
+  sync_curated_qa_from_raw.py：用最新 raw answer / metadata 對齊 curated 集合
+  add_retrieval_boosters.py：補 18 筆 curated-manual retrieval boosters
+  enrich_qa.py：回填 `categories` / `intent_labels` / `scenario_tags` / `serving_tier` / `retrieval_surface_text`
+    ↓ output/qa_final.json（serving artifact） + output/qa_enriched.json（retrieval metadata artifact，約 290 筆）
 
 [Step 4] generate_report.py — RAG 週報生成
   資料：Google Sheets 指標（TSV）
@@ -185,26 +194,28 @@ Notion 會議紀錄（87 份，2023–2026）
   速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min）
   QA ID：stable_id（SHA256[:16] hex），與 Python 相同驗證規則
   Local Mode：無 OpenAI API key 時自動降級（search→keyword-only，chat→context-only）
-  endpoint（9 個 router，31 端點，v2.12～v2.18）：
-    - routes/qa.ts        — GET /qa, /qa/categories, /qa/{id}（hex+int）
-    - routes/search.ts    — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；v2.11 over-retrieve + rerank）
-    - routes/chat.ts      — POST /chat（mode: agent|rag|context-only；v2.29 request-level mode 參數，三層優先：Request > Server AGENT_ENABLED > auto；v2.11 rerank 可啟用）
-    - routes/reports.ts   — GET /reports, /reports/{id}, POST /reports/generate
-    - routes/sessions.ts  — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages（context-only fallback）, DELETE /sessions/{id}
-    - routes/feedback.ts  — POST /feedback
-    - routes/pipeline.ts  — GET /status, /source-docs, /source-docs/:collection/:file/preview, /unprocessed, /logs, POST /fetch, /fetch-articles, /extract-qa, /dedupe-classify, /metrics
-    - routes/synonyms.ts  — GET /synonyms, POST /synonyms, PUT /synonyms/{term}, DELETE /synonyms/{term}（雙層設計：28 靜態術語 + 32 新增（v2.11）+ custom JSON）
+  endpoint（9 個 router，42 端點，v2.12～v3.4）：
+    - routes/qa.ts           — GET /qa, /qa/categories, /qa/{id}（hex+int）
+    - routes/search.ts       — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；若帶 `extraction_model`，先 `top_k × 3` over-retrieve 再 filter）
+    - routes/chat.ts         — POST /chat（mode: agent|rag|context-only；v2.29 request-level mode 參數，三層優先：Request > Server AGENT_ENABLED > auto；v2.11 rerank 可啟用）
+    - routes/reports.ts      — GET /reports, /reports/{id}, POST /reports/generate
+    - routes/sessions.ts     — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages（context-only fallback）, DELETE /sessions/{id}
+    - routes/feedback.ts     — POST /feedback
+    - routes/pipeline.ts     — GET /status, /source-docs, /source-docs/:collection/:file/preview, /unprocessed, /logs, POST /fetch, /fetch-articles, /extract-qa, /dedupe-classify, /metrics
+    - routes/synonyms.ts     — GET /synonyms, POST /synonyms, PUT /synonyms/{term}, DELETE /synonyms/{term}（雙層設計：28 靜態術語 + 32 新增（v2.11）+ custom JSON）
+    - routes/meeting-prep.ts — GET /meeting-prep（列表）, GET /meeting-prep/maturity-trend（趨勢時間序列）, GET /meeting-prep/:date（單篇，fuzzy match）
   核心模組：
-    - store/qa-store.ts：QAStore（讀 qa_final.json + embedding 向量，embedding optional）
+    - store/qa-store.ts：QAStore（讀 qa_final.json / qa_enriched.json + embedding 向量，embedding optional）
     - store/session-store.ts：FileSessionStore（Repository Pattern）
     - store/learning-store.ts：LearningStore（feedback + miss 記錄）
     - store/synonyms-store.ts：SynonymsStore（雙層設計：28 基礎術語 + 31 補充術語（v2.11）= 59 靜態術語 + output/synonym_custom.json 自訂覆蓋，v2.10 新增）
-    - store/search-engine.ts：SearchEngine（hybrid search + keyword boost + keywordOnlySearch）
+    - store/search-engine.ts：SearchEngine（hybrid search + keyword boost + metadata-aware rerank + keywordOnlySearch）
     - utils/npy-reader.ts：NumPy .npy 檔案解析（numpy 相容）
     - utils/cosine-similarity.ts：向量運算（Float32Array）
     - utils/keyword-boost.ts：4 層關鍵字匹配
     - utils/cjk-tokenizer.ts：CJK 分詞（2-gram + 單字，中文 keyword search 支援）
     - utils/mode-detect.ts：hasOpenAI() / hasSupabase() / isAgentEnabled() / resolveMode() helper（mode 偵測 + 三層優先順序解析）
+    - utils/maturity.ts：parseMaturityLevel() / buildMaturityContext() / applyMaturityBoost() / buildReportMaturityBlock() / getDimensionForMetric() / buildMaturityUpgradeLabel() / buildMaturityCallout()（成熟度 L1-L4 跨系統工具；DIMENSIONS / METRIC_MATURITY_DIMENSION_MAP 常數）
     - services/embedding.ts：OpenAI embedding wrapper
     - services/rag-chat.ts：RAG 問答（需要 OpenAI API key；v2.11 支援 reranker）
     - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
@@ -221,12 +232,154 @@ Notion 會議紀錄（87 份，2023–2026）
     - agent/agent-loop.ts：while-loop + 4 終止條件（stop/max_turns/timeout/loop_detection）+ ALLOWED_TOOLS whitelist + JSON.parse guard
     - agent/agent-deps.ts：qaStore → AgentDeps 橋接（Dependency Injection）
   評估工具：
-    - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port，複製 report-evaluator.ts 邏輯；7 維度推送 Laminar `report-quality` group；供 `/generate-report` 存檔後呼叫）
+    - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port；8 維度推送 Laminar `report-quality` group；含 report_action_maturity_labeled）
   schemas：
-    - qa / search / chat / feedback / report / session / pipeline / synonyms / api-response
-  測試：Vitest（39 個 test files，367 tests passing）
+    - qa / search / chat / feedback / report / session / pipeline / synonyms / meeting-prep / api-response
+  測試：Vitest（58 個 test files，625 tests passing）
   部署：Lambda + Function URL（arm64，~$0/月）/ docker-compose（本地開發）
             ↓ http://localhost:8002 (開發) 或 https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/ (生產)
+
+### Retrieval Data Dimensions 架構增量（2026-03-15）
+
+這次不是單純新增幾筆 booster，而是把 retrieval 的資料表示層與 runtime ranking 一起升級：
+
+1. `scripts/enrich_qa.py` 在 serving artifact 上回填多維度欄位。
+2. `scripts/migrate_to_supabase.py` 可選擇把 extended retrieval fields 一起遷移到 Supabase。
+3. `scripts/qa_tools.py` 與 `evals/eval_retrieval.py` 把 dual-label / boosterless / duplicate / failure bucket 變成正式評估輸出。
+4. `api/src/store/search-engine.ts` 與 `api/src/store/supabase-qa-store.ts` 在 runtime path 使用這批欄位做 scoring 與 diversity rerank。
+
+核心資料欄位：
+
+- `primary_category`
+- `categories`
+- `intent_labels`
+- `scenario_tags`
+- `serving_tier`
+- `retrieval_phrases`
+- `retrieval_surface_text`
+- `content_granularity`
+- `evidence_scope`
+- `booster_target_queries`
+- `hard_negative_terms`
+
+這讓系統能區分三件過去混在一起的問題：
+
+- category / intent coverage 不足
+- ranking 被近重複答案汙染
+- booster 雖補弱案例，但同時污染一般 query 的 top-k
+
+### Phase 2：L4 metadata 正式進入可查詢 API surface（2026-03-15）
+
+在 phase 1 之前，這批 metadata 主要服務於 enrichment 與 runtime rerank；phase 2 之後，它們正式變成 queryable capability：
+
+- `routes/qa.ts` 與 `schemas/qa.ts` 讓 `primary_category`、`intent_label`、`scenario_tag`、`serving_tier`、`evidence_scope` 可直接作為列表查詢條件
+- `routes/search.ts` 與 `schemas/search.ts` 讓同一組 metadata 能直接約束 search results
+- `routes/search.ts` 額外回傳 `all_categories`，而 `categories` 改成 query-aware projection，讓 eval 與前端可以同時看到「主要命中類別」與「完整標籤集合」
+
+形式上，這次新增的是兩組 capability：
+
+- QA list filters：`primary_category`、`intent_label`、`scenario_tag`、`serving_tier`、`evidence_scope`，加上既有 `extraction_model`、`maturity_relevance`、`sort_by`、`sort_order`
+- Search request filters：`primary_category`、`intent_label`、`scenario_tag`、`serving_tier`、`evidence_scope`，加上既有 `category`、`extraction_model`、`maturity_level`
+
+這個架構上的意義，不只是 filter 變多，而是把 L4 問題從「只能被系統內部判斷」變成「可以由前端、評估工具、報表流程直接指定要哪類高階問題」。
+
+因此現在的 retrieval stack 可以分三層理解：
+
+1. offline enrichment 產 metadata
+2. store layer 用 metadata 做 ranking / rerank
+3. route layer 把 metadata 暴露成產品能力與評估能力
+
+### L4 External Sources 與本地 fallback 實作快照（2026-03-14）
+
+這次 L4 比例提升，不是單靠新增外部文章來源，而是同時補齊了「來源接入」、「無 OpenAI fallback」與「成熟度欄位回填」三條路徑。
+
+**來源接入已完成**：
+
+- `scripts/02_extract_qa.py` 已納入 Ahrefs / SEJ / Growth Memo raw markdown 目錄。
+- `scripts/list_pipeline_state.py` 已能辨識 `output/qa_per_article/`，不再只看 `output/qa_per_meeting/`。
+- `merge_per_meeting_jsons()` 現在會合併 meeting + article 兩種 extraction artifact，避免外部來源 fetch 完成卻長期停留在「未進入 Step 2」的假象。
+
+**無 OpenAI key 的本地 fallback 已成正式路徑**：
+
+- `utils/openai_helper.py` 新增 local embedding / merge / classify fallback。
+- `scripts/03_dedupe_classify.py` 在缺少 `OPENAI_API_KEY` 時，不再因 remote-only preflight 或 sleep/rate-limit 卡死。
+- `scripts/extract_ahrefs_slice_local.py` 補上 timeout、fast retry、heuristic fallback，處理 Ahrefs 長文 extraction timeout。
+
+這代表 pipeline 不再把「沒有 OpenAI key」視為整條鏈不可執行，而是退化成較慢、較保守、但可完成的本地流程。
+
+### 成熟度回填才是 L4 比例達標的真正槓桿（2026-03-14）
+
+本輪分析確認，L4 不足的主因不只是 external-source coverage，而是大量既有 QA 缺少 `maturity_relevance`。
+
+回填前觀察：
+
+- `qa_final.json` 有 1,468 筆 `maturity_relevance = NULL`
+- 若只看來源擴充，L4 比例仍不足以穩定過門檻
+
+因此改為在 enrichment 階段補齊成熟度：
+
+- `scripts/enrich_qa.py` 在缺值時呼叫 `utils.maturity_classifier.classify_maturity_level()`
+- 回填位置同時包含 top-level `maturity_relevance` 與 `_enrichment.maturity_relevance`
+- `scripts/migrate_to_supabase.py` 也同步優先帶 top-level 或 `_enrichment` 的成熟度欄位
+
+重建 `output/qa_enriched.json` 後的本地分布：
+
+- `NULL 775`
+- `L1 58`
+- `L2 602`
+- `L3 264`
+- `L4 110`
+
+**結論**：在 2026-03-14 當下，本地 artifact 先達到 `110 / 1809 = 6.08%`；接著在 2026-03-15 經 classifier refinement 後，進一步提升到 `155 / 1809 = 8.57%`。L4 目標不是靠單一 booster 或單一來源拉高，而是靠 metadata completeness 與 classifier quality 一起收斂。
+
+### 本地 artifact 與 production Supabase 目前是兩個不同狀態
+
+這次最容易混淆的地方，是「本地資料已完成」不等於「production schema 已對齊」。目前必須明確分開理解：
+
+**本地已完成**：
+
+- external-source extraction 可跑通
+- retrieval golden dataset 已擴至 40 cases
+- `qa_enriched.json` 的 maturity backfill 已完成
+- L4 ratio 已在本地 artifact 達標
+
+**production 仍靠 fallback 穩定運作**：
+
+- production `qa_items` 缺少 `primary_category` 等 retrieval metadata 欄位
+- `api/src/store/supabase-qa-store.ts` 啟動時先試 extended schema，缺欄位時 fallback 到 base schema select
+- `api/src/store/supabase-client.ts` 已補上 response body，讓 PostgREST / RPC 錯誤可直接定位到缺欄位問題
+
+因此現在的 production 搜尋恢復，代表 app-layer resilience 生效，不代表 DB schema migration 已完成。
+
+### Classifier refinement 把成熟度回填從「補值」收斂成「可解釋規則」（2026-03-15）
+
+在 2026-03-14 完成 maturity backfill 之後，隔天又做了一輪 classifier 收斂，原因是當時雖然 L4 ratio 已達標，但 AI Search 類題目仍存在兩種風險：
+
+- 真正屬於高階策略的 AIO / GEO 題可能被低估
+- 單純解釋型的 AI Overview 題可能被過度抬升
+
+因此 `utils/maturity_classifier.py` 這次不是單純加關鍵字，而是改成比較接近「signal composition」的規則：
+
+- 補進 `ai overview`、`ai search`、`geo`、`aeo`、`llm seo`、`品牌可見度`、`scenario planning`、`citation growth` 等 L4 詞彙
+- 新增 `AI_SEARCH_TERMS` 與 `L4_STRATEGY_TERMS`，只有 AI Search 訊號與策略訊號共現時才額外加分
+- 補上 `預期` / `預設` guard，避免被誤判成 `預測` 類 advanced signal
+
+對應的 regression tests 也一起補齊：
+
+- AI Search 品牌可見度策略題應判成 `L4`
+- AI SEO 預算 / scenario planning 題應判成 `L4`
+- 「什麼是 AI Overview？」維持 `L1`
+- `預期排名會下降嗎？` 不可被誤升成 `L4`
+
+重新跑 enrichment 後，本地 `qa_enriched.json` 分布更新為：
+
+- `NULL 748`
+- `L1 55`
+- `L2 595`
+- `L3 256`
+- `L4 155`
+
+也就是 L4 ratio 從前一天的 `110 / 1809 = 6.08%` 提升到 `155 / 1809 = 8.57%`。這個提升的解讀不應是「規則放寬」，而是 classifier 終於能把 AI Search / GEO 類高階策略題與基礎 AI 解釋題清楚分開。
 
 ## v2.11 — RAG 迭代改進計畫：Synonym 擴充 + Contextual Embeddings + Reranker（2026-03-05）
 
@@ -344,7 +497,7 @@ Notion 會議紀錄（87 份，2023–2026）
 ══════════════ Multi-Layer Context（2026-03-02 新增，v1.19）══════════════
 
 [Enrichment] scripts/enrich_qa.py — 離線 Q&A 豐富化（make enrich）
-  輸入：output/qa_final.json（1,317 筆，v2.12+，多來源）
+  輸入：output/qa_final.json（目前為 curated serving set；歷史上曾有 1,317 筆 v2.12 基線）
   計算：utils/synonym_dict.py（avg 11.09 個同義詞/筆，@lru_cache 執行緒安全）
         utils/freshness.py（avg freshness 0.9076，half_life=540d，min_score=0.5）
         utils/notion_url_map.py（source_file → Notion URL 映射）
@@ -372,7 +525,7 @@ Notion 會議紀錄（87 份，2023–2026）
 **決策核心**：
 
 1. **分層遷移**：新功能優先在 Hono 實作，Python 保留作為穩定層
-2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid/full，無 → keyword/context-only）
+2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid / rag-or-agent，無 → keyword / context-only）
 3. **測試優先**：Vitest 路由覆蓋（25 個 test files，216 tests），unit + integration
 4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取（optional，無 .npy 時 keyword-only mode）
 
@@ -380,7 +533,7 @@ Notion 會議紀錄（87 份，2023–2026）
 
 - ~44 個源碼檔案（routes 10、store 5、utils 5、middleware 4、schemas 10、services 4）
 - 25 個測試檔案（routes 10 個完整測試套件 + utils 2 + store 4 + middleware 2 + services 3 + observability/laminar-scoring 2 + others 2）
-- 9 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、synonyms）+ health 檢查（v2.18 移除 eval router）
+- 9 個完整路由器（qa、search、chat、reports、sessions、feedback、pipeline、synonyms、meeting-prep）+ health 檢查（v2.18 移除 eval router）
 - 224 tests passing（25 test files）
 - NumPy .npy 檔案解析引擎（向量相容）
 - 速率限制 middleware（同步 Python layer 配置）
@@ -525,13 +678,14 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 3. **POST /api/v1/reports/generate** — 觸發週報生成（4 種模式）
 
    **Request Schema** 支援 3 種路由模式：
+
    ```json
    {
-     "snapshot_id": "20260306-103000",  // 本地/OpenAI 模式：指標快照 ID
-     "use_openai": true,               // OpenAI 模式開關
-     "metrics_url": "...",             // Legacy URL 模式
-     "weeks": 4,                       // Legacy URL 模式參數
-     "situation_analysis": "...",      // hybrid 模式：5 維度 LLM 分析注入
+     "snapshot_id": "20260306-103000", // 本地/OpenAI 模式：指標快照 ID
+     "use_openai": true, // OpenAI 模式開關
+     "metrics_url": "...", // Legacy URL 模式
+     "weeks": 4, // Legacy URL 模式參數
+     "situation_analysis": "...", // hybrid 模式：5 維度 LLM 分析注入
      "traffic_analysis": "...",
      "technical_analysis": "...",
      "intent_analysis": "...",
@@ -540,6 +694,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
    ```
 
    回應：
+
    ```json
    {
      "data": {
@@ -550,20 +705,20 @@ Phase 3（4 週後）：下線 Python API (port 8001)
      }
    }
    ```
-   > 注意：`generation_mode` 不在 API response 中，而是記錄在報告檔案內的 `<!-- report_meta -->` HTML comment。
 
+   > 注意：`generation_mode` 不在 API response 中，而是記錄在報告檔案內的 `<!-- report_meta -->` HTML comment。
    - 速率限制：5/minute（計算密集）
    - Timeout：120 秒
    - 快取機制：基於 frontmatter + metrics 內容 hash，避免時間戳造成 cache miss
 
    **4 種 Report Generation Mode**：
 
-   | 模式 | 驅動引擎 | 使用場景 | 參數 | 需要 API Key |
-   |------|--------|--------|------|-----------|
-   | `template` | 本地模板（Markdown render） | 靜態內容展示 | 無 | 否 |
-   | `hybrid` | 本地模板 + LLM 5 維度分析 | 結合固定內容與 AI 洞見 | 無 | 否 |
-   | `openai` | TypeScript `report-llm.ts` + OpenAI API（v2.26 從 Python 移植） | 高品質 6 維度 ECC 分析 | `snapshot_id` + `use_openai: true` | 是 |
-   | `claude-code` | Claude Code 語意推理（Interactive 模式） | 開發/本地驗證 | `/generate-report` 指令 | 否 |
+   | 模式          | 驅動引擎                                                        | 使用場景               | 參數                               | 需要 API Key |
+   | ------------- | --------------------------------------------------------------- | ---------------------- | ---------------------------------- | ------------ |
+   | `template`    | 本地模板（Markdown render）                                     | 靜態內容展示           | 無                                 | 否           |
+   | `hybrid`      | 本地模板 + LLM 5 維度分析                                       | 結合固定內容與 AI 洞見 | 無                                 | 否           |
+   | `openai`      | TypeScript `report-llm.ts` + OpenAI API（v2.26 從 Python 移植） | 高品質 6 維度 ECC 分析 | `snapshot_id` + `use_openai: true` | 是           |
+   | `claude-code` | Claude Code 語意推理（Interactive 模式）                        | 開發/本地驗證          | `/generate-report` 指令            | 否           |
 
    **OpenAI 模式詳解**（v2.26+，純 TypeScript）：
    - 前端提交 `snapshot_id` + `use_openai: true`
@@ -574,6 +729,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
    - 前端 `cache_hit` 欄位：指示是否命中快取
 
    **Report Metadata 格式**（附加於報告尾部）：
+
    ```html
    <!-- report_meta {
      "weeks": 1,
@@ -1177,6 +1333,7 @@ qa_final.json → enrich_qa.py → qa_enriched.json
 **目的**：將 golden_retrieval.json 的 20 筆 cases 推送至 Laminar Dashboard 作為離線評估資料集。
 
 **主要特性**：
+
 - Golden set：`output/evals/golden_retrieval.json`（20 cases）
 - 評估模式：keyword-only baseline（純關鍵字搜尋）
 - 評估器數量：5 個（precision、recall、f1、hit_rate、mrr）
@@ -1185,6 +1342,7 @@ qa_final.json → enrich_qa.py → qa_enriched.json
 - Group 名稱：固定 `"keyword-retrieval"`（所有 run 納入同一組，利於 Dashboard 折線圖）
 
 **使用方式**：
+
 ```bash
 python scripts/_eval_laminar.py              # 使用預設 group
 python scripts/_eval_laminar.py --top-k 10  # 改變 top-K
@@ -1192,6 +1350,7 @@ python scripts/_eval_laminar.py --group custom_name  # 自訂 group
 ```
 
 **實作細節**：
+
 - Executor：`_keyword_search()` 執行關鍵字搜尋，回傳精簡欄位（id/category/question[:120]）
 - Safe executor：try-except 防護，搜尋失敗回傳空列表而非拋例外
 - NDCG@K bug 修正：每個 expected_category 只計算第一次命中，確保 NDCG ≤ 1
@@ -1202,11 +1361,13 @@ python scripts/_eval_laminar.py --group custom_name  # 自訂 group
 **目的**：量化三種檢索模式的品質差異。
 
 **評估三種模式**：
+
 1. **Keyword-only**（baseline）— 純關鍵字搜尋，無語意評估
 2. **Hybrid search** — embedding + keyword boost + synonym + freshness
 3. **Hybrid + Rerank** — over-retrieve K×3 → Claude haiku reranker → top-K
 
 **主要特性**：
+
 - Golden set：`output/evals/golden_retrieval.json`（20 cases）
 - 評估指標：Precision@K、Recall@K、F1、Hit Rate、MRR（category level）
 - Reranker 模型：Claude haiku-4-5-20251001
@@ -1214,6 +1375,7 @@ python scripts/_eval_laminar.py --group custom_name  # 自訂 group
 - 支援參數：`--top-k`（預設 5）、`--mode`（keyword/hybrid/rerank/all，預設 all）、`--json`（JSON 輸出）
 
 **使用方式**：
+
 ```bash
 cd api && npx tsx scripts/eval-semantic.ts              # 三模式對比
 cd api && npx tsx scripts/eval-semantic.ts --top-k 3   # 改變 top-K
@@ -1223,10 +1385,12 @@ make eval-semantic-k3                                   # top-k=3 版本
 ```
 
 **評估結果儲存**：輸出至 stdout（可重導向至檔案或 Laminar Dashboard），包含：
+
 - 聚合指標（5 個）
 - 每個 case 的詳細分析（query、expected categories、retrieved categories、四項指標）
 
 **實作細節**：
+
 - Store initialization：`new QAStore()` 載入 qa_final.json 與 embeddings
 - Reranker integration：動態 import 防護（SDK 不存在時自動 fallback）
 - Metric computation：四層嵌套計算，確保計算的準確性（category-level 而非 QA-level）
@@ -1251,36 +1415,37 @@ eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboar
 
 #### Layer 2 — keyword-retrieval group（8 evaluators）
 
-| 評估器 | 計算方式 | 學術依據 |
-|--------|---------|---------|
-| `precision_evaluator` | `|relevant ∩ retrieved| / K` | IR 標準（Voorhees）|
-| `recall_evaluator` | `|expected ∩ retrieved| / len(expected)` | IR 標準 |
-| `f1_evaluator` | `2×P×R/(P+R)` | IR 標準 |
-| `hit_rate_evaluator` | `1.0 if any match else 0.0` | TREC |
-| `mrr_evaluator` | `1 / rank_of_first_match` | TREC |
-| `ndcg_at_k_evaluator` | `DCG / IDCG`（graded relevance）| Jarvelin & Kekalainen (2002) |
-| `top1_category_match_evaluator` | `1.0 if output[0].category in expected else 0.0` | 本專案 |
-| `top5_category_coverage_evaluator` | ≡ `recall_evaluator`（語意更清楚）| 本專案 |
+| 評估器                             | 計算方式                                         | 學術依據                     |
+| ---------------------------------- | ------------------------------------------------ | ---------------------------- | ---------------- | ------------------- |
+| `precision_evaluator`              | `                                                | relevant ∩ retrieved         | / K`             | IR 標準（Voorhees） |
+| `recall_evaluator`                 | `                                                | expected ∩ retrieved         | / len(expected)` | IR 標準             |
+| `f1_evaluator`                     | `2×P×R/(P+R)`                                    | IR 標準                      |
+| `hit_rate_evaluator`               | `1.0 if any match else 0.0`                      | TREC                         |
+| `mrr_evaluator`                    | `1 / rank_of_first_match`                        | TREC                         |
+| `ndcg_at_k_evaluator`              | `DCG / IDCG`（graded relevance）                 | Jarvelin & Kekalainen (2002) |
+| `top1_category_match_evaluator`    | `1.0 if output[0].category in expected else 0.0` | 本專案                       |
+| `top5_category_coverage_evaluator` | ≡ `recall_evaluator`（語意更清楚）               | 本專案                       |
 
 #### Layer 3 — retrieval-enhancement group（2 evaluators）
 
-| 評估器 | 說明 |
-|--------|------|
-| `kw_hit_rate_with_synonyms_evaluator` | 同義詞展開 executor 後的 hit rate（vs baseline）|
-| `synonym_coverage_evaluator` | expected_keywords 有多少比例有 synonym 覆蓋 |
+| 評估器                                | 說明                                             |
+| ------------------------------------- | ------------------------------------------------ |
+| `kw_hit_rate_with_synonyms_evaluator` | 同義詞展開 executor 後的 hit rate（vs baseline） |
+| `synonym_coverage_evaluator`          | expected_keywords 有多少比例有 synonym 覆蓋      |
 
 #### Layer 1 — data-quality group（`scripts/_eval_data_quality.py`）
 
-| 評估器 | 合格線 |
-|--------|--------|
-| `qa_count_in_range` | [100, 2000] |
-| `avg_confidence` | ≥ 0.80 |
-| `keyword_coverage` | ≥ 0.85（≥3 keywords per QA）|
-| `no_admin_content` | 1.0（無污染）|
+| 評估器              | 合格線                       |
+| ------------------- | ---------------------------- |
+| `qa_count_in_range` | [100, 2000]                  |
+| `avg_confidence`    | ≥ 0.80                       |
+| `keyword_coverage`  | ≥ 0.85（≥3 keywords per QA） |
+| `no_admin_content`  | 1.0（無污染）                |
 
 #### Layer 4 — generation-quality group（`scripts/_push_laminar_score.py`）
 
 由 Claude Code as Judge slash commands 執行後，用 `_push_laminar_score.py` 推送：
+
 - `faithfulness`（RAGAS Faithfulness，`/evaluate-faithfulness-local`）
 - `context_precision`（RAGAS Context Precision，`/evaluate-context-precision-local`）
 
@@ -1306,14 +1471,15 @@ eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboar
 
 **三模式對比（20 golden cases，top-k=5）**：
 
-| 模式 | Precision | Recall | F1 | Hit Rate | MRR |
-|------|-----------|--------|-----|----------|-----|
-| Keyword（Python 手動）| 0.810 | 0.800 | 0.768 | 1.0 | 0.938 |
-| Keyword（TS eval-semantic.ts）| 0.700 | — | — | — | — |
-| Keyword + Claude Rerank | **0.950** | **0.825** | **0.861** | 1.0 | **1.0** |
-| Delta vs Python baseline | **+14pp** | **+2.5pp** | **+9.3pp** | — | **+6.2pp** |
+| 模式                           | Precision | Recall     | F1         | Hit Rate | MRR        |
+| ------------------------------ | --------- | ---------- | ---------- | -------- | ---------- |
+| Keyword（Python 手動）         | 0.810     | 0.800      | 0.768      | 1.0      | 0.938      |
+| Keyword（TS eval-semantic.ts） | 0.700     | —          | —          | —        | —          |
+| Keyword + Claude Rerank        | **0.950** | **0.825**  | **0.861**  | 1.0      | **1.0**    |
+| Delta vs Python baseline       | **+14pp** | **+2.5pp** | **+9.3pp** | —        | **+6.2pp** |
 
 **主要發現**：
+
 - Precision +14pp：Reranker 有效過濾語意不相關的結果
 - MRR 達到 1.0：第一筆結果 100% 正確，排序最優化
 - Recall 小幅提升：受 over-retrieve pool 限制
@@ -1375,6 +1541,7 @@ Laminar dashboard ←─── Laminar.flush() ←─── Laminar.event()
 ## v2.25（2026-03-06）— Architecture & Security Hardening
 
 **核心亮點**：
+
 - Security: SSRF whitelist、auth fail-fast (production 503)、HTTP security headers、session UUID validation
 - Refactor: qa-filter.ts 共用模組（消除 200+ 行重複）、itemToSource 共用化
 - Fix: SupabaseQAStore.listQa mutation bug（immutable sort）
@@ -1392,31 +1559,257 @@ Laminar dashboard ←─── Laminar.flush() ←─── Laminar.event()
 **核心亮點**：5 個 Phase 完成 extraction_model / freshness_score / search_hit_count 三個 metadata 欄位從虛設到可用。
 
 ### P0: extraction_model 追溯回填
+
 - 新增 `scripts/backfill_extraction_model.py`：從 `output/qa_per_meeting/*.json` 反查 stable_id，查無者標記 `"claude-code"`
 - 修復 `scripts/03_dedupe_classify.py`：獨立路徑補充 `extraction_model`（fallback `None`）
 - 修復 `.claude/commands/extract-qa.md`：輸出 JSON 加入 `extraction_model` 欄位
 
 ### P1: freshness_score 指數衰減
+
 - 新增 `scripts/update_freshness.py`：`exp(-λ * age_days)`，half_life=540 天，floor 0.01
 - 修復 `scripts/migrate_to_supabase.py`：freshness_score falsy bug（`or 1.0` → `is not None` check）
 - 新增 `.github/workflows/update-freshness.yml`：每週一 02:00 UTC cron
 
 ### P2: search_hit_count 追蹤
+
 - Supabase SQL function `increment_search_hit_count(qa_ids TEXT[])`：atomic increment
 - `SupabaseQAStore.incrementSearchHitCount()`：fire-and-forget pattern
 - `search.ts` module-scope `trackHits()` 函式：搜尋命中後非同步遞增
 
 ### P3: Eval extraction_model 分群
+
 - `evals/eval_retrieval.py` 新增 `--model` / `--limit` CLI 參數
 - Group name 含模型名稱：`retrieval_quality_{model}`
 
 ### P4: API extraction_model filter
+
 - `GET /api/v1/qa?extraction_model=claude-code` 正確過濾
 - Response 每筆含 `extraction_model` + `freshness_score` 欄位
 
 ### 安全修復
+
 - `update_freshness.py` `--since` 參數加 `_DATE_RE` regex 驗證（防 URL injection）
 
 ### 測試
+
 - Python: 21 tests passing（9 backfill + 12 freshness）
 - TypeScript: 562→566 tests（qa filter + route 新增 4 tests）
+
+---
+
+## v3.1 增量去重策略（2026-03-12）
+
+### 問題
+
+知識庫從 1,401 筆擴增至 1,502 筆（新增 11 篇 Medium 文章），需要去重 + 分類。
+上次完整去重耗時 2.5 小時。直接重跑不經濟。
+
+### 解法：多階段預過濾 + 增量處理
+
+不重新處理全部 1,502 筆，而是：
+
+1. **識別差集**：比對 `qa_all_raw.json` vs `qa_final.json` 的 question prefix（前 100 字元），找出 127 筆新增
+2. **檔名正規化去重**（127 → 103）：同一篇文章因重複下載產生 `_1.md`、`_2.md` 等版本，用 regex 正規化檔名後只保留品質最佳的版本
+3. **SequenceMatcher 交叉比對**（103 → 76）：新增項目 vs 現有 1,401 筆，sim > 0.65 視為重複
+4. **SequenceMatcher 內部比對**（76 → 69）：新增項目之間，sim > 0.55 視為重複
+5. **平行 sub-agent 分類**（69 → 68）：分 3 批、每批 23 筆，sonnet 模型平行分類（category / difficulty / evergreen）
+
+```
+原始 1,502 筆
+  └─ 已處理 1,401 筆（跳過）
+  └─ 新增 127 筆
+       ├─ 檔案版本重複 -24 → 103
+       ├─ 交叉重複 -27 → 76
+       ├─ 內部重複 -7  → 69
+       └─ 分類後新增 68 筆 → 最終 1,469 筆
+```
+
+### 閾值選擇依據
+
+| 階段                 | 閾值       | 理由                                                   |
+| -------------------- | ---------- | ------------------------------------------------------ |
+| 交叉比對（vs 現有）  | sim > 0.65 | 不同措辭的同一問題通常 0.65–0.87，低於此值多為不同問題 |
+| 內部比對（新增之間） | sim > 0.55 | 同源不同版本的萃取結果措辭差異更大，需要更寬鬆的閾值   |
+
+### Eval 影響
+
+新增 68 筆後，retrieval 指標變化：
+
+| 指標     | 1,401 筆 | 1,469 筆 | 變化  |
+| -------- | -------- | -------- | ----- |
+| NDCG@K   | 0.784    | 0.802    | +2.3% |
+| Recall@K | 0.75     | 0.786    | +4.8% |
+| Hit Rate | 1.00     | 1.00     | —     |
+| MRR      | 0.975    | 0.952    | -2.4% |
+
+NDCG 和 Recall 提升代表新資料增加了知識覆蓋面。MRR 微降是因為新增項目可能影響 top-1 排序。
+
+---
+
+## Medium 文章批次擴充（2026-03-12）
+
+### 問題發現
+
+Medium index 有 370 筆，但 102 筆缺少對應的 markdown 文件（歷史抓取失敗或重複下載後清理時誤刪）。
+
+### 修復流程
+
+1. **直接 URL 下載**：用 Python 逐一呼叫 `fetch_medium.py` 的內部函式，對 102 個 URL 執行 playwright headless 抓取
+2. **MD5 去重**：重複下載產生 269 個 markdown 檔案（123 unique），用檔案內容 MD5 hash 去重，保留最短檔名的版本
+3. **404 清理**：部分文章已被作者刪除，抓取結果為 Medium 404 頁面，標記為空 QA（0 筆萃取）
+4. **最終結果**：103 個有效 markdown、11 個新檔案已用平行 sub-agent（sonnet × 11）完成 QA 萃取，產出 74 筆 raw QA
+
+---
+
+## v3.4+ Curated QA 後處理層（2026-03-14）
+
+### 背景
+
+本次 session 證實，多來源 `extract-qa → dedupe-classify` 產出的 `qa_final.json` 不能直接視為最終 serving artifact。
+
+原因有三個：
+
+1. raw Q&A 仍會混入泛問句、模板化 `[How]`、中英夾雜 placeholder 等低訊號內容
+2. 清洗後若直接大量刪除，會傷到 retrieval coverage
+3. `output/qa_per_meeting/*.json` 與 `output/qa_all_raw.json` 後續可能被外部流程覆寫，導致 curated 結果與 raw corpus 漂移
+
+因此目前在 Step 3 後，新增一層 **Curated QA 後處理鏈**，把 raw corpus 整理成可 serving 的 curated 集合；這不代表所有 answer 都已被全面潤稿，而是以 deterministic 清洗、question-only salvage、raw sync 與 manual boosters 為主的治理層。
+
+### Curated QA 後處理鏈
+
+```
+output/qa_all_raw.json (raw corpus, 1183 筆)
+                ↓
+  clean_qa_quality.py
+    - 規則式移除泛問題 / 模板答案 / 混語 placeholder
+                ↓
+  restore_rewritten_qas.py
+    - 將可挽救的模板題改寫成自然繁中問句後回補
+                ↓
+  sync_curated_qa_from_raw.py
+    - 用最新 raw answer / metadata 同步 curated 集合
+                ↓
+  add_retrieval_boosters.py
+    - 針對 golden retrieval 弱情境補 11 筆 curated-manual boosters
+                ↓
+output/qa_final.json (serving artifact, 283 筆)
+output/qa_final.md
+```
+
+### 新增腳本與責任分工
+
+- `scripts/clean_qa_quality.py`：規則式品質閘門，攔下 `generic-question-template`、`generic-answer-template`、`mixed-language-placeholder-heavy`、`multi-block-fragmented-answer`
+- `scripts/restore_rewritten_qas.py`：只回補可挽救的模板題，**保留原 answer**、僅改寫 question，並加上 `quality_rewritten_from_phrase`
+- `scripts/sync_curated_qa_from_raw.py`：讓 curated 集合與最新 `qa_all_raw.json` 對齊；若項目是 rewritten 或 raw 已消失，則標記 `raw_sync_status`
+- `scripts/add_retrieval_boosters.py`：注入 11 筆 `curated-manual` scenario boosters，改善弱 retrieval cases；操作為 idempotent
+
+### 審計輸出
+
+- `output/qa_quality_filter_report.json`：品質移除清單
+- `output/qa_quality_restore_report.json`：改寫回補清單
+- `output/qa_sync_from_raw_report.json`：raw 同步摘要
+- `output/qa_retrieval_booster_report.json`：booster 注入摘要
+
+### 本次 session 的實際數字
+
+- raw corpus：`output/qa_all_raw.json` 共 1183 筆
+- 品質過濾：移除 24 筆低品質 Q&A
+- 改寫回補：恢復 24 筆可挽救模板題（question-only salvage，不等於 answer 已完整重寫）
+- raw sync：272 筆 curated 中，246 筆對回 raw、24 筆保留 rewritten、2 筆保留 missing
+- retrieval boosters：新增 11 筆，最終 `output/qa_final.json` 為 283 筆
+
+### Upstream prompt 規則同步強化
+
+為降低下游清洗成本，`.claude/commands/extract-qa.md` 也同步升級：
+
+- 先判斷來源類型（會議 / 指南 / 研究案例）
+- 禁止把段落標題直接包成泛問句
+- 禁止以模板化 `[How]` 補空白內容
+- 強化繁體中文流暢度與 SEO 術語可檢索性
+
+這代表目前知識庫治理改成 **Upstream prompt hardening + Downstream deterministic curation** 的雙層策略。
+
+### Source discovery 補強
+
+`scripts/list_pipeline_state.py` 的 `_classify_extract_qa()` 也已從舊四源擴大到 Ahrefs / SEJ / GrowthMemo，避免 local pipeline 狀態盤點漏掉新來源。
+
+---
+
+## v3.2 `/meeting-prep` command + API（2026-03-12）
+
+- `/meeting-prep` slash command：顧問會議準備深度研究報告（11 sections、4 框架、自動網路研究、KB 交叉比對、顧問文章引用）
+- `meeting-prep` API router：`GET /meeting-prep`（列表）+ `GET /meeting-prep/:date`（單篇，支援 fuzzy match）
+- `scripts/meeting_prep_helper.py`：`list-consultant-articles`（87 篇去重）+ `extract-recent-topics`
+- Meeting-Prep eval 三層架構：L1 Structure（11 metrics）+ L2 Grounding（5 metrics）+ L3 Content Quality（5 維度）
+- `eval/fixtures/meeting_prep/`：4 份 golden fixture
+
+---
+
+## v3.3 成熟度模型全系統整合（2026-03-13）
+
+- `GET /meeting-prep/maturity-trend`：成熟度趨勢時間序列端點（data_points + summary）
+- `evals/eval_meeting_prep_structure.py`：+2 evaluators（s8_meta_maturity_consistency + s10_maturity_upgrade_labeled），11→13 metrics
+- `scripts/_eval_report.py`：+1 evaluator（report_action_maturity_labeled），7→8 metrics
+- `/evaluate-meeting-prep-quality`：+1 維度（s8_maturity_justified），5→6 維度
+- `_push_laminar_score.py`：`--json-file` 批次推送模式
+- `/generate-report` S5/S6：成熟度感知行動建議 + `[LX→LY]` 升級標籤
+- `/meeting-prep` S10：`[LX→LY]` 升級路徑標籤
+- 前端 `MaturityTrendChart.tsx`：Recharts 4 條折線趨勢圖
+- API tests：576→582（57 files）
+- Laminar groups：13→14（+meeting_prep_quality），+1 pending（maturity_progression）
+
+## v3.4 成熟度模型跨系統深化（2026-03-14）
+
+**核心目標**：成熟度知識從 `meeting_prep_meta` 擴展至全部 6 大 Feature。
+
+### 新增模組
+
+- `api/src/utils/maturity.ts`：成熟度工具函式（`parseMaturityLevel`、`buildMaturityContext`、`applyMaturityBoost`、`buildReportMaturityBlock`、`getDimensionForMetric`、`buildMaturityUpgradeLabel`、`buildMaturityCallout`；`DIMENSIONS`、`METRIC_MATURITY_DIMENSION_MAP` 常數）
+- `utils/maturity_classifier.py`：rule-based L1-L4 分類器（Python，backfill + pipeline 共用）
+- `scripts/backfill_maturity_relevance.py`：Supabase 回填腳本（`--dry-run` / `--execute` / `--verify`）
+- `supabase/migrations/009_maturity_relevance.sql`：`qa_items.maturity_relevance` TEXT + B-tree index + `sessions.metadata` JSONB
+
+### Schema 變更
+
+- `schemas/qa.ts`：`maturity_relevance: z.enum(["L1","L2","L3","L4"]).optional()` filter
+- `schemas/search.ts`：`maturity_level` param（boost reranking）
+- `schemas/chat.ts`：`maturity_level` param（system prompt 注入）
+- `schemas/session.ts`：`maturity_level` param + `SessionDetailOut.metadata`
+- `schemas/feedback.ts`：categories 4→6（+`too_basic`/`too_advanced`）
+
+### Store 層
+
+- `qa-store.ts`：`QAItem` +`maturity_relevance` field + `_enrichment.maturity_relevance` 讀取
+- `supabase-qa-store.ts`：`MatchRow` + SELECT + `rowToQAItem()` 更新
+- `qa-filter.ts`：`ListQaParams` + `filterAndPaginateQa()` 支援 `maturity_relevance`
+- `session-store.ts`：`SessionMetadata` 介面 + `updateMetadata()` 方法 + `AsyncSessionStore` 擴充
+- `supabase-session-store.ts`：`metadata` JSONB 欄位 + `updateMetadata()` PATCH
+
+### 路由層
+
+- `routes/qa.ts`：`maturity_relevance` query param + response field
+- `routes/search.ts`：`applyMaturityBoost()` post-retrieve（1.15× 乘法 boost，opt-in）
+- `routes/chat.ts`：`maturity_level` passthrough 至 `ragChat()` + stream
+- `routes/sessions.ts`：maturity 解析（request > session > null）+ 自動持久化
+- `routes/reports.ts`：從 snapshot 萃取 maturity → `generateReportLocal()`
+
+### 服務層
+
+- `rag-chat.ts`：`buildMaturityContext()` 注入 system prompt；有 maturity 時 skip response cache
+- `rag-chat-stream.ts`：同步 maturity context 注入（streaming 路徑）
+- `report-generator-local.ts`：S5 `buildPriorityActions()` 重構——移除舊「成熟度對標」區塊，改用 `buildMaturityCallout()` blockquote（行動清單前方）+ `buildMaturityUpgradeLabel()` 行內標籤（高優先行動尾部）
+
+### Pipeline 整合
+
+- `.claude/commands/extract-qa.md`：QA 輸出加 `maturity_relevance` + 分類指引
+- `.claude/commands/dedupe-classify.md`：合併輸出含 `maturity_relevance`
+- Makefile：+3 targets（`backfill-maturity` / `backfill-maturity-dry` / `backfill-maturity-verify`）
+
+### OpenAPI + 測試
+
+- `openapi.ts`：v2.29→v3.4.0→v3.5；QAItem/SearchResult +`maturity_relevance`；Chat/Search/Session +`maturity_level`；Reports/generate +`maturity_context`
+- `schemas/report.ts`：`maturity_context: z.record(z.string(), z.string()).optional()`（v3.5）
+- `routes/reports.ts`：`effectiveMaturity` 優先序 snapshot > request > null（v3.5）
+- `.claude/commands/generate-report.md`：Step A3 自動偵測 meeting-prep maturity + `--maturity`/`--no-maturity` flag（v3.5）
+- API tests：582→608→660（58→61 files）；新增 `tests/utils/maturity.test.ts`（36 tests）、`tests/services/report-generator-local.test.ts`（7 tests）、`tests/schemas/report.test.ts`（3 tests）
+- Python tests：`tests/test_maturity_classifier.py`（13 tests）

@@ -82,7 +82,10 @@ make test              # 執行測試
 make fetch-medium      # 只執行 Medium 文章擷取（RSS → Markdown）
 make fetch-ithelp      # 只執行 iThome 鐵人賽擷取（HTML → Markdown）
 make fetch-google-cases # 只執行 Google Case Studies 擷取（HTML → Markdown）
-make fetch-articles    # 擷取所有外部文章（Medium + iThome + Google Cases）
+make fetch-ahrefs      # 只執行 Ahrefs Blog 擷取（WP API → Markdown，L4 分類篩選）
+make fetch-sej         # 只執行 Search Engine Journal 擷取（RSS → Markdown）
+make fetch-growthmemo  # 只執行 Growth Memo 擷取（Substack RSS → Markdown）
+make fetch-articles    # 擷取所有外部文章（Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo）
 make fetch-all         # Notion + 所有外部文章
 make backfill-extraction-model      # 回填 extraction_model（全量 Supabase UPDATE）
 make backfill-extraction-model-dry  # 回填 extraction_model（dry-run，不寫入）
@@ -91,6 +94,11 @@ make update-freshness               # 套用 freshness_score 衰減
 make update-freshness-dry            # freshness_score 衰減（dry-run）
 make update-freshness-verify         # 驗證 freshness_score 結果
 make evaluate-retrieval-by-model MODEL=claude-code  # 按模型分群 eval
+make meeting-prep-articles          # 列出顧問文章清單（去重）
+make meeting-prep-topics            # 最近 3 份會議的主題詞
+make evaluate-meeting-prep          # Meeting-Prep 完整評估（L1+L2）
+make evaluate-meeting-prep-structure  # Meeting-Prep 結構品質評估
+make evaluate-meeting-prep-grounding  # Meeting-Prep 引用根基評估
 make help              # 顯示所有可用 targets
 ```
 
@@ -153,6 +161,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/extract-qa` — 只執行 Step 2 Q&A 萃取（parallel sub-agents）
 - `/dedupe-classify` — 只執行 Step 3 去重 + 分類
 - `/generate-report <URL 或路徑>` — 生成 SEO 週報（7 維度：情勢/流量/技術/意圖/行動/AI 可見度/來源，支援 `--snapshot <snapshot_id>` 參數）
+- `/meeting-prep <snapshot 路徑 或 --report 週報路徑>` — 顧問會議準備深度研究報告（11 sections：異常地圖/業界動態/根因假設/交叉比對/審計缺口/E-E-A-T/人本要素/成熟度/提問清單/行動核查）
 - `/search <問題>` — 搜尋知識庫（關鍵字加權，回傳 top-K Q&A）
 - `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
 - `/chat-agent` — Agentic RAG 問答（多輪自主搜尋，混合 Grep/Read/qa_tools.py，不需要 OpenAI）
@@ -161,6 +170,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/evaluate-faithfulness-local` — RAGAS Faithfulness 評估（Answer 是否有幻覺，Claude Code 作為 Judge，不需要 OpenAI）
 - `/evaluate-context-precision-local` — RAGAS Context Precision 評估（Retrieved contexts 有多少真正相關，Claude Code 作為 Judge）
 - `/evaluate-crawled-not-indexed-local` — 檢索未索引分析品質評估（12 golden cases，rule-based）
+- `/evaluate-meeting-prep-quality` — Meeting-Prep 內容品質評估（6 維度，Claude Code 作為 Judge，不需要 OpenAI）
 - `/sync-db` — 本地 Reports + Sessions 上傳至 Supabase（`make sync-db` / `make sync-db-status` / `make sync-db-force`）
 - `/backfill-extraction-model` — 追溯回填 Supabase qa_items 的 extraction_model（`--dry-run` / `--execute`）
 - `/update-freshness` — 批次更新 freshness_score 指數衰減（`--dry-run` / `--execute`）
@@ -186,16 +196,16 @@ pnpm dev               # 啟動開發伺服器（tsx watch，port 8002）
 
 ```bash
 cd ../vocus-web-ui
-git checkout feat/admin-seo-insight  # 切換到前端開發分支
+git checkout main  # feat/admin-seo-insight 已 merge，從主線開新分支
 pnpm install
 pnpm dev               # 啟動前端伺服器（http://localhost:3000）
 ```
 
-測試（562 個測試，80% 覆蓋率）：
+測試（582 個測試，80% 覆蓋率）：
 
 ```bash
 cd api
-pnpm test              # 執行所有 vitest 測試（566 tests, 56 files）
+pnpm test              # 執行所有 vitest 測試（582 tests, 57 files）
 pnpm test:watch       # 監視模式下執行測試
 pnpm test:coverage    # 生成測試覆蓋率報告
 ```
@@ -231,7 +241,7 @@ API 端點特性：
 - `GET /openapi.json` — OpenAPI 3.1 規格（機器可讀，可匯入 Postman / Swagger）
 - `GET /docs` — Scalar 互動式 API 文件（瀏覽器直接測試）
 - Mintlify 託管文件：[vocus.mintlify.app](https://vocus.mintlify.app)（auto-deploy from main，設定檔 `api/docs/docs.json`）
-- 9 個路由器：qa（含 extraction_model filter）、search（含 extraction_model filter + search_hit_count tracking）、chat、reports、sessions、feedback、pipeline、synonyms、health
+- 10 個路由器：qa（含 extraction_model filter）、search（含 extraction_model filter + search_hit_count tracking）、chat、reports、sessions、feedback、pipeline、synonyms、meeting-prep、health
 - Pipeline 端點：18 個（狀態、會議、來源文件、指標、快照、趨勢分析、LLM 用量、索引覆蓋率等）
 - 認證：`X-API-Key` header + 安全層（SSRF whitelist、auth fail-fast、HTTP security headers、session UUID validation）
 - 詳見 `api/README.md`
@@ -279,6 +289,12 @@ Synonyms API 端點（v2.11 新增）：
 - `POST /api/v1/synonyms` — 新增自訂同義詞
 - `PUT /api/v1/synonyms/:term` — 更新自訂同義詞
 - `DELETE /api/v1/synonyms/:term` — 刪除自訂同義詞
+
+Meeting Prep API 端點（v3.3 新增 maturity-trend）：
+
+- `GET /api/v1/meeting-prep` — 列出所有會議準備報告（日期 + meta）
+- `GET /api/v1/meeting-prep/maturity-trend` — SEO 成熟度趨勢時間序列（data_points + summary）
+- `GET /api/v1/meeting-prep/:date` — 取得單篇會議準備報告（YYYYMMDD 或 YYYYMMDD_hash8 格式）
 
 環境變數（v2.11 新增，均可選）：
 
@@ -366,12 +382,14 @@ AGENT_TIMEOUT_MS=90000         # Agent loop 總逾時（5000-300000，預設 90s
 
 新知識補充時，依主題寫入對應檔案：
 
-| 主題                                                               | 檔案                                  |
-| ------------------------------------------------------------------ | ------------------------------------- |
-| LLM / Token / Embedding / Cosine / Prompt 基礎 / Structured Output | `research/01-ai-fundamentals.md`      |
-| RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標                | `research/02-rag-and-search.md`       |
-| 評估 / LLM-as-Judge / Reasoning Model / 評估維度設計               | `research/03-evaluation.md`           |
-| Prompt Engineering 進階 / 業界最佳實踐                             | `research/04-prompting.md`            |
-| 模型選擇決策 / Embedding 模型比較                                  | `research/05-models.md`               |
-| 專案架構 / 技術決策 / Changelog / Mermaid 圖 / Observability       | `research/06-project-architecture.md` |
-| 部署 / Lambda / Docker / Supabase 遷移 / App Runner（已淘汰）      | `research/07-deployment.md`           |
+| 主題                                                               | 檔案                                   |
+| ------------------------------------------------------------------ | -------------------------------------- |
+| LLM / Token / Embedding / Cosine / Prompt 基礎 / Structured Output | `research/01-ai-fundamentals.md`       |
+| RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標                | `research/02-rag-and-search.md`        |
+| 評估 / LLM-as-Judge / Reasoning Model / 評估維度設計               | `research/03-evaluation.md`            |
+| Prompt Engineering 進階 / 業界最佳實踐                             | `research/04-prompting.md`             |
+| 模型選擇決策 / Embedding 模型比較                                  | `research/05-models.md`                |
+| 專案架構 / 技術決策 / Changelog / Mermaid 圖 / Observability       | `research/06-project-architecture.md`  |
+| 部署 / Lambda / Docker / Supabase 遷移 / App Runner（已淘汰）      | `research/07-deployment.md`            |
+| SEO 業界動態（Google 更新 / SER / 業界報導）                       | `research/11-seo-industry-updates.md`  |
+| Meeting Prep 評分追蹤 / 交叉比對發現                               | `research/12-meeting-prep-insights.md` |
