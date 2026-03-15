@@ -31,6 +31,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from utils.freshness import compute_freshness_score  # noqa: E402
+from utils.maturity_classifier import classify_maturity_level  # noqa: E402
 from utils.notion_url_map import build_source_to_notion_url  # noqa: E402
 from utils.synonym_dict import expand_keywords  # noqa: E402
 
@@ -177,6 +178,20 @@ def _infer_retrieval_metadata(qa: dict[str, Any]) -> dict[str, Any]:
     return metadata
 
 
+def _infer_maturity_relevance(qa: dict[str, Any]) -> str | None:
+    existing = qa.get("maturity_relevance")
+    if existing in {"L1", "L2", "L3", "L4"}:
+        return str(existing)
+    enrichment_existing = (qa.get("_enrichment") or {}).get("maturity_relevance")
+    if enrichment_existing in {"L1", "L2", "L3", "L4"}:
+        return str(enrichment_existing)
+    return classify_maturity_level(
+        keywords=[str(keyword) for keyword in qa.get("keywords", []) if keyword],
+        question=str(qa.get("question", "")),
+        answer=str(qa.get("answer", "")),
+    )
+
+
 def _aggregate_hit_counts() -> dict[str, int]:
     """
     從 access_logs/*.jsonl 聚合每筆 Q&A 的搜尋命中次數。
@@ -247,6 +262,7 @@ def _enrich_qa(
         source_url = notion_url
 
     retrieval_metadata = _infer_retrieval_metadata(qa)
+    maturity_relevance = _infer_maturity_relevance(qa)
 
     enrichment = {
         "synonyms": synonyms,
@@ -254,10 +270,12 @@ def _enrich_qa(
         "search_hit_count": search_hit_count,
         "notion_url": notion_url,
         "source_url": source_url,
+        "maturity_relevance": maturity_relevance,
         "backfill_confidence": retrieval_metadata["backfill_confidence"],
     }
     return {
         **qa,
+        "maturity_relevance": maturity_relevance,
         "primary_category": retrieval_metadata["primary_category"],
         "categories": retrieval_metadata["categories"],
         "intent_labels": retrieval_metadata["intent_labels"],

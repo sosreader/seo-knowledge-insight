@@ -35,6 +35,32 @@ L4_KEYWORDS = frozenset([
     "內容生成 pipeline", "content pipeline",
     "seo 自動化測試", "regression testing",
     "推薦系統", "recommendation engine",
+    "ai overview", "ai overviews", "aio",
+    "ai search", "生成式搜尋",
+    "geo", "generative engine optimization",
+    "aeo", "answer engine optimization",
+    "llm seo", "ai 可見度", "ai visibility",
+    "品牌可見度", "citation growth",
+    "scenario planning", "情境規劃",
+    "authority building", "decision gates",
+])
+
+AI_SEARCH_TERMS = frozenset([
+    "ai overview", "ai overviews", "aio",
+    "ai search", "生成式搜尋",
+    "geo", "generative engine optimization",
+    "aeo", "answer engine optimization",
+    "llm seo", "ai 可見度", "ai visibility",
+])
+
+L4_STRATEGY_TERMS = frozenset([
+    "品牌可見度", "brand visibility",
+    "citation growth", "引用成長",
+    "scenario planning", "情境規劃",
+    "authority building", "decision gates",
+    "競爭情報", "competitive intelligence",
+    "site:", "sub-queries", "subqueries",
+    "流量預測", "預測模型",
 ])
 
 L3_KEYWORDS = frozenset([
@@ -108,11 +134,12 @@ def classify_maturity_level(
 
     Returns "L1", "L2", "L3", "L4", or None if confidence is too low.
 
-    Strategy (priority order):
-      1. Check keywords list for level-specific terms
-      2. Check question text for level indicators
-      3. Check answer depth for complexity signals
-      4. Return None if no clear signal
+        Strategy (scoring):
+            1. Match level-specific keywords in keywords/question/answer text
+            2. Apply advanced/basic pattern bonuses from answer phrasing
+            3. Apply AI-search strategy bonus when AI-search and advanced strategy signals coexist
+            4. Use answer length only as a weak supporting signal
+            5. Return None if max score stays below the minimum confidence threshold
     """
     combined_text = f"{question} {answer}".lower()
     kw_text = " ".join(k.lower() for k in keywords)
@@ -146,6 +173,11 @@ def classify_maturity_level(
             scores["L3"] += 1
             scores["L4"] += 1
 
+    has_ai_search_signal = any(term in full_text for term in AI_SEARCH_TERMS)
+    has_l4_strategy_signal = any(term in full_text for term in L4_STRATEGY_TERMS)
+    if has_ai_search_signal and has_l4_strategy_signal:
+        scores["L4"] += 2
+
     for pattern in BASIC_PATTERNS:
         if pattern.search(answer):
             scores["L1"] += 2
@@ -156,12 +188,15 @@ def classify_maturity_level(
     elif len(answer) > 500:
         scores["L3"] += 1
 
+    if "預測" not in full_text and ("預期" in full_text or "預設" in full_text):
+        scores["L4"] = max(0, scores["L4"] - 2)
+
     # Pick highest score level
     max_score = max(scores.values())
     if max_score < 2:
         return None  # Low confidence — needs LLM review
 
-    # Tie-breaking: prefer lower level (conservative)
+    # Tie-breaking: prefer higher maturity when scores are equal.
     for level in ("L4", "L3", "L2", "L1"):
         if scores[level] == max_score:
             return level

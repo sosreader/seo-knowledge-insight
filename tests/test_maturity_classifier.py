@@ -79,6 +79,42 @@ class TestClassifyMaturityLevel:
         )
         assert result == "L4"
 
+    def test_l4_ai_search_visibility_strategy(self):
+        """AI Search / AIO visibility strategy topics should classify as L4."""
+        result = classify_maturity_level(
+            keywords=["AI Overview", "品牌可見度", "GEO"],
+            question="AI Overview 品牌可見度的核心影響因子有哪些？",
+            answer="應從品牌提及、反向連結與可引用內容結構切入，建立 AI Search 可見度監測與競爭情報框架，持續追蹤品牌在 AIO 的曝光變化。",
+        )
+        assert result == "L4"
+
+    def test_l4_scenario_planning_for_ai_seo_budget(self):
+        """Scenario-planning and leadership budgeting topics should classify as L4."""
+        result = classify_maturity_level(
+            keywords=["AI SEO", "scenario planning", "citation growth"],
+            question="向管理層爭取 AI SEO 預算時，為什麼應以情境規劃取代流量預測？",
+            answer="因為 AI 搜尋流量預測不穩定，較合理的作法是用 conservative、moderate、aggressive 三種 scenario planning，搭配 citation growth、authority building 與 decision gates 來配置投資。",
+        )
+        assert result == "L4"
+
+    def test_basic_ai_overview_question_stays_basic(self):
+        """Basic explanatory AI questions should not be over-classified to L4."""
+        result = classify_maturity_level(
+            keywords=["AI Overview", "基礎"],
+            question="什麼是 AI Overview？",
+            answer="AI Overview 是 Google 在搜尋結果中提供的摘要，簡單來說是把答案先整理給使用者看。",
+        )
+        assert result == "L1"
+
+    def test_expectation_does_not_trigger_prediction_l4(self):
+        """「預期」should not be treated as the advanced 「預測」 signal."""
+        result = classify_maturity_level(
+            keywords=["排名", "預期"],
+            question="預期排名會下降嗎？",
+            answer="根據最近波動，預期排名可能小幅下修，先觀察一週即可。",
+        )
+        assert result != "L4"
+
     def test_no_clear_signal_returns_none(self):
         """Ambiguous content should return None (low confidence)."""
         result = classify_maturity_level(

@@ -95,6 +95,7 @@ def _map_item(qa: dict[str, Any], embedding: list[float] | None) -> dict[str, An
         "source_url": source_url_value or enrichment_source_url or notion_url,
         "is_merged": bool(qa.get("is_merged", False)),
         "extraction_model": qa.get("extraction_model"),
+        "maturity_relevance": qa.get("maturity_relevance") or enrichment.get("maturity_relevance"),
         "synonyms": enrichment.get("synonyms") or [],
         "freshness_score": enrichment.get("freshness_score") if enrichment.get("freshness_score") is not None else 1.0,
         "search_hit_count": enrichment.get("search_hit_count") or 0,
