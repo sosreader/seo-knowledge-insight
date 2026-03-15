@@ -6,7 +6,10 @@ export const qaListParamsSchema = z.object({
   category: z.string().optional(),
   primary_category: z.string().optional(),
   keyword: z.string().max(100).optional(),
-  difficulty: z.string().regex(/^(基礎|進階)$/).optional(),
+  difficulty: z
+    .string()
+    .regex(/^(基礎|進階)$/)
+    .optional(),
   evergreen: z
     .enum(["true", "false"])
     .transform((v) => v === "true")

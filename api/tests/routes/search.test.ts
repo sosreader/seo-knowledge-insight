@@ -402,7 +402,11 @@ describe("POST /api/v1/search", () => {
       const res = await app.request("/api/v1/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: "SEO", top_k: 4, extraction_model: "claude-code" }),
+        body: JSON.stringify({
+          query: "SEO",
+          top_k: 4,
+          extraction_model: "claude-code",
+        }),
       });
 
       expect(res.status).toBe(200);

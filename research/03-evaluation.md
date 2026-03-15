@@ -272,19 +272,19 @@ v3.3 起，成熟度模型（L1-L4）成為評估體系的新橫切維度：
 
 最終使用 file-mode API（`http://localhost:8003`）重跑 `evals/eval_retrieval.py` 的結果為：
 
-| 指標 | 結果 |
-| ---- | ---- |
-| `keyword_hit_rate` | `0.9329` |
-| `top1_category_match` | `0.95` |
-| `top5_category_coverage` | `0.82` |
-| `hit_rate` | `1.0` |
-| `mrr` | `0.975` |
-| `precision_at_k` | `0.82` |
-| `recall_at_k` | `0.8875` |
-| `dual_category_recall_at_k` | `0.8875` |
-| `multi_label_f1_at_k` | `0.8297` |
+| 指標                         | 結果     |
+| ---------------------------- | -------- |
+| `keyword_hit_rate`           | `0.9329` |
+| `top1_category_match`        | `0.95`   |
+| `top5_category_coverage`     | `0.82`   |
+| `hit_rate`                   | `1.0`    |
+| `mrr`                        | `0.975`  |
+| `precision_at_k`             | `0.82`   |
+| `recall_at_k`                | `0.8875` |
+| `dual_category_recall_at_k`  | `0.8875` |
+| `multi_label_f1_at_k`        | `0.8297` |
 | `boosterless_precision_at_k` | `0.8175` |
-| `ndcg_at_k` | `0.8921` |
+| `ndcg_at_k`                  | `0.8921` |
 
 這組數字的解讀方式如下：
 
@@ -1146,13 +1146,13 @@ Step 6: 儲存至 output/evals/ab_<date>.json
 
 原本的「Category Hit Rate」實際上是 **Recall@K（category level）**，語意不清。v2.11 重新定義並新增對應指標：
 
-| 指標                                 | 定義                                    | 計算方式                                   |
-| ------------------------------------ | --------------------------------------- | ------------------------------------------ |
-| **KW Hit Rate**                      | 關鍵字命中率（fuzzy match）             | `|matched_kw| / |expected_kw|`             |
-| **MRR**                              | Mean Reciprocal Rank                    | `1 / rank_of_first_relevant`               |
-| **Recall@K**（原 Category Hit Rate） | top-K 中有幾個 expected category 被覆蓋 | `|retrieved_cats ∩ expected_cats| / |expected_cats|` |
-| **Precision@K**（v2.11 新增）        | top-K 中有幾個是 relevant               | `|relevant_in_topk| / K`                   |
-| **F1 Score**（v2.11 新增）           | Precision 與 Recall 的調和平均          | `2 × P × R / (P + R)`                      |
+| 指標                                 | 定義                                    | 計算方式                     |
+| ------------------------------------ | --------------------------------------- | ---------------------------- | ------------------------------ | ---- | ------------- | --- |
+| **KW Hit Rate**                      | 關鍵字命中率（fuzzy match）             | `                            | matched_kw                     | /    | expected_kw   | `   |
+| **MRR**                              | Mean Reciprocal Rank                    | `1 / rank_of_first_relevant` |
+| **Recall@K**（原 Category Hit Rate） | top-K 中有幾個 expected category 被覆蓋 | `                            | retrieved_cats ∩ expected_cats | /    | expected_cats | `   |
+| **Precision@K**（v2.11 新增）        | top-K 中有幾個是 relevant               | `                            | relevant_in_topk               | / K` |
+| **F1 Score**（v2.11 新增）           | Precision 與 Recall 的調和平均          | `2 × P × R / (P + R)`        |
 
 ### 實作（`scripts/qa_tools.py`）
 

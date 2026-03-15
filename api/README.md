@@ -118,24 +118,24 @@ Client → Function URL / localhost:8002
 
 **`GET /api/v1/qa` 查詢參數（2026-03-15）**
 
-| 參數 | 型別 | 說明 |
-| ---- | ---- | ---- |
-| `category` | string | 舊版單一分類 filter |
-| `primary_category` | string | 以 retrieval metadata 的主分類過濾；支援逗號分隔多值 |
-| `keyword` | string | question / answer / keywords 關鍵字搜尋 |
-| `difficulty` | `基礎`\|`進階` | 難度過濾 |
-| `evergreen` | boolean | 是否常青 |
-| `source_type` | string | `meeting` / `article` |
-| `source_collection` | string | collection 名稱 |
-| `extraction_model` | string | 依 extraction model 過濾 |
-| `maturity_relevance` | `L1`\|`L2`\|`L3`\|`L4` | 成熟度過濾 |
-| `intent_label` | string | retrieval intent 過濾；支援逗號分隔多值 |
-| `scenario_tag` | string | retrieval scenario 過濾；支援逗號分隔多值 |
-| `serving_tier` | string | `canonical` / `supporting` / `booster` 之類 serving layer 過濾 |
-| `evidence_scope` | string | 依證據範圍過濾，例如 `platform` / `site` |
-| `sort_by` | `source_date`\|`confidence` | 排序欄位 |
-| `sort_order` | `asc`\|`desc` | 排序方向 |
-| `limit` / `offset` | number | 分頁 |
+| 參數                 | 型別                        | 說明                                                           |
+| -------------------- | --------------------------- | -------------------------------------------------------------- |
+| `category`           | string                      | 舊版單一分類 filter                                            |
+| `primary_category`   | string                      | 以 retrieval metadata 的主分類過濾；支援逗號分隔多值           |
+| `keyword`            | string                      | question / answer / keywords 關鍵字搜尋                        |
+| `difficulty`         | `基礎`\|`進階`              | 難度過濾                                                       |
+| `evergreen`          | boolean                     | 是否常青                                                       |
+| `source_type`        | string                      | `meeting` / `article`                                          |
+| `source_collection`  | string                      | collection 名稱                                                |
+| `extraction_model`   | string                      | 依 extraction model 過濾                                       |
+| `maturity_relevance` | `L1`\|`L2`\|`L3`\|`L4`      | 成熟度過濾                                                     |
+| `intent_label`       | string                      | retrieval intent 過濾；支援逗號分隔多值                        |
+| `scenario_tag`       | string                      | retrieval scenario 過濾；支援逗號分隔多值                      |
+| `serving_tier`       | string                      | `canonical` / `supporting` / `booster` 之類 serving layer 過濾 |
+| `evidence_scope`     | string                      | 依證據範圍過濾，例如 `platform` / `site`                       |
+| `sort_by`            | `source_date`\|`confidence` | 排序欄位                                                       |
+| `sort_order`         | `asc`\|`desc`               | 排序方向                                                       |
+| `limit` / `offset`   | number                      | 分頁                                                           |
 
 **`GET /api/v1/qa` 新增回應欄位**
 
@@ -173,18 +173,18 @@ Client → Function URL / localhost:8002
 
 **`POST /api/v1/search` request body（2026-03-15）**
 
-| 欄位 | 型別 | 說明 |
-| ---- | ---- | ---- |
-| `query` | string | 必填，1–500 字 |
-| `top_k` | number | 1–20，預設 5 |
-| `category` | string | 舊版 category filter |
-| `primary_category` | string | 以 retrieval 主分類做 post-filter |
-| `extraction_model` | string | 以 extraction model 做 post-filter |
-| `maturity_level` | `L1`\|`L2`\|`L3`\|`L4` | 對應 `applyMaturityBoost()` |
-| `intent_label` | string | 以 retrieval intent 做 post-filter |
-| `scenario_tag` | string | 以 retrieval scenario 做 post-filter |
-| `serving_tier` | string | 以 serving layer 做 post-filter |
-| `evidence_scope` | string | 以證據範圍做 post-filter |
+| 欄位               | 型別                   | 說明                                 |
+| ------------------ | ---------------------- | ------------------------------------ |
+| `query`            | string                 | 必填，1–500 字                       |
+| `top_k`            | number                 | 1–20，預設 5                         |
+| `category`         | string                 | 舊版 category filter                 |
+| `primary_category` | string                 | 以 retrieval 主分類做 post-filter    |
+| `extraction_model` | string                 | 以 extraction model 做 post-filter   |
+| `maturity_level`   | `L1`\|`L2`\|`L3`\|`L4` | 對應 `applyMaturityBoost()`          |
+| `intent_label`     | string                 | 以 retrieval intent 做 post-filter   |
+| `scenario_tag`     | string                 | 以 retrieval scenario 做 post-filter |
+| `serving_tier`     | string                 | 以 serving layer 做 post-filter      |
+| `evidence_scope`   | string                 | 以證據範圍做 post-filter             |
 
 **`POST /api/v1/search` 回應補充**
 

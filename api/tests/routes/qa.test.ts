@@ -13,34 +13,72 @@ vi.mock("../../src/store/qa-store.js", () => {
       getBySeq: (seq: number) => items.find((i) => i.seq === seq) ?? undefined,
       listQa: (params: Record<string, unknown>) => {
         let results = [...items];
-        if (params.category) results = results.filter((i) => i.category === params.category);
-        if (params.primary_category) results = results.filter((i) => (i.primary_category ?? i.category) === params.primary_category);
+        if (params.category)
+          results = results.filter((i) => i.category === params.category);
+        if (params.primary_category)
+          results = results.filter(
+            (i) =>
+              (i.primary_category ?? i.category) === params.primary_category,
+          );
         if (params.keyword) {
           const kw = (params.keyword as string).toLowerCase();
           results = results.filter(
-            (i) => i.question.toLowerCase().includes(kw) || i.answer.toLowerCase().includes(kw),
+            (i) =>
+              i.question.toLowerCase().includes(kw) ||
+              i.answer.toLowerCase().includes(kw),
           );
         }
-        if (params.source_type) results = results.filter((i) => i.source_type === params.source_type);
-        if (params.source_collection) results = results.filter((i) => i.source_collection === params.source_collection);
-        if (params.extraction_model) results = results.filter((i) => i.extraction_model === params.extraction_model);
-        if (params.maturity_relevance) results = results.filter((i) => i.maturity_relevance === params.maturity_relevance);
-        if (params.intent_label) results = results.filter((i) => (i.intent_labels ?? []).includes(params.intent_label as string));
-        if (params.scenario_tag) results = results.filter((i) => (i.scenario_tags ?? []).includes(params.scenario_tag as string));
-        if (params.serving_tier) results = results.filter((i) => (i.serving_tier ?? 'canonical') === params.serving_tier);
-        if (params.evidence_scope) results = results.filter((i) => (i.evidence_scope ?? []).includes(params.evidence_scope as string));
+        if (params.source_type)
+          results = results.filter((i) => i.source_type === params.source_type);
+        if (params.source_collection)
+          results = results.filter(
+            (i) => i.source_collection === params.source_collection,
+          );
+        if (params.extraction_model)
+          results = results.filter(
+            (i) => i.extraction_model === params.extraction_model,
+          );
+        if (params.maturity_relevance)
+          results = results.filter(
+            (i) => i.maturity_relevance === params.maturity_relevance,
+          );
+        if (params.intent_label)
+          results = results.filter((i) =>
+            (i.intent_labels ?? []).includes(params.intent_label as string),
+          );
+        if (params.scenario_tag)
+          results = results.filter((i) =>
+            (i.scenario_tags ?? []).includes(params.scenario_tag as string),
+          );
+        if (params.serving_tier)
+          results = results.filter(
+            (i) => (i.serving_tier ?? "canonical") === params.serving_tier,
+          );
+        if (params.evidence_scope)
+          results = results.filter((i) =>
+            (i.evidence_scope ?? []).includes(params.evidence_scope as string),
+          );
         if (params.sort_by === "source_date") {
           const dir = params.sort_order === "asc" ? 1 : -1;
-          results.sort((a, b) => dir * a.source_date.localeCompare(b.source_date));
+          results.sort(
+            (a, b) => dir * a.source_date.localeCompare(b.source_date),
+          );
         }
         const offset = (params.offset as number) ?? 0;
         const limit = (params.limit as number) ?? 20;
-        return { items: results.slice(offset, offset + limit), total: results.length };
+        return {
+          items: results.slice(offset, offset + limit),
+          total: results.length,
+        };
       },
       categories: () => ["SEO Technical", "On-Page SEO", "SEO Strategy"],
       collections: () => [
         { source_collection: "seo-meetings", source_type: "meeting", count: 4 },
-        { source_collection: "genehong-medium", source_type: "article", count: 1 },
+        {
+          source_collection: "genehong-medium",
+          source_type: "article",
+          count: 1,
+        },
       ],
     },
   };
@@ -56,7 +94,12 @@ vi.mock("../../src/config.js", () => ({
     RATE_LIMIT_GENERATE: 1000,
     PORT: 8002,
   },
-  paths: { outputDir: "/tmp", sessionsDir: "/tmp/sessions-qa-test", scriptsDir: "/tmp/scripts", rootDir: "/tmp" },
+  paths: {
+    outputDir: "/tmp",
+    sessionsDir: "/tmp/sessions-qa-test",
+    scriptsDir: "/tmp/scripts",
+    rootDir: "/tmp",
+  },
 }));
 
 let app: Hono;
@@ -129,20 +172,28 @@ describe("GET /api/v1/qa", () => {
   });
 
   it("sorts by source_date ascending", async () => {
-    const res = await app.request("/api/v1/qa?sort_by=source_date&sort_order=asc");
+    const res = await app.request(
+      "/api/v1/qa?sort_by=source_date&sort_order=asc",
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
-    const dates = body.data.items.map((i: { source_date: string }) => i.source_date);
+    const dates = body.data.items.map(
+      (i: { source_date: string }) => i.source_date,
+    );
     for (let i = 1; i < dates.length; i++) {
       expect(dates[i] >= dates[i - 1]).toBe(true);
     }
   });
 
   it("sorts by source_date descending", async () => {
-    const res = await app.request("/api/v1/qa?sort_by=source_date&sort_order=desc");
+    const res = await app.request(
+      "/api/v1/qa?sort_by=source_date&sort_order=desc",
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
-    const dates = body.data.items.map((i: { source_date: string }) => i.source_date);
+    const dates = body.data.items.map(
+      (i: { source_date: string }) => i.source_date,
+    );
     for (let i = 1; i < dates.length; i++) {
       expect(dates[i] <= dates[i - 1]).toBe(true);
     }
@@ -159,7 +210,9 @@ describe("GET /api/v1/qa", () => {
   });
 
   it("filters by source_collection", async () => {
-    const res = await app.request("/api/v1/qa?source_collection=genehong-medium");
+    const res = await app.request(
+      "/api/v1/qa?source_collection=genehong-medium",
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.total).toBe(1);
@@ -178,7 +231,9 @@ describe("GET /api/v1/qa", () => {
       expect(item).toHaveProperty("source_url");
     }
     // article item should have populated source_url
-    const article = body.data.items.find((i: { source_type: string }) => i.source_type === "article");
+    const article = body.data.items.find(
+      (i: { source_type: string }) => i.source_type === "article",
+    );
     expect(article).toBeDefined();
     expect(article.source_url).toContain("genehong.medium.com");
   });
@@ -262,7 +317,9 @@ describe("GET /api/v1/qa", () => {
       expect(item).toHaveProperty("maturity_relevance");
     }
     // First item should have L1
-    const firstItem = body.data.items.find((i: { id: string }) => i.id === "a1b2c3d4e5f67890");
+    const firstItem = body.data.items.find(
+      (i: { id: string }) => i.id === "a1b2c3d4e5f67890",
+    );
     expect(firstItem.maturity_relevance).toBe("L1");
   });
 
@@ -300,14 +357,16 @@ describe("GET /api/v1/qa/collections", () => {
     const body = await res.json();
     expect(body.data.collections).toHaveLength(2);
     const seoMeetings = body.data.collections.find(
-      (c: { source_collection: string }) => c.source_collection === "seo-meetings",
+      (c: { source_collection: string }) =>
+        c.source_collection === "seo-meetings",
     );
     expect(seoMeetings).toBeDefined();
     expect(seoMeetings.source_type).toBe("meeting");
     expect(seoMeetings.count).toBe(4);
 
     const medium = body.data.collections.find(
-      (c: { source_collection: string }) => c.source_collection === "genehong-medium",
+      (c: { source_collection: string }) =>
+        c.source_collection === "genehong-medium",
     );
     expect(medium).toBeDefined();
     expect(medium.source_type).toBe("article");

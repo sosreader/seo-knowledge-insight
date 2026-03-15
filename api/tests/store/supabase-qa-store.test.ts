@@ -269,7 +269,8 @@ describe("SupabaseQAStore", () => {
         categories: ["索引與檢索", "技術SEO"],
         scenario_tags: ["video-seo"],
         retrieval_phrases: ["videoobject structured data", "video appearance"],
-        retrieval_surface_text: "videoobject structured data video appearance json-ld",
+        retrieval_surface_text:
+          "videoobject structured data video appearance json-ld",
       },
       {
         ...FAKE_ROWS[0],
@@ -289,7 +290,10 @@ describe("SupabaseQAStore", () => {
     const localStore = new SupabaseQAStore();
     await localStore.load();
 
-    const [first] = localStore.keywordSearch("影片 SEO VideoObject 結構化資料 影片索引", 2);
+    const [first] = localStore.keywordSearch(
+      "影片 SEO VideoObject 結構化資料 影片索引",
+      2,
+    );
     expect(first).toBeDefined();
     expect(first!.item.id).toBe("video-metadata");
   });

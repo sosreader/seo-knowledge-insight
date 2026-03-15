@@ -47,12 +47,21 @@ const filterHitsByMetadata = (
   } = filters;
 
   return hits.filter(({ item }) => {
-    if (extraction_model && item.extraction_model !== extraction_model) return false;
-    if (primary_category && (item.primary_category ?? item.category) !== primary_category) return false;
-    if (intent_label && !(item.intent_labels ?? []).includes(intent_label)) return false;
-    if (scenario_tag && !(item.scenario_tags ?? []).includes(scenario_tag)) return false;
-    if (serving_tier && (item.serving_tier ?? "canonical") !== serving_tier) return false;
-    if (evidence_scope && !(item.evidence_scope ?? []).includes(evidence_scope)) return false;
+    if (extraction_model && item.extraction_model !== extraction_model)
+      return false;
+    if (
+      primary_category &&
+      (item.primary_category ?? item.category) !== primary_category
+    )
+      return false;
+    if (intent_label && !(item.intent_labels ?? []).includes(intent_label))
+      return false;
+    if (scenario_tag && !(item.scenario_tags ?? []).includes(scenario_tag))
+      return false;
+    if (serving_tier && (item.serving_tier ?? "canonical") !== serving_tier)
+      return false;
+    if (evidence_scope && !(item.evidence_scope ?? []).includes(evidence_scope))
+      return false;
     return true;
   });
 };
@@ -85,8 +94,7 @@ searchRoute.post("/", async (c) => {
     scenario_tag,
     serving_tier,
     evidence_scope,
-  } =
-    parsed.data;
+  } = parsed.data;
   const maturityLevel = parseMaturityLevel(maturity_level);
 
   const mapResults = (hits: ReadonlyArray<{ item: QAItem; score: number }>) => {
@@ -95,15 +103,20 @@ searchRoute.post("/", async (c) => {
 
     return hits.map(({ item, score }, index) => {
       const allCategories = item.categories ?? [item.category];
-      const matchedCategories = allCategories.filter((category) => queryCategories.has(category));
+      const matchedCategories = allCategories.filter((category) =>
+        queryCategories.has(category),
+      );
       const primaryCategory = item.primary_category ?? item.category;
       const preferredCategory =
         index === 0
           ? primaryCategory
-          : matchedCategories.find((category) => !usedQueryCategories.has(category)) ??
+          : (matchedCategories.find(
+              (category) => !usedQueryCategories.has(category),
+            ) ??
             matchedCategories[0] ??
-            primaryCategory;
-      if (queryCategories.has(preferredCategory)) usedQueryCategories.add(preferredCategory);
+            primaryCategory);
+      if (queryCategories.has(preferredCategory))
+        usedQueryCategories.add(preferredCategory);
 
       return {
         id: item.id,
@@ -135,7 +148,9 @@ searchRoute.post("/", async (c) => {
   if (hasOpenAI()) {
     try {
       const embedding = await getEmbedding(query);
-      const retrievalTopK = extraction_model ? top_k * MODEL_FILTER_OVERFETCH : top_k;
+      const retrievalTopK = extraction_model
+        ? top_k * MODEL_FILTER_OVERFETCH
+        : top_k;
       const hits = await qaStore.hybridSearch(
         query,
         embedding,
@@ -150,7 +165,10 @@ searchRoute.post("/", async (c) => {
         serving_tier,
         evidence_scope,
       }).slice(0, top_k);
-      const boostedHits = applyMaturityBoost(filteredHits, maturityLevel).slice(0, top_k);
+      const boostedHits = applyMaturityBoost(filteredHits, maturityLevel).slice(
+        0,
+        top_k,
+      );
       trackHits(boostedHits);
       const results = mapResults(boostedHits);
       return c.json(
@@ -170,7 +188,9 @@ searchRoute.post("/", async (c) => {
   }
 
   // Native TypeScript keyword search — in-memory, no OpenAI required
-  const retrievalTopK = extraction_model ? top_k * MODEL_FILTER_OVERFETCH : top_k;
+  const retrievalTopK = extraction_model
+    ? top_k * MODEL_FILTER_OVERFETCH
+    : top_k;
   const hits = qaStore.keywordSearch(query, retrievalTopK, category ?? null);
   const filteredHits = filterHitsByMetadata(hits, {
     extraction_model,
@@ -180,7 +200,10 @@ searchRoute.post("/", async (c) => {
     serving_tier,
     evidence_scope,
   }).slice(0, top_k);
-  const boostedHits = applyMaturityBoost(filteredHits, maturityLevel).slice(0, top_k);
+  const boostedHits = applyMaturityBoost(filteredHits, maturityLevel).slice(
+    0,
+    top_k,
+  );
   trackHits(boostedHits);
   const results = mapResults(boostedHits);
   return c.json(

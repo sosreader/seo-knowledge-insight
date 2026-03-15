@@ -6,23 +6,23 @@
 
 ## 分類索引
 
-| 檔案                                                             | 主題                                                                        |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| [01-ai-fundamentals.md](./01-ai-fundamentals.md)                 | LLM / Token / Prompt / Structured Output / Embedding / Cosine               |
-| [02-rag-and-search.md](./02-rag-and-search.md)                   | RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標                         |
-| [03-evaluation.md](./03-evaluation.md)                           | LLM-as-Judge / Reasoning Model / 評估維度 / Judge 設計原則                  |
-| [04-prompting.md](./04-prompting.md)                             | Prompt Engineering 進階（業界最佳實踐）                                     |
-| [05-models.md](./05-models.md)                                   | 模型選擇決策 / Embedding 模型比較                                           |
-| [06-project-architecture.md](./06-project-architecture.md)       | 本專案架構 / Pipeline 全景 / 技術決策學術支撐                               |
-| [06a-architecture-changelog.md](./06a-architecture-changelog.md) | 架構變更紀錄（Changelog），每次架構調整後新增一行                           |
-| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.24，Lambda + Supabase pgvector）                            |
-| [06c-backend-onboarding.md](./06c-backend-onboarding.md)         | 後端 API 入門導讀 — 從零理解分層架構、請求流程、雙模式設計                  |
-| [07-deployment.md](./07-deployment.md)                           | Hono API 部署 / Lambda + Function URL / Supabase 遷移 / App Runner（已淘汰）|
-| [08-fetch-optimization.md](./08-fetch-optimization.md)           | Fetch 優化 / Notion 增量 / Medium Scrapling / 多來源爬取架構                |
-| [08-local-fallback.md](./08-local-fallback.md)                   | 無 OpenAI / 舊 schema / timeout 場景下的 local fallback 設計與邊界         |
-| [09-retrieval-dimensions.md](./09-retrieval-dimensions.md)       | Retrieval metadata 欄位、runtime re-rank 邏輯與 migration/fallback 策略    |
-| [09-provider-comparison.md](./09-provider-comparison.md)         | AI Provider 輸出品質比較方法論與歷次跑分結果                                |
-| [10-multi-layer-context.md](./10-multi-layer-context.md)         | Multi-Layer Context / enrichment / 同義詞擴展 / 時效性衰減 / Learning Store |
+| 檔案                                                             | 主題                                                                         |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [01-ai-fundamentals.md](./01-ai-fundamentals.md)                 | LLM / Token / Prompt / Structured Output / Embedding / Cosine                |
+| [02-rag-and-search.md](./02-rag-and-search.md)                   | RAG / Hybrid Search / RAG 框架比較 / Retrieval 指標                          |
+| [03-evaluation.md](./03-evaluation.md)                           | LLM-as-Judge / Reasoning Model / 評估維度 / Judge 設計原則                   |
+| [04-prompting.md](./04-prompting.md)                             | Prompt Engineering 進階（業界最佳實踐）                                      |
+| [05-models.md](./05-models.md)                                   | 模型選擇決策 / Embedding 模型比較                                            |
+| [06-project-architecture.md](./06-project-architecture.md)       | 本專案架構 / Pipeline 全景 / 技術決策學術支撐                                |
+| [06a-architecture-changelog.md](./06a-architecture-changelog.md) | 架構變更紀錄（Changelog），每次架構調整後新增一行                            |
+| [06b-architecture-diagram.md](./06b-architecture-diagram.md)     | Mermaid 架構圖 + 更新 SOP（最新 v2.24，Lambda + Supabase pgvector）          |
+| [06c-backend-onboarding.md](./06c-backend-onboarding.md)         | 後端 API 入門導讀 — 從零理解分層架構、請求流程、雙模式設計                   |
+| [07-deployment.md](./07-deployment.md)                           | Hono API 部署 / Lambda + Function URL / Supabase 遷移 / App Runner（已淘汰） |
+| [08-fetch-optimization.md](./08-fetch-optimization.md)           | Fetch 優化 / Notion 增量 / Medium Scrapling / 多來源爬取架構                 |
+| [08-local-fallback.md](./08-local-fallback.md)                   | 無 OpenAI / 舊 schema / timeout 場景下的 local fallback 設計與邊界           |
+| [09-retrieval-dimensions.md](./09-retrieval-dimensions.md)       | Retrieval metadata 欄位、runtime re-rank 邏輯與 migration/fallback 策略      |
+| [09-provider-comparison.md](./09-provider-comparison.md)         | AI Provider 輸出品質比較方法論與歷次跑分結果                                 |
+| [10-multi-layer-context.md](./10-multi-layer-context.md)         | Multi-Layer Context / enrichment / 同義詞擴展 / 時效性衰減 / Learning Store  |
 
 ---
 
@@ -45,43 +45,43 @@
 
 這個 index 不再維護完整即時指標表；最新狀態以 [06a-architecture-changelog.md](./06a-architecture-changelog.md) 與各主題研究文件為準。2026-03-15 目前已確認的關鍵狀態如下：
 
-| 指標 | 數值 | 說明 |
-| ---- | ---- | ---- |
-| Q&A 總量 | **1,809 筆** | 目前 serving / enrichment artifact 的最新規模 |
-| L4 佔比 | **155 / 1809 = 8.57%** | 2026-03-15 classifier refinement 後重新驗證 |
-| Python 測試 | **430 passed, 1 warning** | 全量 pytest 驗證 |
-| API 測試 | **628 passed / 58 files** | Hono TypeScript Vitest 驗證 |
-| 重要新能力 | local fallback / retrieval dimensions / maturity backfill | 詳見 [08-local-fallback.md](./08-local-fallback.md)、[09-retrieval-dimensions.md](./09-retrieval-dimensions.md)、[03-evaluation.md](./03-evaluation.md) |
+| 指標        | 數值                                                      | 說明                                                                                                                                                    |
+| ----------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q&A 總量    | **1,809 筆**                                              | 目前 serving / enrichment artifact 的最新規模                                                                                                           |
+| L4 佔比     | **155 / 1809 = 8.57%**                                    | 2026-03-15 classifier refinement 後重新驗證                                                                                                             |
+| Python 測試 | **430 passed, 1 warning**                                 | 全量 pytest 驗證                                                                                                                                        |
+| API 測試    | **628 passed / 58 files**                                 | Hono TypeScript Vitest 驗證                                                                                                                             |
+| 重要新能力  | local fallback / retrieval dimensions / maturity backfill | 詳見 [08-local-fallback.md](./08-local-fallback.md)、[09-retrieval-dimensions.md](./09-retrieval-dimensions.md)、[03-evaluation.md](./03-evaluation.md) |
 
 ---
 
 ## 歷史快照（2026-03-06，v2.24 — Supabase pgvector + Lambda 部署）
 
-| 指標                   | 數值       | 說明                                                      |
-| ---------------------- | ---------- | --------------------------------------------------------- |
-| Q&A 總量               | **1,323 筆** | 4 來源：notion-seo-meetings 584、medium-genehong 511、ithelp-gsc-kpi 185、google-case-studies 43 |
-| QA ID 格式             | 16-char hex | stable_id（SHA256[:16]），取代 sequential int             |
-| Hit Rate               | **100%**   | top-k=5，20 cases（keyword-retrieval group）             |
-| KW Hit Rate            | **73%**    | CJK n-gram + synonym 展開（目標 ≥ 85%；中間目標 78%+）  |
-| Precision@K            | **76%**    | category-level（目標 ≥ 80%）                              |
-| Recall@K               | **77.5%**  | （目標 ≥ 80%）                                            |
-| F1 Score               | **0.74**   | Precision/Recall 調和平均                                 |
-| NDCG@K                 | **0.72**   | v2.13 bug 修正後（≤ 1）                                  |
-| freshness_rank_quality | **1.0**    | 時效衰減正常，舊文件未擠掉新文件                          |
-| synonym_coverage       | **1.0**    | 所有 Q&A 已完成 enrichment                               |
-| avg_synonyms / Q&A     | 11.09      | enrichment 後平均同義詞數                                |
-| avg_freshness          | 0.9076     | 知識庫整體新鮮度（max=1.0）                              |
-| MRR                    | **0.88**   | 平均倒數排名（v2.12）                                    |
-| Relevance              | **5.00** / 5 | Claude Code as Judge（v2.12）                           |
-| Accuracy               | **4.30** / 5 | Claude Code as Judge（v2.12）                           |
-| Completeness           | **3.95** / 5 | Claude Code as Judge（v2.12）                           |
-| Context Relevance      | **0.32**（1 query）| NVIDIA style，keyword fallback（v2.12）          |
-| Faithfulness           | 待測       | RAGAS，v2.13 `/evaluate-faithfulness-local`（目標 ≥ 0.80）|
-| Context Precision      | 待測       | RAGAS，v2.13 `/evaluate-context-precision-local`（目標 ≥ 0.70）|
-| **Test 通過率**        | **368/368** | Hono TypeScript Vitest（39 test files，v2.25）           |
-| **API endpoints**      | **32 個**   | 9 routers：qa/search/chat/reports/sessions/feedback/pipeline(16)/synonyms/health |
-| **部署**               | **Lambda + Function URL** | arm64，~$0/月（free tier），ap-northeast-1       |
-| **Observability**      | **完備**    | Laminar traces + Audit logs + Scoring events（三柱）     |
+| 指標                   | 數值                      | 說明                                                                                             |
+| ---------------------- | ------------------------- | ------------------------------------------------------------------------------------------------ |
+| Q&A 總量               | **1,323 筆**              | 4 來源：notion-seo-meetings 584、medium-genehong 511、ithelp-gsc-kpi 185、google-case-studies 43 |
+| QA ID 格式             | 16-char hex               | stable_id（SHA256[:16]），取代 sequential int                                                    |
+| Hit Rate               | **100%**                  | top-k=5，20 cases（keyword-retrieval group）                                                     |
+| KW Hit Rate            | **73%**                   | CJK n-gram + synonym 展開（目標 ≥ 85%；中間目標 78%+）                                           |
+| Precision@K            | **76%**                   | category-level（目標 ≥ 80%）                                                                     |
+| Recall@K               | **77.5%**                 | （目標 ≥ 80%）                                                                                   |
+| F1 Score               | **0.74**                  | Precision/Recall 調和平均                                                                        |
+| NDCG@K                 | **0.72**                  | v2.13 bug 修正後（≤ 1）                                                                          |
+| freshness_rank_quality | **1.0**                   | 時效衰減正常，舊文件未擠掉新文件                                                                 |
+| synonym_coverage       | **1.0**                   | 所有 Q&A 已完成 enrichment                                                                       |
+| avg_synonyms / Q&A     | 11.09                     | enrichment 後平均同義詞數                                                                        |
+| avg_freshness          | 0.9076                    | 知識庫整體新鮮度（max=1.0）                                                                      |
+| MRR                    | **0.88**                  | 平均倒數排名（v2.12）                                                                            |
+| Relevance              | **5.00** / 5              | Claude Code as Judge（v2.12）                                                                    |
+| Accuracy               | **4.30** / 5              | Claude Code as Judge（v2.12）                                                                    |
+| Completeness           | **3.95** / 5              | Claude Code as Judge（v2.12）                                                                    |
+| Context Relevance      | **0.32**（1 query）       | NVIDIA style，keyword fallback（v2.12）                                                          |
+| Faithfulness           | 待測                      | RAGAS，v2.13 `/evaluate-faithfulness-local`（目標 ≥ 0.80）                                       |
+| Context Precision      | 待測                      | RAGAS，v2.13 `/evaluate-context-precision-local`（目標 ≥ 0.70）                                  |
+| **Test 通過率**        | **368/368**               | Hono TypeScript Vitest（39 test files，v2.25）                                                   |
+| **API endpoints**      | **32 個**                 | 9 routers：qa/search/chat/reports/sessions/feedback/pipeline(16)/synonyms/health                 |
+| **部署**               | **Lambda + Function URL** | arm64，~$0/月（free tier），ap-northeast-1                                                       |
+| **Observability**      | **完備**                  | Laminar traces + Audit logs + Scoring events（三柱）                                             |
 
 ---
 

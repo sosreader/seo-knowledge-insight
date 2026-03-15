@@ -52,12 +52,20 @@ export function filterAndPaginateQa(
   let results: readonly QAItem[] = items;
 
   if (category) {
-    const catSet = new Set(category.includes(",") ? category.split(",") : [category]);
+    const catSet = new Set(
+      category.includes(",") ? category.split(",") : [category],
+    );
     results = results.filter((i) => catSet.has(i.category));
   }
   if (primary_category) {
-    const primarySet = new Set(primary_category.includes(",") ? primary_category.split(",") : [primary_category]);
-    results = results.filter((i) => primarySet.has(i.primary_category ?? i.category));
+    const primarySet = new Set(
+      primary_category.includes(",")
+        ? primary_category.split(",")
+        : [primary_category],
+    );
+    results = results.filter((i) =>
+      primarySet.has(i.primary_category ?? i.category),
+    );
   }
   if (keyword) {
     const kwLower = keyword.toLowerCase();
@@ -69,7 +77,9 @@ export function filterAndPaginateQa(
     );
   }
   if (difficulty) {
-    const diffSet = new Set(difficulty.includes(",") ? difficulty.split(",") : [difficulty]);
+    const diffSet = new Set(
+      difficulty.includes(",") ? difficulty.split(",") : [difficulty],
+    );
     results = results.filter((i) => diffSet.has(i.difficulty));
   }
   if (evergreen !== null && evergreen !== undefined) {
@@ -85,23 +95,41 @@ export function filterAndPaginateQa(
     results = results.filter((i) => i.extraction_model === extraction_model);
   }
   if (maturity_relevance) {
-    results = results.filter((i) => i.maturity_relevance === maturity_relevance);
+    results = results.filter(
+      (i) => i.maturity_relevance === maturity_relevance,
+    );
   }
   if (intent_label) {
-    const intentSet = new Set(intent_label.includes(",") ? intent_label.split(",") : [intent_label]);
-    results = results.filter((i) => (i.intent_labels ?? []).some((label) => intentSet.has(label)));
+    const intentSet = new Set(
+      intent_label.includes(",") ? intent_label.split(",") : [intent_label],
+    );
+    results = results.filter((i) =>
+      (i.intent_labels ?? []).some((label) => intentSet.has(label)),
+    );
   }
   if (scenario_tag) {
-    const scenarioSet = new Set(scenario_tag.includes(",") ? scenario_tag.split(",") : [scenario_tag]);
-    results = results.filter((i) => (i.scenario_tags ?? []).some((tag) => scenarioSet.has(tag)));
+    const scenarioSet = new Set(
+      scenario_tag.includes(",") ? scenario_tag.split(",") : [scenario_tag],
+    );
+    results = results.filter((i) =>
+      (i.scenario_tags ?? []).some((tag) => scenarioSet.has(tag)),
+    );
   }
   if (serving_tier) {
-    const tierSet = new Set(serving_tier.includes(",") ? serving_tier.split(",") : [serving_tier]);
+    const tierSet = new Set(
+      serving_tier.includes(",") ? serving_tier.split(",") : [serving_tier],
+    );
     results = results.filter((i) => tierSet.has(i.serving_tier ?? "canonical"));
   }
   if (evidence_scope) {
-    const scopeSet = new Set(evidence_scope.includes(",") ? evidence_scope.split(",") : [evidence_scope]);
-    results = results.filter((i) => (i.evidence_scope ?? []).some((scope) => scopeSet.has(scope)));
+    const scopeSet = new Set(
+      evidence_scope.includes(",")
+        ? evidence_scope.split(",")
+        : [evidence_scope],
+    );
+    results = results.filter((i) =>
+      (i.evidence_scope ?? []).some((scope) => scopeSet.has(scope)),
+    );
   }
 
   if (sort_by === "source_date") {
@@ -116,32 +144,49 @@ export function filterAndPaginateQa(
     results = sorted;
   }
 
-  return { items: results.slice(offset, offset + limit), total: results.length };
+  return {
+    items: results.slice(offset, offset + limit),
+    total: results.length,
+  };
 }
 
-export function categoriesFromItems(items: readonly QAItem[]): readonly string[] {
+export function categoriesFromItems(
+  items: readonly QAItem[],
+): readonly string[] {
   const counts = new Map<string, number>();
   for (const item of items) {
     counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
   }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([cat]) => cat);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([cat]) => cat);
 }
 
 export function collectionsFromItems(
   items: readonly QAItem[],
-): ReadonlyArray<{ source_collection: string; source_type: string; count: number }> {
+): ReadonlyArray<{
+  source_collection: string;
+  source_type: string;
+  count: number;
+}> {
   const counts = new Map<string, { source_type: string; count: number }>();
   for (const item of items) {
     const existing = counts.get(item.source_collection);
     if (existing) {
-      counts.set(item.source_collection, { source_type: existing.source_type, count: existing.count + 1 });
+      counts.set(item.source_collection, {
+        source_type: existing.source_type,
+        count: existing.count + 1,
+      });
     } else {
-      counts.set(item.source_collection, { source_type: item.source_type, count: 1 });
+      counts.set(item.source_collection, {
+        source_type: item.source_type,
+        count: 1,
+      });
     }
   }
   return [...counts.entries()]
     .sort((a, b) => b[1].count - a[1].count)
-    .map(([collection, { source_type, count }]) => ({ source_collection: collection, source_type, count }));
+    .map(([collection, { source_type, count }]) => ({
+      source_collection: collection,
+      source_type,
+      count,
+    }));
 }

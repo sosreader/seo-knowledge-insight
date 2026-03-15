@@ -9,7 +9,10 @@ const FAKE_QA: readonly QADict[] = [
     answer: "LCP measures loading performance.",
     keywords: ["LCP", "Core Web Vitals"],
     category: "Technical",
-    _enrichment: { synonyms: ["largest contentful paint"], freshness_score: 1.0 },
+    _enrichment: {
+      synonyms: ["largest contentful paint"],
+      freshness_score: 1.0,
+    },
   },
   {
     id: "bb",
@@ -32,16 +35,25 @@ const FAKE_QA: readonly QADict[] = [
 // 3 items x 4 dims (simple deterministic embeddings)
 const DIM = 4;
 const EMB = new Float32Array([
-  1, 0, 0, 0, // item 0: along x-axis
-  0, 1, 0, 0, // item 1: along y-axis
-  0, 0, 1, 0, // item 2: along z-axis
+  1,
+  0,
+  0,
+  0, // item 0: along x-axis
+  0,
+  1,
+  0,
+  0, // item 1: along y-axis
+  0,
+  0,
+  1,
+  0, // item 2: along z-axis
 ]);
 
 describe("SearchEngine", () => {
   it("throws if embeddings size mismatches", () => {
-    expect(
-      () => new SearchEngine(FAKE_QA, new Float32Array(10), 4),
-    ).toThrow("qaPairs");
+    expect(() => new SearchEngine(FAKE_QA, new Float32Array(10), 4)).toThrow(
+      "qaPairs",
+    );
   });
 
   it("returns results sorted by score descending", () => {
@@ -97,14 +109,16 @@ describe("SearchEngine", () => {
       {
         id: "video",
         question: "How to implement VideoObject structured data?",
-        answer: "Use JSON-LD VideoObject markup and monitor Video Appearance eligibility.",
+        answer:
+          "Use JSON-LD VideoObject markup and monitor Video Appearance eligibility.",
         keywords: ["VideoObject", "structured data", "video"],
         category: "索引與檢索",
         primary_category: "索引與檢索",
         categories: ["索引與檢索", "技術SEO"],
         scenario_tags: ["video-seo"],
         retrieval_phrases: ["videoobject structured data", "video appearance"],
-        retrieval_surface_text: "VideoObject structured data video appearance json-ld",
+        retrieval_surface_text:
+          "VideoObject structured data video appearance json-ld",
         _enrichment: { synonyms: [], freshness_score: 1.0 },
       },
       {
@@ -120,13 +134,20 @@ describe("SearchEngine", () => {
         _enrichment: { synonyms: [], freshness_score: 1.0 },
       },
     ];
-    const engine = new SearchEngine(qa, new Float32Array([
-      1, 0, 0, 0,
-      1, 0, 0, 0,
-    ]), DIM);
+    const engine = new SearchEngine(
+      qa,
+      new Float32Array([1, 0, 0, 0, 1, 0, 0, 0]),
+      DIM,
+    );
     const queryEmb = normalizeL2(new Float32Array([1, 0, 0, 0]));
 
-    const results = engine.search("影片 SEO VideoObject 結構化資料 影片索引", queryEmb, 2, null, 0);
+    const results = engine.search(
+      "影片 SEO VideoObject 結構化資料 影片索引",
+      queryEmb,
+      2,
+      null,
+      0,
+    );
 
     expect(results[0]!.qa.id).toBe("video");
   });
@@ -136,14 +157,16 @@ describe("SearchEngine", () => {
       {
         id: "ai-traffic",
         question: "How to track ChatGPT and Perplexity traffic share?",
-        answer: "Use GA4 referral analysis to monitor AI traffic share across ChatGPT, Perplexity, and Gemini.",
+        answer:
+          "Use GA4 referral analysis to monitor AI traffic share across ChatGPT, Perplexity, and Gemini.",
         keywords: ["ChatGPT", "Perplexity", "Gemini", "AI traffic"],
         category: "搜尋表現分析",
         primary_category: "搜尋表現分析",
         categories: ["搜尋表現分析", "GA與數據追蹤", "演算法與趨勢"],
         scenario_tags: ["ai-referral-traffic"],
         retrieval_phrases: ["ai traffic share", "chatgpt perplexity gemini"],
-        retrieval_surface_text: "chatgpt perplexity gemini ai traffic share ga4 referral",
+        retrieval_surface_text:
+          "chatgpt perplexity gemini ai traffic share ga4 referral",
         _enrichment: { synonyms: [], freshness_score: 1.0 },
       },
       {
@@ -159,13 +182,20 @@ describe("SearchEngine", () => {
         _enrichment: { synonyms: [], freshness_score: 1.0 },
       },
     ];
-    const engine = new SearchEngine(qa, new Float32Array([
-      1, 0, 0, 0,
-      1, 0, 0, 0,
-    ]), DIM);
+    const engine = new SearchEngine(
+      qa,
+      new Float32Array([1, 0, 0, 0, 1, 0, 0, 0]),
+      DIM,
+    );
     const queryEmb = normalizeL2(new Float32Array([1, 0, 0, 0]));
 
-    const results = engine.search("AI 流量佔比 ChatGPT Perplexity Gemini AI SEO 策略", queryEmb, 2, null, 0);
+    const results = engine.search(
+      "AI 流量佔比 ChatGPT Perplexity Gemini AI SEO 策略",
+      queryEmb,
+      2,
+      null,
+      0,
+    );
 
     expect(results[0]!.qa.id).toBe("ai-traffic");
   });
@@ -209,14 +239,20 @@ describe("SearchEngine", () => {
         _enrichment: { synonyms: [], freshness_score: 1.0 },
       },
     ];
-    const engine = new SearchEngine(qa, new Float32Array([
-      1, 0, 0, 0,
-      1, 0, 0, 0,
-      1, 0, 0, 0,
-    ]), DIM);
+    const engine = new SearchEngine(
+      qa,
+      new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]),
+      DIM,
+    );
     const queryEmb = normalizeL2(new Float32Array([1, 0, 0, 0]));
 
-    const results = engine.search("檢索未索引增加 WAF 封鎖 Googlebot canonical", queryEmb, 3, null, 0);
+    const results = engine.search(
+      "檢索未索引增加 WAF 封鎖 Googlebot canonical",
+      queryEmb,
+      3,
+      null,
+      0,
+    );
 
     expect(results[0]!.qa.id).toBe("waf");
     expect(results[1]!.qa.id).toBe("canonical");

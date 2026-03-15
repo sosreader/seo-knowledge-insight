@@ -1416,9 +1416,9 @@ eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboar
 #### Layer 2 — keyword-retrieval group（8 evaluators）
 
 | 評估器                             | 計算方式                                         | 學術依據                     |
-| ---------------------------------- | ------------------------------------------------ | ---------------------------- |
-| `precision_evaluator`              | `|relevant ∩ retrieved| / K`                     | IR 標準（Voorhees）          |
-| `recall_evaluator`                 | `|expected ∩ retrieved| / len(expected)`         | IR 標準                      |
+| ---------------------------------- | ------------------------------------------------ | ---------------------------- | ---------------- | ------------------- |
+| `precision_evaluator`              | `                                                | relevant ∩ retrieved         | / K`             | IR 標準（Voorhees） |
+| `recall_evaluator`                 | `                                                | expected ∩ retrieved         | / len(expected)` | IR 標準             |
 | `f1_evaluator`                     | `2×P×R/(P+R)`                                    | IR 標準                      |
 | `hit_rate_evaluator`               | `1.0 if any match else 0.0`                      | TREC                         |
 | `mrr_evaluator`                    | `1 / rank_of_first_match`                        | TREC                         |
