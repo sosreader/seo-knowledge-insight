@@ -234,6 +234,9 @@ def main(args: argparse.Namespace) -> None:
         config.RAW_MEDIUM_MD_DIR,
         config.RAW_ITHELP_MD_DIR,
         config.RAW_GOOGLE_CASES_MD_DIR,
+        config.RAW_AHREFS_MD_DIR,
+        config.RAW_SEJ_MD_DIR,
+        config.RAW_GROWTHMEMO_MD_DIR,
     ]
 
     if args.file:

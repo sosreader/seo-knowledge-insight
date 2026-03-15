@@ -111,6 +111,7 @@ def _group_by_collection(qa_pairs: list[dict]) -> dict[str, list[dict]]:
 def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
     """Collection-scoped 去重：各 collection 內部獨立 dedup，跨 collection 不 dedup。"""
     threshold = config.SIMILARITY_THRESHOLD
+    use_remote_llm = bool(os.getenv("OPENAI_API_KEY", "").strip())
     logger.info("去重分析（相似度閾值: %s）", threshold)
     logger.info("原始 Q&A 數量: %d", len(qa_pairs))
 
@@ -170,7 +171,8 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
                         "merge_note": f"合併失敗，共 {len(group_qas)} 筆相似",
                     })
 
-                time.sleep(0.5)
+                if use_remote_llm:
+                    time.sleep(0.5)
 
         logger.info("去重後: %d 筆", len(result))
         all_result.extend(result)
@@ -182,6 +184,7 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
 @observe(name="classify_all_qas")
 def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
     """對每個 Q&A 加分類標籤（回傳新 list，不直接修改傳入的 list）"""
+    use_remote_llm = bool(os.getenv("OPENAI_API_KEY", "").strip())
     logger.info("分類標籤（共 %d 個 Q&A）", len(qa_pairs))
 
     result: list[dict] = []
@@ -204,7 +207,8 @@ def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
             }
 
         result.append(new_qa)
-        time.sleep(0.3)  # rate limit
+        if use_remote_llm:
+            time.sleep(0.3)  # rate limit
 
     # 統計
     categories: dict[str, int] = {}
@@ -271,7 +275,7 @@ def main(args: argparse.Namespace) -> None:
                 hint="請先執行 python scripts/02_extract_qa.py",
             ),
         ],
-        env_keys=["OPENAI_API_KEY"],
+        env_keys=["OPENAI_API_KEY"] if os.getenv("OPENAI_API_KEY", "").strip() else [],
         step_name="Step 3: 去重 + 分類",
         check_only=getattr(args, "check", False),
     )

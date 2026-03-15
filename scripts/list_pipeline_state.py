@@ -40,6 +40,9 @@ def _find_source_markdown(source_file: str) -> Path | None:
         config.RAW_MEDIUM_MD_DIR,
         config.RAW_ITHELP_MD_DIR,
         config.RAW_GOOGLE_CASES_MD_DIR,
+        config.RAW_AHREFS_MD_DIR,
+        config.RAW_SEJ_MD_DIR,
+        config.RAW_GROWTHMEMO_MD_DIR,
     ]:
         candidate = d / basename
         if candidate.exists():
@@ -134,17 +137,23 @@ def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
     already_done: list[Path] = []
     unprocessed: list[Path] = []
     for md_path in md_files:
-        qa_path = config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json"
         done = False
-        if qa_path.exists():
+        qa_candidates = [
+            config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json",
+            config.QA_PER_ARTICLE_DIR / f"{md_path.stem}_qa.json",
+        ]
+        for qa_path in qa_candidates:
+            if not qa_path.exists():
+                continue
             try:
                 data = json.loads(qa_path.read_text(encoding="utf-8"))
                 # qa_pairs 是 list 即算完成（空列表 = 非 SEO 文章，也算處理完畢）
                 # 只有明確標記「處理失敗」才視為未完成
                 if isinstance(data.get("qa_pairs"), list) and "處理失敗" not in data.get("meeting_summary", ""):
                     done = True
+                    break
             except (json.JSONDecodeError, KeyError):
-                pass
+                continue
         (already_done if done else unprocessed).append(md_path)
     return already_done, unprocessed
 
@@ -219,35 +228,38 @@ def merge_per_meeting_jsons() -> None:
     合併所有 output/qa_per_meeting/*_qa.json → output/qa_all_raw.json
     （不需要 OpenAI，純 Python I/O）
     """
-    qa_dir = config.QA_PER_MEETING_DIR
-    if not qa_dir.exists():
-        print(f"[MISS] {qa_dir} 不存在")
+    qa_dirs = [config.QA_PER_MEETING_DIR, config.QA_PER_ARTICLE_DIR]
+    if not any(qa_dir.exists() for qa_dir in qa_dirs):
+        print(f"[MISS] {config.QA_PER_MEETING_DIR} 與 {config.QA_PER_ARTICLE_DIR} 都不存在")
         sys.exit(1)
 
     all_qa: list[dict] = []
     summary: list[dict] = []
     error_count = 0
 
-    for f in sorted(qa_dir.glob("*_qa.json")):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-            pairs = data.get("qa_pairs", [])
-            if not pairs and "處理失敗" in data.get("meeting_summary", ""):
+    for qa_dir in qa_dirs:
+        if not qa_dir.exists():
+            continue
+        for f in sorted(qa_dir.glob("*_qa.json")):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                pairs = data.get("qa_pairs", [])
+                if not pairs and "處理失敗" in data.get("meeting_summary", ""):
+                    error_count += 1
+                    continue
+                # 從 per-meeting JSON 檔名推導 source_file
+                inferred_source = data.get("source_file") or (f.stem.replace("_qa", "") + ".md")
+                for qa in pairs:
+                    enriched = {**qa} if qa.get("source_file") else {**qa, "source_file": inferred_source}
+                    all_qa.append(_enrich_qa_metadata(enriched))
+                summary.append({
+                    "file": f.stem.replace("_qa", "") + ".md",
+                    "qa_count": len(pairs),
+                    "summary": data.get("meeting_summary", ""),
+                })
+            except (json.JSONDecodeError, KeyError) as e:
+                print(f"  [SKIP] {f.name}：{e}")
                 error_count += 1
-                continue
-            # 從 per-meeting JSON 檔名推導 source_file
-            inferred_source = data.get("source_file") or (f.stem.replace("_qa", "") + ".md")
-            for qa in pairs:
-                enriched = {**qa} if qa.get("source_file") else {**qa, "source_file": inferred_source}
-                all_qa.append(_enrich_qa_metadata(enriched))
-            summary.append({
-                "file": f.stem.replace("_qa", "") + ".md",
-                "qa_count": len(pairs),
-                "summary": data.get("meeting_summary", ""),
-            })
-        except (json.JSONDecodeError, KeyError) as e:
-            print(f"  [SKIP] {f.name}：{e}")
-            error_count += 1
             continue
 
     merged = {
