@@ -235,7 +235,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port；8 維度推送 Laminar `report-quality` group；含 report_action_maturity_labeled）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / synonyms / meeting-prep / api-response
-  測試：Vitest（58 個 test files，613 tests passing）
+  測試：Vitest（58 個 test files，625 tests passing）
   部署：Lambda + Function URL（arm64，~$0/月）/ docker-compose（本地開發）
             ↓ http://localhost:8002 (開發) 或 https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/ (生產)
 
@@ -267,6 +267,27 @@ Notion 會議紀錄（87 份，2023–2026）
 - category / intent coverage 不足
 - ranking 被近重複答案汙染
 - booster 雖補弱案例，但同時污染一般 query 的 top-k
+
+### Phase 2：L4 metadata 正式進入可查詢 API surface（2026-03-15）
+
+在 phase 1 之前，這批 metadata 主要服務於 enrichment 與 runtime rerank；phase 2 之後，它們正式變成 queryable capability：
+
+- `routes/qa.ts` 與 `schemas/qa.ts` 讓 `primary_category`、`intent_label`、`scenario_tag`、`serving_tier`、`evidence_scope` 可直接作為列表查詢條件
+- `routes/search.ts` 與 `schemas/search.ts` 讓同一組 metadata 能直接約束 search results
+- `routes/search.ts` 額外回傳 `all_categories`，而 `categories` 改成 query-aware projection，讓 eval 與前端可以同時看到「主要命中類別」與「完整標籤集合」
+
+形式上，這次新增的是兩組 capability：
+
+- QA list filters：`primary_category`、`intent_label`、`scenario_tag`、`serving_tier`、`evidence_scope`，加上既有 `extraction_model`、`maturity_relevance`、`sort_by`、`sort_order`
+- Search request filters：`primary_category`、`intent_label`、`scenario_tag`、`serving_tier`、`evidence_scope`，加上既有 `category`、`extraction_model`、`maturity_level`
+
+這個架構上的意義，不只是 filter 變多，而是把 L4 問題從「只能被系統內部判斷」變成「可以由前端、評估工具、報表流程直接指定要哪類高階問題」。
+
+因此現在的 retrieval stack 可以分三層理解：
+
+1. offline enrichment 產 metadata
+2. store layer 用 metadata 做 ranking / rerank
+3. route layer 把 metadata 暴露成產品能力與評估能力
 
 ### L4 External Sources 與本地 fallback 實作快照（2026-03-14）
 
@@ -309,7 +330,7 @@ Notion 會議紀錄（87 份，2023–2026）
 - `L3 264`
 - `L4 110`
 
-**結論**：本地 artifact 已達 `110 / 1809 = 6.08%`，L4 目標不是靠單一 booster 或單一來源拉高，而是靠 metadata completeness 修復後才真正達標。
+**結論**：在 2026-03-14 當下，本地 artifact 先達到 `110 / 1809 = 6.08%`；接著在 2026-03-15 經 classifier refinement 後，進一步提升到 `155 / 1809 = 8.57%`。L4 目標不是靠單一 booster 或單一來源拉高，而是靠 metadata completeness 與 classifier quality 一起收斂。
 
 ### 本地 artifact 與 production Supabase 目前是兩個不同狀態
 

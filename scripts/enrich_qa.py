@@ -44,7 +44,7 @@ INTENT_PATTERNS: dict[str, tuple[str, ...]] = {
     "diagnosis": ("異常", "下滑", "問題", "診斷", "原因", "why", "根因"),
     "root-cause": ("root cause", "根因", "歸因", "waf", "canonical", "衝突"),
     "implementation": ("如何", "怎麼", "修正", "實作", "設定", "schema", "標記"),
-    "measurement": ("ga", "ga4", "gsc", "ctr", "曝光", "點擊", "kpi", "追蹤"),
+    "measurement": ("ga", "ga4", "gsc", "ctr", "曝光", "點擊", "kpi", "追蹤", "ratio", "share", "佔比"),
     "reporting": ("報告", "週報", "監測", "儀表板", "slice"),
     "platform-decision": ("平台", "策略", "roadmap", "優先", "取捨", "vocus"),
 }
@@ -56,18 +56,26 @@ SCENARIO_PATTERNS: dict[str, tuple[str, ...]] = {
     "ga4-attribution": ("ga4", "attribution", "歸因", "unassigned"),
     "author-page": ("/user", "作者頁", "author"),
     "image-seo": ("image", "圖片", "alt", "縮圖"),
+    "core-web-vitals": ("core web vitals", "cwv", "lcp", "cls", "行動版", "手機體驗"),
+    "video-seo": ("videoobject", "video appearance", "影片", "video"),
+    "sitemap-api": ("sitemap", "url inspection", "inspection api", "cms api"),
+    "ai-referral-traffic": ("chatgpt", "perplexity", "gemini", "ai 流量", "流量佔比"),
 }
 
 CATEGORY_HINTS: dict[str, tuple[str, ...]] = {
-    "技術SEO": ("core web vitals", "lcp", "cls", "schema", "結構化資料", "ttfb", "速度", "amp"),
+    "技術SEO": (
+        "core web vitals", "lcp", "cls", "schema", "結構化資料", "ttfb", "速度", "amp",
+        "videoobject", "video appearance", "sitemap", "url inspection", "inspection api",
+        "mobile seo", "行動版", "手機", "json-ld",
+    ),
     "索引與檢索": ("索引", "coverage", "googlebot", "canonical", "檢索未索引"),
-    "搜尋表現分析": ("ctr", "曝光", "點擊", "排名", "serp", "search console"),
-    "GA與數據追蹤": ("ga", "ga4", "歸因", "事件", "direct", "unassigned"),
+    "搜尋表現分析": ("ctr", "曝光", "點擊", "排名", "serp", "search console", "kpi", "品牌", "非品牌", "brand", "non-brand"),
+    "GA與數據追蹤": ("ga", "ga4", "歸因", "事件", "direct", "unassigned", "chatgpt", "perplexity", "gemini", "ratio", "share", "佔比"),
     "Discover與AMP": ("discover", "amp", "news", "探索"),
     "內容策略": ("內容", "文章", "供給", "eeat", "主題", "更新"),
     "連結策略": ("連結", "內部連結", "錨點", "backlink"),
-    "平台策略": ("平台", "作者", "路徑", "站內", "vocus", "/user"),
-    "演算法與趨勢": ("演算法", "更新", "ai", "趨勢", "gemini", "perplexity"),
+    "平台策略": ("平台", "作者", "路徑", "站內", "vocus", "/user", "cms"),
+    "演算法與趨勢": ("演算法", "更新", "ai", "趨勢", "gemini", "perplexity", "chatgpt", "ai overview", "ai search", "llm"),
 }
 
 
@@ -84,6 +92,18 @@ def _infer_categories(primary_category: str, text: str) -> tuple[list[str], str]
             continue
         if any(hint in text for hint in hints):
             categories.append(category)
+
+    if any(token in text for token in ("discover", "google news", "news", "探索", "amp")):
+        categories.append("Discover與AMP")
+    if any(token in text for token in ("演算法", "update", "趨勢", "ai overview", "ai search", "chatgpt", "gemini", "perplexity", "sge", "discover", "google news")):
+        categories.append("演算法與趨勢")
+    if any(token in text for token in ("waf", "googlebot", "canonical", "coverage", "檢索未索引", "sitemap", "url inspection", "inspection api", "索引")):
+        categories.extend(["索引與檢索", "技術SEO"])
+    if any(token in text for token in ("ga", "ga4", "gsc", "direct", "referral", "歸因")) and any(token in text for token in ("discover", "amp", "news", "探索")):
+        categories.extend(["GA與數據追蹤", "Discover與AMP"])
+    if any(token in text for token in ("轉換率", "conversion", "signups", "註冊")) and any(token in text for token in ("ai search", "ai overview", "chatgpt", "perplexity", "gemini", "ai 流量")):
+        categories.extend(["搜尋表現分析", "內容策略", "演算法與趨勢"])
+
     # Preserve order while removing duplicates.
     deduped = list(dict.fromkeys(categories))
     if len(deduped) >= 3:

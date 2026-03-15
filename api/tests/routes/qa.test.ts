@@ -14,6 +14,7 @@ vi.mock("../../src/store/qa-store.js", () => {
       listQa: (params: Record<string, unknown>) => {
         let results = [...items];
         if (params.category) results = results.filter((i) => i.category === params.category);
+        if (params.primary_category) results = results.filter((i) => (i.primary_category ?? i.category) === params.primary_category);
         if (params.keyword) {
           const kw = (params.keyword as string).toLowerCase();
           results = results.filter(
@@ -24,6 +25,10 @@ vi.mock("../../src/store/qa-store.js", () => {
         if (params.source_collection) results = results.filter((i) => i.source_collection === params.source_collection);
         if (params.extraction_model) results = results.filter((i) => i.extraction_model === params.extraction_model);
         if (params.maturity_relevance) results = results.filter((i) => i.maturity_relevance === params.maturity_relevance);
+        if (params.intent_label) results = results.filter((i) => (i.intent_labels ?? []).includes(params.intent_label as string));
+        if (params.scenario_tag) results = results.filter((i) => (i.scenario_tags ?? []).includes(params.scenario_tag as string));
+        if (params.serving_tier) results = results.filter((i) => (i.serving_tier ?? 'canonical') === params.serving_tier);
+        if (params.evidence_scope) results = results.filter((i) => (i.evidence_scope ?? []).includes(params.evidence_scope as string));
         if (params.sort_by === "source_date") {
           const dir = params.sort_order === "asc" ? 1 : -1;
           results.sort((a, b) => dir * a.source_date.localeCompare(b.source_date));
@@ -209,6 +214,46 @@ describe("GET /api/v1/qa", () => {
     }
   });
 
+  it("filters by primary_category", async () => {
+    const res = await app.request("/api/v1/qa?primary_category=SEO%20Strategy");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.total).toBe(1);
+    expect(body.data.items[0].primary_category).toBe("SEO Strategy");
+  });
+
+  it("filters by intent_label", async () => {
+    const res = await app.request("/api/v1/qa?intent_label=platform-decision");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.total).toBe(1);
+    expect(body.data.items[0].intent_labels).toContain("platform-decision");
+  });
+
+  it("filters by scenario_tag", async () => {
+    const res = await app.request("/api/v1/qa?scenario_tag=faq-rich-result");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.total).toBe(1);
+    expect(body.data.items[0].scenario_tags).toContain("faq-rich-result");
+  });
+
+  it("filters by serving_tier", async () => {
+    const res = await app.request("/api/v1/qa?serving_tier=booster");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.total).toBe(1);
+    expect(body.data.items[0].serving_tier).toBe("booster");
+  });
+
+  it("filters by evidence_scope", async () => {
+    const res = await app.request("/api/v1/qa?evidence_scope=platform");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.total).toBe(1);
+    expect(body.data.items[0].evidence_scope).toContain("platform");
+  });
+
   it("returns maturity_relevance in response", async () => {
     const res = await app.request("/api/v1/qa?limit=10");
     expect(res.status).toBe(200);
@@ -219,6 +264,20 @@ describe("GET /api/v1/qa", () => {
     // First item should have L1
     const firstItem = body.data.items.find((i: { id: string }) => i.id === "a1b2c3d4e5f67890");
     expect(firstItem.maturity_relevance).toBe("L1");
+  });
+
+  it("returns retrieval metadata fields in response", async () => {
+    const res = await app.request("/api/v1/qa?limit=10");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    for (const item of body.data.items) {
+      expect(item).toHaveProperty("primary_category");
+      expect(item).toHaveProperty("categories");
+      expect(item).toHaveProperty("intent_labels");
+      expect(item).toHaveProperty("scenario_tags");
+      expect(item).toHaveProperty("serving_tier");
+      expect(item).toHaveProperty("evidence_scope");
+    }
   });
 
   it("rejects invalid maturity_relevance value", async () => {

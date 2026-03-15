@@ -263,6 +263,42 @@ v3.3 起，成熟度模型（L1-L4）成為評估體系的新橫切維度：
 
 如果兩者未明確區分，就會誤把「本地已達標」解讀成「線上 schema 已完成」。
 
+#### 4.5 2026-03-15 phase 1-2 驗證快照
+
+在 2026-03-15 這輪實作中，retrieval 與 queryability 的評估重點不再只是「能不能找到」，而是拆成兩個 gate：
+
+1. phase 1：ranking quality 是否提升
+2. phase 2：metadata queryability 是否上線且不回退 ranking
+
+最終使用 file-mode API（`http://localhost:8003`）重跑 `evals/eval_retrieval.py` 的結果為：
+
+| 指標 | 結果 |
+| ---- | ---- |
+| `keyword_hit_rate` | `0.9329` |
+| `top1_category_match` | `0.95` |
+| `top5_category_coverage` | `0.82` |
+| `hit_rate` | `1.0` |
+| `mrr` | `0.975` |
+| `precision_at_k` | `0.82` |
+| `recall_at_k` | `0.8875` |
+| `dual_category_recall_at_k` | `0.8875` |
+| `multi_label_f1_at_k` | `0.8297` |
+| `boosterless_precision_at_k` | `0.8175` |
+| `ndcg_at_k` | `0.8921` |
+
+這組數字的解讀方式如下：
+
+- `top1_category_match`、`mrr`、`precision_at_k`、`ndcg_at_k` 明顯高於最初 baseline，代表 rerank 與 metadata enrich 確實讓前排結果更準
+- `keyword_hit_rate` 沒有回到最早的單點高位，但仍穩定高於 eval gate，因此這輪決策是接受 tradeoff，優先保整體 ranking 品質
+- phase 2 新增 route-layer metadata filters 後，再跑一次 retrieval eval，指標維持不變，表示 queryability 擴充沒有破壞 phase 1 的 serving quality
+
+另外，API focused tests 也被納入 phase 2 gate：
+
+- `api/tests/routes/search.test.ts`
+- `api/tests/routes/qa.test.ts`
+
+最終為 `40 passed`，用來驗證 metadata filters 與 response fields 已成正式 API contract，而不是只有離線 artifact 有值。
+
 #### 5. Classifier refinement 把 L4 從「有 AI 關鍵字」收斂成「AI Search + 策略訊號」
 
 2026-03-15 又做了一輪 rule-based classifier refinement，目標不是再把更多題目推進 L4，而是把前一天的 maturity backfill 從「大致達標」收斂成「可解釋、可防誤判」的規則。
@@ -295,6 +331,12 @@ v3.3 起，成熟度模型（L1-L4）成為評估體系的新橫切維度：
 - `L4 155`
 
 也就是本地 artifact 的 L4 ratio 從前一天紀錄的 `110 / 1809 = 6.08%`，進一步提升到 `155 / 1809 = 8.57%`。但這個數字的意義不是「規則更寬鬆」，而是 classifier 對 AI Search / GEO 類高階策略題的召回率提高，同時保留了對基礎 AI 解釋題的保守邊界。
+
+因此目前比較合理的成熟度評估結論是：
+
+- external sources 解決的是語料 coverage
+- classifier refinement 解決的是 L4 recall 與 false-positive control
+- phase 2 queryability 則讓這批成熟度 / retrieval metadata 可以被產品層直接使用，而不只存在離線評估報表
 
 ---
 

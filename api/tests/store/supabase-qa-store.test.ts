@@ -255,6 +255,45 @@ describe("SupabaseQAStore", () => {
     expect(first!.item.serving_tier).toBe("booster");
   });
 
+  it("keywordSearch prefers technical video metadata matches over generic indexing", async () => {
+    mockSupabaseSelect.mockReset();
+    mockSupabaseSelect.mockResolvedValueOnce([
+      {
+        ...FAKE_ROWS[0],
+        id: "video-metadata",
+        question: "How to implement VideoObject structured data?",
+        answer: "Add JSON-LD VideoObject and monitor Video Appearance.",
+        keywords: ["VideoObject", "structured data", "video"],
+        category: "索引與檢索",
+        primary_category: "索引與檢索",
+        categories: ["索引與檢索", "技術SEO"],
+        scenario_tags: ["video-seo"],
+        retrieval_phrases: ["videoobject structured data", "video appearance"],
+        retrieval_surface_text: "videoobject structured data video appearance json-ld",
+      },
+      {
+        ...FAKE_ROWS[0],
+        id: "video-indexing",
+        question: "Why are videos not indexed?",
+        answer: "Check canonical and crawlability.",
+        keywords: ["video", "indexing"],
+        category: "索引與檢索",
+        primary_category: "索引與檢索",
+        categories: ["索引與檢索"],
+        scenario_tags: [],
+        retrieval_phrases: ["video indexing"],
+        retrieval_surface_text: "video indexing canonical crawlability",
+      },
+    ]);
+
+    const localStore = new SupabaseQAStore();
+    await localStore.load();
+
+    const [first] = localStore.keywordSearch("影片 SEO VideoObject 結構化資料 影片索引", 2);
+    expect(first).toBeDefined();
+    expect(first!.item.id).toBe("video-metadata");
+  });
+
   it("hybridSearch passes category filter to RPC", async () => {
     mockSupabaseRpc.mockResolvedValueOnce([]);
     await store.hybridSearch("SEO", new Float32Array(1536), 5, "SEO Technical");

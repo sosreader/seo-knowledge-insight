@@ -7,6 +7,7 @@ import type { QAItem } from "./qa-store.js";
 
 export interface ListQaParams {
   readonly category?: string | null;
+  readonly primary_category?: string | null;
   readonly keyword?: string | null;
   readonly difficulty?: string | null;
   readonly evergreen?: boolean | null;
@@ -14,6 +15,10 @@ export interface ListQaParams {
   readonly source_collection?: string | null;
   readonly extraction_model?: string | null;
   readonly maturity_relevance?: string | null;
+  readonly intent_label?: string | null;
+  readonly scenario_tag?: string | null;
+  readonly serving_tier?: string | null;
+  readonly evidence_scope?: string | null;
   readonly sort_by?: string | null;
   readonly sort_order?: string | null;
   readonly limit?: number;
@@ -26,6 +31,7 @@ export function filterAndPaginateQa(
 ): { items: readonly QAItem[]; total: number } {
   const {
     category,
+    primary_category,
     keyword,
     difficulty,
     evergreen,
@@ -33,6 +39,10 @@ export function filterAndPaginateQa(
     source_collection,
     extraction_model,
     maturity_relevance,
+    intent_label,
+    scenario_tag,
+    serving_tier,
+    evidence_scope,
     sort_by,
     sort_order,
     limit = 20,
@@ -44,6 +54,10 @@ export function filterAndPaginateQa(
   if (category) {
     const catSet = new Set(category.includes(",") ? category.split(",") : [category]);
     results = results.filter((i) => catSet.has(i.category));
+  }
+  if (primary_category) {
+    const primarySet = new Set(primary_category.includes(",") ? primary_category.split(",") : [primary_category]);
+    results = results.filter((i) => primarySet.has(i.primary_category ?? i.category));
   }
   if (keyword) {
     const kwLower = keyword.toLowerCase();
@@ -72,6 +86,22 @@ export function filterAndPaginateQa(
   }
   if (maturity_relevance) {
     results = results.filter((i) => i.maturity_relevance === maturity_relevance);
+  }
+  if (intent_label) {
+    const intentSet = new Set(intent_label.includes(",") ? intent_label.split(",") : [intent_label]);
+    results = results.filter((i) => (i.intent_labels ?? []).some((label) => intentSet.has(label)));
+  }
+  if (scenario_tag) {
+    const scenarioSet = new Set(scenario_tag.includes(",") ? scenario_tag.split(",") : [scenario_tag]);
+    results = results.filter((i) => (i.scenario_tags ?? []).some((tag) => scenarioSet.has(tag)));
+  }
+  if (serving_tier) {
+    const tierSet = new Set(serving_tier.includes(",") ? serving_tier.split(",") : [serving_tier]);
+    results = results.filter((i) => tierSet.has(i.serving_tier ?? "canonical"));
+  }
+  if (evidence_scope) {
+    const scopeSet = new Set(evidence_scope.includes(",") ? evidence_scope.split(",") : [evidence_scope]);
+    results = results.filter((i) => (i.evidence_scope ?? []).some((scope) => scopeSet.has(scope)));
   }
 
   if (sort_by === "source_date") {

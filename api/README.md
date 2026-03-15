@@ -4,7 +4,7 @@ REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（No
 
 **特點：**
 
-- 10 個路由器（Routers）、42 個 API endpoints、613 個測試（58 檔案，coverage 80%+）
+- 10 個路由器（Routers）、42 個 API endpoints、628 個測試（58 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
@@ -116,6 +116,41 @@ Client → Function URL / localhost:8002
 | GET  | `/api/v1/qa/categories`  | 列出所有分類標籤                                                                | ✓    | 60/min     |
 | GET  | `/api/v1/qa/collections` | 列出所有 collection（含 source_type + count）                                   | ✓    | 60/min     |
 
+**`GET /api/v1/qa` 查詢參數（2026-03-15）**
+
+| 參數 | 型別 | 說明 |
+| ---- | ---- | ---- |
+| `category` | string | 舊版單一分類 filter |
+| `primary_category` | string | 以 retrieval metadata 的主分類過濾；支援逗號分隔多值 |
+| `keyword` | string | question / answer / keywords 關鍵字搜尋 |
+| `difficulty` | `基礎`\|`進階` | 難度過濾 |
+| `evergreen` | boolean | 是否常青 |
+| `source_type` | string | `meeting` / `article` |
+| `source_collection` | string | collection 名稱 |
+| `extraction_model` | string | 依 extraction model 過濾 |
+| `maturity_relevance` | `L1`\|`L2`\|`L3`\|`L4` | 成熟度過濾 |
+| `intent_label` | string | retrieval intent 過濾；支援逗號分隔多值 |
+| `scenario_tag` | string | retrieval scenario 過濾；支援逗號分隔多值 |
+| `serving_tier` | string | `canonical` / `supporting` / `booster` 之類 serving layer 過濾 |
+| `evidence_scope` | string | 依證據範圍過濾，例如 `platform` / `site` |
+| `sort_by` | `source_date`\|`confidence` | 排序欄位 |
+| `sort_order` | `asc`\|`desc` | 排序方向 |
+| `limit` / `offset` | number | 分頁 |
+
+**`GET /api/v1/qa` 新增回應欄位**
+
+- `primary_category`
+- `categories`
+- `intent_labels`
+- `scenario_tags`
+- `serving_tier`
+- `evidence_scope`
+
+**相容性說明**
+
+- 若資料仍停在舊 schema，`primary_category` 會回退到舊 `category`
+- `categories` 若缺值，runtime 會回退成 `[category]`
+
 ### 3. 語意搜尋 (search) — 1 個 endpoint
 
 | 方法 | 路由             | 說明                                                | 認證 | Rate Limit |
@@ -130,11 +165,32 @@ Client → Function URL / localhost:8002
 **Search Runtime（2026-03-15）:**
 
 - `hybridSearch()` 與 `keywordSearch()` 都會讀取 retrieval metadata：`primary_category`、`categories`、`intent_labels`、`scenario_tags`、`serving_tier`
-- ranking 公式除 semantic + keyword + synonym 外，額外納入 metadata feature score、serving tier prior、duplicate suppression、category / intent diversity rerank
-- 若 request 帶 `extraction_model`，route layer 會先以 `top_k × 3` over-retrieve，再做 model filter，避免 post-filter 導致結果數不足
-- API response 會帶回 `primary_category`、`categories`、`intent_labels`、`scenario_tags`、`serving_tier`
+- ranking 公式除 semantic + keyword + synonym 外，額外納入 metadata feature score、`exactTermBoost`、serving tier prior、duplicate suppression、category / intent / novel-term diversity rerank
+- 若 request 帶 `extraction_model` 或其他 metadata filters，route layer 會先以 `top_k × 3` over-retrieve，再做 post-filter，避免過早裁切導致結果數不足
+- API response 會帶回 `primary_category`、`categories`、`all_categories`、`intent_labels`、`scenario_tags`、`serving_tier`、`evidence_scope`
 
 `extraction_model` filter 的 `×3` multiplier 是經驗值：目的是在 mixed-model corpus 中避免 filter 後剩不到 `top_k` 筆，同時把額外查詢成本控制在固定常數倍，而不是無上限放大。
+
+**`POST /api/v1/search` request body（2026-03-15）**
+
+| 欄位 | 型別 | 說明 |
+| ---- | ---- | ---- |
+| `query` | string | 必填，1–500 字 |
+| `top_k` | number | 1–20，預設 5 |
+| `category` | string | 舊版 category filter |
+| `primary_category` | string | 以 retrieval 主分類做 post-filter |
+| `extraction_model` | string | 以 extraction model 做 post-filter |
+| `maturity_level` | `L1`\|`L2`\|`L3`\|`L4` | 對應 `applyMaturityBoost()` |
+| `intent_label` | string | 以 retrieval intent 做 post-filter |
+| `scenario_tag` | string | 以 retrieval scenario 做 post-filter |
+| `serving_tier` | string | 以 serving layer 做 post-filter |
+| `evidence_scope` | string | 以證據範圍做 post-filter |
+
+**`POST /api/v1/search` 回應補充**
+
+- `categories`：query-aware 投影後的主要類別；第一筆結果優先保留 `primary_category`
+- `all_categories`：item 的完整多標籤類別集合
+- `intent_labels` / `scenario_tags` / `serving_tier` / `evidence_scope`：供前端或評估工具直接使用
 
 ### 4. RAG 問答 (chat) — 2 個 endpoints
 
@@ -378,7 +434,7 @@ api/
 │   ├── feedback-to-golden.ts  # 使用者回饋 → golden dataset 候選
 │   ├── sync-db.ts             # Reports + Sessions → Supabase 同步
 │   └── eval-semantic.ts       # Retrieval eval（keyword/hybrid/rerank）
-├── tests/                      # 57 個測試檔案，582 tests
+├── tests/                      # 58 個測試檔案，628 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
@@ -619,10 +675,10 @@ pnpm test:watch               # 監視模式
 pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
-**測試套件統計（v3.3）：**
+**測試套件統計（v3.4）：**
 
-- 總測試數：582 個（57 個測試檔案）
-- 通過：582/582 (100%)
+- 總測試數：628 個（58 個測試檔案）
+- 通過：628/628 (100%)
 - 覆蓋率：80%+
 
 ---

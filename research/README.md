@@ -19,6 +19,8 @@
 | [06c-backend-onboarding.md](./06c-backend-onboarding.md)         | 後端 API 入門導讀 — 從零理解分層架構、請求流程、雙模式設計                  |
 | [07-deployment.md](./07-deployment.md)                           | Hono API 部署 / Lambda + Function URL / Supabase 遷移 / App Runner（已淘汰）|
 | [08-fetch-optimization.md](./08-fetch-optimization.md)           | Fetch 優化 / Notion 增量 / Medium Scrapling / 多來源爬取架構                |
+| [08-local-fallback.md](./08-local-fallback.md)                   | 無 OpenAI / 舊 schema / timeout 場景下的 local fallback 設計與邊界         |
+| [09-retrieval-dimensions.md](./09-retrieval-dimensions.md)       | Retrieval metadata 欄位、runtime re-rank 邏輯與 migration/fallback 策略    |
 | [09-provider-comparison.md](./09-provider-comparison.md)         | AI Provider 輸出品質比較方法論與歷次跑分結果                                |
 | [10-multi-layer-context.md](./10-multi-layer-context.md)         | Multi-Layer Context / enrichment / 同義詞擴展 / 時效性衰減 / Learning Store |
 
@@ -39,7 +41,21 @@
 
 ---
 
-## 當前指標現況（2026-03-06，v2.24 — Supabase pgvector + Lambda 部署）
+## 最新狀態（2026-03-15，v3.4+）
+
+這個 index 不再維護完整即時指標表；最新狀態以 [06a-architecture-changelog.md](./06a-architecture-changelog.md) 與各主題研究文件為準。2026-03-15 目前已確認的關鍵狀態如下：
+
+| 指標 | 數值 | 說明 |
+| ---- | ---- | ---- |
+| Q&A 總量 | **1,809 筆** | 目前 serving / enrichment artifact 的最新規模 |
+| L4 佔比 | **155 / 1809 = 8.57%** | 2026-03-15 classifier refinement 後重新驗證 |
+| Python 測試 | **430 passed, 1 warning** | 全量 pytest 驗證 |
+| API 測試 | **628 passed / 58 files** | Hono TypeScript Vitest 驗證 |
+| 重要新能力 | local fallback / retrieval dimensions / maturity backfill | 詳見 [08-local-fallback.md](./08-local-fallback.md)、[09-retrieval-dimensions.md](./09-retrieval-dimensions.md)、[03-evaluation.md](./03-evaluation.md) |
+
+---
+
+## 歷史快照（2026-03-06，v2.24 — Supabase pgvector + Lambda 部署）
 
 | 指標                   | 數值       | 說明                                                      |
 | ---------------------- | ---------- | --------------------------------------------------------- |
