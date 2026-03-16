@@ -838,3 +838,70 @@ LLM 生成最終回答（含 sources 引用）
 - `agent/agent-deps.ts` — qaStore → AgentDeps 橋接
 
 ---
+
+## RAG 迭代改進（從 README 搬入）
+
+> 原位於 README.md「RAG 迭代改進」section，搬移至此以集中管理 RAG 相關知識。
+
+### Phase 2：Contextual Embeddings
+
+- `scripts/_generate_context.py` — 用 Claude Haiku 離線生成 QA 情境 context（150-300 字/筆）
+- `output/qa_context.json` — 預生成的 situating context（無運行時成本）
+- 搜尋和 chat 時可利用 context 豐富檢索結果
+
+### Phase 3：Re-ranking 服務（可選，需要 `ANTHROPIC_API_KEY`）
+
+- `api/src/services/reranker.ts` — Claude Haiku reranker service
+  - 初期 over-retrieve K*3 候選
+  - 用 XML 結構化 prompt 重排序、評分
+  - 篩選 top-K 結果
+  - 錯誤時自動 fallback 至原始排序
+- **實際效果**：Hit Rate 100%、MRR 0.88（v2.12 基準）
+
+### Phase 3.5：Retrieval Data Dimensions（2026-03-15）
+
+- `scripts/enrich_qa.py` 回填 `categories`、`intent_labels`、`scenario_tags`、`serving_tier`、`retrieval_phrases`、`retrieval_surface_text`
+- `api/src/store/search-engine.ts` 與 `api/src/store/supabase-qa-store.ts` 將上述欄位接入 runtime hybrid / keyword search
+- `POST /api/v1/search` 若帶 `extraction_model`，會先以 `top_k * 3` over-retrieve，再做 model filter 與 maturity boost，避免 post-filter 導致回傳數不足
+
+### Phase 4：Context Relevance 評估（v2.12 新增）
+
+- `api/src/services/context-relevance.ts` — Claude Haiku LLM judge
+  - 評估 query 與 retrieved contexts 的語意相關性
+  - 輸出 0-1 分（0 = 完全不相關，1 = 完全相關）+ per-context 細分評分
+  - Dynamic import fallback：ANTHROPIC_API_KEY 缺失時，使用 freshness_score 啟發式評分
+  - `escapeXml()` 防 XML prompt injection
+- eval endpoints 已於 v2.18 移除（改用離線 Laminar eval + CI 自動化）
+
+### 環境變數（v2.11）
+
+```env
+ANTHROPIC_API_KEY=sk-ant-...     # 用於 Reranker（可選）
+CONTEXT_EMBEDDING_WEIGHT=0.6     # Context 加權（預設 0.6）
+RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"，預設 auto）
+```
+
+### 評估基準線
+
+v2.11（20 cases，top-k=5）：
+
+| 指標 | 數值 |
+|------|------|
+| KW Hit Rate | 73% |
+| Precision@K | 76% |
+| Recall@K | 80% |
+| F1 Score | 0.73 |
+| MRR | 0.88 |
+
+Retrieval Data Dimensions phase gate（2026-03-15，40 cases，top-k=5）：
+
+| 指標 | Baseline | Phase 4 |
+|------|----------|---------|
+| Precision@K | 0.58 | 0.85 |
+| Boosterless Precision@K | — | 0.83 |
+| Dual Category Recall@K | — | 1.00 |
+| Multi-label F1@K | — | 0.97 |
+| Canonical Top-1 Rate | — | 0.37 |
+| MRR | 0.92 | 0.99 |
+
+---

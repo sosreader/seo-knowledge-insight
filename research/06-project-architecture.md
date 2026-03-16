@@ -1049,7 +1049,7 @@ opentelemetry-semantic-conventions-ai>=0.4.13,<0.4.14
 scripts/compare_providers.py          # 主腳本
 eval/golden_seo_analysis.json         # Golden case：原始 GSC 資料 + 評估維度
 output/provider_<name>_<date>.md      # 各 Provider 輸出檔案（人工輸入或自動生成）
-research/09-provider-comparison.md    # 完整實驗紀錄與結論
+research/14-provider-comparison.md    # 完整實驗紀錄與結論
 ```
 
 **流程**：
@@ -1813,3 +1813,75 @@ output/qa_final.md
 - `.claude/commands/generate-report.md`：Step A3 自動偵測 meeting-prep maturity + `--maturity`/`--no-maturity` flag（v3.5）
 - API tests：582→608→660（58→61 files）；新增 `tests/utils/maturity.test.ts`（36 tests）、`tests/services/report-generator-local.test.ts`（7 tests）、`tests/schemas/report.test.ts`（3 tests）
 - Python tests：`tests/test_maturity_classifier.py`（13 tests）
+
+## 完整目錄樹（從 README 搬入）
+
+```
+seo-knowledge-insight/
+├── api/                         # Hono TypeScript API（v2.12+，主架構）
+│   ├── src/
+│   │   ├── index.ts             # 入口（middleware + route mount）
+│   │   ├── config.ts            # Zod 驗證環境變數
+│   │   ├── routes/              # 9 個路由（qa/search/chat/reports/sessions/feedback/pipeline/health/synonyms）
+│   │   ├── agent/               # Agentic RAG（v2.28）— agent loop + tool definitions + executor + DI
+│   │   ├── middleware/           # auth / rate-limit / cors / error-handler
+│   │   ├── store/               # QAStore singleton + SearchEngine + SessionStore
+│   │   ├── services/            # embedding + rag-chat + pipeline-runner
+│   │   ├── schemas/             # Zod schema（10 個）
+│   │   └── utils/               # npy-reader / cosine-similarity / keyword-boost / cjk-tokenizer / mode-detect / sanitize
+│   ├── Dockerfile               # Multi-stage Node.js build（node:22-slim）
+│   ├── package.json             # pnpm + tsup + vitest
+│   └── tsconfig.json
+├── config.py                    # Pipeline 設定檔
+├── pyproject.toml               # Package 定義（pip install -e . 用）
+├── .env                         # 你的 API keys（從 .env.example 複製）
+├── scripts/
+│   ├── 01_fetch_notion.py       # 步驟 1a：從 Notion 擷取
+│   ├── 01b_fetch_medium.py      # 步驟 1b：Medium RSS → Markdown
+│   ├── 01c_fetch_ithelp.py      # 步驟 1c：iThome 鐵人賽 HTML → Markdown
+│   ├── 01d_fetch_google_cases.py # 步驟 1d：Google Case Studies HTML → Markdown
+│   ├── 02_extract_qa.py         # 步驟 2：Q&A 萃取（多來源目錄掃描）
+│   ├── 03_dedupe_classify.py    # 步驟 3：Collection-Scoped 去重 + 分類
+│   ├── 04_generate_report.py    # 步驟 4：產生每週 SEO 週報
+│   ├── 05_evaluate.py           # 步驟 5：Q&A 品質評估（LLM-as-Judge）
+│   ├── run_pipeline.py          # 一鍵執行全部
+│   ├── extract_qa_helpers.py    # 純邏輯函式（日期擷取、文字切分）
+│   └── dedupe_helpers.py        # 純邏輯函式（cosine similarity 矩陣）
+├── utils/
+│   ├── notion_client.py         # Notion API 封裝
+│   ├── block_to_markdown.py     # Block → Markdown 轉換
+│   └── openai_helper.py         # OpenAI API 封裝
+├── tests/
+│   └── test_core.py             # 核心邏輯 unit tests（23 個）
+├── evals/                       # Laminar 離線評估（v1.10 新增）
+│   ├── __init__.py              # Package 初始化
+│   ├── eval_retrieval.py        # Retrieval 品質評估（keyword hit rate 等）
+│   ├── eval_extraction.py       # Q&A 萃取品質評估
+│   ├── eval_chat.py             # RAG chat 端到端品質評估
+│   ├── eval_meeting_prep_structure.py  # Meeting-Prep Layer 1 結構 eval（11 evaluators）
+│   └── eval_meeting_prep_grounding.py  # Meeting-Prep Layer 2 grounding eval（5 evaluators）
+├── raw_data/                    # 原始資料（source of truth）
+│   ├── notion_json/             # Notion API 回傳的原始 JSON
+│   ├── markdown/                # Notion 會議 Markdown（87 份）
+│   ├── medium_markdown/         # Medium 文章 Markdown（RSS 擷取）
+│   ├── ithelp_markdown/         # iThome 鐵人賽 Markdown（HTML scraping）
+│   ├── google_cases_markdown/   # Google Case Studies Markdown（HTML scraping，12 篇）
+│   └── images/                  # 下載的圖片
+└── output/                      # 產出
+    ├── qa_per_meeting/          # 每份會議的 Q&A（中間產物）
+    ├── qa_per_article/          # 每篇文章的 Q&A（中間產物）
+    ├── qa_all_raw.json          # 所有原始 Q&A（去重前，含 source_type/collection）
+    ├── qa_final.json            # 最終 Q&A 資料庫（JSON）
+    ├── qa_enriched.json         # 豐富化 Q&A（含同義詞、時效性、Notion 連結）
+    ├── qa_final.md              # 人類可讀的 Markdown 版
+    ├── qa_embeddings.npy        # 持久化 embedding 向量（Step 3 產出，API 載入）
+    ├── metrics_sample.tsv       # 範例指標資料（可替换為實際資料）
+    ├── report_YYYYMMDD.md       # 產生的每週 SEO 週報
+    ├── eval_report.json         # 品質評估報告（JSON）
+    ├── eval_report.md           # 品質評估報告（Markdown）
+    ├── sessions/                # 對話歷史（JSON，API 產生）
+    ├── fetch_logs/              # Step 1 fetch 事件 JSONL（Audit Trail）
+    └── access_logs/             # API 存取事件 JSONL（Audit Trail）
+```
+
+---

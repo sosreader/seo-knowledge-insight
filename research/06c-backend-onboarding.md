@@ -367,3 +367,89 @@ health.ts → qa.ts → search.ts → chat.ts
 - **架構圖**：[`06b-architecture-diagram.md`](./06b-architecture-diagram.md)
 - **架構決策與 Changelog**：[`06-project-architecture.md`](./06-project-architecture.md)、[`06a-architecture-changelog.md`](./06a-architecture-changelog.md)
 - **部署指南**：[`07-deployment.md`](./07-deployment.md)
+
+---
+
+## Troubleshooting（從 README 搬入）
+
+### 常見錯誤
+
+| 錯誤                                  | 原因                                         | 解法                                                                                     |
+| ------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `Error code: 401 - Incorrect API key` | OpenAI API key 無效或過期                    | 確認 `.env` 裡的 `OPENAI_API_KEY` 正確，到 https://platform.openai.com/api-keys 重新產生 |
+| `Unsupported parameter: 'max_tokens'` | 使用較新模型（如 `gpt-5.2`），舊參數名已棄用 | 已在 `utils/openai_helper.py` 改用 `max_completion_tokens`，若自訂 model 也需注意        |
+| `必需環境變數 NOTION_TOKEN 未設定`    | `.env` 不存在或 key 為空（fail-fast 檢查）   | `cp .env.example .env` 後填入；啟動時即檢查必需變數                                      |
+| `必需環境變數 OPENAI_API_KEY 未設定`  | `.env` 中 key 為空（fail-fast 檢查）         | 同上；兩個必需變數都要設定                                                               |
+| `⚠️ 跳過（無存取權）`                 | Integration 沒有該子頁面的權限               | 到 Notion 母頁面 → `···` → `Connections` → 確認 Integration 已加入                       |
+| `Rate limited, waiting Xs`            | API 呼叫太頻繁                               | 正常現象，腳本會自動等待重試                                                             |
+| `JSON 解析失敗`                       | OpenAI 回傳非標準 JSON                       | 通常是內容太長導致截斷，可試著降低 `MAX_TOKENS_PER_CHUNK`                                |
+| 圖片路徑 `[DOWNLOAD_FAILED: ...]`     | Notion 圖片 URL 已過期                       | 重跑步驟 1 會重新下載（Notion 暫存 URL 有效期約 1 小時）                                 |
+
+### 驗證設定
+
+```bash
+# 只檢查 API key 等設定是否正確，不實際執行
+python scripts/run_pipeline.py --dry-run
+```
+
+---
+
+## 開發指南（從 README 搬入）
+
+### 環境設置
+
+```bash
+# Clone 後
+cd seo-knowledge-insight
+cp .env.example .env    # 填入 API keys
+pip install -r requirements.txt
+
+# （選擇性）安裝為可開發模式的 package，免去 sys.path 問題
+pip install -e ".[dev]"
+
+# 驗證設定
+python scripts/run_pipeline.py --dry-run
+
+# 執行測試
+python -m pytest tests/ -v
+```
+
+### 專案慣例
+
+- **Python 3.9+**，使用 `from __future__ import annotations` 支援新型別語法
+- **非同步 I/O**：步驟 1 使用 `httpx.AsyncClient`；步驟 2、3 是同步
+- **路徑管理**：所有路徑定義在 `config.py`，用 `pathlib.Path`
+- **API 安全**：所有 key 透過 `.env` 載入，絕不 hardcode
+
+### 調整 Prompt
+
+Q&A 萃取的品質主要取決於 `utils/openai_helper.py` 中的 prompt：
+
+- `EXTRACT_SYSTEM_PROMPT` — 控制萃取粒度、格式、語言
+- `MERGE_SYSTEM_PROMPT` — 控制合併邏輯（以新日期為準等）
+- `CLASSIFY_SYSTEM_PROMPT` — 控制分類維度和標籤列表
+
+建議修改 prompt 後先用 `--limit 3` 試跑，確認效果再全量處理。
+
+### 擴展新分類
+
+修改 `CLASSIFY_SYSTEM_PROMPT` 中的分類列表，同步更新 [research/16-data-schema.md](./16-data-schema.md) 的「分類標籤列表」。
+
+---
+
+## 快速對照表（從 research/README.md 搬入）
+
+前端你已知的東西，直接對照：
+
+| 你知道的                      | Python / 本專案                                |
+| ----------------------------- | ---------------------------------------------- |
+| `fetch(url, { headers })`     | `requests.get(url, headers=...)`               |
+| `process.env.API_KEY`         | `os.getenv("API_KEY")`                         |
+| `JSON.parse / JSON.stringify` | `json.loads / json.dumps`                      |
+| `npm run build -- --flag`     | `python script.py --step extract-qa --limit 3` |
+| `localStorage.setItem(k, v)`  | `Path("file.json").write_text(...)`            |
+| Promise chain                 | 每步結果存 JSON 檔，下步再讀                   |
+
+其他語法差異（縮排、`def`、`import`）看到就懂，不需要特別記。
+
+---

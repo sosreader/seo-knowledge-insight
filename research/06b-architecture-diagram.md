@@ -177,3 +177,135 @@ flowchart TD
 2. 把確認後的架構更新到本檔（`06b-architecture-diagram.md`）的 Mermaid 圖
 3. 在 [06a-architecture-changelog.md](./06a-architecture-changelog.md) 新增一行（日期 + 版本 + 變更內容 + 影響範圍）
 4. 更新 MEMORY.md 的確認基準線（如有評估數字變動）
+
+---
+
+## 工作流程圖（從 README 搬入）
+
+### 1. Production 部署流程
+
+```mermaid
+flowchart LR
+    subgraph Local["本機"]
+        DEV["pnpm dev\n修改程式碼"] --> TEST["pnpm test\n224 tests"]
+        TEST --> PUSH["git push main"]
+    end
+
+    PUSH --> GHA{"GitHub Actions\n觸發條件"}
+
+    GHA -->|"api/** 變更"| DEPLOY["deploy-ts-api.yml"]
+    GHA -->|"每次 push"| EVAL["eval.yml"]
+    GHA -->|"每週一 / 手動"| ETL["etl-and-deploy.yml"]
+
+    subgraph CI_Deploy["deploy-ts-api.yml"]
+        DEPLOY --> D1["typecheck"] --> D2["test"] --> D3["tsup build\nlambda.js ~3.4MB"]
+        D3 --> D4["zip + aws lambda\nupdate-function-code"]
+        D4 --> D5["health check\n5 retries"]
+    end
+
+    subgraph CI_Eval["eval.yml"]
+        EVAL --> E1["retrieval eval\nSupabase fallback"]
+        EVAL --> E2["extraction eval\ngraceful skip"]
+        E1 --> LMNR["Laminar Dashboard"]
+    end
+
+    subgraph CI_ETL["etl-and-deploy.yml（週排程）"]
+        ETL --> T1["fetch Notion\n+ 文章"]
+        T1 --> T2["extract QA\n+ dedupe"]
+        T2 --> T3["migrate\nSupabase"]
+        T3 --> T4["quality gate\nhit_rate/mrr/qa_count"]
+        T4 -->|pass| T5["deploy Lambda"]
+        T4 -->|fail| STOP["阻止部署"]
+    end
+
+    D5 --> LAMBDA["AWS Lambda\nseo-insight-api\narm64 / 512MB"]
+    T5 --> LAMBDA
+    LAMBDA --> URL["Function URL\nhttps://...lambda-url...on.aws"]
+```
+
+### 2. 本地開發流程
+
+```mermaid
+flowchart TD
+    subgraph Dev["日常開發（不需要任何雲端服務）"]
+        START["cd api && pnpm dev\nport 8002, tsx watch"] --> CODE["修改程式碼\n自動 hot reload"]
+        CODE --> CURL["手動測試\ncurl localhost:8002/health"]
+        CODE --> VITEST["pnpm test\n224 vitest tests"]
+        VITEST --> COMMIT["git commit"]
+    end
+
+    subgraph ETL_Local["本地 ETL（需要 OpenAI API key）"]
+        MAKE_P["make pipeline\n完整 ETL"] --> FETCH["Step 1: fetch\nNotion + 文章"]
+        FETCH --> EXTRACT["Step 2: extract QA\ngpt-5.2 萃取"]
+        EXTRACT --> DEDUPE["Step 3: dedupe\n+ classify"]
+        DEDUPE --> QA_JSON["output/qa_final.json\n1,323 筆 QA"]
+    end
+
+    subgraph ETL_CC["本地 ETL（不需要 API key，Claude Code 模式）"]
+        CC_EX["/extract-qa\nClaude Code 萃取"] --> CC_DD["/dedupe-classify\nClaude Code 去重"]
+        CC_DD --> QA_JSON2["output/qa_final.json"]
+    end
+
+    subgraph Eval_Local["本地評估"]
+        EVAL_L["make eval-laminar\nRetrieval + Extraction"] --> DASH["Laminar Dashboard"]
+        EVAL_CC["/evaluate-qa-local\nClaude Code as Judge"] --> LOCAL_RPT["eval_local_*.json"]
+        QG["make quality-gate\nhit_rate >= 90%\nmrr >= 0.80"] --> PASS_FAIL{通過?}
+    end
+
+    subgraph FE["前端開發（另一個 repo）"]
+        FE_DEV["cd vocus-web-ui\npnpm dev\nport 3000"] -->|"seoFetch\nport 8002"| START
+    end
+
+    QA_JSON --> MIGRATE["make migrate-supabase\n→ Supabase pgvector"]
+    QA_JSON2 --> MIGRATE
+```
+
+### 3. 開發流程互動關係
+
+```mermaid
+flowchart TD
+    subgraph You["開發者"]
+        LOCAL["本機開發\npnpm dev + pnpm test"]
+        LOCAL_ETL["本機 ETL\nmake pipeline"]
+        LOCAL_EVAL["本機評估\nmake eval-laminar"]
+    end
+
+    subgraph GitHub["GitHub（自動化樞紐）"]
+        REPO["sosreader/seo-knowledge-insight\nmain branch"]
+        W1["deploy-ts-api.yml\nAPI 變更時部署"]
+        W2["eval.yml\n每次 push 評估"]
+        W3["etl-and-deploy.yml\n每週排程 ETL"]
+        W4["test-api-ts.yml\nPR 測試"]
+    end
+
+    subgraph Cloud["雲端服務"]
+        LAMBDA["AWS Lambda\nAPI 服務"]
+        SB["Supabase pgvector\n1,323 QA + embeddings"]
+        LMN["Laminar\nEval Dashboard"]
+    end
+
+    subgraph FE_Repo["前端（vocus-web-ui）"]
+        FRONTEND["Next.js\n6 頁 SPA"]
+    end
+
+    LOCAL -->|"git push main"| REPO
+    LOCAL_ETL -->|"make migrate-supabase"| SB
+    LOCAL_EVAL -->|"Laminar SDK"| LMN
+
+    REPO --> W1 & W2 & W4
+    W3 -->|"排程 / 手動"| REPO
+
+    W1 -->|"build + deploy"| LAMBDA
+    W2 -->|"Supabase REST\nfallback 讀 QA"| SB
+    W2 -->|"推送 eval 結果"| LMN
+    W3 -->|"ETL → migrate → quality gate → deploy"| LAMBDA
+    W3 -->|"migrate"| SB
+
+    LAMBDA -->|"hybridSearch RPC"| SB
+    FRONTEND -->|"REST API\nport 8002 / Lambda URL"| LAMBDA
+
+    LOCAL -.->|"pnpm dev 直連"| SB
+    FRONTEND -.->|"本地開發\nlocalhost:8002"| LOCAL
+```
+
+---

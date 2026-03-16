@@ -497,7 +497,7 @@ python scripts/run_pipeline.py --step evaluate-qa --sample 50 --with-source
 
 ## 五大 AI Provider 比較評估
 
-> 參考：`scripts/compare_providers.py`、`research/09-provider-comparison.md`、`eval/golden_seo_analysis.json`
+> 參考：`scripts/compare_providers.py`、`research/14-provider-comparison.md`、`eval/golden_seo_analysis.json`
 
 ### 實驗設計
 
@@ -1979,5 +1979,159 @@ E-E-A-T 評分（1-5）共用同一套色階邏輯。
 | E6  | `maturity_progression_sanity`    | Rule-based（延後） | `maturity_progression`（延後） |
 
 **`_push_laminar_score.py` 擴充**：新增 `--json-file` 批次模式，讀取 `dimensions.*.score` 正規化至 [0,1] 後推送。
+
+---
+
+## Laminar Eval Groups 流程圖（從 README 搬入）
+
+> 原位於 README.md「Laminar Eval Groups」section。
+
+```mermaid
+flowchart LR
+    subgraph Laminar["Laminar Dashboard Groups"]
+        G1["retrieval_quality"]
+        G2["report-quality"]
+        G3["keyword-retrieval"]
+        G4["retrieval-enhancement"]
+        G5["extraction_quality"]
+        G6["enrichment_quality"]
+        G7["chat_quality"]
+        G8["data-quality"]
+        G9["report-quality-eval"]
+    end
+
+    subgraph Scripts["來源腳本"]
+        S1["evals/eval_retrieval.py"]
+        S2["scripts/_eval_report.py"]
+        S3["scripts/_eval_laminar.py\n--group keyword-retrieval"]
+        S4["scripts/_eval_laminar.py\n--group retrieval-enhancement"]
+        S5["evals/eval_extraction.py"]
+        S6["evals/eval_enrichment.py"]
+        S7["evals/eval_chat.py"]
+        S8["scripts/_eval_data_quality.py"]
+        S9["scripts/_eval_laminar.py\n--mode report"]
+    end
+
+    subgraph Trigger["觸發方式"]
+        CI["eval.yml\n每次 push main"]
+        MAKE_EL["make eval-laminar"]
+        MAKE_ES["make eval-semantic"]
+        MANUAL["手動執行"]
+        ETL_CI["etl-and-deploy.yml\nquality gate"]
+    end
+
+    subgraph Target["評估什麼"]
+        T_SEARCH["POST /search\n關鍵字搜尋品質"]
+        T_REPORT["POST /reports/generate\n週報生成品質"]
+        T_ETL["Step 2 extract_qa.py\nQ&A 萃取品質"]
+        T_ENRICH["scripts/enrich_qa.py\n同義詞 + 時效性"]
+        T_CHAT["POST /chat\nRAG 問答品質"]
+        T_DATA["output/qa_final.json\n資料集整體品質"]
+    end
+
+    S1 --> G1
+    S2 --> G2
+    S3 --> G3
+    S4 --> G4
+    S5 --> G5
+    S6 --> G6
+    S7 --> G7
+    S8 --> G8
+    S9 --> G9
+
+    CI --> S1
+    CI --> S5
+    MAKE_EL --> S3
+    MAKE_EL --> S4
+    MAKE_EL --> S9
+    MAKE_ES --> S3
+    MANUAL --> S2
+    MANUAL --> S6
+    MANUAL --> S7
+    MANUAL --> S8
+    ETL_CI --> S8
+
+    S1 --> T_SEARCH
+    S3 --> T_SEARCH
+    S4 --> T_SEARCH
+    S2 --> T_REPORT
+    S9 --> T_REPORT
+    S5 --> T_ETL
+    S6 --> T_ENRICH
+    S7 --> T_CHAT
+    S8 --> T_DATA
+```
+
+### Eval Groups 速查表
+
+| Laminar Group            | 來源腳本                               | 觸發方式                                    | 評估對象                  | 指標                                                                                                                                  |
+| ------------------------ | -------------------------------------- | ------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `retrieval_quality`      | `evals/eval_retrieval.py`              | CI 自動（每次 push）                        | 關鍵字搜尋                | keyword_hit_rate, top1_category, top5_coverage                                                                                        |
+| `keyword-retrieval`      | `_eval_laminar.py`                     | `make eval-laminar`                         | 關鍵字搜尋                | hit_rate, mrr, precision, recall, f1, ndcg, top1_cat, top5_cov                                                                        |
+| `retrieval-enhancement`  | `_eval_laminar.py --group`             | `make eval-laminar`                         | 同義詞增強搜尋            | synonym_coverage, kw_hit_with_synonyms, freshness_rank                                                                                |
+| `report-quality`         | `_eval_report.py`                      | 手動                                        | 週報生成                  | section_coverage, kb_links, research_cited                                                                                            |
+| `report-quality-eval`    | `_eval_laminar.py --mode report`       | `make eval-laminar`                         | 週報生成                  | section_coverage, kb_links, research_cited, overall                                                                                   |
+| `extraction_quality`     | `evals/eval_extraction.py`             | CI 自動（graceful skip）                    | Q&A 萃取                  | qa_count_in_range, keyword_coverage, no_admin, avg_confidence                                                                         |
+| `enrichment_quality`     | `evals/eval_enrichment.py`             | 手動                                        | 離線 enrichment           | kw_hit_with_synonyms, freshness_rank, synonym_coverage                                                                                |
+| `chat_quality`           | `evals/eval_chat.py`                   | 手動                                        | RAG 問答                  | answer_keyword_coverage, top_source_category                                                                                          |
+| `data-quality`           | `_eval_data_quality.py`                | ETL CI / 手動                               | 資料集整體                | qa_count, avg_confidence, category_distribution                                                                                       |
+| `meeting_prep_structure` | `evals/eval_meeting_prep_structure.py` | `make evaluate-meeting-prep-structure` / CI | Meeting-Prep 報告結構     | section_completeness, metadata_valid, citation_block_valid, question_count_valid, eeat_score_format, maturity_level_format 等 11 指標 |
+| `meeting_prep_grounding` | `evals/eval_meeting_prep_grounding.py` | `make evaluate-meeting-prep-grounding` / CI | Meeting-Prep 引用與接地性 | citation_id_resolution, citation_category_consistency, citation_count_in_range, s4_four_sources_populated, inline_citation_coverage   |
+
+> **注意**：Dashboard 中的 `v2.12-fixed`、`v2.12-1317items`、`retrieval-eval-20...` 等為歷史一次性 run（測試或版本驗證），不是固定 group。
+
+---
+
+## 步驟 6：Laminar 離線評估（從 README 搬入）
+
+> 原位於 README.md「步驟 6」section。
+
+### 概述
+
+基於 Laminar SDK 的離線評估系統，自動監控檢索、萃取、RAG chat 三個環節的品質。所有評估皆無需 OpenAI API（pure Python / SQL 邏輯）。
+
+### 啟動方式
+
+**前提**：安裝 Laminar SDK 並設定 API key
+
+```bash
+pip install lmnr
+export LMNR_PROJECT_API_KEY=<your-key-from-laminar.sh>
+```
+
+**執行評估**：
+
+```bash
+# 方式 1：Laminar 正式 eval run（推薦，20 cases 黃金集合）
+python scripts/_eval_laminar.py                  # 預設 top-k=5，group="retrieval-eval"
+python scripts/_eval_laminar.py --top-k 10      # 改變檢索深度
+python scripts/_eval_laminar.py --group "v2.12" # 自訂 group 名稱
+
+# 方式 2：其他評估腳本
+python evals/eval_retrieval.py
+python evals/eval_extraction.py
+python evals/eval_chat.py
+```
+
+**Group 設計**：
+
+- 預設 `--group "keyword-retrieval"` 讓所有 eval run 進同一 group
+- Laminar Dashboard 上可畫趨勢折線圖，追蹤 5 個指標變化
+- `concurrency_limit=1`：每次單個 run，避免並發上傳失敗
+
+**檢視結果**：
+
+```
+# Laminar 儀表板
+https://laminar.sh/app/evals
+```
+
+### 評估維度
+
+| 評估類型            | 檔案                       | 測試集                        | 評估指標（v2.12）                              |
+| ------------------- | -------------------------- | ----------------------------- | ---------------------------------------------- |
+| **Retrieval 品質**  | `scripts/_eval_laminar.py` | golden_retrieval.json (20 筆) | Precision@K、Recall@K、F1 Score、Hit Rate、MRR |
+| **Extraction 品質** | `evals/eval_extraction.py` | golden_extraction.json        | Q&A 計數、Keyword Coverage、無管理內容         |
+| **Chat 品質**       | `evals/eval_chat.py`       | 前 10 retrieval scenarios     | 回答長度、來源涵蓋、關鍵字匹配                 |
 
 ---
