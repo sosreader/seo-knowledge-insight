@@ -126,33 +126,33 @@ python scripts/run_pipeline.py --dry-run
 
 ### Pipeline 建構
 
-| 功能                    | CLI 腳本                  | Claude Code 指令                        | REST API                               |
-| ----------------------- | ------------------------- | --------------------------------------- | -------------------------------------- |
-| Step 1a — Notion 擷取   | `make fetch-notion`       | 由 `/pipeline-local` 整合               | `POST /api/v1/pipeline/fetch`          |
-| Step 1b-d — 文章擷取    | `make fetch-articles`     | 由 `/pipeline-local` 整合               | `POST /api/v1/pipeline/fetch-articles` |
-| Step 2 — Q&A 萃取       | `make extract-qa`         | `/extract-qa`                           | `POST /api/v1/pipeline/extract-qa`     |
-| Step 3 — 去重 + 分類    | `make dedupe-classify`    | `/dedupe-classify`                      | `POST /api/v1/pipeline/dedupe-classify`|
-| Step 4 — 週報生成       | `make generate-report`    | `/generate-report <URL>`                | `POST /api/v1/reports/generate`        |
-| Step 5 — 品質評估       | `make evaluate-qa`        | `/evaluate-qa-local`                    | —                                      |
-| Steps 1–4 — 知識庫建構  | `make pipeline`           | `/pipeline-local`                       | —                                      |
+| 功能                   | CLI 腳本               | Claude Code 指令          | REST API                                |
+| ---------------------- | ---------------------- | ------------------------- | --------------------------------------- |
+| Step 1a — Notion 擷取  | `make fetch-notion`    | 由 `/pipeline-local` 整合 | `POST /api/v1/pipeline/fetch`           |
+| Step 1b-d — 文章擷取   | `make fetch-articles`  | 由 `/pipeline-local` 整合 | `POST /api/v1/pipeline/fetch-articles`  |
+| Step 2 — Q&A 萃取      | `make extract-qa`      | `/extract-qa`             | `POST /api/v1/pipeline/extract-qa`      |
+| Step 3 — 去重 + 分類   | `make dedupe-classify` | `/dedupe-classify`        | `POST /api/v1/pipeline/dedupe-classify` |
+| Step 4 — 週報生成      | `make generate-report` | `/generate-report <URL>`  | `POST /api/v1/reports/generate`         |
+| Step 5 — 品質評估      | `make evaluate-qa`     | `/evaluate-qa-local`      | —                                       |
+| Steps 1–4 — 知識庫建構 | `make pipeline`        | `/pipeline-local`         | —                                       |
 
 ### 搜尋與問答
 
-| 功能             | CLI 腳本                                          | Claude Code 指令   | REST API              |
-| ---------------- | ------------------------------------------------- | ------------------ | --------------------- |
-| 知識庫搜尋       | `python scripts/qa_tools.py search --query "..."` | `/search <問題>`   | `POST /api/v1/search` |
-| RAG 問答         | —                                                 | `/chat`            | `POST /api/v1/chat`   |
-| Agentic RAG 問答 | —                                                 | `/chat-agent`      | `POST /api/v1/chat`   |
+| 功能             | CLI 腳本                                          | Claude Code 指令 | REST API              |
+| ---------------- | ------------------------------------------------- | ---------------- | --------------------- |
+| 知識庫搜尋       | `python scripts/qa_tools.py search --query "..."` | `/search <問題>` | `POST /api/v1/search` |
+| RAG 問答         | —                                                 | `/chat`          | `POST /api/v1/chat`   |
+| Agentic RAG 問答 | —                                                 | `/chat-agent`    | `POST /api/v1/chat`   |
 
 ### 資料查詢
 
-| 功能          | REST API                    |
-| ------------- | --------------------------- |
-| Q&A 列表查詢  | `GET /api/v1/qa`            |
-| 單筆 Q&A 詳情 | `GET /api/v1/qa/{id}`       |
-| 所有分類      | `GET /api/v1/qa/categories` |
-| 資料集列表    | `GET /api/v1/qa/collections`|
-| 週報列表      | `GET /api/v1/reports`       |
+| 功能          | REST API                     |
+| ------------- | ---------------------------- |
+| Q&A 列表查詢  | `GET /api/v1/qa`             |
+| 單筆 Q&A 詳情 | `GET /api/v1/qa/{id}`        |
+| 所有分類      | `GET /api/v1/qa/categories`  |
+| 資料集列表    | `GET /api/v1/qa/collections` |
+| 週報列表      | `GET /api/v1/reports`        |
 
 > 離線評估工具見 [research/03-evaluation.md](research/03-evaluation.md)
 > Pipeline 監控端點見 [CLAUDE.md](CLAUDE.md)
@@ -205,21 +205,21 @@ cd api && pnpm install && pnpm dev   # 啟動開發伺服器
 
 ## 文件導覽
 
-| 文件                                                                  | 說明                                         |
-| --------------------------------------------------------------------- | -------------------------------------------- |
-| [CLAUDE.md](CLAUDE.md)                                                | Claude Code 指令速查、Pipeline CLI、API 啟動 |
-| [api/README.md](api/README.md)                                       | REST API 完整端點、安全機制、部署架構        |
-| [research/02-rag-and-search.md](research/02-rag-and-search.md)       | RAG 迭代改進（Phase 2–4）、評估基準線        |
-| [research/03-evaluation.md](research/03-evaluation.md)               | 評估維度、Laminar Eval Groups、離線評估      |
-| [research/05-models.md](research/05-models.md)                       | 模型選擇決策、Embedding 比較                 |
-| [research/06-project-architecture.md](research/06-project-architecture.md) | 架構決策、目錄樹                       |
-| [research/06a-architecture-changelog.md](research/06a-architecture-changelog.md) | 架構變更紀錄                         |
-| [research/06b-architecture-diagram.md](research/06b-architecture-diagram.md) | Mermaid 架構圖、工作流程圖               |
-| [research/06c-backend-onboarding.md](research/06c-backend-onboarding.md) | 後端入門、Troubleshooting、開發指南      |
-| [research/07-deployment.md](research/07-deployment.md)               | Lambda 部署、Supabase 遷移                   |
-| [research/15-pipeline-operations.md](research/15-pipeline-operations.md) | Pipeline 操作手冊、成本估算               |
-| [research/16-data-schema.md](research/16-data-schema.md)             | 資料結構（5 種 JSON 格式 + 分類標籤）        |
-| [research/README.md](research/README.md)                             | Research 知識庫索引                           |
+| 文件                                                                             | 說明                                         |
+| -------------------------------------------------------------------------------- | -------------------------------------------- |
+| [CLAUDE.md](CLAUDE.md)                                                           | Claude Code 指令速查、Pipeline CLI、API 啟動 |
+| [api/README.md](api/README.md)                                                   | REST API 完整端點、安全機制、部署架構        |
+| [research/02-rag-and-search.md](research/02-rag-and-search.md)                   | RAG 迭代改進（Phase 2–4）、評估基準線        |
+| [research/03-evaluation.md](research/03-evaluation.md)                           | 評估維度、Laminar Eval Groups、離線評估      |
+| [research/05-models.md](research/05-models.md)                                   | 模型選擇決策、Embedding 比較                 |
+| [research/06-project-architecture.md](research/06-project-architecture.md)       | 架構決策、目錄樹                             |
+| [research/06a-architecture-changelog.md](research/06a-architecture-changelog.md) | 架構變更紀錄                                 |
+| [research/06b-architecture-diagram.md](research/06b-architecture-diagram.md)     | Mermaid 架構圖、工作流程圖                   |
+| [research/06c-backend-onboarding.md](research/06c-backend-onboarding.md)         | 後端入門、Troubleshooting、開發指南          |
+| [research/07-deployment.md](research/07-deployment.md)                           | Lambda 部署、Supabase 遷移                   |
+| [research/15-pipeline-operations.md](research/15-pipeline-operations.md)         | Pipeline 操作手冊、成本估算                  |
+| [research/16-data-schema.md](research/16-data-schema.md)                         | 資料結構（5 種 JSON 格式 + 分類標籤）        |
+| [research/README.md](research/README.md)                                         | Research 知識庫索引                          |
 
 ---
 

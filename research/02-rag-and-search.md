@@ -97,14 +97,14 @@ retrieved = [qa_pairs[i] for i in top_indices]
 
 ### 本專案 Retrieval 評估基準線（v2.12→v2.24，2026-03-06）
 
-| 指標                | 數值        | 說明                                 | 目標      |
-| ------------------- | ----------- | ------------------------------------ | --------- |
-| Hit Rate            | **100%** ✅ | top-5 中有正確結果（20 cases）        | ≥ 90%     |
-| MRR                 | **0.88**    | 第一筆正確結果的排名倒數（越高越好） | ≥ 0.85 ✅ |
-| Precision@K         | **76%**     | top-K 中有幾個是 relevant             | ≥ 80%     |
-| Recall@K            | **77.5%**   | 正確結果有多少被 top-K 涵蓋           | ≥ 80%     |
-| NDCG@K              | **0.72**    | 排名加權的累積相關度（v2.13 實作）    | ≥ 0.78    |
-| F1 Score            | **0.74**    | Precision/Recall 調和平均             | ≥ 0.78    |
+| 指標        | 數值        | 說明                                 | 目標      |
+| ----------- | ----------- | ------------------------------------ | --------- |
+| Hit Rate    | **100%** ✅ | top-5 中有正確結果（20 cases）       | ≥ 90%     |
+| MRR         | **0.88**    | 第一筆正確結果的排名倒數（越高越好） | ≥ 0.85 ✅ |
+| Precision@K | **76%**     | top-K 中有幾個是 relevant            | ≥ 80%     |
+| Recall@K    | **77.5%**   | 正確結果有多少被 top-K 涵蓋          | ≥ 80%     |
+| NDCG@K      | **0.72**    | 排名加權的累積相關度（v2.13 實作）   | ≥ 0.78    |
+| F1 Score    | **0.74**    | Precision/Recall 調和平均            | ≥ 0.78    |
 
 > v2.24 資料層改為 Supabase pgvector，搜尋品質維持不變（pgvector over-retrieve → TS re-rank）。
 
@@ -156,14 +156,14 @@ final_score
 
 ### Retrieval Data Dimensions 離線成效（40 golden cases）
 
-| 指標 | Baseline | Phase 4 |
-|------|----------|---------|
-| Precision@K | 0.58 | 0.85 |
-| Boosterless Precision@K | — | 0.83 |
-| Dual Category Recall@K | — | 1.00 |
-| Multi-label F1@K | — | 0.97 |
-| Canonical Top-1 Rate | — | 0.37 |
-| MRR | 0.92 | 0.99 |
+| 指標                    | Baseline | Phase 4 |
+| ----------------------- | -------- | ------- |
+| Precision@K             | 0.58     | 0.85    |
+| Boosterless Precision@K | —        | 0.83    |
+| Dual Category Recall@K  | —        | 1.00    |
+| Multi-label F1@K        | —        | 0.97    |
+| Canonical Top-1 Rate    | —        | 0.37    |
+| MRR                     | 0.92     | 0.99    |
 
 這 5 個新增 case 主要來自 Ahrefs 的 AI Search / AI Overviews 研究，因此這組數字代表的不只是一般 SEO query 的穩定度，也包含較高成熟度、較偏策略層問題的 retrieval 表現。
 
@@ -179,14 +179,14 @@ QA 數量
       2026-02-28       2026-03-01              2026-03-05
 ```
 
-| 日期       | 事件               | QA 數量 | 說明                             |
-| ---------- | ------------------ | ------- | -------------------------------- |
-| 2026-02-28 | 初版萃取           | 725     | Step 2 首次全量萃取（87 場會議） |
-| 2026-02-28 | 去重後             | 725     | Step 3 初版（v1.0）              |
-| 2026-03-01 | 防幻覺規則重跑     | 670     | v2.0 重跑，新規則過濾低品質萃取  |
-| 2026-03-01 | 去重後             | **655** | v2.0 最終版（+ 12 Google Cases） |
-| 2026-03-05 | 多來源擴充            | 1,317     | v2.12：Notion 584 + Medium 505 + iThome 185 + Google Cases 43 |
-| 2026-03-06 | Supabase pgvector（**現行**）| **1,323** | v2.24：6 筆缺 embedding 補齊 + pgvector 遷移 |
+| 日期       | 事件                          | QA 數量   | 說明                                                          |
+| ---------- | ----------------------------- | --------- | ------------------------------------------------------------- |
+| 2026-02-28 | 初版萃取                      | 725       | Step 2 首次全量萃取（87 場會議）                              |
+| 2026-02-28 | 去重後                        | 725       | Step 3 初版（v1.0）                                           |
+| 2026-03-01 | 防幻覺規則重跑                | 670       | v2.0 重跑，新規則過濾低品質萃取                               |
+| 2026-03-01 | 去重後                        | **655**   | v2.0 最終版（+ 12 Google Cases）                              |
+| 2026-03-05 | 多來源擴充                    | 1,317     | v2.12：Notion 584 + Medium 505 + iThome 185 + Google Cases 43 |
+| 2026-03-06 | Supabase pgvector（**現行**） | **1,323** | v2.24：6 筆缺 embedding 補齊 + pgvector 遷移                  |
 
 ### KW Hit Rate 完整歷程
 
@@ -275,12 +275,12 @@ retrieved = [qa_pairs[i] for i in top_indices]
 
 ### Retrieval 評估指標詳解
 
-| 指標                                              | 計算方式                                 | 直覺理解                             | 本專案基準線          |
-| ------------------------------------------------- | ---------------------------------------- | ------------------------------------ | --------------------- |
-| **MRR**（Mean Reciprocal Rank）                   | 第一筆正確結果排名的倒數取平均           | 第 1 筆正確 = 1.0；第 2 筆正確 = 0.5 | **0.88** ✅           |
-| **NDCG**（Normalized Discounted Cumulative Gain） | 考慮排名位置的累積相關度，越靠前越值錢   | 比 MRR 更細緻                        | **0.72**（v2.13 實作）|
-| **Hit Rate**（Recall@K）                          | top-K 結果中有沒有包含正確答案           | Hit@5 = 前 5 筆有沒有                | **100%** ✅           |
-| **LLM Top-1 Precision**                           | top-1 結果是否與查詢真實相關（LLM 判斷） | 最重要的第一筆準不準                 | 100% ✅               |
+| 指標                                              | 計算方式                                 | 直覺理解                             | 本專案基準線           |
+| ------------------------------------------------- | ---------------------------------------- | ------------------------------------ | ---------------------- |
+| **MRR**（Mean Reciprocal Rank）                   | 第一筆正確結果排名的倒數取平均           | 第 1 筆正確 = 1.0；第 2 筆正確 = 0.5 | **0.88** ✅            |
+| **NDCG**（Normalized Discounted Cumulative Gain） | 考慮排名位置的累積相關度，越靠前越值錢   | 比 MRR 更細緻                        | **0.72**（v2.13 實作） |
+| **Hit Rate**（Recall@K）                          | top-K 結果中有沒有包含正確答案           | Hit@5 = 前 5 筆有沒有                | **100%** ✅            |
+| **LLM Top-1 Precision**                           | top-1 結果是否與查詢真實相關（LLM 判斷） | 最重要的第一筆準不準                 | 100% ✅                |
 
 ### KW Hit Rate 54% → 78%：TypeA/TypeB 診斷（2026-02-27 解決）
 
@@ -655,21 +655,23 @@ cd api && npx tsx scripts/eval-semantic.ts --top-k 3 # 改變 top-K 參數
 
 **三種模式評估**（20 golden cases，v2.12 實驗結果）：
 
-| 模式 | Precision | Recall | F1 | Hit Rate | MRR | 說明 |
-|------|-----------|--------|-----|----------|-----|------|
-| **Keyword（baseline）** | 0.810 | 0.800 | 0.768 | 1.0 | 0.938 | Python keyword 手動實驗 baseline（非 TS eval-semantic.ts）|
-| **Keyword + Claude Rerank** | **0.950** | **0.825** | **0.861** | 1.0 | **1.0** | Claude Code 直接語意選取 top-5 |
-| **Delta** | **+0.140** | **+0.025** | **+0.093** | ±0.0 | **+0.062** | Precision +14pp，MRR 達到完美 |
+| 模式                        | Precision  | Recall     | F1         | Hit Rate | MRR        | 說明                                                       |
+| --------------------------- | ---------- | ---------- | ---------- | -------- | ---------- | ---------------------------------------------------------- |
+| **Keyword（baseline）**     | 0.810      | 0.800      | 0.768      | 1.0      | 0.938      | Python keyword 手動實驗 baseline（非 TS eval-semantic.ts） |
+| **Keyword + Claude Rerank** | **0.950**  | **0.825**  | **0.861**  | 1.0      | **1.0**    | Claude Code 直接語意選取 top-5                             |
+| **Delta**                   | **+0.140** | **+0.025** | **+0.093** | ±0.0     | **+0.062** | Precision +14pp，MRR 達到完美                              |
 
 > **Baseline 版本說明**：Precision 0.810 為 Python keyword 手動實驗結果；TypeScript `eval-semantic.ts` keyword mode 為 0.700（不同 BM25 實作）；`_eval_laminar.py` Python keyword 為 0.76。
 
 **主要發現**：
+
 - **Precision 大幅提升（+14%）**：Reranker 有效過濾噪音（keyword 命中但語意不相關的結果）
 - **MRR 達到 1.0**：第一筆結果 100% 是期望分類，排序順序最優
 - **Recall 小幅提升（+2.5%）**：受 over-retrieve pool 限制（某些期望分類不在 top-15 pool 中），無法進一步改善
 - **Hit Rate 持平（1.0）**：所有 20 個查詢都至少命中一筆正確分類，keyword 搜尋本身無失敗
 
 **Reranker 的語意判斷能力**：Claude haiku-4-5 作為 judge 輸入 query + candidates，輸出語意相關度排序。相比純 keyword 匹配，reranker 能捕捉：
+
 - 語意等價但措詞不同的結果（如 "CTR" vs "點擊率"）
 - Discover 專屬情境（keyword 命中「流量」但非 Discover 導向的結果被降權）
 - 相關性梯度（部分相關 vs 完全相關，而非二元 relevant/irrelevant）
@@ -688,6 +690,7 @@ const boostedHits = applyMaturityBoost(filteredHits, maturityLevel);
 ```
 
 **設計決策**：
+
 - **opt-in 而非 auto-detect**：Lambda 上無 meeting-prep 檔案，不適合自動偵測
 - **post-retrieve 而非 pre-filter**：不排除其他等級的 QA，僅調整排序
 - **乘法 boost 而非加法**：與 synonym_boost / freshness_decay 相容，高分項目被提升幅度更大
@@ -696,13 +699,13 @@ const boostedHits = applyMaturityBoost(filteredHits, maturityLevel);
 
 **與現有 boost 的交互**：
 
-| Boost 類型 | 實作位置 | 應用階段 |
-|-----------|---------|---------|
-| Keyword boost | `SearchEngine` / `SupabaseQAStore` | Retrieve 時 |
-| Synonym boost | `SearchEngine._synonym_boost_vec` | Retrieve 時 |
-| Freshness decay | `SearchEngine._freshness_vec` | Retrieve 時 |
-| Claude rerank | `reranker.ts` | Post-retrieve |
-| **Maturity boost** | `maturity.ts` | **Post-rerank**（最後一層） |
+| Boost 類型         | 實作位置                           | 應用階段                    |
+| ------------------ | ---------------------------------- | --------------------------- |
+| Keyword boost      | `SearchEngine` / `SupabaseQAStore` | Retrieve 時                 |
+| Synonym boost      | `SearchEngine._synonym_boost_vec`  | Retrieve 時                 |
+| Freshness decay    | `SearchEngine._freshness_vec`      | Retrieve 時                 |
+| Claude rerank      | `reranker.ts`                      | Post-retrieve               |
+| **Maturity boost** | `maturity.ts`                      | **Post-rerank**（最後一層） |
 
 ### Synonym Expansion 評估維度（v2.13）
 
@@ -710,10 +713,10 @@ const boostedHits = applyMaturityBoost(filteredHits, maturityLevel);
 
 本專案引入兩個 Layer 3 指標（`_eval_laminar.py --group retrieval-enhancement`）：
 
-| 指標 | 定義 | 測量意義 |
-|------|------|---------|
-| `synonym_coverage` | `expected_keywords` 中有 synonym 對應的比例 | 詞典覆蓋密度——若 query 的 expected keywords 都沒有 synonym，擴充無效 |
-| `kw_hit_rate_with_synonyms` | 同義詞展開後的 hit rate | 展開後搜尋是否實際改善命中（與 baseline hit_rate 對比）|
+| 指標                        | 定義                                        | 測量意義                                                             |
+| --------------------------- | ------------------------------------------- | -------------------------------------------------------------------- |
+| `synonym_coverage`          | `expected_keywords` 中有 synonym 對應的比例 | 詞典覆蓋密度——若 query 的 expected keywords 都沒有 synonym，擴充無效 |
+| `kw_hit_rate_with_synonyms` | 同義詞展開後的 hit rate                     | 展開後搜尋是否實際改善命中（與 baseline hit_rate 對比）              |
 
 **Synonym Expansion 機制**：
 
@@ -730,10 +733,10 @@ for term, syn_list in synonyms.items():
 
 **已知基準線**（v2.11，`qa_enriched.json`）：
 
-| 指標 | 值 | 說明 |
-|------|----|----|
-| `synonym_coverage` | 100% | qa_enriched 有完整同義詞擴充；新 query 可能低於此值 |
-| `kw_hit_rate_with_synonyms` | 79.67% | vs keyword hit_rate 74%（+5.67pp）|
+| 指標                        | 值     | 說明                                                |
+| --------------------------- | ------ | --------------------------------------------------- |
+| `synonym_coverage`          | 100%   | qa_enriched 有完整同義詞擴充；新 query 可能低於此值 |
+| `kw_hit_rate_with_synonyms` | 79.67% | vs keyword hit_rate 74%（+5.67pp）                  |
 
 ### Phase 4：Context Relevance 評估（`api/src/services/context-relevance.ts`，v2.12）
 
@@ -753,13 +756,13 @@ const result = await contextRelevance(
 
 **與 Phase 1–3 的關係**：
 
-| 優化 Phase                     | 動作             | 評估方式                                        |
-| ------------------------------ | ---------------- | ----------------------------------------------- |
-| Phase 1：Synonym 擴充          | 增加查詢覆蓋率   | KW Hit Rate（keyword overlap）                  |
-| Phase 2：Contextual Embeddings | 強化語意向量     | 尚無獨立指標（混入 hybrid score）               |
-| Phase 3：Re-ranking            | 改善排序順序     | `POST /eval/reranking`（rank order delta）      |
-| **Phase 4：Context Relevance** | **評估整體品質** | **`POST /eval/context-relevance`（0–1 score）** |
-| **Phase 5：Agentic RAG** | **LLM 自主多輪搜尋** | Agent mode `POST /chat`（tool_calls_count, agent_turns） |
+| 優化 Phase                     | 動作                 | 評估方式                                                 |
+| ------------------------------ | -------------------- | -------------------------------------------------------- |
+| Phase 1：Synonym 擴充          | 增加查詢覆蓋率       | KW Hit Rate（keyword overlap）                           |
+| Phase 2：Contextual Embeddings | 強化語意向量         | 尚無獨立指標（混入 hybrid score）                        |
+| Phase 3：Re-ranking            | 改善排序順序         | `POST /eval/reranking`（rank order delta）               |
+| **Phase 4：Context Relevance** | **評估整體品質**     | **`POST /eval/context-relevance`（0–1 score）**          |
+| **Phase 5：Agentic RAG**       | **LLM 自主多輪搜尋** | Agent mode `POST /chat`（tool_calls_count, agent_turns） |
 
 Context Relevance 作為**端到端指標**，可驗證 Phase 1–3 的累積效果。
 預期：`context_relevance_score > kw_hit_rate`（語意評估應高於純 keyword 判斷）。
@@ -783,6 +786,7 @@ POST /api/v1/eval/context-relevance
 ### Phase 5：Agentic RAG（`api/src/agent/`，v2.28）
 
 Phase 1–4 的 RAG 是**單輪固定流程**：embedding → hybrid search → GPT completion。LLM 無法決定：
+
 - 要不要搜尋、搜什麼關鍵字
 - 搜到的結果夠不夠、要不要再搜一次
 - 是否需要查詢特定 Q&A 的完整內容
@@ -819,13 +823,13 @@ LLM 生成最終回答（含 sources 引用）
 
 **與 Phase 1–4 的差異**：
 
-| | Phase 1–4（Single-pass RAG） | Phase 5（Agentic RAG） |
-|---|---|---|
-| 搜尋次數 | 固定 1 次 | LLM 自主決定 1–N 次 |
-| 關鍵字選擇 | 直接用使用者問題 | LLM 拆解、重組 |
-| 結果評估 | 無（搜到就回答） | LLM 判斷是否充足 |
-| Tool 種類 | 只有 search | 4 種 tools |
-| 回應模式 | `mode: "full"` | `mode: "agent"` |
+|            | Phase 1–4（Single-pass RAG） | Phase 5（Agentic RAG） |
+| ---------- | ---------------------------- | ---------------------- |
+| 搜尋次數   | 固定 1 次                    | LLM 自主決定 1–N 次    |
+| 關鍵字選擇 | 直接用使用者問題             | LLM 拆解、重組         |
+| 結果評估   | 無（搜到就回答）             | LLM 判斷是否充足       |
+| Tool 種類  | 只有 search                  | 4 種 tools             |
+| 回應模式   | `mode: "full"`               | `mode: "agent"`        |
 
 **Feature Flag**：`AGENT_ENABLED=auto|true|false`（auto = 有 OpenAI key 就啟用）。
 
@@ -852,7 +856,7 @@ LLM 生成最終回答（含 sources 引用）
 ### Phase 3：Re-ranking 服務（可選，需要 `ANTHROPIC_API_KEY`）
 
 - `api/src/services/reranker.ts` — Claude Haiku reranker service
-  - 初期 over-retrieve K*3 候選
+  - 初期 over-retrieve K\*3 候選
   - 用 XML 結構化 prompt 重排序、評分
   - 篩選 top-K 結果
   - 錯誤時自動 fallback 至原始排序
@@ -885,23 +889,23 @@ RERANKER_ENABLED=auto            # 是否啟用 reranker（"auto"/"true"/"false"
 
 v2.11（20 cases，top-k=5）：
 
-| 指標 | 數值 |
-|------|------|
-| KW Hit Rate | 73% |
-| Precision@K | 76% |
-| Recall@K | 80% |
-| F1 Score | 0.73 |
-| MRR | 0.88 |
+| 指標        | 數值 |
+| ----------- | ---- |
+| KW Hit Rate | 73%  |
+| Precision@K | 76%  |
+| Recall@K    | 80%  |
+| F1 Score    | 0.73 |
+| MRR         | 0.88 |
 
 Retrieval Data Dimensions phase gate（2026-03-15，40 cases，top-k=5）：
 
-| 指標 | Baseline | Phase 4 |
-|------|----------|---------|
-| Precision@K | 0.58 | 0.85 |
-| Boosterless Precision@K | — | 0.83 |
-| Dual Category Recall@K | — | 1.00 |
-| Multi-label F1@K | — | 0.97 |
-| Canonical Top-1 Rate | — | 0.37 |
-| MRR | 0.92 | 0.99 |
+| 指標                    | Baseline | Phase 4 |
+| ----------------------- | -------- | ------- |
+| Precision@K             | 0.58     | 0.85    |
+| Boosterless Precision@K | —        | 0.83    |
+| Dual Category Recall@K  | —        | 1.00    |
+| Multi-label F1@K        | —        | 0.97    |
+| Canonical Top-1 Rate    | —        | 0.37    |
+| MRR                     | 0.92     | 0.99    |
 
 ---
