@@ -93,7 +93,7 @@ Client → Function URL / localhost:8002
 | ----------------- | -------------------------------------------------- | ------------------------------------------------------------ |
 | OpenAPI JSON      | `http://localhost:8002/openapi.json`               | 機器可讀規格（可匯入 Postman / Swagger Editor）              |
 | 互動式文件        | `http://localhost:8002/docs`                       | Scalar UI（可直接在瀏覽器測試 API）                          |
-| Mintlify 託管文件 | [`vocus.mintlify.app`](https://vocus.mintlify.app) | 託管文件站（auto-deploy from main，Pro trial 至 2026-03-21） |
+| GitHub Pages 文件 | [`sosreader.github.io/seo-knowledge-insight`](https://sosreader.github.io/seo-knowledge-insight/) | Scalar 託管文件站（CI auto-deploy from `api/src/openapi.ts`） |
 
 > `/openapi.json` 和 `/docs` 不需要認證，也不受 rate limit 限制。
 
@@ -430,12 +430,7 @@ api/
 │       ├── observability.ts  # Laminar tracing
 │       ├── laminar-scoring.ts  # Online scoring
 │       └── llm-usage-logger.ts  # LLM cost monitoring（token usage tracking）
-├── docs/                       # Mintlify API 文件（託管於 vocus.mintlify.app）
-│   ├── docs.json              # Mintlify 設定（docs.json v2 格式）
-│   ├── openapi.json           # OpenAPI 3.1 靜態規格（31 paths）
-│   ├── introduction.mdx       # API 簡介
-│   ├── authentication.mdx     # 認證說明
-│   └── favicon.svg            # 文件站 favicon
+├── scripts/export-openapi.ts    # OpenAPI spec 匯出（CI 用，產生 docs-site/openapi.json）
 ├── scripts/
 │   ├── ai-crawler-checker.ts  # AI crawler readiness CLI（GPTBot/ClaudeBot 等 10 bots）
 │   ├── feedback-to-golden.ts  # 使用者回饋 → golden dataset 候選

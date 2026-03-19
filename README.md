@@ -182,7 +182,7 @@ cd api && pnpm install && pnpm dev   # 啟動開發伺服器
 
 - [`/docs`](http://localhost:8002/docs) — Scalar 互動式文件
 - [`/openapi.json`](http://localhost:8002/openapi.json) — OpenAPI 3.1 規格
-- [Mintlify 文件](https://vocus.mintlify.app) — 線上託管文件
+- [GitHub Pages 文件](https://sosreader.github.io/seo-knowledge-insight/) — Scalar 線上託管文件（Art Deco theme，雙語 zh-TW + EN）
 
 > 完整端點清單、安全機制、部署架構見 [api/README.md](api/README.md)
 

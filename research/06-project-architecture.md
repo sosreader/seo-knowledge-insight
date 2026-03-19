@@ -1461,7 +1461,7 @@ eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboar
 - **`src/openapi.ts`**：手工建構 OpenAPI 3.1 spec（29 paths, 32 endpoints, 15+ schemas）
 - **`GET /openapi.json`**：機器可讀規格（無需 auth，可匯入 Postman / Swagger Editor / SDK generator）
 - **`GET /docs`**：Scalar UI 互動式文件（`@scalar/hono-api-reference`）
-- **`api/docs/`**：Mintlify 結構化文件（docs.json + openapi.json + introduction.mdx + authentication.mdx + favicon.svg），託管於 [vocus.mintlify.app](https://vocus.mintlify.app)
+- **`docs-site/`**：GitHub Pages 靜態站（Scalar CDN + Art Deco theme + Tailwind CSS v4），託管於 [sosreader.github.io/seo-knowledge-insight](https://sosreader.github.io/seo-knowledge-insight/)。OpenAPI spec 由 CI 從 `api/scripts/export-openapi.ts` 動態產生，不 commit
 - 不使用 `hono-openapi` + `zod-openapi`——Zod v4 不相容，改用手動方案
 
 ### Observability 擴充（v2.12）
