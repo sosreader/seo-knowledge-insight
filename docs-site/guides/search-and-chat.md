@@ -1,8 +1,3 @@
----
-title: Search & Chat
-description: Semantic search and RAG chat endpoints — the core features for frontend integration
----
-
 # Search & Chat
 
 These are the most commonly used endpoints for frontend integration.
@@ -28,6 +23,8 @@ Search the knowledge base using hybrid semantic + keyword search with synonym ex
 | `query` | string | Yes | Search query (1-500 chars) |
 | `top_k` | number | No | Number of results (default: 5, max: 20) |
 | `category` | string | No | Filter by category |
+| `extraction_model` | string | No | Filter by extraction model (e.g. `"claude-code"`) |
+| `maturity_level` | string | No | Boost results matching this maturity level (`"L1"`-`"L4"`) |
 
 ### Response
 
@@ -38,14 +35,13 @@ Search the knowledge base using hybrid semantic + keyword search with synonym ex
       "question": "What are Core Web Vitals and how do they impact SEO?",
       "answer": "Core Web Vitals are a set of metrics...",
       "score": 0.89,
-      "source": "notion",
+      "source_type": "meeting",
       "source_collection": "weekly-meetings",
       "category": "Technical SEO",
-      "difficulty": "intermediate",
-      "stable_id": "a1b2c3d4e5f67890"
+      "difficulty": "advanced",
+      "id": "a1b2c3d4e5f67890"
     }
   ],
-  "query": "How to improve Core Web Vitals",
   "total": 5,
   "mode": "hybrid"
 }
@@ -55,9 +51,9 @@ Search the knowledge base using hybrid semantic + keyword search with synonym ex
 
 | Condition | Mode | Description |
 |-----------|------|-------------|
-| OpenAI key available | `hybrid` | Embedding similarity + keyword boost |
+| Supabase configured | `hybrid` | pgvector embedding + keyword boost |
+| OpenAI key only | `hybrid` | Embedding similarity + keyword boost |
 | No OpenAI key | `keyword` | Keyword-only search with synonym expansion |
-| Supabase configured | `pgvector` | PostgreSQL hybrid search via RPC |
 
 ### Frontend Example
 
@@ -69,7 +65,7 @@ async function searchKnowledgeBase(query: string, category?: string) {
     body: JSON.stringify({ query, top_k: 10, category }),
   });
   const data = await res.json();
-  return data.results; // { question, answer, score, source, category }[]
+  return data.results; // { question, answer, score, source_type, category }[]
 }
 ```
 
@@ -99,6 +95,7 @@ Single-turn question answering with automatic knowledge base retrieval.
 | `message` | string | Yes | User message (1-2000 chars) |
 | `history` | array | No | Previous messages for context (max 20) |
 | `mode` | string | No | `"rag"` or `"agent"` (default: auto) |
+| `maturity_level` | string | No | Client SEO maturity level (`"L1"`-`"L4"`) for response depth tuning |
 
 ### Response
 
@@ -109,9 +106,9 @@ Single-turn question answering with automatic knowledge base retrieval.
     {
       "question": "What is canonical URL?",
       "answer": "...",
-      "source": "notion",
+      "source_type": "meeting",
       "category": "Technical SEO",
-      "stable_id": "abc123def456"
+      "id": "abc123def456"
     }
   ],
   "mode": "rag",
@@ -144,9 +141,9 @@ interface ChatResponse {
   sources: Array<{
     question: string;
     answer: string;
-    source: string;
+    source_type: string;
     category: string;
-    stable_id: string;
+    id: string;
   }>;
   mode: "rag" | "agent" | "context-only";
   metadata?: {

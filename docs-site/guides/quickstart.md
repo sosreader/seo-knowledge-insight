@@ -1,8 +1,3 @@
----
-title: Quick Start
-description: Frontend integration guide for the SEO Knowledge Insight API
----
-
 # Quick Start
 
 This guide covers integrating the SEO Knowledge Insight API into a frontend application.
@@ -27,10 +22,7 @@ async function seoApi(path: string, options?: RequestInit) {
 }
 ```
 
-<Warning>
-  API Key must stay server-side. Use a proxy route (e.g. Next.js API route) to
-  forward requests — never embed the key in browser code.
-</Warning>
+> **Warning:** API Key must stay server-side. Use a proxy route (e.g. Next.js API route) to forward requests -- never embed the key in browser code.
 
 ## Common Operations
 
@@ -56,10 +48,10 @@ const chat = await seoApi("/api/v1/chat", {
   }),
 });
 
-// chat.answer — AI-generated answer with citations
-// chat.sources[] — relevant Q&A sources
-// chat.mode — actual mode used ("rag" | "agent" | "context-only")
-// chat.metadata — model, tokens, duration
+// chat.answer -- AI-generated answer with citations
+// chat.sources[] -- relevant Q&A sources
+// chat.mode -- actual mode used ("rag" | "agent" | "context-only")
+// chat.metadata -- model, tokens, duration
 ```
 
 ### Multi-Turn Chat with Sessions
@@ -90,7 +82,7 @@ const history = await seoApi(`/api/v1/sessions/${sessionId}`);
 ```typescript
 // List with filters
 const qa = await seoApi(
-  "/api/v1/qa?category=Technical%20SEO&difficulty=intermediate&limit=20"
+  "/api/v1/qa?category=Technical%20SEO&difficulty=advanced&limit=20"
 );
 
 // Get single QA detail

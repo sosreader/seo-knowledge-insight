@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SEO Knowledge Insight API</title>
+    <meta
+      name="description"
+      content="SEO knowledge base API with RAG chat, search, reports, and pipeline management."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;"
+    />
+    <style>
+      body { margin: 0; }
+      .nav-bar {
+        background: #1a1a2e;
+        padding: 12px 24px;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 14px;
+      }
+      .nav-bar a {
+        color: #a0aec0;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .nav-bar a:hover { color: #fff; }
+      .nav-bar .brand {
+        color: #fff;
+        font-weight: 600;
+        font-size: 15px;
+        margin-right: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav-bar">
+      <span class="brand">SEO Knowledge Insight API</span>
+      <a href="./guides/introduction.md">Introduction</a>
+      <a href="./guides/authentication.md">Authentication</a>
+      <a href="./guides/quickstart.md">Quick Start</a>
+      <a href="./guides/search-and-chat.md">Search & Chat</a>
+      <a href="./guides/api-overview.md">API Overview</a>
+    </nav>
+    <script
+      id="api-reference"
+      data-url="./openapi.json"
+      data-configuration='{"theme":"kepler"}'
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.71/dist/browser/standalone.min.js"
+      integrity="sha384-VKMDXzLcsOCCELgb9aQMhET8OCyY6nhRijfF1q7WxI2ooFRBgrWOB/2n8wYLoIFG"
+      crossorigin="anonymous"
+    ></script>
+  </body>
+</html>

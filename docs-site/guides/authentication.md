@@ -1,8 +1,3 @@
----
-title: Authentication
-description: API authentication with X-API-Key header
----
-
 # Authentication
 
 All API endpoints (except `/health`) require the `X-API-Key` header.

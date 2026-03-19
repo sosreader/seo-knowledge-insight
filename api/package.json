@@ -12,7 +12,8 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "eval:semantic": "tsx scripts/eval-semantic.ts"
+    "eval:semantic": "tsx scripts/eval-semantic.ts",
+    "docs:export": "tsx scripts/export-openapi.ts"
   },
   "engines": {
     "node": ">=22"
