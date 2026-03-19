@@ -174,7 +174,7 @@ Notion/Medium/iThome/Google Cases/Ahrefs/SEJ/Growth Memo
 
 ## REST API
 
-TypeScript Hono（port 8002），42 個端點、660 tests、80%+ coverage。
+TypeScript Hono（port 8002），42 個端點、734 tests、80%+ coverage。
 
 ```bash
 cd api && pnpm install && pnpm dev   # 啟動開發伺服器
@@ -239,7 +239,7 @@ make extract-qa-test   # 小量驗證（--limit 3）
 
 # 4. API 開發
 cd api && pnpm install && pnpm dev    # port 8002
-pnpm test                              # 660 tests
+pnpm test                              # 734 tests
 
 # 5. 部署
 git push origin main   # 自動觸發 GitHub Actions → Lambda

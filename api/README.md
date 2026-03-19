@@ -4,7 +4,7 @@ REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（No
 
 **特點：**
 
-- 10 個路由器（Routers）、42 個 API endpoints、660 個測試（61 檔案，coverage 80%+）
+- 10 個路由器（Routers）、42 個 API endpoints、734 個測試（65 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
@@ -441,7 +441,7 @@ api/
 │   ├── feedback-to-golden.ts  # 使用者回饋 → golden dataset 候選
 │   ├── sync-db.ts             # Reports + Sessions → Supabase 同步
 │   └── eval-semantic.ts       # Retrieval eval（keyword/hybrid/rerank）
-├── tests/                      # 61 個測試檔案，660 tests
+├── tests/                      # 65 個測試檔案，734 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json
@@ -682,10 +682,10 @@ pnpm test:watch               # 監視模式
 pnpm test:coverage            # 覆蓋率（目標 ≥ 80%）
 ```
 
-**測試套件統計（v3.5）：**
+**測試套件統計（v3.6）：**
 
-- 總測試數：660 個（61 個測試檔案）
-- 通過：659/660 (1 pre-existing pipeline steps count mismatch)
+- 總測試數：734 個（65 個測試檔案）
+- 通過：734/734
 - 覆蓋率：80%+
 
 ---
