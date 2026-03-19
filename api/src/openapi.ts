@@ -117,12 +117,12 @@ const schemas: Record<string, Record<string, unknown>> = {
       mode: {
         type: "string",
         enum: ["agent", "rag"],
-        description: "Chat mode (auto-detected if omitted)",
+        description: "對話模式（未指定時自動偵測）/ Chat mode (auto-detected if omitted)",
       },
       maturity_level: {
         type: "string",
         enum: ["L1", "L2", "L3", "L4"],
-        description: "Client SEO maturity level for response depth tuning",
+        description: "客戶 SEO 成熟度等級，用於調整回應深度 / Client SEO maturity level for response depth tuning",
       },
     },
   },
@@ -276,7 +276,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/health": {
     get: {
       tags: ["Health"],
-      summary: "Health check",
+      summary: "健康檢查 / Health check",
       operationId: "healthCheck",
       security: [],
       responses: {
@@ -299,7 +299,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/qa": {
     get: {
       tags: ["QA"],
-      summary: "List QA items",
+      summary: "列出 QA 項目 / List QA items",
       operationId: "listQA",
       parameters: [
         { name: "category", in: "query", schema: { type: "string" } },
@@ -324,7 +324,7 @@ const paths: Record<string, Record<string, unknown>> = {
           name: "maturity_relevance",
           in: "query",
           schema: { type: "string", enum: ["L1", "L2", "L3", "L4"] },
-          description: "Filter by maturity level",
+          description: "依成熟度等級篩選 / Filter by maturity level",
         },
         {
           name: "sort_by",
@@ -366,7 +366,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/qa/categories": {
     get: {
       tags: ["QA"],
-      summary: "List all categories",
+      summary: "列出所有分類 / List all categories",
       operationId: "listCategories",
       responses: {
         "200": jsonContent(
@@ -383,7 +383,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/qa/collections": {
     get: {
       tags: ["QA"],
-      summary: "List all source collections",
+      summary: "列出所有來源集合 / List all source collections",
       operationId: "listCollections",
       responses: {
         "200": jsonContent(
@@ -410,7 +410,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/qa/{item_id}": {
     get: {
       tags: ["QA"],
-      summary: "Get QA item by ID",
+      summary: "依 ID 取得 QA 項目 / Get QA item by ID",
       operationId: "getQAById",
       parameters: [
         {
@@ -418,7 +418,7 @@ const paths: Record<string, Record<string, unknown>> = {
           in: "path",
           required: true,
           schema: { type: "string" },
-          description: "Hex stable_id (16 chars) or integer seq",
+          description: "十六進位 stable_id (16 字元) 或整數 seq / Hex stable_id (16 chars) or integer seq",
         },
       ],
       responses: {
@@ -432,7 +432,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/search": {
     post: {
       tags: ["Search"],
-      summary: "Search QA knowledge base",
+      summary: "搜尋 QA 知識庫 / Search QA knowledge base",
       operationId: "search",
       requestBody: jsonContent(
         {
@@ -451,7 +451,7 @@ const paths: Record<string, Record<string, unknown>> = {
             maturity_level: {
               type: "string",
               enum: ["L1", "L2", "L3", "L4"],
-              description: "Boost results matching this maturity level",
+              description: "提升符合此成熟度等級的結果排序 / Boost results matching this maturity level",
             },
           },
         },
@@ -476,7 +476,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/chat": {
     post: {
       tags: ["Chat"],
-      summary: "RAG chat (single-turn or agent mode)",
+      summary: "RAG 對話（單輪或 Agent 模式）/ RAG chat (single-turn or agent mode)",
       operationId: "chat",
       requestBody: jsonContent(
         ref("ChatRequest"),
@@ -495,7 +495,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/reports": {
     get: {
       tags: ["Reports"],
-      summary: "List all weekly reports",
+      summary: "列出所有週報 / List all weekly reports",
       operationId: "listReports",
       responses: {
         "200": jsonContent(
@@ -513,7 +513,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/reports/{date}": {
     get: {
       tags: ["Reports"],
-      summary: "Get report by date",
+      summary: "依日期取得週報 / Get report by date",
       operationId: "getReport",
       parameters: [
         {
@@ -521,7 +521,7 @@ const paths: Record<string, Record<string, unknown>> = {
           in: "path",
           required: true,
           schema: { type: "string", pattern: "^\\d{8}(?:_[0-9a-f]{8})?$" },
-          description: "YYYYMMDD or YYYYMMDD_hash8",
+          description: "YYYYMMDD 或 YYYYMMDD_hash8 格式 / YYYYMMDD or YYYYMMDD_hash8",
         },
       ],
       responses: {
@@ -544,10 +544,10 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/reports/generate": {
     post: {
       tags: ["Reports"],
-      summary: "Generate weekly report",
+      summary: "生成週報 / Generate weekly report",
       operationId: "generateReport",
       description:
-        "Supports three modes: local (snapshot_id), OpenAI (snapshot_id + use_openai), legacy (metrics_url)",
+        "支援三種模式：本地（snapshot_id）、OpenAI（snapshot_id + use_openai）、Legacy（metrics_url）\n\nSupports three modes: local (snapshot_id), OpenAI (snapshot_id + use_openai), legacy (metrics_url)",
       requestBody: jsonContent({
         type: "object",
         properties: {
@@ -591,7 +591,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/sessions": {
     get: {
       tags: ["Sessions"],
-      summary: "List chat sessions",
+      summary: "列出對話 Sessions / List chat sessions",
       operationId: "listSessions",
       parameters: [
         {
@@ -619,7 +619,7 @@ const paths: Record<string, Record<string, unknown>> = {
     },
     post: {
       tags: ["Sessions"],
-      summary: "Create a new chat session",
+      summary: "建立新對話 Session / Create a new chat session",
       operationId: "createSession",
       requestBody: jsonContent({
         type: "object",
@@ -635,7 +635,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/sessions/{session_id}": {
     get: {
       tags: ["Sessions"],
-      summary: "Get session with messages",
+      summary: "取得 Session 含訊息 / Get session with messages",
       operationId: "getSession",
       parameters: [
         {
@@ -652,7 +652,7 @@ const paths: Record<string, Record<string, unknown>> = {
     },
     delete: {
       tags: ["Sessions"],
-      summary: "Delete a session",
+      summary: "刪除 Session / Delete a session",
       operationId: "deleteSession",
       parameters: [
         {
@@ -679,7 +679,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/sessions/{session_id}/messages": {
     post: {
       tags: ["Sessions"],
-      summary: "Send message in session",
+      summary: "在 Session 中發送訊息 / Send message in session",
       operationId: "sendMessage",
       parameters: [
         {
@@ -699,7 +699,7 @@ const paths: Record<string, Record<string, unknown>> = {
             type: "string",
             enum: ["L1", "L2", "L3", "L4"],
             description:
-              "Client maturity level (persisted to session on first use)",
+              "客戶 SEO 成熟度等級，用於調整回應深度 / Client SEO maturity level for response depth tuning",
           },
         },
       }),
@@ -723,7 +723,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/feedback": {
     post: {
       tags: ["Feedback"],
-      summary: "Submit search feedback",
+      summary: "提交搜尋回饋 / Submit search feedback",
       operationId: "submitFeedback",
       requestBody: jsonContent({
         type: "object",
@@ -765,7 +765,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/synonyms": {
     get: {
       tags: ["Synonyms"],
-      summary: "List all synonym entries",
+      summary: "列出所有同義詞 / List all synonym entries",
       operationId: "listSynonyms",
       responses: {
         "200": jsonContent(
@@ -778,7 +778,7 @@ const paths: Record<string, Record<string, unknown>> = {
     },
     post: {
       tags: ["Synonyms"],
-      summary: "Create custom synonym",
+      summary: "建立自訂同義詞 / Create custom synonym",
       operationId: "createSynonym",
       requestBody: jsonContent({
         type: "object",
@@ -805,7 +805,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/synonyms/{term}": {
     put: {
       tags: ["Synonyms"],
-      summary: "Update synonym",
+      summary: "更新同義詞 / Update synonym",
       operationId: "updateSynonym",
       parameters: [
         {
@@ -834,7 +834,7 @@ const paths: Record<string, Record<string, unknown>> = {
     },
     delete: {
       tags: ["Synonyms"],
-      summary: "Delete custom synonym",
+      summary: "刪除自訂同義詞 / Delete custom synonym",
       operationId: "deleteSynonym",
       parameters: [
         {
@@ -867,7 +867,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/status": {
     get: {
       tags: ["Pipeline"],
-      summary: "Pipeline step completion status",
+      summary: "Pipeline 各步驟完成狀態 / Pipeline step completion status",
       operationId: "getPipelineStatus",
       responses: {
         "200": jsonContent(
@@ -884,7 +884,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/meetings": {
     get: {
       tags: ["Pipeline"],
-      summary: "List Notion meetings",
+      summary: "列出 Notion 會議 / List Notion meetings",
       operationId: "listMeetings",
       responses: {
         "200": jsonContent(
@@ -902,7 +902,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/meetings/{id}/preview": {
     get: {
       tags: ["Pipeline"],
-      summary: "Preview meeting markdown",
+      summary: "預覽會議 Markdown / Preview meeting markdown",
       operationId: "previewMeeting",
       parameters: [
         {
@@ -931,7 +931,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/source-docs": {
     get: {
       tags: ["Pipeline"],
-      summary: "List source documents",
+      summary: "列出來源文件 / List source documents",
       operationId: "listSourceDocs",
       parameters: [
         {
@@ -979,7 +979,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/source-docs/{collection}/{file}/preview": {
     get: {
       tags: ["Pipeline"],
-      summary: "Preview source document",
+      summary: "預覽來源文件 / Preview source document",
       operationId: "previewSourceDoc",
       parameters: [
         {
@@ -1015,7 +1015,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/unprocessed": {
     get: {
       tags: ["Pipeline"],
-      summary: "List unprocessed markdown files",
+      summary: "列出未處理的 Markdown 檔案 / List unprocessed markdown files",
       operationId: "listUnprocessed",
       responses: {
         "200": jsonContent(
@@ -1033,7 +1033,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/logs": {
     get: {
       tags: ["Pipeline"],
-      summary: "Fetch history logs",
+      summary: "取得擷取歷史日誌 / Fetch history logs",
       operationId: "getFetchLogs",
       parameters: [
         {
@@ -1059,7 +1059,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/fetch": {
     post: {
       tags: ["Pipeline"],
-      summary: "Trigger Notion incremental fetch",
+      summary: "觸發 Notion 增量擷取 / Trigger Notion incremental fetch",
       operationId: "triggerFetch",
       requestBody: jsonContent({
         type: "object",
@@ -1075,8 +1075,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/fetch-articles": {
     post: {
       tags: ["Pipeline"],
-      summary:
-        "Trigger external article fetch (Medium + iThome + Google Cases)",
+      summary: "觸發外部文章擷取 / Trigger external article fetch",
       operationId: "triggerFetchArticles",
       responses: {
         "200": jsonContent(
@@ -1105,7 +1104,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/extract-qa": {
     post: {
       tags: ["Pipeline"],
-      summary: "Trigger QA extraction",
+      summary: "觸發 QA 萃取 / Trigger QA extraction",
       operationId: "triggerExtractQA",
       requestBody: jsonContent({
         type: "object",
@@ -1122,7 +1121,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/dedupe-classify": {
     post: {
       tags: ["Pipeline"],
-      summary: "Trigger dedup + classification",
+      summary: "觸發去重 + 分類 / Trigger dedup + classification",
       operationId: "triggerDedupeClassify",
       requestBody: jsonContent({
         type: "object",
@@ -1140,7 +1139,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/metrics": {
     post: {
       tags: ["Pipeline"],
-      summary: "Parse SEO metrics from Google Sheets",
+      summary: "解析 Google Sheets SEO 指標 / Parse SEO metrics from Google Sheets",
       operationId: "loadMetrics",
       requestBody: jsonContent({
         type: "object",
@@ -1162,7 +1161,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/metrics/save": {
     post: {
       tags: ["Pipeline"],
-      summary: "Save metrics snapshot",
+      summary: "儲存指標快照 / Save metrics snapshot",
       operationId: "saveMetricsSnapshot",
       requestBody: jsonContent({
         type: "object",
@@ -1193,7 +1192,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/metrics/snapshots": {
     get: {
       tags: ["Pipeline"],
-      summary: "List metrics snapshots",
+      summary: "列出指標快照 / List metrics snapshots",
       operationId: "listSnapshots",
       responses: {
         "200": jsonContent(
@@ -1211,7 +1210,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/metrics/snapshots/{id}": {
     delete: {
       tags: ["Pipeline"],
-      summary: "Delete metrics snapshot",
+      summary: "刪除指標快照 / Delete metrics snapshot",
       operationId: "deleteSnapshot",
       parameters: [
         {
@@ -1238,10 +1237,10 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/crawled-not-indexed": {
     post: {
       tags: ["Pipeline"],
-      summary: "Analyze crawled-not-indexed path segments",
+      summary: "分析已爬取未索引的路徑 / Analyze crawled-not-indexed path segments",
       operationId: "analyzeCrawledNotIndexed",
       description:
-        "Parse and analyze Google Search Console 'Crawled - currently not indexed' data by path segment. Supports URL mode (Google Sheets) and raw TSV mode (inline data).",
+        "解析並分析 Google Search Console「已爬取但未索引」的資料。支援 URL 模式（Google Sheets）和 raw TSV 模式（直接輸入）。\n\nParse and analyze Google Search Console 'Crawled - currently not indexed' data by path segment. Supports URL mode (Google Sheets) and raw TSV mode (inline data).",
       requestBody: jsonContent({
         type: "object",
         properties: {
@@ -1302,25 +1301,25 @@ export function buildOpenAPISpec(): OpenAPISpec {
       title: "SEO Knowledge Insight API",
       version: API_VERSION,
       description:
-        "SEO knowledge base API with RAG chat, search, reports, and pipeline management.",
+        "具備 RAG 對話、語意搜尋、週報生成與 Pipeline 管理功能的 SEO 知識庫 API。\n\nSEO knowledge base API with RAG chat, search, reports, and pipeline management.",
     },
     servers: [
-      { url: "http://localhost:8002", description: "Local development" },
+      { url: "http://localhost:8002", description: "本地開發環境 / Local development" },
       {
         url: "https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws",
-        description: "Production (Lambda)",
+        description: "正式環境 (Lambda) / Production (Lambda)",
       },
     ],
     tags: [
-      { name: "Health", description: "Server health check" },
-      { name: "QA", description: "QA knowledge base CRUD" },
-      { name: "Search", description: "Semantic / keyword search" },
-      { name: "Chat", description: "RAG chat and agent mode" },
-      { name: "Reports", description: "Weekly SEO reports" },
-      { name: "Sessions", description: "Multi-turn chat sessions" },
-      { name: "Feedback", description: "Search relevance feedback" },
-      { name: "Synonyms", description: "Synonym management" },
-      { name: "Pipeline", description: "ETL pipeline management" },
+      { name: "Health", description: "伺服器健康檢查\n\nServer health check" },
+      { name: "QA", description: "QA 知識庫 CRUD 操作\n\nQA knowledge base CRUD" },
+      { name: "Search", description: "語意搜尋 / 關鍵字搜尋\n\nSemantic / keyword search" },
+      { name: "Chat", description: "RAG 對話與 Agent 模式\n\nRAG chat and agent mode" },
+      { name: "Reports", description: "SEO 週報管理\n\nWeekly SEO reports" },
+      { name: "Sessions", description: "多輪對話管理\n\nMulti-turn chat sessions" },
+      { name: "Feedback", description: "搜尋相關性回饋\n\nSearch relevance feedback" },
+      { name: "Synonyms", description: "同義詞管理\n\nSynonym management" },
+      { name: "Pipeline", description: "ETL Pipeline 管理\n\nETL pipeline management" },
     ],
     paths,
     components: {
@@ -1330,7 +1329,7 @@ export function buildOpenAPISpec(): OpenAPISpec {
           type: "apiKey",
           in: "header",
           name: "X-API-Key",
-          description: "API key for authentication (not required for /health)",
+          description: "API 認證金鑰（/health 不需要）\n\nAPI key for authentication (not required for /health)",
         },
       },
     },
