@@ -47,7 +47,18 @@
       </div>
     </header>
 
-    <main class="article">
+    <div class="guide-layout">
+      <aside class="guide-sidebar">
+        <div class="sidebar-title">文件導覽 / Guides</div>
+        <a href="./introduction.html">簡介 / Introduction</a>
+        <a href="./authentication.html">認證 / Authentication</a>
+        <a href="./quickstart.html">快速開始 / Quick Start</a>
+        <a href="./search-and-chat.html">搜尋與對話 / Search & Chat</a>
+        <a href="./api-overview.html" aria-current="page">API 總覽 / Overview</a>
+        <a class="sidebar-back" href="../">&larr; API 參考文件 / API Reference</a>
+      </aside>
+
+      <main class="article">
       <h1>API 總覽<br /><small style="font-size:0.6em;color:var(--muted)">API Overview</small></h1>
       <p>API 共有 10 個路由器、42 個端點。<code>/api/v1/*</code> 下的所有端點均需 <code>X-API-Key</code> 認證。</p>
       <p style="color:var(--muted)">The API has 10 routers and 42 endpoints. All endpoints under <code>/api/v1/*</code> require <code>X-API-Key</code> authentication.</p>
@@ -462,7 +473,7 @@
   "details": "message: String must contain at least 1 character(s)"
 }</code></pre>
 
-      <a class="back-link" href="../">&larr; 回到 API 參考文件 / Back to API Reference</a>
     </main>
+    </div>
   </body>
 </html>

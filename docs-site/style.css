@@ -162,23 +162,86 @@ body::before {
   fill: currentColor;
 }
 
+/* ── Guide Layout (Sidebar + Article) ── */
+.guide-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  max-width: 1080px;
+  margin: 0 auto;
+  min-height: calc(100vh - 64px);
+}
+
+/* ── Sidebar ── */
+.guide-sidebar {
+  position: sticky;
+  top: 68px;
+  align-self: start;
+  padding: 40px 24px 40px 24px;
+  border-right: 1px solid rgba(212,175,55,0.12);
+  height: fit-content;
+  max-height: calc(100vh - 68px);
+  overflow-y: auto;
+}
+
+.guide-sidebar .sidebar-title {
+  font-family: var(--font-body);
+  font-size: 0.625rem;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(212,175,55,0.2);
+}
+
+.guide-sidebar a {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 8px 0;
+  border-left: 2px solid transparent;
+  padding-left: 12px;
+  transition: color 300ms, border-color 300ms;
+  line-height: 1.4;
+}
+
+.guide-sidebar a:hover {
+  color: var(--fg);
+}
+
+.guide-sidebar a[aria-current="page"] {
+  color: var(--gold);
+  border-left-color: var(--gold);
+}
+
+.guide-sidebar a:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.guide-sidebar .sidebar-back {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(212,175,55,0.12);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-left: none;
+  padding-left: 0;
+}
+
+.guide-sidebar .sidebar-back:hover {
+  color: var(--gold);
+}
+
 /* ── Article (Guide Pages) ── */
 .article {
   max-width: 720px;
-  margin: 0 auto;
-  padding: 64px 24px 120px;
+  padding: 64px 40px 120px;
   position: relative;
-}
-
-/* Decorative vertical line */
-.article::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -40px;
-  width: 1px;
-  height: 100%;
-  background: linear-gradient(to bottom, rgba(212,175,55,0.15), transparent 80%);
 }
 
 .article h1 {
@@ -376,8 +439,9 @@ body::before {
   .nav-links { display: none; }
   .nav-sep { display: none; }
   .brand-name { font-size: 14px; letter-spacing: 0.05em; }
+  .guide-layout { grid-template-columns: 1fr; }
+  .guide-sidebar { display: none; }
   .article { padding: 40px 20px 80px; }
-  .article::before { display: none; }
   .article h1 { font-size: 1.75rem; }
   .article h2 { font-size: 1.125rem; }
 }

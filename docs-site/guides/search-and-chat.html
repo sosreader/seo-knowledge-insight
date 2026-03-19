@@ -47,7 +47,18 @@
       </div>
     </header>
 
-    <main class="article">
+    <div class="guide-layout">
+      <aside class="guide-sidebar">
+        <div class="sidebar-title">文件導覽 / Guides</div>
+        <a href="./introduction.html">簡介 / Introduction</a>
+        <a href="./authentication.html">認證 / Authentication</a>
+        <a href="./quickstart.html">快速開始 / Quick Start</a>
+        <a href="./search-and-chat.html" aria-current="page">搜尋與對話 / Search & Chat</a>
+        <a href="./api-overview.html">API 總覽 / Overview</a>
+        <a class="sidebar-back" href="../">&larr; API 參考文件 / API Reference</a>
+      </aside>
+
+      <main class="article">
       <h1>搜尋與對話<br /><small style="font-size:0.6em;color:var(--muted)">Search &amp; Chat</small></h1>
       <p>以下為前端整合最常用的端點。</p>
       <p style="color:var(--muted)">These are the most commonly used endpoints for frontend integration.</p>
@@ -337,7 +348,7 @@ const { id } = await session.json();
 const { messages } = await session.json();
 // messages: Array&lt;{ role, content, metadata?, created_at }&gt;</code></pre>
 
-      <a class="back-link" href="../">&larr; 回到 API 參考文件 / Back to API Reference</a>
     </main>
+    </div>
   </body>
 </html>

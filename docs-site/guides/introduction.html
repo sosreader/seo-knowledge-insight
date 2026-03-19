@@ -47,7 +47,18 @@
       </div>
     </header>
 
-    <main class="article">
+    <div class="guide-layout">
+      <aside class="guide-sidebar">
+        <div class="sidebar-title">文件導覽 / Guides</div>
+        <a href="./introduction.html" aria-current="page">簡介 / Introduction</a>
+        <a href="./authentication.html">認證 / Authentication</a>
+        <a href="./quickstart.html">快速開始 / Quick Start</a>
+        <a href="./search-and-chat.html">搜尋與對話 / Search & Chat</a>
+        <a href="./api-overview.html">API 總覽 / Overview</a>
+        <a class="sidebar-back" href="../">&larr; API 參考文件 / API Reference</a>
+      </aside>
+
+      <main class="article">
       <h1>SEO 知識洞察 API<br /><small style="font-size:0.6em;color:var(--muted)">SEO Knowledge Insight API</small></h1>
       <p>具備 RAG 對話、語意搜尋、SEO 週報生成與 ETL Pipeline 管理功能的 SEO 知識庫 API。</p>
       <p style="color:var(--muted)">SEO knowledge base API with RAG chat, semantic search, weekly reports, and ETL pipeline management.</p>
@@ -104,7 +115,7 @@ curl -X POST http://localhost:8002/api/v1/search \
       <p>互動式 API 參考文件位於<a href="../">首頁</a>，由 <a href="https://github.com/scalar/scalar" target="_blank" rel="noopener noreferrer">Scalar</a> 驅動，支援完整的線上測試功能。</p>
       <p style="color:var(--muted)">The interactive API reference is available at the <a href="../">root page</a> with full Try It functionality powered by <a href="https://github.com/scalar/scalar" target="_blank" rel="noopener noreferrer">Scalar</a>.</p>
 
-      <a class="back-link" href="../">&larr; 回到 API 參考文件 / Back to API Reference</a>
     </main>
+    </div>
   </body>
 </html>

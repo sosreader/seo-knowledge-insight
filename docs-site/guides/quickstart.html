@@ -47,7 +47,18 @@
       </div>
     </header>
 
-    <main class="article">
+    <div class="guide-layout">
+      <aside class="guide-sidebar">
+        <div class="sidebar-title">文件導覽 / Guides</div>
+        <a href="./introduction.html">簡介 / Introduction</a>
+        <a href="./authentication.html">認證 / Authentication</a>
+        <a href="./quickstart.html" aria-current="page">快速開始 / Quick Start</a>
+        <a href="./search-and-chat.html">搜尋與對話 / Search & Chat</a>
+        <a href="./api-overview.html">API 總覽 / Overview</a>
+        <a class="sidebar-back" href="../">&larr; API 參考文件 / API Reference</a>
+      </aside>
+
+      <main class="article">
       <h1>快速開始<br /><small style="font-size:0.6em;color:var(--muted)">Quick Start</small></h1>
       <p>本指南說明如何將 SEO 知識洞察 API 整合至前端應用程式。</p>
       <p style="color:var(--muted)">This guide covers integrating the SEO Knowledge Insight API into a frontend application.</p>
@@ -172,7 +183,7 @@ await seoApi("/api/v1/chat", {
   body: JSON.stringify({ message: "Compare canonical vs 301 redirect for SEO", mode: "agent" }),
 });</code></pre>
 
-      <a class="back-link" href="../">&larr; 回到 API 參考文件 / Back to API Reference</a>
     </main>
+    </div>
   </body>
 </html>
