@@ -240,7 +240,9 @@ API 端點特性：
 - `GET /health` — 健康檢查
 - `GET /openapi.json` — OpenAPI 3.1 規格（機器可讀，可匯入 Postman / Swagger）
 - `GET /docs` — Scalar 互動式 API 文件（瀏覽器直接測試）
-- GitHub Pages 文件：[sosreader.github.io/seo-knowledge-insight](https://sosreader.github.io/seo-knowledge-insight/)（Scalar CDN，CI auto-deploy from `api/src/openapi.ts`）
+- GitHub Pages 文件：[sosreader.github.io/seo-knowledge-insight](https://sosreader.github.io/seo-knowledge-insight/)（Scalar CDN + Art Deco theme + Tailwind v4，雙語 zh-TW + EN，CI auto-deploy from `api/src/openapi.ts`）
+- 文件站結構：`docs-site/`（`index.html` Scalar API Reference + `style.css` + `guides/*.html` 5 頁雙語）
+- OpenAPI spec 匯出：`pnpm docs:export` → `api/scripts/export-openapi.ts`（CI 產生，不 commit `docs-site/openapi.json`）
 - 10 個路由器：qa（含 extraction_model filter）、search（含 extraction_model filter + search_hit_count tracking）、chat、reports、sessions、feedback、pipeline、synonyms、meeting-prep、health
 - Pipeline 端點：18 個（狀態、會議、來源文件、指標、快照、趨勢分析、LLM 用量、索引覆蓋率等）
 - 認證：`X-API-Key` header + 安全層（SSRF whitelist、auth fail-fast、HTTP security headers、session UUID validation）
