@@ -5,7 +5,8 @@ import { ok, fail } from "../schemas/api-response.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
 import { ragChatStream } from "../services/rag-chat-stream.js";
 import { qaStore } from "../store/qa-store.js";
-import { hasOpenAI, resolveMode } from "../utils/mode-detect.js";
+import { resolveMode } from "../utils/mode-detect.js";
+import { resolveCapabilities, formatCapabilityTag } from "../utils/capabilities.js";
 import { config } from "../config.js";
 import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
 import { createAgentDeps } from "../agent/agent-deps.js";
@@ -46,8 +47,10 @@ chatRoute.post("/", async (c) => {
     maturity_level: maturityLevel,
   } = parsed.data;
 
-  if (!hasOpenAI()) {
-    const result = contextOnlyResponse(message);
+  const caps = resolveCapabilities(c.req.header("user-agent"));
+
+  if (caps.llm === "none") {
+    const result = { ...contextOnlyResponse(message), execution_context: formatCapabilityTag(caps) };
     return c.json(ok(result));
   }
 
@@ -77,6 +80,7 @@ chatRoute.post("/", async (c) => {
           sources: result.sources,
           mode: result.mode,
           metadata: result.metadata,
+          execution_context: formatCapabilityTag(caps),
         }),
       );
     }
@@ -93,6 +97,7 @@ chatRoute.post("/", async (c) => {
         sources: result.sources,
         mode: result.mode,
         metadata: result.metadata,
+        execution_context: formatCapabilityTag(caps),
       }),
     );
   } catch (err: unknown) {
@@ -129,9 +134,11 @@ chatRoute.post("/stream", async (c) => {
 
   const { message, history, maturity_level: streamMaturityLevel } = parsed.data;
 
-  if (!hasOpenAI()) {
+  const streamCaps = resolveCapabilities(c.req.header("user-agent"));
+
+  if (streamCaps.llm === "none") {
     // Streaming not available without OpenAI — return non-streaming fallback
-    const result = contextOnlyResponse(message);
+    const result = { ...contextOnlyResponse(message), execution_context: formatCapabilityTag(streamCaps) };
     return c.json(ok(result));
   }
 

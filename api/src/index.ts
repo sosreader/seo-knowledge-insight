@@ -22,6 +22,7 @@ import { buildOpenAPISpec } from "./openapi.js";
 import { qaStore, loadQaStore } from "./store/qa-store.js";
 import { synonymsStore } from "./store/synonyms-store.js";
 import { initLaminar, flushLaminar } from "./utils/observability.js";
+import { resolveServerCapabilities, formatCapabilityTag } from "./utils/capabilities.js";
 
 const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
 
@@ -117,6 +118,8 @@ async function _doInitStores(): Promise<void> {
   } catch (err) {
     console.warn("SynonymsStore load failed:", err);
   }
+
+  console.log(formatCapabilityTag(resolveServerCapabilities()));
 }
 
 if (process.env.NODE_ENV !== "test" && !isLambda) {

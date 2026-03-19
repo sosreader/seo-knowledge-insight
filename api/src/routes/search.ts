@@ -5,7 +5,8 @@ import { getEmbedding } from "../services/embedding.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
 import { QUERY_CATEGORY_HINTS } from "../store/search-engine.js";
 import { SupabaseQAStore } from "../store/supabase-qa-store.js";
-import { hasOpenAI, type SearchMode } from "../utils/mode-detect.js";
+import type { SearchMode } from "../utils/mode-detect.js";
+import { resolveCapabilities } from "../utils/capabilities.js";
 import { applyMaturityBoost, parseMaturityLevel } from "../utils/maturity.js";
 
 /** Fire-and-forget: increment search_hit_count for matched IDs. */
@@ -149,7 +150,9 @@ searchRoute.post("/", async (c) => {
     !!extraction_model || !!primary_category || !!intent_label ||
     !!scenario_tag || !!serving_tier || !!evidence_scope;
 
-  if (hasOpenAI()) {
+  const caps = resolveCapabilities(c.req.header("user-agent"));
+
+  if (caps.llm === "openai") {
     try {
       const embedding = await getEmbedding(query);
       const retrievalTopK = hasPostFilter

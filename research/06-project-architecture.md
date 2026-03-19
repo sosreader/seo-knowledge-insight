@@ -206,6 +206,8 @@ Notion 會議紀錄（87 份，2023–2026）
     - routes/meeting-prep.ts — GET /meeting-prep（列表）, GET /meeting-prep/maturity-trend（趨勢時間序列）, GET /meeting-prep/:date（單篇，fuzzy match）
   核心模組：
     - store/qa-store.ts：QAStore（讀 qa_final.json / qa_enriched.json + embedding 向量，embedding optional）
+    - store/store-registry.ts：集中式 Supabase store singleton（reportStore / snapshotStore），取代 reports.ts / pipeline.ts 各自 hasSupabase() + new SupabaseXxxStore() 的分散初始化（v3.6 新增）
+    - store/qa-fns.ts：QAStore pure module functions（無副作用），與 OOP store 互補，提升可測試性（v3.6 新增）
     - store/session-store.ts：FileSessionStore（Repository Pattern）
     - store/learning-store.ts：LearningStore（feedback + miss 記錄）
     - store/synonyms-store.ts：SynonymsStore（雙層設計：28 基礎術語 + 31 補充術語（v2.11）= 59 靜態術語 + output/synonym_custom.json 自訂覆蓋，v2.10 新增）
@@ -215,9 +217,12 @@ Notion 會議紀錄（87 份，2023–2026）
     - utils/keyword-boost.ts：4 層關鍵字匹配
     - utils/cjk-tokenizer.ts：CJK 分詞（2-gram + 單字，中文 keyword search 支援）
     - utils/mode-detect.ts：hasOpenAI() / hasSupabase() / isAgentEnabled() / resolveMode() helper（mode 偵測 + 三層優先順序解析）
+    - utils/capabilities.ts：5 維度 capability detection（runtime/llm/store/agent/caller）；Routes 統一用 caps.llm / caps.store 判斷，取代分散的 hasOpenAI()/hasSupabase() 呼叫（v3.6 新增）
+    - utils/result.ts：Result<T,E> tagged union（Ok/Err），替代 throw-catch 模式；mapResult() / flatMapResult() / unwrapOr()（v3.6 新增）
     - utils/maturity.ts：parseMaturityLevel() / buildMaturityContext() / applyMaturityBoost() / buildReportMaturityBlock() / getDimensionForMetric() / buildMaturityUpgradeLabel() / buildMaturityCallout()（成熟度 L1-L4 跨系統工具；DIMENSIONS / METRIC_MATURITY_DIMENSION_MAP 常數）
     - services/embedding.ts：OpenAI embedding wrapper
     - services/rag-chat.ts：RAG 問答（需要 OpenAI API key；v2.11 支援 reranker）
+    - services/rag-chat-pure.ts：從 rag-chat.ts 萃取的 6 個 pure function（無副作用，可獨立測試）（v3.6 新增）
     - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
     - services/context-relevance.ts：Context Relevance 評估（v2.12 新增，Claude haiku judge；per-context 細分；escapeXml() 防 prompt injection）
     - services/report-generator-local.ts：本地週報生成（v2.13 新增；6 維度 ECC 分析；無需 OpenAI API；含 RESEARCH_CITATIONS 業界研究引用庫；v2.14 加入 CitationTracker — `[N]` 標記 + `<!-- citations [...] -->` block）
@@ -235,7 +240,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port；8 維度推送 Laminar `report-quality` group；含 report_action_maturity_labeled）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / synonyms / meeting-prep / api-response
-  測試：Vitest（58 個 test files，625 tests passing）
+  測試：Vitest（65 個 test files，734 tests passing）
   部署：Lambda + Function URL（arm64，~$0/月）/ docker-compose（本地開發）
             ↓ http://localhost:8002 (開發) 或 https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/ (生產)
 
@@ -528,6 +533,8 @@ Notion 會議紀錄（87 份，2023–2026）
 2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid / rag-or-agent，無 → keyword / context-only）
 3. **測試優先**：Vitest 路由覆蓋（25 個 test files，216 tests），unit + integration
 4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取（optional，無 .npy 時 keyword-only mode）
+5. **三模式顯式化（v3.6）**：capability 判斷集中到 `utils/capabilities.ts`，Routes 只讀 `caps` 物件，不再直接呼叫 `hasOpenAI()`/`hasSupabase()`；三種執行模式（full/rag/context-only）的條件路徑對開發者透明可見
+6. **Functional Programming（v3.6）**：新增 pure function 層（`rag-chat-pure.ts`、`qa-fns.ts`、`result.ts`），side-effect 邊界明確；`Result<T,E>` 取代 throw-catch，錯誤路徑型別安全
 
 **實作成果（v2.12 更新）**：
 

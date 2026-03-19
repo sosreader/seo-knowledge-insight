@@ -27,7 +27,7 @@ import { scoreEvent } from "../utils/laminar-scoring.js";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
 import { hasSupabase, supabaseSelect } from "../store/supabase-client.js";
-import { SupabaseSnapshotStore } from "../store/supabase-snapshot-store.js";
+import { snapshotStore } from "../store/store-registry.js";
 import type { SourceDocEntry } from "../schemas/pipeline.js";
 import {
   UUID_RE,
@@ -42,8 +42,6 @@ import {
   generateSnapshotId,
   listSnapshots,
 } from "./pipeline-fs.js";
-
-const supabaseSnapshotStore = hasSupabase() ? new SupabaseSnapshotStore() : null;
 
 /**
  * Derive source docs from qaStore items (Lambda fallback).
@@ -380,9 +378,9 @@ pipelineRoute.post("/metrics/save", async (c) => {
     ...(maturity ? { maturity } : {}),
   } as MetricsSnapshot;
 
-  if (supabaseSnapshotStore) {
+  if (snapshotStore) {
     try {
-      await supabaseSnapshotStore.save(snapshot);
+      await snapshotStore.save(snapshot);
     } catch {
       return c.json(fail("Failed to save snapshot"), 500);
     }
@@ -410,8 +408,8 @@ pipelineRoute.post("/metrics/save", async (c) => {
 
 // GET /metrics/snapshots
 pipelineRoute.get("/metrics/snapshots", async (c) => {
-  if (supabaseSnapshotStore) {
-    const snapshots = await supabaseSnapshotStore.list();
+  if (snapshotStore) {
+    const snapshots = await snapshotStore.list();
     return c.json(ok({ items: snapshots, total: snapshots.length }));
   }
   const snapshots = listSnapshots();
@@ -426,8 +424,8 @@ pipelineRoute.delete("/metrics/snapshots/:id", async (c) => {
     return c.json(fail("Invalid snapshot ID format"), 400);
   }
 
-  if (supabaseSnapshotStore) {
-    const deleted = await supabaseSnapshotStore.delete(id);
+  if (snapshotStore) {
+    const deleted = await snapshotStore.delete(id);
     if (!deleted) {
       return c.json(fail("Snapshot not found"), 404);
     }
@@ -600,7 +598,7 @@ pipelineRoute.get("/llm-usage", async (c) => {
  *   weeks   — number of recent snapshots to analyze (default 8, max 12)
  */
 pipelineRoute.get("/metrics/trends", async (c) => {
-  if (!supabaseSnapshotStore) {
+  if (!snapshotStore) {
     return c.json(fail("Supabase not configured"), 503);
   }
 
@@ -609,7 +607,7 @@ pipelineRoute.get("/metrics/trends", async (c) => {
   const weeks = Math.min(Math.max(parseInt(weeksParam, 10) || 8, 4), 12);
 
   try {
-    const allSnapshots = await supabaseSnapshotStore.list();
+    const allSnapshots = await snapshotStore.list();
     const sorted = [...allSnapshots]
       .sort((a, b) => a.created_at.localeCompare(b.created_at))
       .slice(-weeks);
@@ -624,7 +622,7 @@ pipelineRoute.get("/metrics/trends", async (c) => {
 
     // Load full snapshots with metrics
     const fullSnapshots = await Promise.all(
-      sorted.map((s) => supabaseSnapshotStore!.getById(s.id)),
+      sorted.map((s) => snapshotStore!.getById(s.id)),
     );
 
     // Build timeseries per metric

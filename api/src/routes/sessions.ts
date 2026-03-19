@@ -11,7 +11,8 @@ import { ok, fail } from "../schemas/api-response.js";
 import { sessionStore } from "../store/session-store.js";
 import type { Session } from "../store/session-store.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
-import { hasOpenAI, resolveMode } from "../utils/mode-detect.js";
+import { resolveMode } from "../utils/mode-detect.js";
+import { resolveCapabilities, formatCapabilityTag } from "../utils/capabilities.js";
 import { qaStore } from "../store/qa-store.js";
 import { config } from "../config.js";
 import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
@@ -160,8 +161,9 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
   // 3. Call RAG chat (with context-only fallback when no OpenAI)
   let result: { answer: string | null; sources: Record<string, unknown>[]; mode: string; metadata?: Record<string, unknown> };
   const ragStartMs = Date.now();
+  const caps = resolveCapabilities(c.req.header("user-agent"));
 
-  if (hasOpenAI()) {
+  if (caps.llm === "openai") {
     const effectiveMode = resolveMode(requestMode);
     try {
       if (effectiveMode === "agent") {
@@ -228,6 +230,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
       sources: result.sources,
       mode: result.mode,
       session: toDetail(session),
+      execution_context: formatCapabilityTag(caps),
     }),
   );
 });

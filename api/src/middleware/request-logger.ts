@@ -1,4 +1,5 @@
 import { createMiddleware } from "hono/factory";
+import { inferCaller } from "../utils/capabilities.js";
 
 const SKIP_PATHS = new Set(["/health"]);
 
@@ -28,6 +29,9 @@ export const requestLogger = createMiddleware(async (c, next) => {
 
   c.header("X-Request-Id", requestId);
 
+  const userAgent = c.req.header("user-agent");
+  const clientType = inferCaller(userAgent);
+
   const entry = {
     level: resolveLevel(status),
     method: c.req.method,
@@ -36,6 +40,8 @@ export const requestLogger = createMiddleware(async (c, next) => {
     duration_ms: durationMs,
     request_id: requestId,
     timestamp: new Date().toISOString(),
+    user_agent: userAgent ?? null,
+    client_type: clientType,
   };
 
   console.log(JSON.stringify(entry));

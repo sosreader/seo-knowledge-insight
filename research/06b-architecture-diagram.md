@@ -5,7 +5,7 @@
 
 ---
 
-## 架構圖（最新：v3.5，2026-03-16）
+## 架構圖（最新：v3.6，2026-03-19）
 
 ```mermaid
 flowchart TD
@@ -70,7 +70,7 @@ flowchart TD
 
     FE -->|"seoInsight.api.ts<br/>seoFetch（port 8002）"| HAPI
 
-    subgraph Hono_API["API Layer v3.5（Hono + TypeScript，port 8002，Local Mode + Laminar）"]
+    subgraph Hono_API["API Layer v3.6（Hono + TypeScript，port 8002，Local Mode + Laminar）"]
         QA --> HAPI["SEO Insight API<br/>Hono + TypeScript<br/>QAStore / SupabaseQAStore（factory pattern）"]
         EMB -.->|"optional（Local Mode 不需要）"| HAPI
         SE -.->|hybrid_search / keywordOnlySearch| HAPI
@@ -80,9 +80,9 @@ flowchart TD
         HEP -->|not_relevant / helpful| LS
         HEP -->|"pipeline/eval proxy"| QT
         HEP -->|"read/write"| SYNSTORE["synonyms-store.ts<br/>output/synonym_custom.json"]
-        HAPI --> HSTORE["store/<br/>qa-store.ts（QAStore / SupabaseQAStore factory）<br/>supabase-client.ts（thin REST，no SDK）<br/>supabase-qa-store.ts（pgvector hybrid search）<br/>search-engine.ts（hybrid + keyword boost + keywordOnlySearch）<br/>session-store.ts（FileSessionStore）<br/>learning-store.ts<br/>synonyms-store.ts（雙層：28 靜態 + custom JSON，v2.10）"]
-        HAPI --> HUTIL["utils/<br/>npy-reader.ts（NumPy .npy 解析）<br/>cosine-similarity.ts（Float32Array）<br/>keyword-boost.ts（4 層匹配）<br/>sanitize.ts（HTML escape 防 XSS）<br/>cjk-tokenizer.ts（CJK 分詞 2-gram）<br/>mode-detect.ts（hasOpenAI 偵測）"]
-        HAPI --> HSVC["services/<br/>embedding.ts（OpenAI wrapper）<br/>rag-chat.ts（RAG 問答 + v2.11 rerank 支援）<br/>reranker.ts（v2.11 新增，Haiku）<br/>context-relevance.ts（v2.12 新增，Claude haiku judge）<br/>report-generator-local.ts（v2.13 重寫，ECC 6 維度本地週報）<br/>report-evaluator.ts（v2.13 新增，5 維度規則式品質評估）<br/>pipeline-runner.ts（Python CLI 代理）"]
+        HAPI --> HSTORE["store/<br/>qa-store.ts（QAStore / SupabaseQAStore factory）<br/>store-registry.ts（集中式 singleton 管理，v3.6）<br/>qa-fns.ts（pure module functions，v3.6）<br/>supabase-client.ts（thin REST，no SDK）<br/>supabase-qa-store.ts（pgvector hybrid search）<br/>search-engine.ts（hybrid + keyword boost + keywordOnlySearch）<br/>session-store.ts（FileSessionStore）<br/>learning-store.ts<br/>synonyms-store.ts（雙層：28 靜態 + custom JSON，v2.10）"]
+        HAPI --> HUTIL["utils/<br/>npy-reader.ts（NumPy .npy 解析）<br/>cosine-similarity.ts（Float32Array）<br/>keyword-boost.ts（4 層匹配）<br/>sanitize.ts（HTML escape 防 XSS）<br/>cjk-tokenizer.ts（CJK 分詞 2-gram）<br/>mode-detect.ts（hasOpenAI 偵測）<br/>capabilities.ts（5 維度 cap detection，v3.6）<br/>result.ts（Result&lt;T,E&gt; tagged union，v3.6）"]
+        HAPI --> HSVC["services/<br/>embedding.ts（OpenAI wrapper）<br/>rag-chat.ts（RAG 問答 + v2.11 rerank 支援）<br/>rag-chat-pure.ts（6 pure functions 萃取，v3.6）<br/>reranker.ts（v2.11 新增，Haiku）<br/>context-relevance.ts（v2.12 新增，Claude haiku judge）<br/>report-generator-local.ts（v2.13 重寫，ECC 6 維度本地週報）<br/>report-evaluator.ts（v2.13 新增，5 維度規則式品質評估）<br/>pipeline-runner.ts（Python CLI 代理）"]
         HAPI --> HSCHEMA["schemas/ 10 個<br/>Zod runtime validation<br/>qa / search / chat / feedback<br/>report / session / pipeline / eval<br/>synonyms / api-response"]
     end
 
