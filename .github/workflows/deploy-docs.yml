@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: deploy-docs
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -45,6 +45,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
+          # path is relative to GITHUB_WORKSPACE (not working-directory)
           path: docs-site
 
   deploy:
