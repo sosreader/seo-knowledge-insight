@@ -48,19 +48,20 @@
     </header>
 
     <main class="article">
-      <h1>API Overview</h1>
-      <p>The API has 10 routers and 42 endpoints. All endpoints under <code>/api/v1/*</code> require <code>X-API-Key</code> authentication.</p>
+      <h1>API 總覽<br /><small style="font-size:0.6em;color:var(--muted)">API Overview</small></h1>
+      <p>API 共有 10 個路由器、42 個端點。<code>/api/v1/*</code> 下的所有端點均需 <code>X-API-Key</code> 認證。</p>
+      <p style="color:var(--muted)">The API has 10 routers and 42 endpoints. All endpoints under <code>/api/v1/*</code> require <code>X-API-Key</code> authentication.</p>
 
-      <h2>Endpoints Summary</h2>
+      <h2>端點總覽<br /><small style="font-size:0.7em;color:var(--muted)">Endpoints Summary</small></h2>
 
-      <h3>Health Check</h3>
+      <h3>健康檢查<br /><small style="font-size:0.7em;color:var(--muted)">Health Check</small></h3>
       <table>
         <thead>
           <tr>
             <th>Method</th>
             <th>Path</th>
             <th>Auth</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
@@ -68,352 +69,353 @@
             <td>GET</td>
             <td><code>/health</code></td>
             <td>No</td>
-            <td>Server health check</td>
+            <td>伺服器健康檢查<br /><span style="color:var(--muted);font-size:0.85em">Server health check</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3>QA Knowledge Base — 4 endpoints</h3>
+      <h3>QA 知識庫 — 4 個端點<br /><small style="font-size:0.7em;color:var(--muted)">QA Knowledge Base — 4 endpoints</small></h3>
       <table>
         <thead>
           <tr>
             <th>Method</th>
             <th>Path</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/qa</code></td>
-            <td>List Q&amp;A items (paginated, filterable)</td>
+            <td>列出 Q&amp;A 項目（分頁、可篩選）<br /><span style="color:var(--muted);font-size:0.85em">List Q&amp;A items (paginated, filterable)</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/qa/{id}</code></td>
-            <td>Get single Q&amp;A detail</td>
+            <td>取得單筆 Q&amp;A 詳細資料<br /><span style="color:var(--muted);font-size:0.85em">Get single Q&amp;A detail</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/qa/categories</code></td>
-            <td>List all categories</td>
+            <td>列出所有分類<br /><span style="color:var(--muted);font-size:0.85em">List all categories</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/qa/collections</code></td>
-            <td>List all source collections</td>
+            <td>列出所有來源 Collection<br /><span style="color:var(--muted);font-size:0.85em">List all source collections</span></td>
           </tr>
         </tbody>
       </table>
 
-      <p><strong>QA Filters:</strong></p>
+      <p><strong>QA 篩選參數 / QA Filters:</strong></p>
       <ul>
-        <li><code>category</code> — Filter by SEO category (e.g. "Technical SEO", "Content Strategy")</li>
-        <li><code>keyword</code> — Full-text keyword search</li>
+        <li><code>category</code> — 依 SEO 分類篩選（例如 "Technical SEO"、"Content Strategy"）<br /><span style="color:var(--muted)">Filter by SEO category (e.g. "Technical SEO", "Content Strategy")</span></li>
+        <li><code>keyword</code> — 全文關鍵字搜尋 / Full-text keyword search</li>
         <li><code>difficulty</code> — <code>basic</code> / <code>advanced</code></li>
         <li><code>evergreen</code> — <code>true</code> / <code>false</code></li>
         <li><code>source_type</code> — <code>meeting</code> / <code>article</code></li>
-        <li><code>source_collection</code> — Specific collection name</li>
+        <li><code>source_collection</code> — 指定 Collection 名稱 / Specific collection name</li>
         <li><code>maturity_relevance</code> — <code>L1</code> / <code>L2</code> / <code>L3</code> / <code>L4</code></li>
-        <li><code>limit</code> / <code>offset</code> — Pagination</li>
-        <li><code>sort_by</code> / <code>sort_order</code> — Sorting</li>
+        <li><code>limit</code> / <code>offset</code> — 分頁 / Pagination</li>
+        <li><code>sort_by</code> / <code>sort_order</code> — 排序 / Sorting</li>
       </ul>
 
-      <h3>Search — 1 endpoint</h3>
+      <h3>搜尋 — 1 個端點<br /><small style="font-size:0.7em;color:var(--muted)">Search — 1 endpoint</small></h3>
       <table>
         <thead>
           <tr>
             <th>Method</th>
             <th>Path</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/search</code></td>
-            <td>Hybrid semantic + keyword search</td>
+            <td>混合語意 + 關鍵字搜尋<br /><span style="color:var(--muted);font-size:0.85em">Hybrid semantic + keyword search</span></td>
           </tr>
         </tbody>
       </table>
 
-      <p><strong>Request body:</strong></p>
+      <p><strong>請求 Body / Request body:</strong></p>
       <pre><code class="language-json">{
   "query": "How to optimize Core Web Vitals?",
   "top_k": 5,
   "category": "Technical SEO"
 }</code></pre>
 
-      <h3>Chat — 1 endpoint</h3>
+      <h3>對話 — 1 個端點<br /><small style="font-size:0.7em;color:var(--muted)">Chat — 1 endpoint</small></h3>
       <table>
         <thead>
           <tr>
             <th>Method</th>
             <th>Path</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/chat</code></td>
-            <td>Single-turn RAG chat (supports agent mode)</td>
+            <td>單輪 RAG 對話（支援 Agent 模式）<br /><span style="color:var(--muted);font-size:0.85em">Single-turn RAG chat (supports agent mode)</span></td>
           </tr>
         </tbody>
       </table>
 
-      <p><strong>Request body:</strong></p>
+      <p><strong>請求 Body / Request body:</strong></p>
       <pre><code class="language-json">{
   "message": "What is canonical URL?",
   "history": [],
   "mode": "rag"
 }</code></pre>
 
-      <h3>Sessions — 4 endpoints</h3>
+      <h3>對話管理 — 4 個端點<br /><small style="font-size:0.7em;color:var(--muted)">Sessions — 4 endpoints</small></h3>
       <table>
         <thead>
           <tr>
             <th>Method</th>
             <th>Path</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/sessions</code></td>
-            <td>Create new chat session</td>
+            <td>建立新對話 Session<br /><span style="color:var(--muted);font-size:0.85em">Create new chat session</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/sessions/{id}</code></td>
-            <td>Get session with message history</td>
+            <td>取得 Session 及訊息歷史<br /><span style="color:var(--muted);font-size:0.85em">Get session with message history</span></td>
           </tr>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/sessions/{id}/messages</code></td>
-            <td>Send message in session</td>
+            <td>在 Session 中發送訊息<br /><span style="color:var(--muted);font-size:0.85em">Send message in session</span></td>
           </tr>
           <tr>
             <td>DELETE</td>
             <td><code>/api/v1/sessions/{id}</code></td>
-            <td>Delete session</td>
+            <td>刪除 Session<br /><span style="color:var(--muted);font-size:0.85em">Delete session</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Reports — 3 endpoints</h3>
+      <h3>週報 — 3 個端點<br /><small style="font-size:0.7em;color:var(--muted)">Reports — 3 endpoints</small></h3>
       <table>
         <thead>
           <tr>
             <th>Method</th>
             <th>Path</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/reports</code></td>
-            <td>List all weekly reports</td>
+            <td>列出所有週報<br /><span style="color:var(--muted);font-size:0.85em">List all weekly reports</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/reports/{date}</code></td>
-            <td>Get report by date (YYYYMMDD)</td>
+            <td>依日期取得週報（YYYYMMDD）<br /><span style="color:var(--muted);font-size:0.85em">Get report by date (YYYYMMDD)</span></td>
           </tr>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/reports/generate</code></td>
-            <td>Generate new report</td>
+            <td>生成新週報<br /><span style="color:var(--muted);font-size:0.85em">Generate new report</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Feedback — 1 endpoint</h3>
+      <h3>回饋 — 1 個端點<br /><small style="font-size:0.7em;color:var(--muted)">Feedback — 1 endpoint</small></h3>
       <table>
         <thead>
           <tr>
             <th>Method</th>
             <th>Path</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/feedback</code></td>
-            <td>Submit feedback on search/chat responses</td>
+            <td>提交搜尋／對話回饋<br /><span style="color:var(--muted);font-size:0.85em">Submit feedback on search/chat responses</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Synonyms — 4 endpoints</h3>
+      <h3>同義詞 — 4 個端點<br /><small style="font-size:0.7em;color:var(--muted)">Synonyms — 4 endpoints</small></h3>
       <table>
         <thead>
           <tr>
             <th>Method</th>
             <th>Path</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/synonyms</code></td>
-            <td>List all synonyms (static + custom)</td>
+            <td>列出所有同義詞（靜態 + 自訂）<br /><span style="color:var(--muted);font-size:0.85em">List all synonyms (static + custom)</span></td>
           </tr>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/synonyms</code></td>
-            <td>Add custom synonym</td>
+            <td>新增自訂同義詞<br /><span style="color:var(--muted);font-size:0.85em">Add custom synonym</span></td>
           </tr>
           <tr>
             <td>PUT</td>
             <td><code>/api/v1/synonyms/{term}</code></td>
-            <td>Update custom synonym</td>
+            <td>更新自訂同義詞<br /><span style="color:var(--muted);font-size:0.85em">Update custom synonym</span></td>
           </tr>
           <tr>
             <td>DELETE</td>
             <td><code>/api/v1/synonyms/{term}</code></td>
-            <td>Delete custom synonym</td>
+            <td>刪除自訂同義詞<br /><span style="color:var(--muted);font-size:0.85em">Delete custom synonym</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Pipeline — 18 endpoints</h3>
+      <h3>Pipeline 管理 — 18 個端點<br /><small style="font-size:0.7em;color:var(--muted)">Pipeline — 18 endpoints</small></h3>
       <table>
         <thead>
           <tr>
             <th>Method</th>
             <th>Path</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/pipeline/status</code></td>
-            <td>Pipeline step completion status</td>
+            <td>Pipeline 步驟完成狀態<br /><span style="color:var(--muted);font-size:0.85em">Pipeline step completion status</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/pipeline/meetings</code></td>
-            <td>List meetings with metadata</td>
+            <td>列出會議（含 Metadata）<br /><span style="color:var(--muted);font-size:0.85em">List meetings with metadata</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/pipeline/meetings/{id}/preview</code></td>
-            <td>Meeting markdown preview</td>
+            <td>會議 Markdown 預覽<br /><span style="color:var(--muted);font-size:0.85em">Meeting markdown preview</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/pipeline/source-docs</code></td>
-            <td>List all source documents</td>
+            <td>列出所有來源文件<br /><span style="color:var(--muted);font-size:0.85em">List all source documents</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/pipeline/source-docs/{collection}/{file}/preview</code></td>
-            <td>Document preview</td>
+            <td>文件預覽<br /><span style="color:var(--muted);font-size:0.85em">Document preview</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/pipeline/unprocessed</code></td>
-            <td>List unprocessed documents</td>
+            <td>列出待處理文件<br /><span style="color:var(--muted);font-size:0.85em">List unprocessed documents</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/pipeline/logs</code></td>
-            <td>Fetch history logs</td>
+            <td>擷取歷史日誌<br /><span style="color:var(--muted);font-size:0.85em">Fetch history logs</span></td>
           </tr>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/pipeline/fetch</code></td>
-            <td>Trigger Notion incremental fetch</td>
+            <td>觸發 Notion 增量擷取<br /><span style="color:var(--muted);font-size:0.85em">Trigger Notion incremental fetch</span></td>
           </tr>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/pipeline/fetch-articles</code></td>
-            <td>Trigger article fetch</td>
+            <td>觸發文章擷取<br /><span style="color:var(--muted);font-size:0.85em">Trigger article fetch</span></td>
           </tr>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/pipeline/extract-qa</code></td>
-            <td>Trigger Q&amp;A extraction</td>
+            <td>觸發 Q&amp;A 萃取<br /><span style="color:var(--muted);font-size:0.85em">Trigger Q&amp;A extraction</span></td>
           </tr>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/pipeline/dedupe-classify</code></td>
-            <td>Trigger dedup + classification</td>
+            <td>觸發去重 + 分類<br /><span style="color:var(--muted);font-size:0.85em">Trigger dedup + classification</span></td>
           </tr>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/pipeline/metrics</code></td>
-            <td>Parse SEO metrics from Google Sheets</td>
+            <td>從 Google Sheets 解析 SEO 指標<br /><span style="color:var(--muted);font-size:0.85em">Parse SEO metrics from Google Sheets</span></td>
           </tr>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/pipeline/metrics/save</code></td>
-            <td>Save metrics snapshot</td>
+            <td>儲存指標快照<br /><span style="color:var(--muted);font-size:0.85em">Save metrics snapshot</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/pipeline/metrics/snapshots</code></td>
-            <td>List metrics snapshots</td>
+            <td>列出指標快照清單<br /><span style="color:var(--muted);font-size:0.85em">List metrics snapshots</span></td>
           </tr>
           <tr>
             <td>DELETE</td>
             <td><code>/api/v1/pipeline/metrics/snapshots/{id}</code></td>
-            <td>Delete snapshot</td>
+            <td>刪除指定快照<br /><span style="color:var(--muted);font-size:0.85em">Delete snapshot</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/pipeline/metrics/trends</code></td>
-            <td>Timeseries anomaly detection</td>
+            <td>時間序列異常偵測<br /><span style="color:var(--muted);font-size:0.85em">Timeseries anomaly detection</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/pipeline/llm-usage</code></td>
-            <td>LLM cost/latency monitoring</td>
+            <td>LLM 成本與延遲監控<br /><span style="color:var(--muted);font-size:0.85em">LLM cost/latency monitoring</span></td>
           </tr>
           <tr>
             <td>POST</td>
             <td><code>/api/v1/pipeline/crawled-not-indexed</code></td>
-            <td>Crawled-not-indexed analysis</td>
+            <td>已檢索未索引路徑分析<br /><span style="color:var(--muted);font-size:0.85em">Crawled-not-indexed analysis</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Meeting Prep — 3 endpoints</h3>
+      <h3>會議準備 — 3 個端點<br /><small style="font-size:0.7em;color:var(--muted)">Meeting Prep — 3 endpoints</small></h3>
       <table>
         <thead>
           <tr>
             <th>Method</th>
             <th>Path</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/meeting-prep</code></td>
-            <td>List all meeting prep reports</td>
+            <td>列出所有會議準備報告<br /><span style="color:var(--muted);font-size:0.85em">List all meeting prep reports</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/meeting-prep/maturity-trend</code></td>
-            <td>SEO maturity trend timeseries</td>
+            <td>SEO 成熟度趨勢時間序列<br /><span style="color:var(--muted);font-size:0.85em">SEO maturity trend timeseries</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/meeting-prep/{date}</code></td>
-            <td>Get meeting prep report by date</td>
+            <td>依日期取得會議準備報告<br /><span style="color:var(--muted);font-size:0.85em">Get meeting prep report by date</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h2>Response Format</h2>
-      <p>All API responses follow a consistent JSON structure:</p>
+      <h2>回應格式<br /><small style="font-size:0.7em;color:var(--muted)">Response Format</small></h2>
+      <p>所有 API 回應均遵循一致的 JSON 結構：</p>
+      <p style="color:var(--muted)">All API responses follow a consistent JSON structure:</p>
       <pre><code class="language-json">{
   "data": { ... },
   "error": null,
@@ -423,34 +425,34 @@
   }
 }</code></pre>
 
-      <h2>Error Responses</h2>
+      <h2>錯誤回應<br /><small style="font-size:0.7em;color:var(--muted)">Error Responses</small></h2>
       <table>
         <thead>
           <tr>
-            <th>Status</th>
-            <th>Meaning</th>
+            <th>狀態碼 / Status</th>
+            <th>意義 / Meaning</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>400</td>
-            <td>Invalid request (Zod validation failed)</td>
+            <td>無效請求（Zod 驗證失敗）<br /><span style="color:var(--muted);font-size:0.85em">Invalid request (Zod validation failed)</span></td>
           </tr>
           <tr>
             <td>401</td>
-            <td>Missing or invalid API key</td>
+            <td>缺少或無效的 API Key<br /><span style="color:var(--muted);font-size:0.85em">Missing or invalid API key</span></td>
           </tr>
           <tr>
             <td>404</td>
-            <td>Resource not found</td>
+            <td>資源不存在<br /><span style="color:var(--muted);font-size:0.85em">Resource not found</span></td>
           </tr>
           <tr>
             <td>429</td>
-            <td>Rate limit exceeded</td>
+            <td>超過速率限制<br /><span style="color:var(--muted);font-size:0.85em">Rate limit exceeded</span></td>
           </tr>
           <tr>
             <td>500</td>
-            <td>Internal server error</td>
+            <td>伺服器內部錯誤<br /><span style="color:var(--muted);font-size:0.85em">Internal server error</span></td>
           </tr>
         </tbody>
       </table>
@@ -460,7 +462,7 @@
   "details": "message: String must contain at least 1 character(s)"
 }</code></pre>
 
-      <a class="back-link" href="../">&larr; API Reference</a>
+      <a class="back-link" href="../">&larr; 回到 API 參考文件 / Back to API Reference</a>
     </main>
   </body>
 </html>

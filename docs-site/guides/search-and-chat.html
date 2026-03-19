@@ -48,14 +48,16 @@
     </header>
 
     <main class="article">
-      <h1>Search &amp; Chat</h1>
-      <p>These are the most commonly used endpoints for frontend integration.</p>
+      <h1>搜尋與對話<br /><small style="font-size:0.6em;color:var(--muted)">Search &amp; Chat</small></h1>
+      <p>以下為前端整合最常用的端點。</p>
+      <p style="color:var(--muted)">These are the most commonly used endpoints for frontend integration.</p>
 
-      <h2>Semantic Search</h2>
+      <h2>語意搜尋<br /><small style="font-size:0.7em;color:var(--muted)">Semantic Search</small></h2>
       <p><code>POST /api/v1/search</code></p>
-      <p>Search the knowledge base using hybrid semantic + keyword search with synonym expansion.</p>
+      <p>透過混合語意搜尋 + 關鍵字搜尋，並支援同義詞擴展，搜尋知識庫。</p>
+      <p style="color:var(--muted)">Search the knowledge base using hybrid semantic + keyword search with synonym expansion.</p>
 
-      <h3>Request</h3>
+      <h3>請求<br /><small style="font-size:0.7em;color:var(--muted)">Request</small></h3>
       <pre><code class="language-json">{
   "query": "How to improve Core Web Vitals",
   "top_k": 5,
@@ -65,10 +67,10 @@
       <table>
         <thead>
           <tr>
-            <th>Field</th>
-            <th>Type</th>
-            <th>Required</th>
-            <th>Description</th>
+            <th>欄位 / Field</th>
+            <th>型別 / Type</th>
+            <th>必填 / Required</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
@@ -76,36 +78,36 @@
             <td><code>query</code></td>
             <td>string</td>
             <td>Yes</td>
-            <td>Search query (1-500 chars)</td>
+            <td>搜尋查詢（1-500 字元）<br /><span style="color:var(--muted);font-size:0.85em">Search query (1-500 chars)</span></td>
           </tr>
           <tr>
             <td><code>top_k</code></td>
             <td>number</td>
             <td>No</td>
-            <td>Number of results (default: 5, max: 20)</td>
+            <td>回傳結果數（預設：5，最大：20）<br /><span style="color:var(--muted);font-size:0.85em">Number of results (default: 5, max: 20)</span></td>
           </tr>
           <tr>
             <td><code>category</code></td>
             <td>string</td>
             <td>No</td>
-            <td>Filter by category</td>
+            <td>依分類篩選<br /><span style="color:var(--muted);font-size:0.85em">Filter by category</span></td>
           </tr>
           <tr>
             <td><code>extraction_model</code></td>
             <td>string</td>
             <td>No</td>
-            <td>Filter by extraction model (e.g. <code>"claude-code"</code>)</td>
+            <td>依萃取模型篩選（例如 <code>"claude-code"</code>）<br /><span style="color:var(--muted);font-size:0.85em">Filter by extraction model (e.g. <code>"claude-code"</code>)</span></td>
           </tr>
           <tr>
             <td><code>maturity_level</code></td>
             <td>string</td>
             <td>No</td>
-            <td>Boost results matching this maturity level (<code>"L1"</code>–<code>"L4"</code>)</td>
+            <td>提升符合指定成熟度等級的結果排序（<code>"L1"</code>–<code>"L4"</code>）<br /><span style="color:var(--muted);font-size:0.85em">Boost results matching this maturity level (<code>"L1"</code>–<code>"L4"</code>)</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Response</h3>
+      <h3>回應<br /><small style="font-size:0.7em;color:var(--muted)">Response</small></h3>
       <pre><code class="language-json">{
   "results": [
     {
@@ -123,35 +125,35 @@
   "mode": "hybrid"
 }</code></pre>
 
-      <h3>Search Modes (automatic)</h3>
+      <h3>搜尋模式（自動）<br /><small style="font-size:0.7em;color:var(--muted)">Search Modes (automatic)</small></h3>
       <table>
         <thead>
           <tr>
-            <th>Condition</th>
+            <th>條件 / Condition</th>
             <th>Mode</th>
-            <th>Description</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>Supabase configured</td>
+            <td>已設定 Supabase<br /><span style="color:var(--muted);font-size:0.85em">Supabase configured</span></td>
             <td><code>hybrid</code></td>
-            <td>pgvector embedding + keyword boost</td>
+            <td>pgvector embedding + 關鍵字加權<br /><span style="color:var(--muted);font-size:0.85em">pgvector embedding + keyword boost</span></td>
           </tr>
           <tr>
-            <td>OpenAI key only</td>
+            <td>僅有 OpenAI Key<br /><span style="color:var(--muted);font-size:0.85em">OpenAI key only</span></td>
             <td><code>hybrid</code></td>
-            <td>Embedding similarity + keyword boost</td>
+            <td>Embedding 相似度 + 關鍵字加權<br /><span style="color:var(--muted);font-size:0.85em">Embedding similarity + keyword boost</span></td>
           </tr>
           <tr>
-            <td>No OpenAI key</td>
+            <td>無 OpenAI Key<br /><span style="color:var(--muted);font-size:0.85em">No OpenAI key</span></td>
             <td><code>keyword</code></td>
-            <td>Keyword-only search with synonym expansion</td>
+            <td>純關鍵字搜尋，支援同義詞擴展<br /><span style="color:var(--muted);font-size:0.85em">Keyword-only search with synonym expansion</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Frontend Example</h3>
+      <h3>前端範例<br /><small style="font-size:0.7em;color:var(--muted)">Frontend Example</small></h3>
       <pre><code class="language-typescript">async function searchKnowledgeBase(query: string, category?: string) {
   const res = await fetch("/api/proxy/search", {
     method: "POST",
@@ -164,11 +166,12 @@
 
       <hr />
 
-      <h2>RAG Chat</h2>
+      <h2>RAG 對話<br /><small style="font-size:0.7em;color:var(--muted)">RAG Chat</small></h2>
       <p><code>POST /api/v1/chat</code></p>
-      <p>Single-turn question answering with automatic knowledge base retrieval.</p>
+      <p>單輪問答，自動從知識庫檢索相關內容。</p>
+      <p style="color:var(--muted)">Single-turn question answering with automatic knowledge base retrieval.</p>
 
-      <h3>Request</h3>
+      <h3>請求<br /><small style="font-size:0.7em;color:var(--muted)">Request</small></h3>
       <pre><code class="language-json">{
   "message": "What is the difference between canonical URL and 301 redirect?",
   "history": [
@@ -181,10 +184,10 @@
       <table>
         <thead>
           <tr>
-            <th>Field</th>
-            <th>Type</th>
-            <th>Required</th>
-            <th>Description</th>
+            <th>欄位 / Field</th>
+            <th>型別 / Type</th>
+            <th>必填 / Required</th>
+            <th>說明 / Description</th>
           </tr>
         </thead>
         <tbody>
@@ -192,30 +195,30 @@
             <td><code>message</code></td>
             <td>string</td>
             <td>Yes</td>
-            <td>User message (1-2000 chars)</td>
+            <td>使用者訊息（1-2000 字元）<br /><span style="color:var(--muted);font-size:0.85em">User message (1-2000 chars)</span></td>
           </tr>
           <tr>
             <td><code>history</code></td>
             <td>array</td>
             <td>No</td>
-            <td>Previous messages for context (max 20)</td>
+            <td>上下文用的歷史訊息（最多 20 條）<br /><span style="color:var(--muted);font-size:0.85em">Previous messages for context (max 20)</span></td>
           </tr>
           <tr>
             <td><code>mode</code></td>
             <td>string</td>
             <td>No</td>
-            <td><code>"rag"</code> or <code>"agent"</code> (default: auto)</td>
+            <td><code>"rag"</code> 或 <code>"agent"</code>（預設：auto）<br /><span style="color:var(--muted);font-size:0.85em"><code>"rag"</code> or <code>"agent"</code> (default: auto)</span></td>
           </tr>
           <tr>
             <td><code>maturity_level</code></td>
             <td>string</td>
             <td>No</td>
-            <td>Client SEO maturity level (<code>"L1"</code>–<code>"L4"</code>) for response depth tuning</td>
+            <td>客戶 SEO 成熟度（<code>"L1"</code>–<code>"L4"</code>），用於調整回應深度<br /><span style="color:var(--muted);font-size:0.85em">Client SEO maturity level (<code>"L1"</code>–<code>"L4"</code>) for response depth tuning</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Response</h3>
+      <h3>回應<br /><small style="font-size:0.7em;color:var(--muted)">Response</small></h3>
       <pre><code class="language-json">{
   "answer": "Canonical URLs and 301 redirects serve different purposes...",
   "sources": [
@@ -240,39 +243,39 @@
   }
 }</code></pre>
 
-      <h3>Mode Comparison</h3>
+      <h3>模式比較<br /><small style="font-size:0.7em;color:var(--muted)">Mode Comparison</small></h3>
       <table>
         <thead>
           <tr>
             <th>Mode</th>
-            <th>Behavior</th>
-            <th>Latency</th>
-            <th>Use Case</th>
+            <th>行為 / Behavior</th>
+            <th>延遲 / Latency</th>
+            <th>適用情境 / Use Case</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td><code>rag</code></td>
-            <td>Single retrieval + generation</td>
+            <td>單次檢索 + 生成<br /><span style="color:var(--muted);font-size:0.85em">Single retrieval + generation</span></td>
             <td>~2-3s</td>
-            <td>Simple factual questions</td>
+            <td>簡單事實性問題<br /><span style="color:var(--muted);font-size:0.85em">Simple factual questions</span></td>
           </tr>
           <tr>
             <td><code>agent</code></td>
-            <td>Multi-turn search (up to 5 rounds)</td>
+            <td>多輪搜尋（最多 5 輪）<br /><span style="color:var(--muted);font-size:0.85em">Multi-turn search (up to 5 rounds)</span></td>
             <td>~5-15s</td>
-            <td>Complex comparison questions</td>
+            <td>複雜的比較型問題<br /><span style="color:var(--muted);font-size:0.85em">Complex comparison questions</span></td>
           </tr>
           <tr>
             <td><code>context-only</code></td>
-            <td>No LLM, returns sources only</td>
+            <td>不呼叫 LLM，直接回傳來源<br /><span style="color:var(--muted);font-size:0.85em">No LLM, returns sources only</span></td>
             <td>~0.5s</td>
-            <td>When no OpenAI key</td>
+            <td>未設定 OpenAI Key 時<br /><span style="color:var(--muted);font-size:0.85em">When no OpenAI key</span></td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Frontend Example</h3>
+      <h3>前端範例<br /><small style="font-size:0.7em;color:var(--muted)">Frontend Example</small></h3>
       <pre><code class="language-typescript">interface ChatResponse {
   answer: string | null;
   sources: Array&lt;{
@@ -301,22 +304,23 @@ async function askQuestion(message: string, mode?: "rag" | "agent") {
 
       <hr />
 
-      <h2>Session-Based Chat</h2>
-      <p>For multi-turn conversations where context needs to be preserved across messages.</p>
+      <h2>Session 對話<br /><small style="font-size:0.7em;color:var(--muted)">Session-Based Chat</small></h2>
+      <p>適用於需要跨訊息保留對話上下文的多輪對話情境。</p>
+      <p style="color:var(--muted)">For multi-turn conversations where context needs to be preserved across messages.</p>
 
-      <h3>Create Session</h3>
+      <h3>建立 Session<br /><small style="font-size:0.7em;color:var(--muted)">Create Session</small></h3>
       <pre><code class="language-typescript">const session = await fetch("/api/proxy/sessions", { method: "POST" });
 const { id } = await session.json();
 // id: "550e8400-e29b-41d4-a716-446655440000"</code></pre>
 
-      <h3>Send Message</h3>
+      <h3>發送訊息<br /><small style="font-size:0.7em;color:var(--muted)">Send Message</small></h3>
       <pre><code class="language-typescript">const response = await fetch(`/api/proxy/sessions/${sessionId}/messages`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ message: "What is structured data?", mode: "rag" }),
 });</code></pre>
 
-      <h3>Response includes metadata</h3>
+      <h3>回應包含 Metadata<br /><small style="font-size:0.7em;color:var(--muted)">Response includes metadata</small></h3>
       <pre><code class="language-json">{
   "role": "assistant",
   "content": "Structured data is...",
@@ -328,12 +332,12 @@ const { id } = await session.json();
   }
 }</code></pre>
 
-      <h3>Get Session History</h3>
+      <h3>取得對話歷史<br /><small style="font-size:0.7em;color:var(--muted)">Get Session History</small></h3>
       <pre><code class="language-typescript">const session = await fetch(`/api/proxy/sessions/${sessionId}`);
 const { messages } = await session.json();
 // messages: Array&lt;{ role, content, metadata?, created_at }&gt;</code></pre>
 
-      <a class="back-link" href="../">&larr; API Reference</a>
+      <a class="back-link" href="../">&larr; 回到 API 參考文件 / Back to API Reference</a>
     </main>
   </body>
 </html>

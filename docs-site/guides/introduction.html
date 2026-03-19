@@ -48,54 +48,63 @@
     </header>
 
     <main class="article">
-      <h1>SEO Knowledge Insight API</h1>
-      <p>SEO knowledge base API with RAG chat, semantic search, weekly reports, and ETL pipeline management.</p>
+      <h1>SEO 知識洞察 API<br /><small style="font-size:0.6em;color:var(--muted)">SEO Knowledge Insight API</small></h1>
+      <p>具備 RAG 對話、語意搜尋、SEO 週報生成與 ETL Pipeline 管理功能的 SEO 知識庫 API。</p>
+      <p style="color:var(--muted)">SEO knowledge base API with RAG chat, semantic search, weekly reports, and ETL pipeline management.</p>
 
-      <h2>Features</h2>
+      <h2>功能特色<br /><small style="font-size:0.7em;color:var(--muted)">Features</small></h2>
       <ul>
-        <li><strong>QA Knowledge Base</strong> — 1,469+ SEO Q&amp;A pairs from meetings and articles (8 sources)</li>
-        <li><strong>Semantic Search</strong> — Hybrid search (pgvector embedding + keyword) with synonym expansion</li>
-        <li><strong>RAG Chat</strong> — Single-turn RAG and multi-turn agent mode with inline citations</li>
-        <li><strong>Weekly Reports</strong> — Automated SEO report generation from metrics snapshots (7 dimensions)</li>
-        <li><strong>Pipeline Management</strong> — ETL pipeline for Notion, Medium, iThome, Google Case Studies, Ahrefs, SEJ, and Growth Memo</li>
-        <li><strong>Session Management</strong> — Persistent multi-turn chat sessions with maturity-aware responses</li>
-        <li><strong>Meeting Prep</strong> — Deep research reports for SEO consulting sessions</li>
+        <li><strong>QA 知識庫</strong> — 1,469+ 筆 SEO 問答，來自會議與文章（8 個來源）<br />
+        <span style="color:var(--muted)">QA Knowledge Base — 1,469+ SEO Q&amp;A pairs from meetings and articles (8 sources)</span></li>
+        <li><strong>語意搜尋</strong> — 混合搜尋（pgvector embedding + 關鍵字），支援同義詞擴展<br />
+        <span style="color:var(--muted)">Semantic Search — Hybrid search (pgvector embedding + keyword) with synonym expansion</span></li>
+        <li><strong>RAG 對話</strong> — 單輪 RAG 與多輪 Agent 模式，支援行內引用<br />
+        <span style="color:var(--muted)">RAG Chat — Single-turn RAG and multi-turn agent mode with inline citations</span></li>
+        <li><strong>週報生成</strong> — 從指標快照自動生成 SEO 週報（7 個維度）<br />
+        <span style="color:var(--muted)">Weekly Reports — Automated SEO report generation from metrics snapshots (7 dimensions)</span></li>
+        <li><strong>Pipeline 管理</strong> — 支援 Notion、Medium、iThome、Google 案例、Ahrefs、SEJ、Growth Memo 的 ETL Pipeline<br />
+        <span style="color:var(--muted)">Pipeline Management — ETL pipeline for Notion, Medium, iThome, Google Case Studies, Ahrefs, SEJ, and Growth Memo</span></li>
+        <li><strong>對話管理</strong> — 持久化多輪對話 Session，支援成熟度感知回應<br />
+        <span style="color:var(--muted)">Session Management — Persistent multi-turn chat sessions with maturity-aware responses</span></li>
+        <li><strong>會議準備</strong> — 為 SEO 顧問會議生成深度研究報告<br />
+        <span style="color:var(--muted)">Meeting Prep — Deep research reports for SEO consulting sessions</span></li>
       </ul>
 
       <h2>Base URL</h2>
       <table>
         <thead>
           <tr>
-            <th>Environment</th>
+            <th>環境 / Environment</th>
             <th>URL</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>Local</td>
+            <td>本地 / Local</td>
             <td><code>http://localhost:8002</code></td>
           </tr>
           <tr>
-            <td>Production</td>
+            <td>正式環境 / Production</td>
             <td><code>https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws</code></td>
           </tr>
         </tbody>
       </table>
 
-      <h2>Quick Start</h2>
-      <pre><code class="language-bash"># Health check (no auth required)
+      <h2>快速開始<br /><small style="font-size:0.7em;color:var(--muted)">Quick Start</small></h2>
+      <pre><code class="language-bash"># 健康檢查（不需要認證）/ Health check (no auth required)
 curl http://localhost:8002/health
 
-# Search the knowledge base
+# 搜尋知識庫 / Search the knowledge base
 curl -X POST http://localhost:8002/api/v1/search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-key" \
   -d '{"query": "Core Web Vitals", "top_k": 5}'</code></pre>
 
-      <h2>API Documentation</h2>
-      <p>The interactive API reference is available at the <a href="../">root page</a> with full Try It functionality powered by <a href="https://github.com/scalar/scalar" target="_blank" rel="noopener noreferrer">Scalar</a>.</p>
+      <h2>API 文件<br /><small style="font-size:0.7em;color:var(--muted)">API Documentation</small></h2>
+      <p>互動式 API 參考文件位於<a href="../">首頁</a>，由 <a href="https://github.com/scalar/scalar" target="_blank" rel="noopener noreferrer">Scalar</a> 驅動，支援完整的線上測試功能。</p>
+      <p style="color:var(--muted)">The interactive API reference is available at the <a href="../">root page</a> with full Try It functionality powered by <a href="https://github.com/scalar/scalar" target="_blank" rel="noopener noreferrer">Scalar</a>.</p>
 
-      <a class="back-link" href="../">&larr; API Reference</a>
+      <a class="back-link" href="../">&larr; 回到 API 參考文件 / Back to API Reference</a>
     </main>
   </body>
 </html>

@@ -48,46 +48,49 @@
     </header>
 
     <main class="article">
-      <h1>Authentication</h1>
-      <p>All API endpoints (except <code>/health</code>) require the <code>X-API-Key</code> header.</p>
+      <h1>認證<br /><small style="font-size:0.6em;color:var(--muted)">Authentication</small></h1>
+      <p>除 <code>/health</code> 以外，所有 API 端點均需提供 <code>X-API-Key</code> Header。</p>
+      <p style="color:var(--muted)">All API endpoints (except <code>/health</code>) require the <code>X-API-Key</code> header.</p>
 
       <h2>Header</h2>
       <pre><code>X-API-Key: your-api-key</code></pre>
 
-      <h2>Configuration</h2>
-      <p>Set <code>SEO_API_KEY</code> in <code>.env</code>:</p>
+      <h2>設定<br /><small style="font-size:0.7em;color:var(--muted)">Configuration</small></h2>
+      <p>在 <code>.env</code> 中設定 <code>SEO_API_KEY</code>：</p>
+      <p style="color:var(--muted)">Set <code>SEO_API_KEY</code> in <code>.env</code>:</p>
       <pre><code class="language-env">SEO_API_KEY=your-secret-key</code></pre>
-      <p>When <code>SEO_API_KEY</code> is not set, authentication is disabled (development mode only). In production, requests without a valid key receive <code>401 Unauthorized</code>.</p>
+      <p>未設定 <code>SEO_API_KEY</code> 時，認證功能關閉（僅限開發環境）。正式環境中，未提供有效 Key 的請求將收到 <code>401 Unauthorized</code>。</p>
+      <p style="color:var(--muted)">When <code>SEO_API_KEY</code> is not set, authentication is disabled (development mode only). In production, requests without a valid key receive <code>401 Unauthorized</code>.</p>
 
-      <h2>Example</h2>
+      <h2>範例<br /><small style="font-size:0.7em;color:var(--muted)">Example</small></h2>
       <pre><code class="language-bash">curl http://localhost:8002/api/v1/qa \
   -H "X-API-Key: your-api-key"</code></pre>
 
-      <h2>Rate Limits</h2>
+      <h2>速率限制<br /><small style="font-size:0.7em;color:var(--muted)">Rate Limits</small></h2>
       <table>
         <thead>
           <tr>
-            <th>Endpoint Group</th>
-            <th>Limit</th>
+            <th>端點群組 / Endpoint Group</th>
+            <th>限制 / Limit</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>Default (QA, Search, Feedback, Pipeline, Synonyms)</td>
-            <td>Configurable</td>
+            <td>預設（QA、搜尋、回饋、Pipeline、同義詞）<br /><span style="color:var(--muted);font-size:0.85em">Default (QA, Search, Feedback, Pipeline, Synonyms)</span></td>
+            <td>可設定 / Configurable</td>
           </tr>
           <tr>
-            <td>Chat</td>
-            <td>Lower limit</td>
+            <td>對話<br /><span style="color:var(--muted);font-size:0.85em">Chat</span></td>
+            <td>較低限制 / Lower limit</td>
           </tr>
           <tr>
-            <td>Report Generation</td>
-            <td>Lowest limit</td>
+            <td>週報生成<br /><span style="color:var(--muted);font-size:0.85em">Report Generation</span></td>
+            <td>最低限制 / Lowest limit</td>
           </tr>
         </tbody>
       </table>
 
-      <a class="back-link" href="../">&larr; API Reference</a>
+      <a class="back-link" href="../">&larr; 回到 API 參考文件 / Back to API Reference</a>
     </main>
   </body>
 </html>
