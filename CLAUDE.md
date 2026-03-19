@@ -240,7 +240,7 @@ API 端點特性：
 - `GET /health` — 健康檢查
 - `GET /openapi.json` — OpenAPI 3.1 規格（機器可讀，可匯入 Postman / Swagger）
 - `GET /docs` — Scalar 互動式 API 文件（瀏覽器直接測試）
-- Mintlify 託管文件：[vocus.mintlify.app](https://vocus.mintlify.app)（auto-deploy from main，設定檔 `api/docs/docs.json`）
+- GitHub Pages 文件：[sosreader.github.io/seo-knowledge-insight](https://sosreader.github.io/seo-knowledge-insight/)（Scalar CDN，CI auto-deploy from `api/src/openapi.ts`）
 - 10 個路由器：qa（含 extraction_model filter）、search（含 extraction_model filter + search_hit_count tracking）、chat、reports、sessions、feedback、pipeline、synonyms、meeting-prep、health
 - Pipeline 端點：18 個（狀態、會議、來源文件、指標、快照、趨勢分析、LLM 用量、索引覆蓋率等）
 - 認證：`X-API-Key` header + 安全層（SSRF whitelist、auth fail-fast、HTTP security headers、session UUID validation）
