@@ -42,3 +42,6 @@ api/lambda.zip
 
 # Supabase CLI temp files
 supabase/.temp/
+
+# Generated docs (built by CI from openapi.ts)
+docs-site/openapi.json
