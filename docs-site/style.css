@@ -1,18 +1,9 @@
-/* ── Art Deco Design Tokens ── */
-:root {
-  --bg: #0A0A0A;
-  --fg: #F2F0E4;
-  --card: #141414;
-  --gold: #D4AF37;
-  --gold-light: #F2E8C4;
-  --midnight: #1E3D59;
-  --muted: #888888;
-  --font-display: "Marcellus", Georgia, serif;
-  --font-body: "Josefin Sans", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
-}
+/* ══════════════════════════════════════════════════
+   Art Deco — CSS-only layer (pseudo-elements + article typography)
+   Layout/components use Tailwind utility classes in HTML.
+   ══════════════════════════════════════════════════ */
 
-/* ── Diagonal crosshatch background ── */
+/* ── Diagonal crosshatch texture ── */
 body::before {
   content: "";
   position: fixed;
@@ -24,15 +15,7 @@ body::before {
     repeating-linear-gradient(-45deg, transparent, transparent 40px, rgba(212,175,55,0.03) 40px, rgba(212,175,55,0.03) 41px);
 }
 
-/* ── Site Header ── */
-.site-header {
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  background: var(--bg);
-  border-bottom: 1px solid var(--gold);
-}
-
+/* ── Header double-border line ── */
 .site-header::after {
   content: "";
   position: absolute;
@@ -43,213 +26,28 @@ body::before {
   background: rgba(212,175,55,0.3);
 }
 
-/* ── Brand ── */
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-right: auto;
-  text-decoration: none;
-  color: var(--fg);
-}
-
-.brand-diamond {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--gold);
-  transform: rotate(45deg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.brand-diamond span {
-  transform: rotate(-45deg);
-  font-family: var(--font-display);
-  font-size: 14px;
-  color: var(--gold);
-  line-height: 1;
-}
-
-.brand-name {
-  font-family: var(--font-display);
-  font-size: 18px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg);
-}
-
-.brand-tag {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--gold);
-  border: 1px solid rgba(212,175,55,0.4);
-  padding: 2px 10px;
-}
-
-/* ── Nav ── */
-.nav-links a {
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--muted);
-  text-decoration: none;
-  padding: 8px 14px;
-  transition: color 300ms, text-shadow 300ms;
-  position: relative;
-}
-
-.nav-links a::after {
+/* ── Nav underline animation ── */
+.nav-link::after {
   content: "";
   position: absolute;
   bottom: 2px;
   left: 14px;
   right: 14px;
   height: 1px;
-  background: var(--gold);
+  background: #D4AF37;
   transform: scaleX(0);
   transition: transform 300ms;
 }
+.nav-link:hover::after,
+.nav-link[aria-current="page"]::after { transform: scaleX(1); }
 
-.nav-links a:hover { color: var(--gold); }
-.nav-links a:hover::after { transform: scaleX(1); }
-
-.nav-links a[aria-current="page"] {
-  color: var(--gold);
-  text-shadow: 0 0 12px rgba(212,175,55,0.3);
-}
-.nav-links a[aria-current="page"]::after { transform: scaleX(1); }
-
-.nav-links a:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-/* ── Divider ── */
-.nav-sep {
-  width: 1px;
-  height: 20px;
-  background: rgba(212,175,55,0.2);
-  margin: 0 6px;
-}
-
-/* ── GitHub icon ── */
-.github-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  color: var(--muted);
-  transition: color 300ms;
-}
-
-.github-link:hover { color: var(--gold); }
-
-.github-link:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-.github-link svg {
-  width: 18px;
-  height: 18px;
-  fill: currentColor;
-}
-
-/* ── Guide Layout (Sidebar + Article) ── */
-.guide-layout {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  max-width: 1080px;
-  margin: 0 auto;
-  min-height: calc(100vh - 64px);
-}
-
-/* ── Sidebar ── */
-.guide-sidebar {
-  position: sticky;
-  top: 68px;
-  align-self: start;
-  padding: 40px 24px 40px 24px;
-  border-right: 1px solid rgba(212,175,55,0.12);
-  height: fit-content;
-  max-height: calc(100vh - 68px);
-  overflow-y: auto;
-}
-
-.guide-sidebar .sidebar-title {
-  font-family: var(--font-body);
-  font-size: 0.625rem;
-  font-weight: 400;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(212,175,55,0.2);
-}
-
-.guide-sidebar a {
-  display: block;
-  font-family: var(--font-body);
-  font-size: 0.8125rem;
-  color: var(--muted);
-  text-decoration: none;
-  padding: 8px 0;
-  border-left: 2px solid transparent;
-  padding-left: 12px;
-  transition: color 300ms, border-color 300ms;
-  line-height: 1.4;
-}
-
-.guide-sidebar a:hover {
-  color: var(--fg);
-}
-
-.guide-sidebar a[aria-current="page"] {
-  color: var(--gold);
-  border-left-color: var(--gold);
-}
-
-.guide-sidebar a:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-.guide-sidebar .sidebar-back {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(212,175,55,0.12);
-  font-size: 0.6875rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  border-left: none;
-  padding-left: 0;
-}
-
-.guide-sidebar .sidebar-back:hover {
-  color: var(--gold);
-}
-
-/* ── Article (Guide Pages) ── */
-.article {
-  max-width: 720px;
-  padding: 64px 40px 120px;
-  position: relative;
-}
-
+/* ── Article bare-element typography ── */
 .article h1 {
-  font-family: var(--font-display);
+  font-family: "Marcellus", Georgia, serif;
   font-size: 2.5rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: #D4AF37;
   line-height: 1.2;
   margin-bottom: 8px;
   padding-bottom: 20px;
@@ -257,22 +55,21 @@ body::before {
   position: relative;
 }
 
-/* Decorative line above h1 */
 .article h1::before {
   content: "";
   display: block;
   width: 60px;
   height: 1px;
-  background: var(--gold);
+  background: #D4AF37;
   margin-bottom: 20px;
 }
 
 .article h2 {
-  font-family: var(--font-display);
+  font-family: "Marcellus", Georgia, serif;
   font-size: 1.375rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: #D4AF37;
   line-height: 1.3;
   margin-top: 48px;
   margin-bottom: 16px;
@@ -281,68 +78,57 @@ body::before {
 }
 
 .article h3 {
-  font-family: var(--font-display);
+  font-family: "Marcellus", Georgia, serif;
   font-size: 1.125rem;
   letter-spacing: 0.05em;
-  color: var(--fg);
+  color: #F2F0E4;
   margin-top: 32px;
   margin-bottom: 12px;
 }
 
 .article p {
-  font-family: var(--font-body);
   font-size: 1rem;
   line-height: 1.75;
-  color: var(--fg);
+  color: #F2F0E4;
   margin-bottom: 16px;
 }
 
 .article .lead {
   font-size: 1.125rem;
-  color: var(--muted);
+  color: #888888;
 }
 
 .article a {
-  color: var(--gold);
+  color: #D4AF37;
   text-decoration: none;
   border-bottom: 1px solid rgba(212,175,55,0.3);
   transition: border-color 300ms;
 }
+.article a:hover { border-color: #D4AF37; }
+.article a:focus-visible { outline: 2px solid #D4AF37; outline-offset: 2px; }
 
-.article a:hover { border-color: var(--gold); }
-
-.article a:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-.article ul, .article ol {
-  padding-left: 24px;
-  margin-bottom: 16px;
-}
+.article ul, .article ol { padding-left: 24px; margin-bottom: 16px; }
 
 .article li {
-  font-family: var(--font-body);
   font-size: 1rem;
   line-height: 1.75;
-  color: var(--fg);
+  color: #F2F0E4;
   margin-bottom: 6px;
 }
-
-.article li::marker { color: var(--gold); }
-.article li strong { color: var(--gold-light); }
+.article li::marker { color: #D4AF37; }
+.article li strong { color: #F2E8C4; }
 
 .article code {
-  font-family: var(--font-mono);
+  font-family: "JetBrains Mono", monospace;
   font-size: 0.85em;
-  background: var(--card);
-  color: var(--gold-light);
+  background: #141414;
+  color: #F2E8C4;
   padding: 2px 6px;
   border: 1px solid rgba(212,175,55,0.15);
 }
 
 .article pre {
-  background: var(--card);
+  background: #141414;
   border: 1px solid rgba(212,175,55,0.15);
   padding: 20px 24px;
   overflow-x: auto;
@@ -351,7 +137,6 @@ body::before {
   position: relative;
 }
 
-/* Corner decoration on code blocks */
 .article pre::before {
   content: "";
   position: absolute;
@@ -368,80 +153,46 @@ body::before {
   border: none;
   padding: 0;
   font-size: 0.8125rem;
-  color: var(--fg);
+  color: #F2F0E4;
 }
 
 .article blockquote {
-  border-left: 2px solid var(--gold);
+  border-left: 2px solid #D4AF37;
   padding: 16px 20px;
   margin: 24px 0;
-  background: var(--card);
+  background: #141414;
 }
+.article blockquote p { margin-bottom: 0; color: #F2E8C4; }
 
-.article blockquote p {
-  margin-bottom: 0;
-  color: var(--gold-light);
-}
-
-.article table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 24px;
-  font-size: 0.9375rem;
-}
+.article table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 0.9375rem; }
 
 .article th, .article td {
   text-align: left;
   padding: 10px 16px;
   border: 1px solid rgba(212,175,55,0.15);
-  font-family: var(--font-body);
 }
 
 .article th {
-  font-family: var(--font-body);
   font-size: 0.6875rem;
   font-weight: 400;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  background: var(--card);
-  color: var(--gold);
+  background: #141414;
+  color: #D4AF37;
 }
 
-.article td { color: var(--fg); }
+.article td { color: #F2F0E4; }
 .article td code { font-size: 0.8em; }
 
 .article hr {
   border: none;
   height: 1px;
-  background: linear-gradient(to right, transparent, var(--gold), transparent);
+  background: linear-gradient(to right, transparent, #D4AF37, transparent);
   margin: 48px 0;
 }
 
-.article .back-link {
-  display: inline-block;
-  margin-top: 48px;
-  padding-top: 24px;
-  border-top: 1px solid rgba(212,175,55,0.15);
-  font-family: var(--font-body);
-  font-size: 0.6875rem;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--muted);
-  text-decoration: none;
-  border-bottom: none;
-  transition: color 300ms;
-}
-
-.article .back-link:hover { color: var(--gold); }
-
-/* ── Mobile ── */
+/* ── Mobile article ── */
 @media (max-width: 768px) {
-  .nav-links { display: none; }
-  .nav-sep { display: none; }
-  .brand-name { font-size: 14px; letter-spacing: 0.05em; }
-  .guide-layout { grid-template-columns: 1fr; }
-  .guide-sidebar { display: none; }
-  .article { padding: 40px 20px 80px; }
   .article h1 { font-size: 1.75rem; }
   .article h2 { font-size: 1.125rem; }
 }

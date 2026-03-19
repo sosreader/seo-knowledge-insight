@@ -27,38 +27,40 @@
     <link rel="stylesheet" href="../style.css" />
   </head>
   <body class="bg-obsidian text-champagne font-body">
-    <header class="site-header">
-      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center gap-0">
-        <a class="brand" href="../">
-          <span class="brand-diamond"><span>S</span></span>
-          <span class="brand-name">SEO Insight</span>
-          <span class="brand-tag">v3.4</span>
+    <header class="site-header sticky top-0 z-200 bg-obsidian border-b border-gold relative">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center">
+        <a class="flex items-center gap-3 mr-auto no-underline text-champagne" href="../">
+          <span class="w-8 h-8 border border-gold rotate-45 flex items-center justify-center shrink-0">
+            <span class="-rotate-45 font-display text-sm text-gold leading-none">S</span>
+          </span>
+          <span class="font-display text-lg tracking-[0.08em] uppercase max-md:text-sm max-md:tracking-[0.05em]">SEO Insight</span>
+          <span class="font-mono text-[10px] tracking-[0.15em] uppercase text-gold border border-gold/40 px-2.5 py-0.5">v3.4</span>
         </a>
-        <nav class="nav-links flex items-center">
-          <a href="./introduction.html">Guide</a>
-          <a href="./quickstart.html">Quick Start</a>
-          <a href="./search-and-chat.html" aria-current="page">Search &amp; Chat</a>
-          <a href="./api-overview.html">Overview</a>
+        <nav class="hidden md:flex items-center">
+          <a class="nav-link relative font-body text-[11px] tracking-[0.15em] uppercase text-pewter no-underline px-3.5 py-2 transition-colors duration-300 hover:text-gold focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2" href="./introduction.html">Guide</a>
+          <a class="nav-link relative font-body text-[11px] tracking-[0.15em] uppercase text-pewter no-underline px-3.5 py-2 transition-colors duration-300 hover:text-gold focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2" href="./quickstart.html">Quick Start</a>
+          <a class="nav-link relative font-body text-[11px] tracking-[0.15em] uppercase no-underline px-3.5 py-2 transition-colors duration-300 hover:text-gold focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2 text-gold shadow-[0_0_12px_rgba(212,175,55,0.3)]" href="./search-and-chat.html" aria-current="page">Search &amp; Chat</a>
+          <a class="nav-link relative font-body text-[11px] tracking-[0.15em] uppercase text-pewter no-underline px-3.5 py-2 transition-colors duration-300 hover:text-gold focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2" href="./api-overview.html">Overview</a>
         </nav>
-        <div class="nav-sep"></div>
-        <a class="github-link" href="https://github.com/sosreader/seo-knowledge-insight" target="_blank" rel="noopener noreferrer" title="GitHub">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+        <div class="hidden md:block w-px h-5 bg-gold/20 mx-1.5"></div>
+        <a class="flex items-center justify-center w-9 h-9 text-pewter transition-colors duration-300 hover:text-gold focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2" href="https://github.com/sosreader/seo-knowledge-insight" target="_blank" rel="noopener noreferrer" title="GitHub">
+          <svg class="w-[18px] h-[18px] fill-current" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
         </a>
       </div>
     </header>
 
-    <div class="guide-layout">
-      <aside class="guide-sidebar">
-        <div class="sidebar-title">文件導覽 / Guides</div>
-        <a href="./introduction.html">簡介 / Introduction</a>
-        <a href="./authentication.html">認證 / Authentication</a>
-        <a href="./quickstart.html">快速開始 / Quick Start</a>
-        <a href="./search-and-chat.html" aria-current="page">搜尋與對話 / Search & Chat</a>
-        <a href="./api-overview.html">API 總覽 / Overview</a>
-        <a class="sidebar-back" href="../">&larr; API 參考文件 / API Reference</a>
+    <div class="grid grid-cols-[220px_1fr] max-w-[1080px] mx-auto min-h-[calc(100vh-4rem)] max-md:grid-cols-1">
+      <aside class="sticky top-[68px] self-start py-10 px-6 border-r border-gold/[0.12] h-fit max-h-[calc(100vh-68px)] overflow-y-auto max-md:hidden">
+        <div class="font-body text-[0.625rem] tracking-[0.2em] uppercase text-gold mb-5 pb-2.5 border-b border-gold/20">文件導覽 / Guides</div>
+        <a class="block font-body text-[0.8125rem] text-pewter no-underline py-2 border-l-2 border-transparent pl-3 transition-all duration-300 leading-snug hover:text-champagne focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2" href="./introduction.html">簡介 / Introduction</a>
+        <a class="block font-body text-[0.8125rem] text-pewter no-underline py-2 border-l-2 border-transparent pl-3 transition-all duration-300 leading-snug hover:text-champagne focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2" href="./authentication.html">認證 / Authentication</a>
+        <a class="block font-body text-[0.8125rem] text-pewter no-underline py-2 border-l-2 border-transparent pl-3 transition-all duration-300 leading-snug hover:text-champagne focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2" href="./quickstart.html">快速開始 / Quick Start</a>
+        <a class="block font-body text-[0.8125rem] no-underline py-2 border-l-2 pl-3 transition-all duration-300 leading-snug hover:text-champagne focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2 text-gold border-gold" href="./search-and-chat.html" aria-current="page">搜尋與對話 / Search &amp; Chat</a>
+        <a class="block font-body text-[0.8125rem] text-pewter no-underline py-2 border-l-2 border-transparent pl-3 transition-all duration-300 leading-snug hover:text-champagne focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2" href="./api-overview.html">API 總覽 / Overview</a>
+        <a class="block font-body text-[0.6875rem] tracking-[0.12em] uppercase text-pewter no-underline mt-6 pt-4 border-t border-gold/[0.12] transition-colors duration-300 hover:text-gold" href="../">&larr; API 參考文件 / API Reference</a>
       </aside>
 
-      <main class="article">
+      <main class="article max-w-[720px] py-16 px-10 relative max-md:py-10 max-md:px-5">
       <h1>搜尋與對話<br /><small style="font-size:0.6em;color:var(--muted)">Search &amp; Chat</small></h1>
       <p>以下為前端整合最常用的端點。</p>
       <p style="color:var(--muted)">These are the most commonly used endpoints for frontend integration.</p>
