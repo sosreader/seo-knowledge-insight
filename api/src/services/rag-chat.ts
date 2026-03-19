@@ -15,47 +15,14 @@ import { normalizeQuery, hashQuery, lookupCache, saveCache } from "./response-ca
 import { logLLMUsage } from "../utils/llm-usage-logger.js";
 import { evaluateRetrievalQuality, validateCitations, type RetrievalQuality } from "./retrieval-gate.js";
 import { recordMiss } from "../store/learning-store.js";
-import { buildMaturityContext, type MaturityLevel } from "../utils/maturity.js";
-
-const SYSTEM_PROMPT = `你是一位資深 SEO 顧問，根據以下 SEO 知識庫內容回答用戶的問題。
-回答時請：
-1. 直接針對問題給出具體建議，不要含糊其辭
-2. 引用知識庫中的案例或數字來支撐建議，在該句末尾標注來源編號（如 [1]、[2]），編號對應知識庫條目順序
-3. 若知識庫沒有相關資訊，誠實說明並提供通用建議
-4. 回答使用繁體中文，技術術語可以保留英文
-5. 控制在 500 字以內，重點優先，不要加追問段落`;
-
-const AMBIGUOUS_DISCLAIMER =
-  "\n\n注意：以上回答基於相似度較低的知識庫結果，建議進一步確認資訊正確性。";
-
-const STALENESS_THRESHOLD_MONTHS = 18;
-
-function isStale(sourceDate: string): boolean {
-  try {
-    const d = new Date(sourceDate);
-    if (isNaN(d.getTime())) return false;
-    const ageMonths = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 30);
-    return ageMonths > STALENESS_THRESHOLD_MONTHS;
-  } catch {
-    return false;
-  }
-}
-
-function formatContext(hits: ReadonlyArray<{ item: QAItem; score: number }>): string {
-  return hits
-    .map(({ item, score }, idx) => {
-      const stalenessNote =
-        !item.evergreen && isStale(item.source_date)
-          ? " [注意：此建議超過 18 個月，請確認是否仍適用]"
-          : "";
-      return (
-        `[${idx + 1}] Q: ${item.question}\n` +
-        `    A: ${item.answer}${stalenessNote}\n` +
-        `    (來源: ${item.source_title || item.source_date}, 相似度: ${score.toFixed(2)})`
-      );
-    })
-    .join("\n\n");
-}
+import type { MaturityLevel } from "../utils/maturity.js";
+import {
+  formatContext,
+  buildSystemPrompt,
+  buildMessages,
+  buildMetadata,
+  appendDisclaimer,
+} from "./rag-chat-pure.js";
 
 
 let openaiClient: OpenAI | null = null;
@@ -123,81 +90,48 @@ export async function ragChat(
     };
   }
 
-  // 4. Build context
+  // 4. Build context + messages (pure functions)
   const context = formatContext(finalHits);
+  const systemPrompt = buildSystemPrompt(maturityLevel, retrievalQuality);
+  const messages = buildMessages({ systemPrompt, context, history, message });
 
-  // 5. Assemble messages
-  let systemPrompt = SYSTEM_PROMPT;
-  if (maturityLevel) {
-    systemPrompt += `\n\n--- 客戶成熟度脈絡 ---\n${buildMaturityContext(maturityLevel)}\n--- 脈絡結束 ---`;
-  }
-  if (retrievalQuality === "ambiguous") {
-    systemPrompt += "\n\n注意：檢索結果的相似度偏低，回答時請格外謹慎，僅根據有把握的內容作答。";
-  }
-
-  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    { role: "system", content: systemPrompt },
-  ];
-
-  if (context) {
-    messages.push({
-      role: "system",
-      content: `--- 相關 SEO 知識庫 ---\n${context}\n--- 知識庫結束 ---`,
-    });
-  }
-
-  if (history) {
-    for (const h of history) {
-      messages.push({
-        role: h.role as "user" | "assistant",
-        content: h.content,
-      });
-    }
-  }
-
-  messages.push({ role: "user", content: message });
-
-  // 6. Call GPT (max_completion_tokens for reasoning models like gpt-5.x)
+  // 5. Call GPT (max_completion_tokens for reasoning models like gpt-5.x)
   const resp = await getOpenAI().chat.completions.create({
     model: config.CHAT_MODEL,
-    messages,
+    messages: messages as Array<{ role: "system" | "user" | "assistant"; content: string }>,
     temperature: 0.3,
     max_completion_tokens: 2000,
   });
 
-  let answer = resp.choices[0]?.message?.content ?? "";
+  const rawAnswer = resp.choices[0]?.message?.content ?? "";
   const sources = finalHits.map(({ item, score }) => itemToSource(item, score));
 
-  // 6a. Append disclaimer for ambiguous retrieval
-  if (retrievalQuality === "ambiguous" && answer) {
-    answer = answer + AMBIGUOUS_DISCLAIMER;
-  }
+  // 5a. Append disclaimer for ambiguous retrieval
+  const answer = appendDisclaimer(rawAnswer, retrievalQuality);
 
-  // 6b. Validate inline citations
+  // 5b. Validate inline citations
   const { citationCount } = validateCitations(answer, sources.length);
 
   // Online scoring (safe no-op when Laminar not initialized)
   await scoreRagResponse(answer, sources);
 
   const usage = resp.usage;
-  const metadata: MessageMetadata = {
+  const metadata = buildMetadata({
     model: resp.model ?? config.CHAT_MODEL,
-    provider: "openai",
-    mode: "rag",
-    embedding_model: config.OPENAI_EMBEDDING_MODEL,
-    input_tokens: usage?.prompt_tokens,
-    output_tokens: usage?.completion_tokens,
-    total_tokens: usage?.total_tokens,
-    reasoning_tokens: (usage as unknown as Record<string, unknown>)?.completion_tokens_details
+    embeddingModel: config.OPENAI_EMBEDDING_MODEL,
+    inputTokens: usage?.prompt_tokens,
+    outputTokens: usage?.completion_tokens,
+    totalTokens: usage?.total_tokens,
+    reasoningTokens: (usage as unknown as Record<string, unknown>)?.completion_tokens_details
       ? ((usage as unknown as Record<string, unknown>).completion_tokens_details as Record<string, number>)?.reasoning_tokens
       : undefined,
-    duration_ms: Date.now() - startMs,
-    retrieval_count: finalHits.length,
-    reranker_used: rerankerUsed,
-    cache_hit: false,
-    retrieval_quality: retrievalQuality,
-    citation_count: citationCount,
-  };
+    durationMs: Date.now() - startMs,
+    retrievalCount: finalHits.length,
+    rerankerUsed: rerankerUsed,
+    cacheHit: false,
+    retrievalQuality: retrievalQuality,
+    citationCount: citationCount,
+  });
 
   // Log LLM usage (fire-and-forget)
   logLLMUsage({

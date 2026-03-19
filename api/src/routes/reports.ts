@@ -7,19 +7,14 @@ import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
 import { generateRequestSchema } from "../schemas/report.js";
 import { paths } from "../config.js";
-import { hasOpenAI } from "../utils/mode-detect.js";
+import { resolveCapabilities } from "../utils/capabilities.js";
 import { generateReportLocal, saveReport, getAlertMetricNames } from "../services/report-generator-local.js";
 import { generateReportLlm } from "../services/report-llm.js";
 import { evaluateReport } from "../services/report-evaluator.js";
 import { scoreEvent } from "../utils/laminar-scoring.js";
 import { qaStore } from "../store/qa-store.js";
-import { hasSupabase } from "../store/supabase-client.js";
-import { SupabaseReportStore } from "../store/supabase-report-store.js";
-import { SupabaseSnapshotStore } from "../store/supabase-snapshot-store.js";
+import { reportStore, snapshotStore } from "../store/store-registry.js";
 import { parseReportMeta, listReportFiles } from "../utils/report-file.js";
-
-const supabaseReportStore = hasSupabase() ? new SupabaseReportStore() : null;
-const supabaseSnapshotStore = hasSupabase() ? new SupabaseSnapshotStore() : null;
 
 const execFileAsync = promisify(execFile);
 const DATE_RE = /^\d{8}(?:_[0-9a-f]{8})?$/;
@@ -29,8 +24,8 @@ const ALLOWED_URL_HOSTS = new Set(["docs.google.com", "sheets.google.com"]);
 export const reportsRoute = new Hono();
 
 reportsRoute.get("/", async (c) => {
-  if (supabaseReportStore) {
-    const items = await supabaseReportStore.list();
+  if (reportStore) {
+    const items = await reportStore.list();
     return c.json(ok({ items, total: items.length }));
   }
   const items = listReportFiles();
@@ -43,8 +38,8 @@ reportsRoute.get("/:date", async (c) => {
     return c.json(fail("Invalid date format, expected YYYYMMDD"), 400);
   }
 
-  if (supabaseReportStore) {
-    const result = await supabaseReportStore.getByDate(date);
+  if (reportStore) {
+    const result = await reportStore.getByDate(date);
     if (!result) {
       return c.json(fail(`Report report_${date}.md not found`), 404);
     }
@@ -71,6 +66,7 @@ const SNAPSHOT_ID_RE = /^[0-9]{8}-[0-9]{6}$/;
 reportsRoute.post("/generate", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parsed = generateRequestSchema.safeParse(body);
+  const caps = resolveCapabilities(c.req.header("user-agent"));
 
   if (!parsed.success) {
     return c.json(fail("Invalid request body"), 400);
@@ -88,8 +84,8 @@ reportsRoute.post("/generate", async (c) => {
     }
 
     // Try Supabase first, then fall back to file system
-    if (supabaseSnapshotStore) {
-      const found = await supabaseSnapshotStore.getById(snapshotId);
+    if (snapshotStore) {
+      const found = await snapshotStore.getById(snapshotId);
       if (!found) {
         return c.json(fail("Snapshot not found"), 404);
       }
@@ -118,13 +114,13 @@ reportsRoute.post("/generate", async (c) => {
   }
 
   // ── OpenAI mode: snapshot_id + use_openai + OPENAI_API_KEY ─────
-  if (parsed.data.use_openai && !hasOpenAI()) {
+  if (parsed.data.use_openai && caps.llm === "none") {
     return c.json(fail("OPENAI_API_KEY not set"), 400);
   }
   if (parsed.data.use_openai && !snapshotMetrics) {
     return c.json(fail("snapshot_id is required for OpenAI mode"), 400);
   }
-  if (parsed.data.use_openai && snapshotMetrics && hasOpenAI()) {
+  if (parsed.data.use_openai && snapshotMetrics && caps.llm === "openai") {
     const weeks = parsed.data.weeks
       ?? (snapshot && typeof snapshot.weeks === "number" ? snapshot.weeks : 1);
 
@@ -138,11 +134,11 @@ reportsRoute.post("/generate", async (c) => {
       const hash8 = createHash("sha1").update(result.content).digest("hex").slice(0, 8);
       const dateKey = `${dateOnly}_${hash8}`;
 
-      if (supabaseReportStore) {
-        const exists = await supabaseReportStore.exists(dateKey);
+      if (reportStore) {
+        const exists = await reportStore.exists(dateKey);
         if (!exists) {
           const meta = parseReportMeta(result.content);
-          await supabaseReportStore.save(dateKey, result.content, meta);
+          await reportStore.save(dateKey, result.content, meta);
         }
       } else {
         const reportFilename = `report_${dateKey}.md`;
@@ -151,8 +147,8 @@ reportsRoute.post("/generate", async (c) => {
         }
       }
 
-      if (supabaseReportStore) {
-        const reports = await supabaseReportStore.list();
+      if (reportStore) {
+        const reports = await reportStore.list();
         if (reports.length === 0) {
           return c.json(fail("No report found after generation"), 500);
         }
@@ -211,11 +207,11 @@ reportsRoute.post("/generate", async (c) => {
       const dateOnly = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const hash8 = createHash("sha1").update(reportContent).digest("hex").slice(0, 8);
       const dateKey = `${dateOnly}_${hash8}`;
-      if (supabaseReportStore) {
-        cacheHit = await supabaseReportStore.exists(dateKey);
+      if (reportStore) {
+        cacheHit = await reportStore.exists(dateKey);
         if (!cacheHit) {
           const meta = parseReportMeta(reportContent);
-          await supabaseReportStore.save(dateKey, reportContent, meta);
+          await reportStore.save(dateKey, reportContent, meta);
         }
       } else {
         const reportFilename = `report_${dateKey}.md`;
@@ -257,8 +253,8 @@ reportsRoute.post("/generate", async (c) => {
       })();
     }
 
-    if (supabaseReportStore) {
-      const reports = await supabaseReportStore.list();
+    if (reportStore) {
+      const reports = await reportStore.list();
       if (reports.length === 0) {
         return c.json(fail("No report found after generation"), 500);
       }
@@ -274,7 +270,7 @@ reportsRoute.post("/generate", async (c) => {
   }
 
   // ── OpenAI mode: spawn Python script with metrics_url ────────────
-  if (!hasOpenAI()) {
+  if (caps.llm === "none") {
     return c.json(fail("OPENAI_API_KEY not set. Use snapshot_id for local generation."), 400);
   }
 

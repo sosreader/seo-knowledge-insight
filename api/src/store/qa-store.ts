@@ -15,7 +15,16 @@ import { paths } from "../config.js";
 import { parseNpy } from "../utils/npy-reader.js";
 import { normalizeRows, normalizeL2, matrixDotVector } from "../utils/cosine-similarity.js";
 import { SearchEngine, type QADict, type SearchResult } from "./search-engine.js";
-import { filterAndPaginateQa, categoriesFromItems, collectionsFromItems, type ListQaParams } from "./qa-filter.js";
+import { type ListQaParams } from "./qa-filter.js";
+import {
+  createStoreData,
+  getById as getByIdFn,
+  getBySeq as getBySeqFn,
+  listQa as listQaFn,
+  categories as categoriesFn,
+  collections as collectionsFn,
+  type QAStoreData,
+} from "./qa-fns.js";
 import { hasSupabase } from "./supabase-client.js";
 import { SupabaseQAStore } from "./supabase-qa-store.js";
 
@@ -105,25 +114,23 @@ function computeStableId(sourceTitle: string, question: string): string {
 }
 
 export class QAStore {
-  private items: readonly QAItem[] = [];
+  private data: QAStoreData = createStoreData([]);
   private qaDicts: readonly QADict[] = [];
   private embNorm: Float32Array = new Float32Array(0); // flat [N x dim], L2-normalized
   private embDim: number = 1536;
-  private idIndex: Map<string, QAItem> = new Map();
-  private seqIndex: Map<number, QAItem> = new Map();
   private engine: SearchEngine | null = null;
 
   get loaded(): boolean {
-    return this.items.length > 0;
+    return this.data.items.length > 0;
   }
 
   get count(): number {
-    return this.items.length;
+    return this.data.items.length;
   }
 
   /** Expose items for read-only iteration (e.g., deriving source docs). */
   get allItems(): readonly QAItem[] {
-    return this.items;
+    return this.data.items;
   }
 
   load(
@@ -148,7 +155,7 @@ export class QAStore {
     const data: RawQAData = JSON.parse(rawText);
     const rawItems = data.qa_database;
 
-    this.items = rawItems.map((qa) => ({
+    const parsedItems: QAItem[] = rawItems.map((qa) => ({
       id: qa.stable_id ?? computeStableId(qa.source_title ?? "", qa.question),
       seq: qa.id,
       question: qa.question,
@@ -183,9 +190,8 @@ export class QAStore {
       hard_negative_terms: qa.hard_negative_terms ?? [],
     }));
 
-    // Build indexes
-    this.idIndex = new Map(this.items.map((item) => [item.id, item]));
-    this.seqIndex = new Map(this.items.map((item) => [item.seq, item]));
+    // Build store data (items + indexes) via pure function
+    this.data = createStoreData(parsedItems);
 
     // Build QADicts for SearchEngine (needed for both hybrid and keyword-only)
     const qaDicts: QADict[] = rawItems.map((qa) => ({
@@ -222,15 +228,15 @@ export class QAStore {
       this.embNorm = normalizeRows(npy.data, npy.shape[0], npy.shape[1]);
 
       console.log(
-        `QAStore loaded: ${this.items.length} items, embeddings shape [${npy.shape[0]}, ${npy.shape[1]}]`,
+        `QAStore loaded: ${this.data.items.length} items, embeddings shape [${npy.shape[0]}, ${npy.shape[1]}]`,
       );
 
       // Initialize hybrid search engine
-      if (this.items.length === npy.shape[0]) {
+      if (this.data.items.length === npy.shape[0]) {
         this.engine = new SearchEngine(qaDicts, npy.data, this.embDim);
       } else {
         console.warn(
-          `SearchEngine not initialized: items (${this.items.length}) != embeddings (${npy.shape[0]})`,
+          `SearchEngine not initialized: items (${this.data.items.length}) != embeddings (${npy.shape[0]})`,
         );
         this.engine = null;
       }
@@ -241,11 +247,11 @@ export class QAStore {
   }
 
   getById(qaId: string): QAItem | undefined {
-    return this.idIndex.get(qaId);
+    return getByIdFn(this.data, qaId);
   }
 
   getBySeq(seq: number): QAItem | undefined {
-    return this.seqIndex.get(seq);
+    return getBySeqFn(this.data, seq);
   }
 
   /**
@@ -262,12 +268,12 @@ export class QAStore {
         : new Float32Array(queryEmbedding);
 
     const qNorm = normalizeL2(qVec);
-    const scores = matrixDotVector(this.embNorm, qNorm, this.items.length, this.embDim);
+    const scores = matrixDotVector(this.embNorm, qNorm, this.data.items.length, this.embDim);
 
     // Apply category mask
     if (category) {
-      for (let i = 0; i < this.items.length; i++) {
-        if (this.items[i]!.category !== category) {
+      for (let i = 0; i < this.data.items.length; i++) {
+        if (this.data.items[i]!.category !== category) {
           scores[i] = -1;
         }
       }
@@ -283,7 +289,7 @@ export class QAStore {
     indexed.sort((a, b) => b.score - a.score);
 
     return indexed.slice(0, topK).map(({ idx, score }) => ({
-      item: this.items[idx]!,
+      item: this.data.items[idx]!,
       score,
     }));
   }
@@ -316,7 +322,7 @@ export class QAStore {
     // Map QADict back to QAItem
     return results
       .map(({ qa, score }) => {
-        const item = this.idIndex.get(qa.id);
+        const item = this.data.idIndex.get(qa.id);
         return item ? { item, score } : null;
       })
       .filter((r): r is { item: QAItem; score: number } => r !== null);
@@ -335,7 +341,7 @@ export class QAStore {
       return this.engine
         .keywordOnlySearch(query, topK, category)
         .map(({ qa, score }) => {
-          const item = this.idIndex.get(qa.id);
+          const item = this.data.idIndex.get(qa.id);
           return item ? { item, score } : null;
         })
         .filter((r): r is { item: QAItem; score: number } => r !== null);
@@ -356,15 +362,15 @@ export class QAStore {
   }
 
   listQa(params: ListQaParams): { items: readonly QAItem[]; total: number } {
-    return filterAndPaginateQa(this.items, params);
+    return listQaFn(this.data, params);
   }
 
   categories(): readonly string[] {
-    return categoriesFromItems(this.items);
+    return categoriesFn(this.data);
   }
 
   collections(): ReadonlyArray<{ source_collection: string; source_type: string; count: number }> {
-    return collectionsFromItems(this.items);
+    return collectionsFn(this.data);
   }
 }
 

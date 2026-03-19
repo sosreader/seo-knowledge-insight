@@ -52,6 +52,21 @@ def _has_openai_key() -> bool:
     return bool(os.getenv("OPENAI_API_KEY", "").strip())
 
 
+def get_capabilities() -> dict:
+    """Return four-dimension capability record (matches TypeScript side)."""
+    return {
+        "runtime": "cli",
+        "llm": "openai" if _has_openai_key() else "claude-code",
+        "store": "file",
+        "agent": "disabled",
+    }
+
+
+def format_capability_tag(caps: dict) -> str:
+    """Format capabilities as a human-readable tag for logging."""
+    return f"[runtime:{caps['runtime']} | llm:{caps['llm']} | store:{caps['store']} | agent:{caps['agent']}]"
+
+
 def _local_embed_text(text: str, dim: int = _LOCAL_EMBED_DIM) -> list[float]:
     lowered = text.lower()
     raw_counts = Counter(_RAW_TOKEN_RE.findall(lowered))
@@ -287,6 +302,7 @@ def extract_qa_from_text(
     從單份會議紀錄文字中萃取 Q&A pairs。
     回傳 dict: {qa_pairs: [...], meeting_summary: str}
     """
+    _logger.info(format_capability_tag(get_capabilities()))
     client = _client()
 
     user_msg = f"以下是一份 SEO 顧問會議紀錄"
@@ -706,6 +722,7 @@ A: SGE 可能讓使用者在 SERP 即得到答案而不點擊，資訊型關鍵�
 @observe(name="classify_qa")
 def classify_qa(question: str, answer: str) -> dict:
     """對單個 Q&A 進行分類（列入 content-addressed cache）"""
+    _logger.info(format_capability_tag(get_capabilities()))
     from utils.pipeline_cache import cache_get, cache_set
 
     # ── cache check ───────────────────────────────────────

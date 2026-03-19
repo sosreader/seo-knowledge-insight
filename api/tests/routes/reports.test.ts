@@ -39,6 +39,8 @@ vi.mock("../../src/config.js", () => ({
 
 vi.mock("../../src/utils/mode-detect.js", () => ({
   hasOpenAI: vi.fn(() => false),
+  isAgentEnabled: vi.fn(() => false),
+  resolveMode: vi.fn(() => "rag"),
 }));
 
 let app: Hono;
