@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Search &amp; Chat — SEO Knowledge Insight API</title>
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net;" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Marcellus&family=Josefin+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-obsidian: #0A0A0A;
+        --color-charcoal: #141414;
+        --color-gold: #D4AF37;
+        --color-gold-light: #F2E8C4;
+        --color-champagne: #F2F0E4;
+        --color-midnight: #1E3D59;
+        --color-pewter: #888888;
+        --font-display: "Marcellus", Georgia, serif;
+        --font-body: "Josefin Sans", sans-serif;
+        --font-mono: "JetBrains Mono", monospace;
+      }
+    </style>
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body class="bg-obsidian text-champagne font-body">
+    <header class="site-header">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center gap-0">
+        <a class="brand" href="../">
+          <span class="brand-diamond"><span>S</span></span>
+          <span class="brand-name">SEO Insight</span>
+          <span class="brand-tag">v3.4</span>
+        </a>
+        <nav class="nav-links flex items-center">
+          <a href="./introduction.html">Guide</a>
+          <a href="./quickstart.html">Quick Start</a>
+          <a href="./search-and-chat.html" aria-current="page">Search &amp; Chat</a>
+          <a href="./api-overview.html">Overview</a>
+        </nav>
+        <div class="nav-sep"></div>
+        <a class="github-link" href="https://github.com/sosreader/seo-knowledge-insight" target="_blank" rel="noopener noreferrer" title="GitHub">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="article">
+      <h1>Search &amp; Chat</h1>
+      <p>These are the most commonly used endpoints for frontend integration.</p>
+
+      <h2>Semantic Search</h2>
+      <p><code>POST /api/v1/search</code></p>
+      <p>Search the knowledge base using hybrid semantic + keyword search with synonym expansion.</p>
+
+      <h3>Request</h3>
+      <pre><code class="language-json">{
+  "query": "How to improve Core Web Vitals",
+  "top_k": 5,
+  "category": "Technical SEO"
+}</code></pre>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Type</th>
+            <th>Required</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>query</code></td>
+            <td>string</td>
+            <td>Yes</td>
+            <td>Search query (1-500 chars)</td>
+          </tr>
+          <tr>
+            <td><code>top_k</code></td>
+            <td>number</td>
+            <td>No</td>
+            <td>Number of results (default: 5, max: 20)</td>
+          </tr>
+          <tr>
+            <td><code>category</code></td>
+            <td>string</td>
+            <td>No</td>
+            <td>Filter by category</td>
+          </tr>
+          <tr>
+            <td><code>extraction_model</code></td>
+            <td>string</td>
+            <td>No</td>
+            <td>Filter by extraction model (e.g. <code>"claude-code"</code>)</td>
+          </tr>
+          <tr>
+            <td><code>maturity_level</code></td>
+            <td>string</td>
+            <td>No</td>
+            <td>Boost results matching this maturity level (<code>"L1"</code>–<code>"L4"</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Response</h3>
+      <pre><code class="language-json">{
+  "results": [
+    {
+      "question": "What are Core Web Vitals and how do they impact SEO?",
+      "answer": "Core Web Vitals are a set of metrics...",
+      "score": 0.89,
+      "source_type": "meeting",
+      "source_collection": "weekly-meetings",
+      "category": "Technical SEO",
+      "difficulty": "advanced",
+      "id": "a1b2c3d4e5f67890"
+    }
+  ],
+  "total": 5,
+  "mode": "hybrid"
+}</code></pre>
+
+      <h3>Search Modes (automatic)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Condition</th>
+            <th>Mode</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Supabase configured</td>
+            <td><code>hybrid</code></td>
+            <td>pgvector embedding + keyword boost</td>
+          </tr>
+          <tr>
+            <td>OpenAI key only</td>
+            <td><code>hybrid</code></td>
+            <td>Embedding similarity + keyword boost</td>
+          </tr>
+          <tr>
+            <td>No OpenAI key</td>
+            <td><code>keyword</code></td>
+            <td>Keyword-only search with synonym expansion</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Frontend Example</h3>
+      <pre><code class="language-typescript">async function searchKnowledgeBase(query: string, category?: string) {
+  const res = await fetch("/api/proxy/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, top_k: 10, category }),
+  });
+  const data = await res.json();
+  return data.results; // { question, answer, score, source_type, category }[]
+}</code></pre>
+
+      <hr />
+
+      <h2>RAG Chat</h2>
+      <p><code>POST /api/v1/chat</code></p>
+      <p>Single-turn question answering with automatic knowledge base retrieval.</p>
+
+      <h3>Request</h3>
+      <pre><code class="language-json">{
+  "message": "What is the difference between canonical URL and 301 redirect?",
+  "history": [
+    { "role": "user", "content": "What is canonical URL?" },
+    { "role": "assistant", "content": "A canonical URL is..." }
+  ],
+  "mode": "rag"
+}</code></pre>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Type</th>
+            <th>Required</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>message</code></td>
+            <td>string</td>
+            <td>Yes</td>
+            <td>User message (1-2000 chars)</td>
+          </tr>
+          <tr>
+            <td><code>history</code></td>
+            <td>array</td>
+            <td>No</td>
+            <td>Previous messages for context (max 20)</td>
+          </tr>
+          <tr>
+            <td><code>mode</code></td>
+            <td>string</td>
+            <td>No</td>
+            <td><code>"rag"</code> or <code>"agent"</code> (default: auto)</td>
+          </tr>
+          <tr>
+            <td><code>maturity_level</code></td>
+            <td>string</td>
+            <td>No</td>
+            <td>Client SEO maturity level (<code>"L1"</code>–<code>"L4"</code>) for response depth tuning</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Response</h3>
+      <pre><code class="language-json">{
+  "answer": "Canonical URLs and 301 redirects serve different purposes...",
+  "sources": [
+    {
+      "question": "What is canonical URL?",
+      "answer": "...",
+      "source_type": "meeting",
+      "category": "Technical SEO",
+      "id": "abc123def456"
+    }
+  ],
+  "mode": "rag",
+  "metadata": {
+    "model": "gpt-5.2",
+    "provider": "openai",
+    "mode": "rag",
+    "input_tokens": 1250,
+    "output_tokens": 380,
+    "total_tokens": 1630,
+    "duration_ms": 2340,
+    "retrieval_count": 5
+  }
+}</code></pre>
+
+      <h3>Mode Comparison</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Mode</th>
+            <th>Behavior</th>
+            <th>Latency</th>
+            <th>Use Case</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>rag</code></td>
+            <td>Single retrieval + generation</td>
+            <td>~2-3s</td>
+            <td>Simple factual questions</td>
+          </tr>
+          <tr>
+            <td><code>agent</code></td>
+            <td>Multi-turn search (up to 5 rounds)</td>
+            <td>~5-15s</td>
+            <td>Complex comparison questions</td>
+          </tr>
+          <tr>
+            <td><code>context-only</code></td>
+            <td>No LLM, returns sources only</td>
+            <td>~0.5s</td>
+            <td>When no OpenAI key</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Frontend Example</h3>
+      <pre><code class="language-typescript">interface ChatResponse {
+  answer: string | null;
+  sources: Array&lt;{
+    question: string;
+    answer: string;
+    source_type: string;
+    category: string;
+    id: string;
+  }&gt;;
+  mode: "rag" | "agent" | "context-only";
+  metadata?: {
+    model: string;
+    duration_ms: number;
+    total_tokens: number;
+  };
+}
+
+async function askQuestion(message: string, mode?: "rag" | "agent") {
+  const res = await fetch("/api/proxy/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, mode }),
+  });
+  return (await res.json()) as ChatResponse;
+}</code></pre>
+
+      <hr />
+
+      <h2>Session-Based Chat</h2>
+      <p>For multi-turn conversations where context needs to be preserved across messages.</p>
+
+      <h3>Create Session</h3>
+      <pre><code class="language-typescript">const session = await fetch("/api/proxy/sessions", { method: "POST" });
+const { id } = await session.json();
+// id: "550e8400-e29b-41d4-a716-446655440000"</code></pre>
+
+      <h3>Send Message</h3>
+      <pre><code class="language-typescript">const response = await fetch(`/api/proxy/sessions/${sessionId}/messages`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ message: "What is structured data?", mode: "rag" }),
+});</code></pre>
+
+      <h3>Response includes metadata</h3>
+      <pre><code class="language-json">{
+  "role": "assistant",
+  "content": "Structured data is...",
+  "metadata": {
+    "model": "gpt-5.2",
+    "mode": "rag",
+    "duration_ms": 1820,
+    "retrieval_count": 3
+  }
+}</code></pre>
+
+      <h3>Get Session History</h3>
+      <pre><code class="language-typescript">const session = await fetch(`/api/proxy/sessions/${sessionId}`);
+const { messages } = await session.json();
+// messages: Array&lt;{ role, content, metadata?, created_at }&gt;</code></pre>
+
+      <a class="back-link" href="../">&larr; API Reference</a>
+    </main>
+  </body>
+</html>

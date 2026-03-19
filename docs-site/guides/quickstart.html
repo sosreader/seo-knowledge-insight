@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quick Start — SEO Knowledge Insight API</title>
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net;" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Marcellus&family=Josefin+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-obsidian: #0A0A0A;
+        --color-charcoal: #141414;
+        --color-gold: #D4AF37;
+        --color-gold-light: #F2E8C4;
+        --color-champagne: #F2F0E4;
+        --color-midnight: #1E3D59;
+        --color-pewter: #888888;
+        --font-display: "Marcellus", Georgia, serif;
+        --font-body: "Josefin Sans", sans-serif;
+        --font-mono: "JetBrains Mono", monospace;
+      }
+    </style>
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body class="bg-obsidian text-champagne font-body">
+    <header class="site-header">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center gap-0">
+        <a class="brand" href="../">
+          <span class="brand-diamond"><span>S</span></span>
+          <span class="brand-name">SEO Insight</span>
+          <span class="brand-tag">v3.4</span>
+        </a>
+        <nav class="nav-links flex items-center">
+          <a href="./introduction.html">Guide</a>
+          <a href="./quickstart.html" aria-current="page">Quick Start</a>
+          <a href="./search-and-chat.html">Search &amp; Chat</a>
+          <a href="./api-overview.html">Overview</a>
+        </nav>
+        <div class="nav-sep"></div>
+        <a class="github-link" href="https://github.com/sosreader/seo-knowledge-insight" target="_blank" rel="noopener noreferrer" title="GitHub">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="article">
+      <h1>Quick Start</h1>
+      <p>This guide covers integrating the SEO Knowledge Insight API into a frontend application.</p>
+
+      <h2>Base Configuration</h2>
+      <pre><code class="language-typescript">const API_BASE = process.env.NEXT_PUBLIC_SEO_API_URL || "http://localhost:8002";
+const API_KEY = process.env.SEO_API_KEY; // server-side only, never expose to browser
+
+async function seoApi(path: string, options?: RequestInit) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": API_KEY!,
+      ...options?.headers,
+    },
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}</code></pre>
+
+      <blockquote>
+        <p><strong>Warning:</strong> API Key must stay server-side. Use a proxy route (e.g. Next.js API route) to forward requests — never embed the key in browser code.</p>
+      </blockquote>
+
+      <h2>Common Operations</h2>
+
+      <h3>Search the Knowledge Base</h3>
+      <pre><code class="language-typescript">const results = await seoApi("/api/v1/search", {
+  method: "POST",
+  body: JSON.stringify({ query: "Core Web Vitals optimization", top_k: 5 }),
+});
+
+// results.results[] contains { question, answer, score, source, category }</code></pre>
+
+      <h3>RAG Chat (Single Turn)</h3>
+      <pre><code class="language-typescript">const chat = await seoApi("/api/v1/chat", {
+  method: "POST",
+  body: JSON.stringify({
+    message: "How to improve LCP?",
+    mode: "rag", // "rag" or "agent"
+  }),
+});
+
+// chat.answer -- AI-generated answer with citations
+// chat.sources[] -- relevant Q&amp;A sources
+// chat.mode -- actual mode used ("rag" | "agent" | "context-only")
+// chat.metadata -- model, tokens, duration</code></pre>
+
+      <h3>Multi-Turn Chat with Sessions</h3>
+      <pre><code class="language-typescript">// 1. Create session
+const session = await seoApi("/api/v1/sessions", { method: "POST" });
+const sessionId = session.id;
+
+// 2. Send messages (context preserved)
+const msg1 = await seoApi(`/api/v1/sessions/${sessionId}/messages`, {
+  method: "POST",
+  body: JSON.stringify({ message: "What is canonical URL?" }),
+});
+
+// 3. Follow up (session remembers previous messages)
+const msg2 = await seoApi(`/api/v1/sessions/${sessionId}/messages`, {
+  method: "POST",
+  body: JSON.stringify({ message: "How does it affect SEO?" }),
+});
+
+// 4. Get full history
+const history = await seoApi(`/api/v1/sessions/${sessionId}`);</code></pre>
+
+      <h3>Browse QA Knowledge Base</h3>
+      <pre><code class="language-typescript">// List with filters
+const qa = await seoApi(
+  "/api/v1/qa?category=Technical%20SEO&amp;difficulty=advanced&amp;limit=20"
+);
+
+// Get single QA detail
+const detail = await seoApi("/api/v1/qa/a1b2c3d4e5f67890");
+
+// Get all categories
+const categories = await seoApi("/api/v1/qa/categories");</code></pre>
+
+      <h2>Chat Mode Parameter</h2>
+      <p>The <code>mode</code> parameter controls how the API processes your request:</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Mode</th>
+            <th>Behavior</th>
+            <th>Best For</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>"rag"</code></td>
+            <td>Single-pass retrieval + generation</td>
+            <td>Fast, predictable answers</td>
+          </tr>
+          <tr>
+            <td><code>"agent"</code></td>
+            <td>Multi-turn autonomous search (up to 5 rounds)</td>
+            <td>Complex questions needing multiple sources</td>
+          </tr>
+          <tr>
+            <td><em>(omit)</em></td>
+            <td>Auto-detect based on server config</td>
+            <td>Default behavior</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <pre><code class="language-typescript">// Force RAG mode (faster)
+await seoApi("/api/v1/chat", {
+  method: "POST",
+  body: JSON.stringify({ message: "What is robots.txt?", mode: "rag" }),
+});
+
+// Force agent mode (more thorough)
+await seoApi("/api/v1/chat", {
+  method: "POST",
+  body: JSON.stringify({ message: "Compare canonical vs 301 redirect for SEO", mode: "agent" }),
+});</code></pre>
+
+      <a class="back-link" href="../">&larr; API Reference</a>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>API Overview — SEO Knowledge Insight API</title>
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net;" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Marcellus&family=Josefin+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-obsidian: #0A0A0A;
+        --color-charcoal: #141414;
+        --color-gold: #D4AF37;
+        --color-gold-light: #F2E8C4;
+        --color-champagne: #F2F0E4;
+        --color-midnight: #1E3D59;
+        --color-pewter: #888888;
+        --font-display: "Marcellus", Georgia, serif;
+        --font-body: "Josefin Sans", sans-serif;
+        --font-mono: "JetBrains Mono", monospace;
+      }
+    </style>
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body class="bg-obsidian text-champagne font-body">
+    <header class="site-header">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center gap-0">
+        <a class="brand" href="../">
+          <span class="brand-diamond"><span>S</span></span>
+          <span class="brand-name">SEO Insight</span>
+          <span class="brand-tag">v3.4</span>
+        </a>
+        <nav class="nav-links flex items-center">
+          <a href="./introduction.html">Guide</a>
+          <a href="./quickstart.html">Quick Start</a>
+          <a href="./search-and-chat.html">Search &amp; Chat</a>
+          <a href="./api-overview.html" aria-current="page">Overview</a>
+        </nav>
+        <div class="nav-sep"></div>
+        <a class="github-link" href="https://github.com/sosreader/seo-knowledge-insight" target="_blank" rel="noopener noreferrer" title="GitHub">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="article">
+      <h1>API Overview</h1>
+      <p>The API has 10 routers and 42 endpoints. All endpoints under <code>/api/v1/*</code> require <code>X-API-Key</code> authentication.</p>
+
+      <h2>Endpoints Summary</h2>
+
+      <h3>Health Check</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Auth</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GET</td>
+            <td><code>/health</code></td>
+            <td>No</td>
+            <td>Server health check</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>QA Knowledge Base — 4 endpoints</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/qa</code></td>
+            <td>List Q&amp;A items (paginated, filterable)</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/qa/{id}</code></td>
+            <td>Get single Q&amp;A detail</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/qa/categories</code></td>
+            <td>List all categories</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/qa/collections</code></td>
+            <td>List all source collections</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><strong>QA Filters:</strong></p>
+      <ul>
+        <li><code>category</code> — Filter by SEO category (e.g. "Technical SEO", "Content Strategy")</li>
+        <li><code>keyword</code> — Full-text keyword search</li>
+        <li><code>difficulty</code> — <code>basic</code> / <code>advanced</code></li>
+        <li><code>evergreen</code> — <code>true</code> / <code>false</code></li>
+        <li><code>source_type</code> — <code>meeting</code> / <code>article</code></li>
+        <li><code>source_collection</code> — Specific collection name</li>
+        <li><code>maturity_relevance</code> — <code>L1</code> / <code>L2</code> / <code>L3</code> / <code>L4</code></li>
+        <li><code>limit</code> / <code>offset</code> — Pagination</li>
+        <li><code>sort_by</code> / <code>sort_order</code> — Sorting</li>
+      </ul>
+
+      <h3>Search — 1 endpoint</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/search</code></td>
+            <td>Hybrid semantic + keyword search</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><strong>Request body:</strong></p>
+      <pre><code class="language-json">{
+  "query": "How to optimize Core Web Vitals?",
+  "top_k": 5,
+  "category": "Technical SEO"
+}</code></pre>
+
+      <h3>Chat — 1 endpoint</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/chat</code></td>
+            <td>Single-turn RAG chat (supports agent mode)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><strong>Request body:</strong></p>
+      <pre><code class="language-json">{
+  "message": "What is canonical URL?",
+  "history": [],
+  "mode": "rag"
+}</code></pre>
+
+      <h3>Sessions — 4 endpoints</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/sessions</code></td>
+            <td>Create new chat session</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/sessions/{id}</code></td>
+            <td>Get session with message history</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/sessions/{id}/messages</code></td>
+            <td>Send message in session</td>
+          </tr>
+          <tr>
+            <td>DELETE</td>
+            <td><code>/api/v1/sessions/{id}</code></td>
+            <td>Delete session</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Reports — 3 endpoints</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/reports</code></td>
+            <td>List all weekly reports</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/reports/{date}</code></td>
+            <td>Get report by date (YYYYMMDD)</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/reports/generate</code></td>
+            <td>Generate new report</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Feedback — 1 endpoint</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/feedback</code></td>
+            <td>Submit feedback on search/chat responses</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Synonyms — 4 endpoints</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/synonyms</code></td>
+            <td>List all synonyms (static + custom)</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/synonyms</code></td>
+            <td>Add custom synonym</td>
+          </tr>
+          <tr>
+            <td>PUT</td>
+            <td><code>/api/v1/synonyms/{term}</code></td>
+            <td>Update custom synonym</td>
+          </tr>
+          <tr>
+            <td>DELETE</td>
+            <td><code>/api/v1/synonyms/{term}</code></td>
+            <td>Delete custom synonym</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Pipeline — 18 endpoints</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/pipeline/status</code></td>
+            <td>Pipeline step completion status</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/pipeline/meetings</code></td>
+            <td>List meetings with metadata</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/pipeline/meetings/{id}/preview</code></td>
+            <td>Meeting markdown preview</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/pipeline/source-docs</code></td>
+            <td>List all source documents</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/pipeline/source-docs/{collection}/{file}/preview</code></td>
+            <td>Document preview</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/pipeline/unprocessed</code></td>
+            <td>List unprocessed documents</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/pipeline/logs</code></td>
+            <td>Fetch history logs</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/pipeline/fetch</code></td>
+            <td>Trigger Notion incremental fetch</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/pipeline/fetch-articles</code></td>
+            <td>Trigger article fetch</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/pipeline/extract-qa</code></td>
+            <td>Trigger Q&amp;A extraction</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/pipeline/dedupe-classify</code></td>
+            <td>Trigger dedup + classification</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/pipeline/metrics</code></td>
+            <td>Parse SEO metrics from Google Sheets</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/pipeline/metrics/save</code></td>
+            <td>Save metrics snapshot</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/pipeline/metrics/snapshots</code></td>
+            <td>List metrics snapshots</td>
+          </tr>
+          <tr>
+            <td>DELETE</td>
+            <td><code>/api/v1/pipeline/metrics/snapshots/{id}</code></td>
+            <td>Delete snapshot</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/pipeline/metrics/trends</code></td>
+            <td>Timeseries anomaly detection</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/pipeline/llm-usage</code></td>
+            <td>LLM cost/latency monitoring</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/pipeline/crawled-not-indexed</code></td>
+            <td>Crawled-not-indexed analysis</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Meeting Prep — 3 endpoints</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/meeting-prep</code></td>
+            <td>List all meeting prep reports</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/meeting-prep/maturity-trend</code></td>
+            <td>SEO maturity trend timeseries</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/api/v1/meeting-prep/{date}</code></td>
+            <td>Get meeting prep report by date</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Response Format</h2>
+      <p>All API responses follow a consistent JSON structure:</p>
+      <pre><code class="language-json">{
+  "data": { ... },
+  "error": null,
+  "meta": {
+    "request_id": "uuid",
+    "version": "3.4.0"
+  }
+}</code></pre>
+
+      <h2>Error Responses</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>400</td>
+            <td>Invalid request (Zod validation failed)</td>
+          </tr>
+          <tr>
+            <td>401</td>
+            <td>Missing or invalid API key</td>
+          </tr>
+          <tr>
+            <td>404</td>
+            <td>Resource not found</td>
+          </tr>
+          <tr>
+            <td>429</td>
+            <td>Rate limit exceeded</td>
+          </tr>
+          <tr>
+            <td>500</td>
+            <td>Internal server error</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <pre><code class="language-json">{
+  "error": "Validation failed",
+  "details": "message: String must contain at least 1 character(s)"
+}</code></pre>
+
+      <a class="back-link" href="../">&larr; API Reference</a>
+    </main>
+  </body>
+</html>
