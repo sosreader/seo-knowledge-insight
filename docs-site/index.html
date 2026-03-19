@@ -10,46 +10,166 @@
     />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' https://cdn.jsdelivr.net;"
     />
     <style>
-      body { margin: 0; }
-      .nav-bar {
-        background: #1a1a2e;
-        padding: 12px 24px;
+      :root {
+        --brand-primary: #10b981;
+        --brand-dark: #059669;
+        --surface-0: #0c0f17;
+        --surface-1: #131720;
+        --surface-2: #1a1f2e;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --text-muted: #64748b;
+        --border: #1e293b;
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--surface-0); }
+
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: var(--surface-1);
+        border-bottom: 1px solid var(--border);
+        backdrop-filter: blur(12px);
+      }
+
+      .header-inner {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 0 24px;
+        height: 56px;
         display: flex;
         align-items: center;
-        gap: 24px;
-        font-family: system-ui, -apple-system, sans-serif;
-        font-size: 14px;
+        gap: 8px;
       }
-      .nav-bar a {
-        color: #a0aec0;
-        text-decoration: none;
-        transition: color 0.2s;
-      }
-      .nav-bar a:hover { color: #fff; }
-      .nav-bar .brand {
-        color: #fff;
-        font-weight: 600;
-        font-size: 15px;
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         margin-right: auto;
+        text-decoration: none;
+      }
+
+      .brand-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--brand-primary), var(--brand-dark));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 700;
+        color: #fff;
+        letter-spacing: -0.5px;
+      }
+
+      .brand-text {
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary);
+        letter-spacing: -0.3px;
+      }
+
+      .brand-version {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--brand-primary);
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        padding: 2px 8px;
+        border-radius: 12px;
+        letter-spacing: 0.3px;
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .nav-links a {
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-decoration: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        transition: color 0.15s, background 0.15s;
+      }
+
+      .nav-links a:hover {
+        color: var(--text-primary);
+        background: var(--surface-2);
+      }
+
+      .nav-divider {
+        width: 1px;
+        height: 20px;
+        background: var(--border);
+        margin: 0 8px;
+      }
+
+      .github-link {
+        display: flex;
+        align-items: center;
+        color: var(--text-muted);
+        transition: color 0.15s;
+      }
+
+      .github-link:hover { color: var(--text-primary); }
+
+      .github-link svg {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+      }
+
+      @media (max-width: 768px) {
+        .nav-links { display: none; }
+        .nav-divider { display: none; }
       }
     </style>
   </head>
   <body>
-    <nav class="nav-bar">
-      <span class="brand">SEO Knowledge Insight API</span>
-      <a href="./guides/introduction.md">Introduction</a>
-      <a href="./guides/authentication.md">Authentication</a>
-      <a href="./guides/quickstart.md">Quick Start</a>
-      <a href="./guides/search-and-chat.md">Search & Chat</a>
-      <a href="./guides/api-overview.md">API Overview</a>
-    </nav>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="./">
+          <span class="brand-icon">S</span>
+          <span class="brand-text">SEO Knowledge Insight</span>
+          <span class="brand-version">v3.4</span>
+        </a>
+        <nav class="nav-links">
+          <a href="./guides/introduction.md">Introduction</a>
+          <a href="./guides/quickstart.md">Quick Start</a>
+          <a href="./guides/search-and-chat.md">Search &amp; Chat</a>
+          <a href="./guides/api-overview.md">Overview</a>
+        </nav>
+        <div class="nav-divider"></div>
+        <a
+          class="github-link"
+          href="https://github.com/sosreader/seo-knowledge-insight"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="GitHub"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+          </svg>
+        </a>
+      </div>
+    </header>
     <script
       id="api-reference"
       data-url="./openapi.json"
-      data-configuration='{"theme":"kepler"}'
+      data-configuration='{"theme":"deepSpace","darkMode":true,"hideDarkModeToggle":true}'
     ></script>
     <script
       src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.71/dist/browser/standalone.min.js"
