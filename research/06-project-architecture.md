@@ -194,7 +194,7 @@ Notion 會議紀錄（87 份，2023–2026）
   速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min）
   QA ID：stable_id（SHA256[:16] hex），與 Python 相同驗證規則
   Local Mode：無 OpenAI API key 時自動降級（search→keyword-only，chat→context-only）
-  endpoint（9 個 router，42 端點，v2.12～v3.4）：
+  endpoint（10 個 router，42 端點，v2.12～v3.6）：
     - routes/qa.ts           — GET /qa, /qa/categories, /qa/{id}（hex+int）
     - routes/search.ts       — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；若帶 `extraction_model`，先 `top_k × 3` over-retrieve 再 filter）
     - routes/chat.ts         — POST /chat（mode: agent|rag|context-only；v2.29 request-level mode 參數，三層優先：Request > Server AGENT_ENABLED > auto；v2.11 rerank 可啟用）
