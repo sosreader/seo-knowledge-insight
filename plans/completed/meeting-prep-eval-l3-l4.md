@@ -198,3 +198,8 @@
 - `evaluate-meeting-prep` 保持向下相容（L1+L2），新增 `-full` 跑全 4 層
 - 反例 fixture 和 few-shot calibration 延後至 v2（當前 4 cases 足夠啟動）
 - L3 使用 haiku 而非 sonnet：eval 為批次工作，速度/成本比推理深度重要
+
+## Completion
+
+- **完成日期**：2026-03-22
+- **驗證結果**：4 層評估全部 PASS — L1 結構 8/8、L2 Grounding 5/5、L3 LLM-as-Judge 7/7（avg=0.83，閾值 0.4-0.55）、L4 Web Freshness 3/3；`make evaluate-meeting-prep-full` 完整執行正常；無 ANTHROPIC_API_KEY 時 L3 正確輸出 SKIPPED log 並 exit 0
