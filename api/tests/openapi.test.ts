@@ -61,8 +61,8 @@ describe("OpenAPI Spec", () => {
     const spec = buildOpenAPISpec();
     const pathKeys = Object.keys(spec.paths as Record<string, unknown>);
 
-    // 32 unique path patterns covering 36 HTTP operations
-    expect(pathKeys.length).toBe(32);
+    // 38 unique path patterns covering 42+ HTTP operations
+    expect(pathKeys.length).toBe(38);
 
     // Verify key paths exist
     const expected = [
@@ -73,6 +73,7 @@ describe("OpenAPI Spec", () => {
       "/api/v1/qa/{item_id}",
       "/api/v1/search",
       "/api/v1/chat",
+      "/api/v1/chat/stream",
       "/api/v1/reports",
       "/api/v1/reports/{date}",
       "/api/v1/reports/generate",
@@ -95,7 +96,12 @@ describe("OpenAPI Spec", () => {
       "/api/v1/pipeline/metrics/save",
       "/api/v1/pipeline/metrics/snapshots",
       "/api/v1/pipeline/metrics/snapshots/{id}",
+      "/api/v1/pipeline/llm-usage",
+      "/api/v1/pipeline/metrics/trends",
       "/api/v1/pipeline/crawled-not-indexed",
+      "/api/v1/meeting-prep",
+      "/api/v1/meeting-prep/maturity-trend",
+      "/api/v1/meeting-prep/{date}",
     ];
 
     for (const path of expected) {
@@ -114,15 +120,15 @@ describe("OpenAPI Spec", () => {
     expect(securitySchemes.apiKey.name).toBe("X-API-Key");
   });
 
-  it("spec has all 9 tags", () => {
+  it("spec has all 10 tags", () => {
     const spec = buildOpenAPISpec();
     const tags = spec.tags as Array<{ name: string }>;
 
-    expect(tags).toHaveLength(9);
+    expect(tags).toHaveLength(10);
     const tagNames = tags.map((t) => t.name);
     expect(tagNames).toEqual([
       "Health", "QA", "Search", "Chat", "Reports",
-      "Sessions", "Feedback", "Synonyms", "Pipeline",
+      "Sessions", "Feedback", "Synonyms", "Pipeline", "Meeting Prep",
     ]);
   });
 
