@@ -48,7 +48,7 @@ export function computeKeywordBoostSingle(
     const kwTokens = tokenize(kw);
 
     if (kwLower.length > 0 && queryLower.includes(kwLower)) {
-      totalHits += 2.0;
+      totalHits += 2.5;
     } else if ([...queryTokens].some((t) => kwLower.includes(t))) {
       totalHits += 1;
     } else if ([...kwTokens].some((t) => queryLower.includes(t))) {
