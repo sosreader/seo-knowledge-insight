@@ -5,7 +5,7 @@
  * Each path matches the routes in src/routes/*.ts.
  */
 
-const API_VERSION = "3.6.0";
+export const API_VERSION = "3.6.0";
 
 type OpenAPISpec = Record<string, unknown>;
 

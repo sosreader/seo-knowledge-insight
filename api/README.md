@@ -107,7 +107,7 @@ Client → Function URL / localhost:8002
 | ---- | --------- | -------------- | ---- | ---------- |
 | GET  | `/health` | 伺服器健康檢查 | ✗    | —          |
 
-回傳 `capabilities` 物件（5 維度：`runtime`/`llm`/`store`/`agent`/`caller`）。`llm` 為有效 LLM（`"openai"` = server 內建、`"claude-code"` = Claude Code 作為 LLM 引擎、`"none"` = 無 LLM）。`caller` 由 User-Agent 推斷。注意：route 內部決策邏輯仍使用 `resolveServerCapabilities()`（server 自身能力），`resolveHealthCapabilities()` 僅供 /health 顯示。
+回傳 `version`（動態引用 `API_VERSION`，與 OpenAPI spec 同步）及 `capabilities` 物件（5 維度：`runtime`/`llm`/`store`/`agent`/`caller`）。`llm` 為有效 LLM（`"openai"` = server 內建、`"claude-code"` = Claude Code 作為 LLM 引擎、`"none"` = 無 LLM）。`caller` 由 User-Agent 推斷。注意：route 內部決策邏輯仍使用 `resolveServerCapabilities()`（server 自身能力），`resolveHealthCapabilities()` 僅供 /health 顯示。
 
 ### 2. Q&A 知識庫 (qa) — 4 個 endpoints
 

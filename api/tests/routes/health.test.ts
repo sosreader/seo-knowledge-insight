@@ -32,7 +32,7 @@ describe("GET /health", () => {
 
     const body = await res.json();
     expect(body.status).toBe("healthy");
-    expect(body.version).toBe("2.2.0");
+    expect(body.version).toBe("3.6.0");
     expect(body.timestamp).toBeDefined();
   });
 

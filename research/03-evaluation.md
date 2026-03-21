@@ -2077,6 +2077,9 @@ flowchart LR
 | `data-quality`           | `_eval_data_quality.py`                | ETL CI / 手動                               | 資料集整體                | qa_count, avg_confidence, category_distribution                                                                                       |
 | `meeting_prep_structure` | `evals/eval_meeting_prep_structure.py` | `make evaluate-meeting-prep-structure` / CI | Meeting-Prep 報告結構     | section_completeness, metadata_valid, citation_block_valid, question_count_valid, eeat_score_format, maturity_level_format 等 11 指標 |
 | `meeting_prep_grounding` | `evals/eval_meeting_prep_grounding.py` | `make evaluate-meeting-prep-grounding` / CI | Meeting-Prep 引用與接地性 | citation_id_resolution, citation_category_consistency, citation_count_in_range, s4_four_sources_populated, inline_citation_coverage   |
+| `report_quality_v2`      | `_eval_report.py` + `report-evaluator-l2.ts` | `make evaluate-report` / API 非同步        | 週報生成（三層）          | composite_v2(≥0.69), section_coverage, has_kb_links, action_specificity(≥0.5), cross_metric_reasoning(≥0.25)                         |
+
+> **`report_quality_v2` 設計**：L1 `overall`（binary 飽和，72% 在 0.97-1.0）→ 三層架構：L1 結構護欄 + L2 連續 rule-based（6 指標）+ L3 LLM-as-Judge（3 維度）。`composite_v2` 公式：有 L3 時 L1:20%+L2:45%+L3:35%；無 L3 時 L1:30%+L2:70%。閾值 0.69 基於 44 份報告實測（BAD max=0.62, GOOD min=0.75, gap=0.13）。
 
 > **注意**：Dashboard 中的 `v2.12-fixed`、`v2.12-1317items`、`retrieval-eval-20...` 等為歷史一次性 run（測試或版本驗證），不是固定 group。
 
