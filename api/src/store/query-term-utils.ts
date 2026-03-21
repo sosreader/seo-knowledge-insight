@@ -1,11 +1,23 @@
 const MIN_QUERY_TERM_LENGTH = 2;
 
 export function queryTerms(text: string): readonly string[] {
-  return text
+  const CJK_RE = /^[\u4e00-\u9fff]+$/;
+  const baseTerms = text
     .toLowerCase()
     .split(/\s+/)
     .map((token) => token.trim())
     .filter((token) => token.length >= MIN_QUERY_TERM_LENGTH);
+
+  const result: string[] = [];
+  for (const term of baseTerms) {
+    result.push(term);
+    if (term.length >= 4 && CJK_RE.test(term)) {
+      for (let i = 0; i < term.length - 1; i++) {
+        result.push(term.slice(i, i + 2));
+      }
+    }
+  }
+  return result;
 }
 
 export function matchedQueryTerms(
