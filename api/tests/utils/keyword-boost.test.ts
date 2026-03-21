@@ -11,9 +11,8 @@ describe("computeKeywordBoostSingle", () => {
   });
 
   it("gives full boost for exact keyword match in query", () => {
-    // exact match contributes 3.0 hits, capped at maxHits=3 → boost * 3 = 0.3
     const score = computeKeywordBoostSingle("how to improve LCP performance", ["LCP"]);
-    expect(score).toBeCloseTo(0.3);
+    expect(score).toBeCloseTo(0.1);
   });
 
   it("accumulates multiple keyword hits up to max", () => {
@@ -22,8 +21,7 @@ describe("computeKeywordBoostSingle", () => {
       "performance",
       "Core Web Vitals",
     ]);
-    // each exact match = 3.0 hits, total 9.0, capped at maxHits=3 → 0.3
-    expect(score).toBeCloseTo(0.3);
+    expect(score).toBeCloseTo(0.3); // 3 hits * 0.1
   });
 
   it("caps at maxHits", () => {

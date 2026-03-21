@@ -134,13 +134,8 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
       "行動版",
       "手機",
       "json-ld",
-      "key moments",
-      "image pack",
-      "圖片搜尋",
-      "伺服器",
-      "回應時間",
     ],
-    索引與檢索: ["索引", "coverage", "googlebot", "canonical", "檢索未索引", "url inspection", "inspection api"],
+    索引與檢索: ["索引", "coverage", "googlebot", "canonical", "檢索未索引"],
     搜尋表現分析: [
       "ctr",
       "曝光",
@@ -152,9 +147,6 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
       "非品牌",
       "brand",
       "non-brand",
-      "轉換率",
-      "可見度",
-      "安全區",
     ],
     GA與數據追蹤: [
       "ga",
@@ -169,10 +161,10 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
       "share",
       "佔比",
     ],
-    Discover與AMP: ["discover", "amp", "news", "max-image-preview"],
-    內容策略: ["內容", "文章", "eeat", "供給", "更新", "意圖"],
-    連結策略: ["連結", "內部連結", "錨點", "反向連結", "錨文本"],
-    平台策略: ["平台", "作者", "/user", "路徑", "創作者", "自訂網域"],
+    Discover與AMP: ["discover", "amp", "news"],
+    內容策略: ["內容", "文章", "eeat", "供給", "更新"],
+    連結策略: ["連結", "內部連結", "錨點"],
+    平台策略: ["平台", "作者", "/user", "路徑", "cms"],
     演算法與趨勢: [
       "演算法",
       "趨勢",
@@ -232,14 +224,7 @@ export function inferQueryLabels(
   const queryLower = query.toLowerCase();
   const labels = new Set<string>();
   for (const [label, hints] of Object.entries(hintMap)) {
-    if (
-      hints.some((hint) => {
-        if (hint.length <= 3 && /^[a-z0-9]+$/.test(hint)) {
-          return new RegExp(`\\b${hint}\\b`).test(queryLower);
-        }
-        return queryLower.includes(hint);
-      })
-    ) {
+    if (hints.some((hint) => queryLower.includes(hint))) {
       labels.add(label);
     }
   }
