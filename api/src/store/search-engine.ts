@@ -152,6 +152,7 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
       "non-brand",
       "轉換率",
       "可見度",
+      "安全區",
     ],
     GA與數據追蹤: [
       "ga",
