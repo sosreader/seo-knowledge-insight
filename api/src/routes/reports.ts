@@ -72,12 +72,12 @@ reportsRoute.get("/:date/metrics", async (c) => {
   if (reportStore) {
     const result = await reportStore.getByDate(date);
     if (!result) return c.json(fail(`Report not found`), 404);
-    meta = (result.summary.meta ?? parseReportMeta(result.content)) as Record<string, unknown> | null;
+    meta = (result.summary.meta ?? parseReportMeta(result.content)) as unknown as Record<string, unknown> | null;
   } else {
     const filename = `report_${date}.md`;
     const filepath = join(paths.outputDir, filename);
     if (!existsSync(filepath)) return c.json(fail("Report not found"), 404);
-    meta = parseReportMeta(readFileSync(filepath, "utf-8")) as Record<string, unknown> | null;
+    meta = parseReportMeta(readFileSync(filepath, "utf-8")) as unknown as Record<string, unknown> | null;
   }
 
   const snapshotId = meta?.snapshot_id as string | undefined;
