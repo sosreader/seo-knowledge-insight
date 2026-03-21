@@ -164,8 +164,8 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
       "佔比",
     ],
     Discover與AMP: ["discover", "amp", "news"],
-    內容策略: ["內容", "文章", "eeat", "供給", "更新"],
-    連結策略: ["連結", "內部連結", "錨點"],
+    內容策略: ["內容", "文章", "eeat", "供給", "更新", "意圖"],
+    連結策略: ["連結", "內部連結", "錨點", "反向連結", "錨文本"],
     平台策略: ["平台", "作者", "/user", "路徑", "cms"],
     演算法與趨勢: [
       "演算法",
