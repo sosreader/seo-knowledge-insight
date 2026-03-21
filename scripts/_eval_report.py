@@ -1,5 +1,5 @@
 """
-_eval_report.py — 週報品質評估 + Laminar trace（v2.17）
+_eval_report.py — 週報品質評估 + Laminar trace（v3.6.1）
 
 複製 api/src/services/report-evaluator.ts 邏輯，供 Claude Code fallback 使用。
 在 /generate-report 本地生成後呼叫，將 7 個評估維度推送至 Laminar。
@@ -12,6 +12,7 @@ _eval_report.py — 週報品質評估 + Laminar trace（v2.17）
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import re
 import sys
@@ -105,18 +106,23 @@ def evaluate_report(content: str, alert_names: list[str]) -> dict[str, float]:
     has_kb_links = 1.0 if KB_LINK_RE.search(content) else 0.0
 
     # 5. alert_coverage (fuzzy: substring + core-name match)
-    action_section = _extract_section(content, "## 五、")
+    # Search full report body — alert names are specific enough to avoid false positives
+    search_text = content.lower()
     if alert_names:
-        section_lower = action_section.lower()
         mentioned = 0
         for name in alert_names:
             name_lower = name.lower()
-            if name_lower in section_lower:
+            if name_lower in search_text:
                 mentioned += 1
                 continue
             # Strip parenthetical suffix: "News(new)" → "News"
             core_name = re.sub(r"\s*\(.*?\)\s*", "", name_lower).strip()
-            if len(core_name) >= 2 and core_name in section_lower:
+            if len(core_name) >= 2 and core_name in search_text:
+                mentioned += 1
+                continue
+            # Strip "KW:" / "KW: " prefix: "KW: 影評" → "影評"
+            kw_stripped = re.sub(r"^kw:\s*", "", name_lower).strip()
+            if kw_stripped != name_lower and len(kw_stripped) >= 2 and kw_stripped in search_text:
                 mentioned += 1
         alert_coverage = mentioned / len(alert_names)
     else:
@@ -126,7 +132,20 @@ def evaluate_report(content: str, alert_names: list[str]) -> dict[str, float]:
         section_coverage + kb_citation_count + has_research + has_kb_links + alert_coverage
     ) / 5
 
-    llm_augmented = 1.0 if ("AI 輔助" in content or "AI 解讀" in content) else 0.0
+    # Detect LLM augmentation via report_meta generation_mode OR legacy markers
+    llm_augmented = 0.0
+    meta_match = re.search(r"<!--\s*report_meta\s+(\{.*?\})\s*-->", content)
+    if meta_match:
+        try:
+            meta = json.loads(meta_match.group(1))
+            mode = meta.get("generation_mode", "")
+            if mode in ("claude-code", "openai"):
+                llm_augmented = 1.0
+        except (json.JSONDecodeError, TypeError):
+            pass
+    # Fallback: legacy API template markers
+    if llm_augmented == 0.0 and ("AI 輔助" in content or "AI 解讀" in content):
+        llm_augmented = 1.0
 
     # 8. report_action_maturity_labeled
     maturity_labeled = _report_action_maturity_labeled(content)

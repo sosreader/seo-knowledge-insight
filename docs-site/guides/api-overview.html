@@ -34,7 +34,7 @@
             <span class="-rotate-45 font-display text-sm text-gold leading-none">S</span>
           </span>
           <span class="font-display text-lg tracking-[0.08em] uppercase max-md:text-sm max-md:tracking-[0.05em]">SEO Insight</span>
-          <span class="font-mono text-[10px] tracking-[0.15em] uppercase text-gold border border-gold/40 px-2.5 py-0.5">v3.4</span>
+          <span class="font-mono text-[10px] tracking-[0.15em] uppercase text-gold border border-gold/40 px-2.5 py-0.5">v3.6</span>
         </a>
         <nav class="hidden md:flex items-center">
           <a class="nav-link relative font-body text-[11px] tracking-[0.15em] uppercase text-pewter no-underline px-3.5 py-2 transition-colors duration-300 hover:text-gold focus-visible:outline-2 focus-visible:outline-gold focus-visible:outline-offset-2" href="./introduction.html">Guide</a>
@@ -183,7 +183,7 @@
   "mode": "rag"
 }</code></pre>
 
-      <h3>對話管理 — 4 個端點<br /><small style="font-size:0.7em;color:var(--muted)">Sessions — 4 endpoints</small></h3>
+      <h3>對話管理 — 5 個端點<br /><small style="font-size:0.7em;color:var(--muted)">Sessions — 5 endpoints</small></h3>
       <table>
         <thead>
           <tr>
@@ -194,14 +194,19 @@
         </thead>
         <tbody>
           <tr>
-            <td>POST</td>
+            <td>GET</td>
             <td><code>/api/v1/sessions</code></td>
-            <td>建立新對話 Session<br /><span style="color:var(--muted);font-size:0.85em">Create new chat session</span></td>
+            <td>列出所有對話<br /><span style="color:var(--muted);font-size:0.85em">List all sessions</span></td>
           </tr>
           <tr>
             <td>GET</td>
             <td><code>/api/v1/sessions/{id}</code></td>
             <td>取得 Session 及訊息歷史<br /><span style="color:var(--muted);font-size:0.85em">Get session with message history</span></td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/v1/sessions</code></td>
+            <td>建立新對話 Session<br /><span style="color:var(--muted);font-size:0.85em">Create new chat session</span></td>
           </tr>
           <tr>
             <td>POST</td>

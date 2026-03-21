@@ -5,7 +5,7 @@
  * Each path matches the routes in src/routes/*.ts.
  */
 
-const API_VERSION = "3.4.0";
+const API_VERSION = "3.6.0";
 
 type OpenAPISpec = Record<string, unknown>;
 
@@ -287,6 +287,41 @@ const paths: Record<string, Record<string, unknown>> = {
               status: { type: "string", example: "healthy" },
               timestamp: { type: "string", format: "date-time" },
               version: { type: "string" },
+              capabilities: {
+                type: "object",
+                description:
+                  "有效能力偵測（考慮 caller）。llm 為本次請求的有效 LLM：server 有 OpenAI 則為 openai；Claude Code 呼叫時為 claude-code；其餘為 none。\n\nEffective capability detection (caller-aware). `llm` reflects the effective LLM for this request: `openai` if server has OpenAI key; `claude-code` when called by Claude Code; `none` otherwise.",
+                properties: {
+                  runtime: {
+                    type: "string",
+                    enum: ["lambda", "local-server"],
+                    description: "執行環境 / Runtime environment",
+                  },
+                  llm: {
+                    type: "string",
+                    enum: ["openai", "claude-code", "none"],
+                    description:
+                      "有效 LLM。openai = server 內建；claude-code = Claude Code 作為 LLM 引擎；none = 無 LLM。\n\nEffective LLM. `openai` = server built-in; `claude-code` = Claude Code acts as LLM engine; `none` = no LLM available.",
+                  },
+                  store: {
+                    type: "string",
+                    enum: ["supabase", "file"],
+                    description: "資料儲存後端 / Data store backend",
+                  },
+                  agent: {
+                    type: "string",
+                    enum: ["enabled", "disabled"],
+                    description: "Agent mode 狀態 / Agent mode status",
+                  },
+                  caller: {
+                    type: "string",
+                    enum: ["browser", "cli", "claude-code", "lambda", "unknown"],
+                    description:
+                      "呼叫端身份（由 User-Agent 推斷）/ Caller identity (inferred from User-Agent)",
+                  },
+                },
+                required: ["runtime", "llm", "store", "agent", "caller"],
+              },
             },
           },
           "Server is healthy",
@@ -486,6 +521,38 @@ const paths: Record<string, Record<string, unknown>> = {
         "200": jsonContent(
           apiResponse(ref("ChatResponse")),
           "Chat response with sources",
+        ),
+      },
+    },
+  },
+
+  "/api/v1/chat/stream": {
+    post: {
+      tags: ["Chat"],
+      summary: "SSE 串流 RAG 對話 / SSE streaming RAG chat",
+      operationId: "chatStream",
+      description:
+        "Server-Sent Events 串流模式。本地開發可用；Lambda 環境回傳 501。\n\nSSE streaming chat. Available in local dev; returns 501 on Lambda.",
+      requestBody: jsonContent(
+        ref("ChatRequest"),
+        "Chat message (same schema as POST /chat)",
+      ),
+      responses: {
+        "200": {
+          description: "SSE event stream (sources → token* → metadata → done)",
+          content: {
+            "text/event-stream": {
+              schema: {
+                type: "string",
+                description:
+                  "SSE events: sources (JSON array), token (text chunk), metadata (JSON), done ([DONE]), error (string)",
+              },
+            },
+          },
+        },
+        "501": jsonContent(
+          apiResponse({ type: "null" }),
+          "Streaming not available in Lambda environment",
         ),
       },
     },
@@ -1234,6 +1301,83 @@ const paths: Record<string, Record<string, unknown>> = {
       },
     },
   },
+  "/api/v1/pipeline/llm-usage": {
+    get: {
+      tags: ["Pipeline"],
+      summary: "LLM 用量統計 / LLM usage statistics",
+      operationId: "getLlmUsage",
+      description:
+        "取得指定天數內的 LLM 呼叫統計（按 endpoint + model 分群）。\n\nGet LLM call statistics grouped by endpoint and model for the specified period.",
+      parameters: [
+        {
+          name: "days",
+          in: "query",
+          schema: { type: "integer", minimum: 1, maximum: 90, default: 30 },
+          description: "統計天數（1–90，預設 30）/ Number of days (1–90, default 30)",
+        },
+      ],
+      responses: {
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              days: { type: "integer" },
+              total_calls: { type: "integer" },
+              summary: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    endpoint: { type: "string" },
+                    model: { type: "string" },
+                    calls: { type: "integer" },
+                    input_tokens: { type: "integer" },
+                    output_tokens: { type: "integer" },
+                    avg_latency_ms: { type: "number" },
+                  },
+                },
+              },
+            },
+          }),
+        ),
+      },
+    },
+  },
+  "/api/v1/pipeline/metrics/trends": {
+    get: {
+      tags: ["Pipeline"],
+      summary: "指標趨勢異常偵測 / Metrics trend anomaly detection",
+      operationId: "getMetricsTrends",
+      description:
+        "分析指標快照的時間序列趨勢，偵測異常（MA 偏離 / 連續下降 / 線性趨勢）。需至少 4 週快照。\n\nAnalyze metrics snapshot timeseries for anomalies (MA deviation / consecutive decline / linear trend). Requires at least 4 weekly snapshots.",
+      parameters: [
+        {
+          name: "metric",
+          in: "query",
+          schema: { type: "string" },
+          description: "篩選特定指標名稱 / Filter by metric name (e.g. 'CTR')",
+        },
+        {
+          name: "weeks",
+          in: "query",
+          schema: { type: "integer", minimum: 4, maximum: 12, default: 8 },
+          description: "分析週數（4–12，預設 8）/ Number of weeks to analyze (4–12, default 8)",
+        },
+      ],
+      responses: {
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              snapshots_count: { type: "integer" },
+              metrics_analyzed: { type: "integer" },
+              anomalies: { type: "array", items: { type: "object" } },
+            },
+          }),
+        ),
+      },
+    },
+  },
   "/api/v1/pipeline/crawled-not-indexed": {
     post: {
       tags: ["Pipeline"],
@@ -1292,6 +1436,108 @@ const paths: Record<string, Record<string, unknown>> = {
       },
     },
   },
+
+  // Meeting Prep
+  "/api/v1/meeting-prep": {
+    get: {
+      tags: ["Meeting Prep"],
+      summary: "列出所有會議準備報告 / List all meeting prep reports",
+      operationId: "listMeetingPrep",
+      responses: {
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              items: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    date: { type: "string" },
+                    filename: { type: "string" },
+                    size_bytes: { type: "integer" },
+                    meta: { type: "object", nullable: true, description: "Parsed meeting prep metadata (scores, alert_down_count, etc.)" },
+                  },
+                },
+              },
+              total: { type: "integer" },
+            },
+          }),
+        ),
+      },
+    },
+  },
+  "/api/v1/meeting-prep/maturity-trend": {
+    get: {
+      tags: ["Meeting Prep"],
+      summary: "SEO 成熟度趨勢 / SEO maturity trend timeseries",
+      operationId: "getMeetingPrepMaturityTrend",
+      description:
+        "從歷次會議準備報告中萃取成熟度評分，回傳時間序列與趨勢摘要。\n\nExtract maturity scores from meeting prep reports and return timeseries with trend summary.",
+      responses: {
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              data_points: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    date: { type: "string", format: "date" },
+                    maturity: { type: "object" },
+                    eeat: { type: "object" },
+                    alert_down_count: { type: "integer" },
+                  },
+                },
+              },
+              summary: {
+                type: "object",
+                nullable: true,
+                properties: {
+                  improved: { type: "array", items: { type: "string" } },
+                  stagnant: { type: "array", items: { type: "string" } },
+                  regressed: { type: "array", items: { type: "string" } },
+                },
+              },
+              total: { type: "integer" },
+            },
+          }),
+        ),
+      },
+    },
+  },
+  "/api/v1/meeting-prep/{date}": {
+    get: {
+      tags: ["Meeting Prep"],
+      summary: "取得單篇會議準備報告 / Get meeting prep report by date",
+      operationId: "getMeetingPrep",
+      parameters: [
+        {
+          name: "date",
+          in: "path",
+          required: true,
+          schema: { type: "string", pattern: "^\\d{8}(?:_[0-9a-f]{8})?$" },
+          description: "YYYYMMDD 或 YYYYMMDD_hash8 格式 / YYYYMMDD or YYYYMMDD_hash8",
+        },
+      ],
+      responses: {
+        "200": jsonContent(
+          apiResponse({
+            type: "object",
+            properties: {
+              date: { type: "string" },
+              filename: { type: "string" },
+              content: { type: "string" },
+              size_bytes: { type: "integer" },
+              meta: { type: "object", nullable: true, description: "Parsed meeting prep metadata (scores, alert_down_count, etc.)" },
+            },
+          }),
+        ),
+        "404": jsonContent(apiResponse({ type: "null" }), "Meeting prep report not found"),
+      },
+    },
+  },
 };
 
 export function buildOpenAPISpec(): OpenAPISpec {
@@ -1320,6 +1566,7 @@ export function buildOpenAPISpec(): OpenAPISpec {
       { name: "Feedback", description: "搜尋相關性回饋\n\nSearch relevance feedback" },
       { name: "Synonyms", description: "同義詞管理\n\nSynonym management" },
       { name: "Pipeline", description: "ETL Pipeline 管理\n\nETL pipeline management" },
+      { name: "Meeting Prep", description: "顧問會議準備報告\n\nConsulting meeting preparation reports" },
     ],
     paths,
     components: {

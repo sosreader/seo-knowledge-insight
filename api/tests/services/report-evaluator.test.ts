@@ -97,12 +97,12 @@ describe("evaluateReport()", () => {
     expect(result.has_research_citations).toBe(0);
   });
 
-  it("computes alert_coverage: 1.0 when all alert names appear in section 五", () => {
+  it("computes alert_coverage: 1.0 when all alert names appear in action section", () => {
     const result = evaluateReport(REPORT_WITH_LINKS, ["CTR"]);
     expect(result.alert_coverage).toBe(1.0);
   });
 
-  it("computes alert_coverage: 0.0 when no alert names appear in section 五", () => {
+  it("computes alert_coverage: 0.0 when no alert names appear in any searched section", () => {
     const result = evaluateReport(REPORT_WITH_LINKS, ["NonExistentMetric"]);
     expect(result.alert_coverage).toBe(0);
   });
@@ -127,6 +127,59 @@ describe("evaluateReport()", () => {
     // AMP Article: exact match, News(new) → "News" fuzzy, GPT (工作階段) → "GPT" fuzzy
     // 週平均回應時間: not found → 3/4
     expect(result.alert_coverage).toBeCloseTo(0.75, 5);
+  });
+
+  it("finds alert names across any section in 7-section format", () => {
+    const report = `## 一、本週 SEO 情勢快照
+Discover 急跌 -55%
+
+## 二、流量信號解讀
+探索比例月 -28.5%
+
+## 五、搜尋意圖對映
+意圖位移分析
+
+## 六、優先行動清單
+- 排查外部連結流失
+- 監控檢索未索引趨勢
+`;
+    const result = evaluateReport(report, [
+      "Discover",
+      "外部連結",
+      "檢索未索引",
+      "探索比例",
+    ]);
+    expect(result.alert_coverage).toBe(1.0);
+  });
+
+  it("strips 'KW:' prefix for fuzzy matching", () => {
+    const report = `## 一、本週 SEO 情勢快照
+影評月 -29.8%，電影 -25.5%
+`;
+    const result = evaluateReport(report, ["KW: 影評", "KW: 電影", "NonExistent"]);
+    // "KW: 影評" → "影評" found, "KW: 電影" → "電影" found, NonExistent missing → 2/3
+    expect(result.alert_coverage).toBeCloseTo(2 / 3, 5);
+  });
+
+  it("finds alert names anywhere in the body, not just specific sections", () => {
+    const report = `## 一、本週 SEO 情勢快照
+Discover 月 -24.1%, 外部連結 -30.5%
+
+## 三、技術 SEO 健康度
+檢索未索引 +25.7%
+
+## 六、優先行動清單
+- 監控 CTR 趨勢
+`;
+    const result = evaluateReport(report, [
+      "Discover",
+      "外部連結",
+      "CTR",
+      "檢索未索引",
+      "NonExistent",
+    ]);
+    // All found except NonExistent → 4/5
+    expect(result.alert_coverage).toBeCloseTo(0.8, 5);
   });
 
   it("overall is average of all 5 dimension scores", () => {
@@ -159,7 +212,21 @@ describe("evaluateReport()", () => {
     expect(result.llm_augmented).toBe(1);
   });
 
-  it("llm_augmented: 0 for standard template report", () => {
+  it("llm_augmented: 1 when report_meta generation_mode is claude-code", () => {
+    const ccReport = FULL_SEVEN_SECTION_REPORT +
+      '\n<!-- report_meta {"generation_mode":"claude-code","generated_at":"2026-03-21T11:00:00.000Z"} -->';
+    const result = evaluateReport(ccReport, []);
+    expect(result.llm_augmented).toBe(1);
+  });
+
+  it("llm_augmented: 1 when report_meta generation_mode is openai", () => {
+    const openaiReport = FULL_SEVEN_SECTION_REPORT +
+      '\n<!-- report_meta {"generation_mode":"openai","generated_at":"2026-03-21T11:00:00.000Z"} -->';
+    const result = evaluateReport(openaiReport, []);
+    expect(result.llm_augmented).toBe(1);
+  });
+
+  it("llm_augmented: 0 for standard template report without meta or markers", () => {
     const result = evaluateReport(FULL_SEVEN_SECTION_REPORT, []);
     expect(result.llm_augmented).toBe(0);
   });

@@ -194,7 +194,7 @@ Notion 會議紀錄（87 份，2023–2026）
   速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min）
   QA ID：stable_id（SHA256[:16] hex），與 Python 相同驗證規則
   Local Mode：無 OpenAI API key 時自動降級（search→keyword-only，chat→context-only）
-  endpoint（9 個 router，42 端點，v2.12～v3.4）：
+  endpoint（10 個 router，42 端點，v2.12～v3.6）：
     - routes/qa.ts           — GET /qa, /qa/categories, /qa/{id}（hex+int）
     - routes/search.ts       — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；若帶 `extraction_model`，先 `top_k × 3` over-retrieve 再 filter）
     - routes/chat.ts         — POST /chat（mode: agent|rag|context-only；v2.29 request-level mode 參數，三層優先：Request > Server AGENT_ENABLED > auto；v2.11 rerank 可啟用）
@@ -217,7 +217,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - utils/keyword-boost.ts：4 層關鍵字匹配
     - utils/cjk-tokenizer.ts：CJK 分詞（2-gram + 單字，中文 keyword search 支援）
     - utils/mode-detect.ts：hasOpenAI() / hasSupabase() / isAgentEnabled() / resolveMode() helper（mode 偵測 + 三層優先順序解析）
-    - utils/capabilities.ts：5 維度 capability detection（runtime/llm/store/agent/caller）；Routes 統一用 caps.llm / caps.store 判斷，取代分散的 hasOpenAI()/hasSupabase() 呼叫（v3.6 新增）
+    - utils/capabilities.ts：5 維度 capability detection（runtime/llm/store/agent/caller）；三層函式——`resolveServerCapabilities()` 回傳 server 自身能力（llm: openai|none，route 決策用），`resolveCapabilities(ua)` 加入 caller 維度（request-level），`resolveHealthCapabilities(ua)` 回傳有效 LLM（Claude Code 呼叫且 server 無 OpenAI → llm: "claude-code"，僅 /health 顯示用）；Routes 統一用 caps.llm / caps.store 判斷，取代分散的 hasOpenAI()/hasSupabase() 呼叫（v3.6 新增，v3.6.1 加入 resolveHealthCapabilities）
     - utils/result.ts：Result<T,E> tagged union（Ok/Err），替代 throw-catch 模式；mapResult() / flatMapResult() / unwrapOr()（v3.6 新增）
     - utils/maturity.ts：parseMaturityLevel() / buildMaturityContext() / applyMaturityBoost() / buildReportMaturityBlock() / getDimensionForMetric() / buildMaturityUpgradeLabel() / buildMaturityCallout()（成熟度 L1-L4 跨系統工具；DIMENSIONS / METRIC_MATURITY_DIMENSION_MAP 常數）
     - services/embedding.ts：OpenAI embedding wrapper
@@ -226,7 +226,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - services/reranker.ts：Haiku reranker（v2.11 新增，需要 ANTHROPIC_API_KEY）
     - services/context-relevance.ts：Context Relevance 評估（v2.12 新增，Claude haiku judge；per-context 細分；escapeXml() 防 prompt injection）
     - services/report-generator-local.ts：本地週報生成（v2.13 新增；6 維度 ECC 分析；無需 OpenAI API；含 RESEARCH_CITATIONS 業界研究引用庫；v2.14 加入 CitationTracker — `[N]` 標記 + `<!-- citations [...] -->` block）
-    - services/report-evaluator.ts：報告品質規則式評估（v2.13 新增；5 維度 section_coverage/kb_citation/research/kb_links/alert_coverage；online scoring；v2.18 修正 KB_LINK_RE 格式）
+    - services/report-evaluator.ts：報告品質規則式評估（v2.13 新增；5 維度 section_coverage/kb_citation/research/kb_links/alert_coverage；online scoring；v2.18 修正 KB_LINK_RE 格式；v3.6.1 alert_coverage 改搜全 body；llm_augmented 改以 report_meta generation_mode 判斷，legacy marker 作 fallback）
     - services/metrics-parser.ts：純 TS 指標解析（v2.26 新增；Google Sheets CSV fetch + TSV parse + anomaly detect；取代 Python qa_tools.py load-metrics）
     - services/report-llm.ts：純 TS OpenAI 報告生成（v2.26 新增；同 Python 04_generate_report.py 的 system prompt + QA context 建構；取代 Python 依賴）
     - services/pipeline-runner.ts：Python CLI 代理（execPython / execQaTools；v2.18 stdout/stderr 分離，修復 Laminar log 混入 JSON parse bug；v2.26 metrics 端點已不再使用）
@@ -240,7 +240,7 @@ Notion 會議紀錄（87 份，2023–2026）
     - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port；8 維度推送 Laminar `report-quality` group；含 report_action_maturity_labeled）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / synonyms / meeting-prep / api-response
-  測試：Vitest（65 個 test files，734 tests passing）
+  測試：Vitest（65 個 test files，745 tests passing）
   部署：Lambda + Function URL（arm64，~$0/月）/ docker-compose（本地開發）
             ↓ http://localhost:8002 (開發) 或 https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/ (生產)
 
@@ -533,7 +533,7 @@ Notion 會議紀錄（87 份，2023–2026）
 2. **邊界清晰**：Hono 層與 Python Pipeline 共享 output/ 資料；search/chat graceful degradation（有 OpenAI → hybrid / rag-or-agent，無 → keyword / context-only）
 3. **測試優先**：Vitest 路由覆蓋（25 個 test files，216 tests），unit + integration
 4. **資料相容**：QAStore 完全鏡像，支援 .npy embedding 檔案讀取（optional，無 .npy 時 keyword-only mode）
-5. **三模式顯式化（v3.6）**：capability 判斷集中到 `utils/capabilities.ts`，Routes 只讀 `caps` 物件，不再直接呼叫 `hasOpenAI()`/`hasSupabase()`；三種執行模式（full/rag/context-only）的條件路徑對開發者透明可見
+5. **三模式顯式化（v3.6）**：capability 判斷集中到 `utils/capabilities.ts`，三層函式（server-level / request-level / health-display）；`/health` 回傳有效 LLM（`resolveHealthCapabilities(ua)`：Claude Code 呼叫時 `llm: "claude-code"`，有 OpenAI key 時 `llm: "openai"`，其餘 `"none"`）；route 內部決策仍用 `resolveServerCapabilities()`（`caps.llm === "openai"` / `"none"`）確保 server-side 行為正確；三種執行模式（full/rag/context-only）的條件路徑對開發者透明可見（架構備註：業界標準建議 /health 與 /info 分離，但本專案規模小且 Lambda health check 只看 status code，合併無害。遷移觸發條件見 memory/tech-decisions.md）
 6. **Functional Programming（v3.6）**：新增 pure function 層（`rag-chat-pure.ts`、`qa-fns.ts`、`result.ts`），side-effect 邊界明確；`Result<T,E>` 取代 throw-catch，錯誤路徑型別安全
 
 **實作成果（v2.12 更新）**：

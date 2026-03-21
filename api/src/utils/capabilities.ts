@@ -8,7 +8,13 @@
 import { hasOpenAI, isAgentEnabled } from "./mode-detect.js";
 import { hasSupabase } from "../store/supabase-client.js";
 
+/** Runtime environment. Server-level only returns "lambda" | "local-server".
+ *  "cli" is reserved for Caller dimension (inferCaller), not server runtime. */
 export type Runtime = "lambda" | "local-server" | "cli";
+
+/** LLM provider. Server-level only returns "openai" | "none".
+ *  "claude-code" is used by Python-layer (qa_tools.py, openai_helper.py)
+ *  when Claude Code itself acts as the LLM engine. */
 export type LLMProvider = "openai" | "claude-code" | "none";
 export type StoreBackend = "supabase" | "file";
 export type AgentMode = "enabled" | "disabled";
@@ -39,7 +45,13 @@ export function resolveServerCapabilities(): Omit<Capabilities, "caller"> {
   };
 }
 
-/** Request-level capabilities (per request, includes caller from User-Agent). */
+/**
+ * Request-level capabilities (per request, includes caller from User-Agent).
+ *
+ * `llm` always reflects the server's own capability (same as server-level).
+ * Caller identity is a separate concern — use `caller` dimension for that,
+ * and `mode` request parameter for LLM mode negotiation.
+ */
 export function resolveCapabilities(userAgent?: string): Capabilities {
   return {
     ...resolveServerCapabilities(),
@@ -56,6 +68,25 @@ export function inferCaller(userAgent?: string): Caller {
   if (ua.includes("mozilla")) return "browser";
   if (ua.includes("lambda") || ua.includes("aws")) return "lambda";
   return "unknown";
+}
+
+/**
+ * Health-endpoint capabilities — effective LLM considering the caller.
+ *
+ * When Claude Code calls and the server has no LLM of its own,
+ * Claude Code itself serves as the LLM engine → `llm: "claude-code"`.
+ * All other dimensions are identical to `resolveCapabilities()`.
+ *
+ * This function is ONLY for the /health display. Route decision logic
+ * must continue using `resolveServerCapabilities()` or `resolveCapabilities()`.
+ */
+export function resolveHealthCapabilities(userAgent?: string): Capabilities {
+  const caps = resolveCapabilities(userAgent);
+  const effectiveLlm =
+    caps.caller === "claude-code" && caps.llm === "none"
+      ? "claude-code"
+      : caps.llm;
+  return { ...caps, llm: effectiveLlm };
 }
 
 /** Format capabilities as a human-readable tag for logging. */

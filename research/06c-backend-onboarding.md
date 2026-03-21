@@ -230,24 +230,31 @@ api/src/
 │   ├── rate-limit.ts        按路由差異化限流
 │   └── error-handler.ts     全域錯誤處理
 │
-├── routes/               # 9 個路由器（掛在 /api/v1/ 下）
+├── routes/               # 10 個路由器（掛在 /api/v1/ 下）
 │   ├── health.ts            GET /health（無 auth）
 │   ├── qa.ts                Q&A CRUD + 分類/collections
 │   ├── search.ts            知識庫搜尋（hybrid search）
-│   ├── chat.ts              RAG 問答
+│   ├── chat.ts              RAG 問答（含 SSE streaming）
 │   ├── reports.ts           週報 CRUD + 生成
 │   ├── sessions.ts          Chat session 管理
 │   ├── feedback.ts          使用者回饋
 │   ├── pipeline.ts          Pipeline 操作（fetch/extract/dedupe/metrics）
 │   ├── pipeline-fs.ts       Pipeline 檔案系統邏輯（source-docs 等）
-│   └── synonyms.ts          同義詞 CRUD
+│   ├── synonyms.ts          同義詞 CRUD
+│   └── meeting-prep.ts      顧問會議準備報告
 │
 ├── services/             # 業務邏輯層
 │   ├── rag-chat.ts          RAG 對話引擎
+│   ├── rag-chat-pure.ts     RAG 問答 pure functions（FP 重構）
+│   ├── rag-chat-stream.ts   SSE streaming 問答
 │   ├── embedding.ts         OpenAI embedding 服務
 │   ├── reranker.ts          Reranker（Anthropic，實驗性）
 │   ├── context-relevance.ts Context 相關性評分
+│   ├── retrieval-gate.ts    CRAG 3-tier quality gate
+│   ├── response-cache.ts    Exact match response cache
+│   ├── timeseries-analyzer.ts Timeseries anomaly detection
 │   ├── metrics-parser.ts    SEO 指標解析（純 TS）
+│   ├── crawled-not-indexed-*.ts  檢索未索引解析/分析/評估（3 檔）
 │   ├── report-generator-local.ts  本地週報生成
 │   ├── report-llm.ts        LLM 週報生成（純 TS）
 │   ├── report-evaluator.ts  5 維度品質評估
@@ -255,6 +262,9 @@ api/src/
 │
 ├── store/                # 資料存取層（Factory Pattern）
 │   ├── qa-store.ts              QAStore factory（Supabase vs 檔案）
+│   ├── qa-fns.ts                QAStore pure module functions（FP 重構）
+│   ├── query-term-utils.ts      查詢詞處理工具
+│   ├── store-registry.ts        Store singleton registry
 │   ├── supabase-client.ts       Supabase REST client
 │   ├── supabase-qa-store.ts     pgvector hybrid search
 │   ├── supabase-report-store.ts
@@ -275,15 +285,20 @@ api/src/
 │   └── synonyms.ts
 │
 └── utils/                # 純函式工具
+    ├── audit-logger.ts         安全審計日誌
+    ├── capabilities.ts         5 維度能力偵測（runtime/llm/store/agent/caller）
+    ├── cjk-tokenizer.ts        CJK 分詞 2-gram
     ├── cosine-similarity.ts    Float32Array 矩陣運算
     ├── keyword-boost.ts        4 層關鍵字加權
-    ├── cjk-tokenizer.ts        CJK 分詞 2-gram
+    ├── laminar-scoring.ts      Online scoring
+    ├── llm-usage-logger.ts     LLM cost monitoring
+    ├── maturity.ts             成熟度工具（dimensions/boost/callout）
+    ├── mode-detect.ts          hasOpenAI() / isAgentEnabled() / resolveMode()
     ├── npy-reader.ts           numpy 檔案讀取
-    ├── sanitize.ts             HTML escape 防 XSS
-    ├── audit-logger.ts         存取日誌
-    ├── mode-detect.ts          hasOpenAI() / hasSupabase() / resolveMode()
     ├── observability.ts        Laminar tracing
-    └── laminar-scoring.ts      Online scoring
+    ├── report-file.ts          週報檔案 I/O
+    ├── result.ts               Result<T,E> tagged union
+    └── sanitize.ts             HTML escape 防 XSS
 ```
 
 ---
@@ -303,7 +318,7 @@ pnpm test tests/store/qa-filter.test.ts    # 純邏輯函式
 - 正常情況回傳什麼
 - 邊界情況怎麼處理（空值、錯誤、無權限）
 
-目前共 428 個測試（45 檔案），coverage 80%+。
+目前共 734 個測試（65 檔案），coverage 80%+。
 
 ---
 

@@ -1,10 +1,10 @@
-# Hono TypeScript API (v3.5)
+# Hono TypeScript API (v3.6)
 
 REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（Node.js server / AWS Lambda）。
 
 **特點：**
 
-- 10 個路由器（Routers）、42 個 API endpoints、734 個測試（65 檔案，coverage 80%+）
+- 10 個路由器（Routers）、42 個 API endpoints、745 個測試（65 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
@@ -17,7 +17,7 @@ REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（No
 - SSE streaming（`POST /chat/stream`，5 event types）
 - Inline citation（[1][2] 來源標注 + `validateCitations()` 後處理）
 - Exact match response cache（sha256 hash lookup）
-- Categorical feedback（4 categories: wrong_answer / missing_info / wrong_source / outdated）
+- Categorical feedback（6 categories: wrong_answer / missing_info / wrong_source / outdated / too_basic / too_advanced）
 - Timeseries anomaly detection（MA deviation / consecutive decline / linear trend）
 - AI visibility 報告維度（7 維度含 AI 可見度；有 crawled-not-indexed 資料時升至 8 維度）
 
@@ -106,6 +106,8 @@ Client → Function URL / localhost:8002
 | 方法 | 路由      | 說明           | 認證 | Rate Limit |
 | ---- | --------- | -------------- | ---- | ---------- |
 | GET  | `/health` | 伺服器健康檢查 | ✗    | —          |
+
+回傳 `capabilities` 物件（5 維度：`runtime`/`llm`/`store`/`agent`/`caller`）。`llm` 為有效 LLM（`"openai"` = server 內建、`"claude-code"` = Claude Code 作為 LLM 引擎、`"none"` = 無 LLM）。`caller` 由 User-Agent 推斷。注意：route 內部決策邏輯仍使用 `resolveServerCapabilities()`（server 自身能力），`resolveHealthCapabilities()` 僅供 /health 顯示。
 
 ### 2. Q&A 知識庫 (qa) — 4 個 endpoints
 
@@ -237,7 +239,7 @@ Client → Function URL / localhost:8002
 
 | 方法 | 路由               | 說明                                                                           | 認證 | Rate Limit |
 | ---- | ------------------ | ------------------------------------------------------------------------------ | ---- | ---------- |
-| POST | `/api/v1/feedback` | 提交使用者回饋（支援 4 類別：wrong_answer/missing_info/wrong_source/outdated） | ✓    | 60/min     |
+| POST | `/api/v1/feedback` | 提交使用者回饋（支援 6 類別：wrong_answer/missing_info/wrong_source/outdated/too_basic/too_advanced） | ✓    | 60/min     |
 
 ### 8. Pipeline 管理 (pipeline) — 18 個 endpoints
 
@@ -374,6 +376,9 @@ api/
 │   │   └── error-handler.ts     # 錯誤處理
 │   ├── store/
 │   │   ├── qa-store.ts              # QAStore singleton + loadQaStore() factory
+│   │   ├── qa-fns.ts                # QAStore pure module functions（FP 重構）
+│   │   ├── query-term-utils.ts      # 查詢詞處理工具
+│   │   ├── store-registry.ts        # Store singleton registry（reportStore/snapshotStore）
 │   │   ├── supabase-client.ts       # Supabase REST thin client（no SDK）
 │   │   ├── supabase-qa-store.ts     # SupabaseQAStore（pgvector hybrid search）
 │   │   ├── supabase-session-store.ts # SupabaseSessionStore
@@ -407,6 +412,7 @@ api/
 │   │   ├── crawled-not-indexed-evaluator.ts # 檢索未索引品質 5 維度評估器
 │   │   ├── report-generator-local.ts  # 8 維度本地週報（含 AI 可見度 + 索引章節）
 │   │   ├── report-llm.ts     # LLM 週報生成（純 TS，7 維度含 AI 可見度）
+│   │   ├── rag-chat-pure.ts    # RAG 問答 pure functions（FP 重構）
 │   │   ├── report-evaluator.ts  # 5 維度品質評估
 │   │   └── pipeline-runner.ts # Python 腳本執行器
 │   ├── schemas/              # Zod schemas
@@ -421,15 +427,20 @@ api/
 │   │   ├── synonyms.ts
 │   │   └── meeting-prep.ts
 │   └── utils/
-│       ├── npy-reader.ts     # numpy 檔案讀取
-│       ├── cosine-similarity.ts  # Float32Array 矩陣運算
-│       ├── keyword-boost.ts  # 4 層關鍵字加權
-│       ├── cjk-tokenizer.ts  # CJK 分詞 2-gram
-│       ├── sanitize.ts       # HTML escape 防 XSS
-│       ├── mode-detect.ts    # hasOpenAI() / hasSupabase() / isAgentEnabled() / resolveMode() 偵測
-│       ├── observability.ts  # Laminar tracing
-│       ├── laminar-scoring.ts  # Online scoring
-│       └── llm-usage-logger.ts  # LLM cost monitoring（token usage tracking）
+│       ├── audit-logger.ts      # 安全審計日誌
+│       ├── capabilities.ts      # 5 維度能力偵測（runtime/llm/store/agent/caller）
+│       ├── cjk-tokenizer.ts     # CJK 分詞 2-gram
+│       ├── cosine-similarity.ts # Float32Array 矩陣運算
+│       ├── keyword-boost.ts     # 4 層關鍵字加權
+│       ├── laminar-scoring.ts   # Online scoring
+│       ├── llm-usage-logger.ts  # LLM cost monitoring（token usage tracking）
+│       ├── maturity.ts          # 成熟度工具（DIMENSIONS / boost / callout / upgrade label）
+│       ├── mode-detect.ts       # hasOpenAI() / isAgentEnabled() / resolveMode() 偵測
+│       ├── npy-reader.ts        # numpy 檔案讀取
+│       ├── observability.ts     # Laminar tracing
+│       ├── report-file.ts       # 週報檔案 I/O
+│       ├── result.ts            # Result<T,E> tagged union（Ok/Err/map/flatMap/unwrapOr）
+│       └── sanitize.ts          # HTML escape 防 XSS
 ├── scripts/export-openapi.ts    # OpenAPI spec 匯出（CI 用，產生 docs-site/openapi.json）
 ├── scripts/
 │   ├── ai-crawler-checker.ts  # AI crawler readiness CLI（GPTBot/ClaudeBot 等 10 bots）

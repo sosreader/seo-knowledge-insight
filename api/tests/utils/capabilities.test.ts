@@ -13,6 +13,7 @@ import { config } from "../../src/config.js";
 import {
   resolveServerCapabilities,
   resolveCapabilities,
+  resolveHealthCapabilities,
   inferCaller,
   formatCapabilityTag,
 } from "../../src/utils/capabilities.js";
@@ -69,6 +70,13 @@ describe("capabilities", () => {
       expect(caps.store).toBe("supabase");
     });
 
+    it("requires both URL and ANON_KEY for supabase store", () => {
+      (config as Record<string, unknown>).SUPABASE_URL = "https://test.supabase.co";
+      // SUPABASE_ANON_KEY is "" (from beforeEach)
+      const caps = resolveServerCapabilities();
+      expect(caps.store).toBe("file");
+    });
+
     it("detects agent enabled", () => {
       (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test";
       (config as Record<string, unknown>).AGENT_ENABLED = true;
@@ -81,6 +89,13 @@ describe("capabilities", () => {
       (config as Record<string, unknown>).AGENT_ENABLED = "auto";
       const caps = resolveServerCapabilities();
       expect(caps.agent).toBe("enabled");
+    });
+
+    it("agent auto-disabled without OpenAI key", () => {
+      (config as Record<string, unknown>).AGENT_ENABLED = "auto";
+      // OPENAI_API_KEY is "" (from beforeEach)
+      const caps = resolveServerCapabilities();
+      expect(caps.agent).toBe("disabled");
     });
 
     it("handles full Lambda + OpenAI + Supabase + Agent combo", () => {
@@ -143,6 +158,46 @@ describe("capabilities", () => {
 
     it("defaults caller to unknown when no User-Agent", () => {
       const caps = resolveCapabilities();
+      expect(caps.caller).toBe("unknown");
+    });
+
+    it("llm reflects server capability, not caller identity", () => {
+      const caps = resolveCapabilities("claude-code/1.0");
+      expect(caps.llm).toBe("none");
+      expect(caps.caller).toBe("claude-code");
+    });
+
+    it("llm reflects server capability when OpenAI is available", () => {
+      (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test";
+      const caps = resolveCapabilities("claude-code/1.0");
+      expect(caps.llm).toBe("openai");
+      expect(caps.caller).toBe("claude-code");
+    });
+  });
+
+  describe("resolveHealthCapabilities", () => {
+    it("returns claude-code llm when caller is Claude Code and server has no OpenAI", () => {
+      const caps = resolveHealthCapabilities("claude-code/1.0");
+      expect(caps.llm).toBe("claude-code");
+      expect(caps.caller).toBe("claude-code");
+    });
+
+    it("returns openai llm when server has OpenAI, even from Claude Code caller", () => {
+      (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test";
+      const caps = resolveHealthCapabilities("claude-code/1.0");
+      expect(caps.llm).toBe("openai");
+      expect(caps.caller).toBe("claude-code");
+    });
+
+    it("returns none llm for browser caller without OpenAI", () => {
+      const caps = resolveHealthCapabilities("Mozilla/5.0 (Macintosh)");
+      expect(caps.llm).toBe("none");
+      expect(caps.caller).toBe("browser");
+    });
+
+    it("returns none llm when no User-Agent provided", () => {
+      const caps = resolveHealthCapabilities();
+      expect(caps.llm).toBe("none");
       expect(caps.caller).toBe("unknown");
     });
   });
