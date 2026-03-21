@@ -63,6 +63,7 @@ export class SupabaseSnapshotStore {
         metrics: snapshot.metrics,
         ...(snapshot.maturity ? { maturity: snapshot.maturity } : {}),
         created_at: snapshot.created_at,
+        deleted_at: null,
       }],
       { upsert: true, onConflict: "id" },
     );

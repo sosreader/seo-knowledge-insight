@@ -177,7 +177,7 @@ export class SupabaseSessionStore {
     if (!session) return false;
     await supabasePatch(
       "sessions",
-      `?id=eq.${sessionId}`,
+      `?id=eq.${encodeURIComponent(sessionId)}`,
       { deleted_at: new Date().toISOString() },
     );
     return true;

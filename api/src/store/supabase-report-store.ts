@@ -72,6 +72,7 @@ export class SupabaseReportStore {
         content,
         size_bytes: Buffer.byteLength(content, "utf-8"),
         meta: meta ?? null,
+        deleted_at: null,
       }],
       { upsert: true, onConflict: "date_key" },
     );
