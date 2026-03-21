@@ -1,0 +1,19 @@
+{
+  "version": "v3.1",
+  "date": "2026-03-12",
+  "metrics": {
+    "hit_rate": 1.00,
+    "mrr": 0.952,
+    "precision_at_k": 0.863,
+    "ndcg_at_k": 0.802,
+    "keyword_hit_rate": 0.856,
+    "multi_label_f1_at_k": 0.82,
+    "dual_category_recall_at_k": 1.0,
+    "boosterless_precision_at_k": 0.863,
+    "recall_at_k": 0.786,
+    "top1_category_match": 0.914,
+    "top5_category_coverage": 0.863
+  },
+  "composite_score": 0.905,
+  "notes": "hybrid mode, Supabase pgvector, 1469 QA items"
+}
