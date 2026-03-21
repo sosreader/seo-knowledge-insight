@@ -201,11 +201,11 @@ pnpm install
 pnpm dev               # 啟動前端伺服器（http://localhost:3000）
 ```
 
-測試（734 個測試，80% 覆蓋率）：
+測試（745 個測試，80% 覆蓋率）：
 
 ```bash
 cd api
-pnpm test              # 執行所有 vitest 測試（734 tests, 65 files）
+pnpm test              # 執行所有 vitest 測試（745 tests, 65 files）
 pnpm test:watch       # 監視模式下執行測試
 pnpm test:coverage    # 生成測試覆蓋率報告
 ```
@@ -237,7 +237,7 @@ docker-compose logs seo-api-ts  # 監看 Hono 日誌
 
 API 端點特性：
 
-- `GET /health` — 健康檢查
+- `GET /health` — 健康檢查（含 `capabilities` 物件：5 維度 runtime/llm/store/agent/caller；llm 為有效 LLM——Claude Code 呼叫且 server 無 OpenAI key 時回傳 `"claude-code"`，有 OpenAI key 回傳 `"openai"`，其餘 `"none"`）
 - `GET /openapi.json` — OpenAPI 3.1 規格（機器可讀，可匯入 Postman / Swagger）
 - `GET /docs` — Scalar 互動式 API 文件（瀏覽器直接測試）
 - GitHub Pages 文件：[sosreader.github.io/seo-knowledge-insight](https://sosreader.github.io/seo-knowledge-insight/)（Scalar CDN + Art Deco theme + Tailwind v4，雙語 zh-TW + EN，CI auto-deploy from `api/src/openapi.ts`）

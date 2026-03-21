@@ -4,7 +4,7 @@ REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（No
 
 **特點：**
 
-- 10 個路由器（Routers）、42 個 API endpoints、734 個測試（65 檔案，coverage 80%+）
+- 10 個路由器（Routers）、42 個 API endpoints、745 個測試（65 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
@@ -106,6 +106,8 @@ Client → Function URL / localhost:8002
 | 方法 | 路由      | 說明           | 認證 | Rate Limit |
 | ---- | --------- | -------------- | ---- | ---------- |
 | GET  | `/health` | 伺服器健康檢查 | ✗    | —          |
+
+回傳 `capabilities` 物件（5 維度：`runtime`/`llm`/`store`/`agent`/`caller`）。`llm` 為有效 LLM（`"openai"` = server 內建、`"claude-code"` = Claude Code 作為 LLM 引擎、`"none"` = 無 LLM）。`caller` 由 User-Agent 推斷。注意：route 內部決策邏輯仍使用 `resolveServerCapabilities()`（server 自身能力），`resolveHealthCapabilities()` 僅供 /health 顯示。
 
 ### 2. Q&A 知識庫 (qa) — 4 個 endpoints
 

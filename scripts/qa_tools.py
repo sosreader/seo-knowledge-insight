@@ -16,7 +16,35 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # 禁止 import config：避免 _require_env("OPENAI_API_KEY") 在啟動時觸發
+import os
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _get_local_capabilities() -> dict:
+    """Inline capability detection (no openai_helper import).
+
+    llm is always "claude-code" — this CLI is designed for slash commands
+    where Claude Code itself acts as the LLM engine. OPENAI_API_KEY
+    availability does not change this tool's LLM context.
+    """
+    has_supabase = bool(
+        os.getenv("SUPABASE_URL", "").strip()
+        and os.getenv("SUPABASE_ANON_KEY", "").strip()
+    )
+    return {
+        "runtime": "cli",
+        "llm": "claude-code",
+        "store": "supabase" if has_supabase else "file",
+        "agent": "disabled",
+    }
+
+
+def _print_capabilities() -> None:
+    """Print mode line to stderr."""
+    caps = _get_local_capabilities()
+    parts = [f"{k}:{v}" for k, v in caps.items()]
+    print(f"Mode: [{' | '.join(parts)}]", file=sys.stderr)
 
 # 載入 .env（config.py 不被 import，需手動載入以取得 LMNR_PROJECT_API_KEY 等）
 from dotenv import load_dotenv  # noqa: E402
@@ -435,6 +463,7 @@ def cmd_diff_snapshot(args: argparse.Namespace) -> None:
 @observe(name="qa_tools.search")
 def cmd_search(args: argparse.Namespace) -> None:
     """關鍵字搜尋知識庫（無 OpenAI）。"""
+    _print_capabilities()
     query = args.query
     top_k = args.top_k
     category = getattr(args, "category", None)
@@ -473,6 +502,7 @@ def cmd_load_metrics(args: argparse.Namespace) -> None:
     從 Google Sheets URL 或本機 TSV 解析 SEO 指標。
     輸出異常指標清單（供 Claude Code 生成週報）。
     """
+    _print_capabilities()
     sys.path.insert(0, str(PROJECT_ROOT))
     from utils.metrics_parser import fetch_from_sheets, parse_metrics_tsv, detect_anomalies
 

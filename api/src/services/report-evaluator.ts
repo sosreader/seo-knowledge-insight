@@ -16,7 +16,7 @@ export interface ReportEvalResult {
   has_research_citations: number;
   /** 1 if report contains /admin/seoInsight/{id} links, else 0 */
   has_kb_links: number;
-  /** Proportion of alert metric names mentioned in section 五 (0–1) */
+  /** Proportion of alert metric names mentioned in action list + situation snapshot (0–1) */
   alert_coverage: number;
   /** Average of the 5 scores above */
   overall: number;
@@ -110,23 +110,28 @@ export function evaluateReport(
   // 4. has_kb_links: /admin/seoInsight/{id} pattern anywhere in body
   const has_kb_links = kbLinkRe().test(body) ? 1 : 0;
 
-  // 5. alert_coverage: alert names appearing in 五、本週優先行動清單
-  // alertNames should be only the metrics that triggered alerts (CORE + threshold breach),
-  // not all metric keys. When no alerts exist, coverage defaults to 1 (nothing to cover).
-  // Uses fuzzy matching: "AMP Article" matches "AMP Article Ratio", partial substring OK.
-  const actionSection = extractSection(body, "## 五、");
+  // 5. alert_coverage: alert names appearing anywhere in the report body
+  // Search full body — alert names are specific enough to avoid false positives.
+  const searchText = body.toLowerCase();
+
   let alert_coverage = 0;
   if (alertNames.length === 0) {
     alert_coverage = 1; // No alerts → nothing to cover → full credit
   } else {
-    const sectionLower = actionSection.toLowerCase();
     const mentioned = alertNames.filter((name) => {
       const nameLower = name.toLowerCase();
-      // Exact match or fuzzy: alert name is substring of section content
-      if (sectionLower.includes(nameLower)) return true;
-      // Reverse: section contains a word-level match (e.g. "News(new)" → "News")
+      if (searchText.includes(nameLower)) return true;
+      // Strip parenthetical suffix: "News(new)" → "News"
       const coreName = nameLower.replace(/\s*\(.*?\)\s*/g, "").trim();
-      if (coreName.length >= 2 && sectionLower.includes(coreName)) return true;
+      if (coreName.length >= 2 && searchText.includes(coreName)) return true;
+      // Strip "KW:" / "KW: " prefix: "KW: 影評" → "影評"
+      const kwStripped = nameLower.replace(/^kw:\s*/, "").trim();
+      if (
+        kwStripped !== nameLower &&
+        kwStripped.length >= 2 &&
+        searchText.includes(kwStripped)
+      )
+        return true;
       return false;
     }).length;
     alert_coverage = mentioned / alertNames.length;
@@ -140,8 +145,23 @@ export function evaluateReport(
       alert_coverage) /
     5;
 
-  const llm_augmented =
-    body.includes("AI 輔助") || body.includes("AI 解讀") ? 1 : 0;
+  // Detect LLM augmentation via report_meta generation_mode OR legacy markers
+  let llm_augmented = 0;
+  const metaMatch = content.match(/<!--\s*report_meta\s+(\{.*?\})\s*-->/);
+  if (metaMatch) {
+    try {
+      const meta = JSON.parse(metaMatch[1]);
+      if (meta.generation_mode === "claude-code" || meta.generation_mode === "openai") {
+        llm_augmented = 1;
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  // Fallback: legacy API template markers
+  if (llm_augmented === 0 && (body.includes("AI 輔助") || body.includes("AI 解讀"))) {
+    llm_augmented = 1;
+  }
 
   const has_crawled_not_indexed_section = body.includes("## 檢索未索引分析") ? 1 : 0;
 

@@ -287,6 +287,41 @@ const paths: Record<string, Record<string, unknown>> = {
               status: { type: "string", example: "healthy" },
               timestamp: { type: "string", format: "date-time" },
               version: { type: "string" },
+              capabilities: {
+                type: "object",
+                description:
+                  "有效能力偵測（考慮 caller）。llm 為本次請求的有效 LLM：server 有 OpenAI 則為 openai；Claude Code 呼叫時為 claude-code；其餘為 none。\n\nEffective capability detection (caller-aware). `llm` reflects the effective LLM for this request: `openai` if server has OpenAI key; `claude-code` when called by Claude Code; `none` otherwise.",
+                properties: {
+                  runtime: {
+                    type: "string",
+                    enum: ["lambda", "local-server"],
+                    description: "執行環境 / Runtime environment",
+                  },
+                  llm: {
+                    type: "string",
+                    enum: ["openai", "claude-code", "none"],
+                    description:
+                      "有效 LLM。openai = server 內建；claude-code = Claude Code 作為 LLM 引擎；none = 無 LLM。\n\nEffective LLM. `openai` = server built-in; `claude-code` = Claude Code acts as LLM engine; `none` = no LLM available.",
+                  },
+                  store: {
+                    type: "string",
+                    enum: ["supabase", "file"],
+                    description: "資料儲存後端 / Data store backend",
+                  },
+                  agent: {
+                    type: "string",
+                    enum: ["enabled", "disabled"],
+                    description: "Agent mode 狀態 / Agent mode status",
+                  },
+                  caller: {
+                    type: "string",
+                    enum: ["browser", "cli", "claude-code", "lambda", "unknown"],
+                    description:
+                      "呼叫端身份（由 User-Agent 推斷）/ Caller identity (inferred from User-Agent)",
+                  },
+                },
+                required: ["runtime", "llm", "store", "agent", "caller"],
+              },
             },
           },
           "Server is healthy",

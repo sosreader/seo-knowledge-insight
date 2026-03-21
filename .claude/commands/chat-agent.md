@@ -89,6 +89,11 @@ UPDATE sessions SET
 WHERE id = $session_id;
 ```
 
+> **錯誤處理**：Step 3.5 上傳為 best-effort，失敗不影響已交付的答案。
+> - DB 不可用（Supabase unreachable / credentials 缺失）：跳過上傳，顯示警告 `[DB unavailable, skipping session save]`
+> - INSERT 失敗（constraint violation）：跳過，不重試
+> - 若連續 2 次上傳失敗，後續輪次自動跳過 Step 3.5（避免重複 timeout）
+
 每則 assistant message 的 metadata 包含：
 ```json
 {
