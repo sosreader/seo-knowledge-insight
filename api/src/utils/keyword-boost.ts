@@ -50,9 +50,9 @@ export function computeKeywordBoostSingle(
     if (kwLower.length > 0 && queryLower.includes(kwLower)) {
       totalHits += 3.0;
     } else if ([...queryTokens].some((t) => kwLower.includes(t))) {
-      totalHits += 1;
+      totalHits += 1.5;
     } else if ([...kwTokens].some((t) => queryLower.includes(t))) {
-      totalHits += 1;
+      totalHits += 1.5;
     } else if (kwLower.length >= 2 && queryLower.includes(kwLower.slice(0, 2))) {
       totalHits += cfg.boost > 0 ? cfg.partial / cfg.boost : 0;
     }
