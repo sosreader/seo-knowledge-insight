@@ -138,7 +138,7 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
       "image pack",
       "圖片搜尋",
     ],
-    索引與檢索: ["索引", "coverage", "googlebot", "canonical", "檢索未索引"],
+    索引與檢索: ["索引", "coverage", "googlebot", "canonical", "檢索未索引", "url inspection", "inspection api"],
     搜尋表現分析: [
       "ctr",
       "曝光",
