@@ -61,6 +61,58 @@ reportsRoute.get("/:date", async (c) => {
   return c.json(ok({ date, filename, content, size_bytes, meta }));
 });
 
+reportsRoute.get("/:date/metrics", async (c) => {
+  const date = c.req.param("date");
+  if (!DATE_RE.test(date)) {
+    return c.json(fail("Invalid date format, expected YYYYMMDD or YYYYMMDD_hash8"), 400);
+  }
+
+  // Get report to extract snapshot_id from meta
+  let meta: Record<string, unknown> | null = null;
+  if (reportStore) {
+    const result = await reportStore.getByDate(date);
+    if (!result) return c.json(fail(`Report not found`), 404);
+    meta = (result.summary.meta ?? parseReportMeta(result.content)) as Record<string, unknown> | null;
+  } else {
+    const filename = `report_${date}.md`;
+    const filepath = join(paths.outputDir, filename);
+    if (!existsSync(filepath)) return c.json(fail("Report not found"), 404);
+    meta = parseReportMeta(readFileSync(filepath, "utf-8")) as Record<string, unknown> | null;
+  }
+
+  const snapshotId = meta?.snapshot_id as string | undefined;
+  if (!snapshotId) {
+    return c.json(fail("Report has no linked snapshot (generated before snapshot linking was added)"), 404);
+  }
+
+  // Fetch snapshot metrics
+  if (snapshotStore) {
+    try {
+      const snapshot = await snapshotStore.getById(snapshotId);
+      if (!snapshot) return c.json(fail(`Snapshot ${snapshotId} not found`), 404);
+      return c.json(ok({
+        snapshot_id: snapshotId,
+        label: snapshot.label,
+        source: snapshot.source,
+        tab: snapshot.tab,
+        weeks: snapshot.weeks,
+        metrics: snapshot.metrics,
+        created_at: snapshot.created_at,
+      }));
+    } catch {
+      return c.json(fail("Store unavailable"), 503);
+    }
+  }
+
+  // File fallback
+  const snapshotPath = resolve(paths.metricsSnapshotsDir, `${snapshotId}.json`);
+  if (!snapshotPath.startsWith(paths.metricsSnapshotsDir) || !existsSync(snapshotPath)) {
+    return c.json(fail(`Snapshot ${snapshotId} not found`), 404);
+  }
+  const snapshot = JSON.parse(readFileSync(snapshotPath, "utf-8"));
+  return c.json(ok({ snapshot_id: snapshotId, ...snapshot }));
+});
+
 const SNAPSHOT_ID_RE = /^[0-9]{8}-[0-9]{6}$/;
 
 reportsRoute.post("/generate", async (c) => {
