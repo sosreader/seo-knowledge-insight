@@ -43,7 +43,7 @@ export function categoryDiversityBoost(
 
   // Preserve the original single-category boost, then allow one additional step
   // when a candidate covers two uncovered query categories at once.
-  return 0.12 + Math.min(uncoveredQueryCategories - 1, 1) * 0.06;
+  return 0.10 + Math.min(uncoveredQueryCategories - 1, 1) * 0.08;
 }
 
 export function novelQueryTermBoost(
