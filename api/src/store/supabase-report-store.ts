@@ -5,7 +5,7 @@
  * Reports are stored in the `reports` table with full markdown content.
  */
 
-import { supabaseSelect, supabaseInsert, supabaseDelete } from "./supabase-client.js";
+import { supabaseSelect, supabaseInsert, supabasePatch } from "./supabase-client.js";
 import type { ReportSummary, ReportMeta } from "../schemas/report.js";
 
 interface ReportRow {
@@ -77,11 +77,15 @@ export class SupabaseReportStore {
     );
   }
 
-  /** Delete a report by date_key. */
+  /** Soft-delete a report by date_key (sets deleted_at). */
   async delete(dateKey: string): Promise<boolean> {
     const exists = await this.exists(dateKey);
     if (!exists) return false;
-    await supabaseDelete("reports", `?date_key=eq.${encodeURIComponent(dateKey)}`);
+    await supabasePatch(
+      "reports",
+      `?date_key=eq.${encodeURIComponent(dateKey)}`,
+      { deleted_at: new Date().toISOString() },
+    );
     return true;
   }
 }
