@@ -19,6 +19,22 @@
       "citation_category_consistency_min": 0.8,
       "s4_row_count_min": 3
     },
+    "expected_llm": {
+      "min_avg_score": 3.0,
+      "min_score_per_dimension": {
+        "s3_hypothesis_grounded": 3.0,
+        "s6_eeat_justified": 3.0,
+        "s9_question_specificity": 3.0,
+        "s4_contradiction_quality": 2.5,
+        "overall_coherence": 3.0,
+        "s8_maturity_justified": 3.0
+      }
+    },
+    "expected_web": {
+      "date_window_days": 30,
+      "min_source_diversity": 2,
+      "url_check_enabled": false
+    },
     "notes": "v3.3 全 pipeline 重生（snapshot → 週報 → meeting-prep），S8 成熟度表 + S10 含 9 個 [LX→LY] 升級標籤"
   },
   {
@@ -40,6 +56,22 @@
       "citation_id_resolution_min": 0.9,
       "citation_category_consistency_min": 0.8,
       "s4_row_count_min": 3
+    },
+    "expected_llm": {
+      "min_avg_score": 3.0,
+      "min_score_per_dimension": {
+        "s3_hypothesis_grounded": 3.0,
+        "s6_eeat_justified": 3.0,
+        "s9_question_specificity": 3.0,
+        "s4_contradiction_quality": 2.5,
+        "overall_coherence": 3.0,
+        "s8_maturity_justified": 3.0
+      }
+    },
+    "expected_web": {
+      "date_window_days": 30,
+      "min_source_diversity": 2,
+      "url_check_enabled": false
     },
     "notes": "v3.3 重生，週報萃取模式，S8 成熟度表 + S10 含 8 個 [LX→LY] 升級標籤"
   },
@@ -63,6 +95,22 @@
       "citation_category_consistency_min": 0.8,
       "s4_row_count_min": 3
     },
+    "expected_llm": {
+      "min_avg_score": 3.0,
+      "min_score_per_dimension": {
+        "s3_hypothesis_grounded": 3.0,
+        "s6_eeat_justified": 3.0,
+        "s9_question_specificity": 3.0,
+        "s4_contradiction_quality": 2.5,
+        "overall_coherence": 3.0,
+        "s8_maturity_justified": 3.0
+      }
+    },
+    "expected_web": {
+      "date_window_days": 30,
+      "min_source_diversity": 2,
+      "url_check_enabled": false
+    },
     "notes": "v3.3 重生，Health Score 0，S8 成熟度表 + S10 含 11 個 [LX→LY] 升級標籤"
   },
   {
@@ -84,6 +132,22 @@
       "citation_id_resolution_min": 0.9,
       "citation_category_consistency_min": 0.8,
       "s4_row_count_min": 3
+    },
+    "expected_llm": {
+      "min_avg_score": 3.0,
+      "min_score_per_dimension": {
+        "s3_hypothesis_grounded": 3.0,
+        "s6_eeat_justified": 3.0,
+        "s9_question_specificity": 3.0,
+        "s4_contradiction_quality": 2.5,
+        "overall_coherence": 3.0,
+        "s8_maturity_justified": 3.0
+      }
+    },
+    "expected_web": {
+      "date_window_days": 30,
+      "min_source_diversity": 2,
+      "url_check_enabled": false
     },
     "notes": "v3.3 重生，Health Score 10，S8 成熟度表 + S10 含 9 個 [LX→LY] 升級標籤"
   }

@@ -96,9 +96,12 @@ make update-freshness-verify         # 驗證 freshness_score 結果
 make evaluate-retrieval-by-model MODEL=claude-code  # 按模型分群 eval
 make meeting-prep-articles          # 列出顧問文章清單（去重）
 make meeting-prep-topics            # 最近 3 份會議的主題詞
-make evaluate-meeting-prep          # Meeting-Prep 完整評估（L1+L2）
+make evaluate-meeting-prep          # Meeting-Prep 快速評估（L1+L2）
 make evaluate-meeting-prep-structure  # Meeting-Prep 結構品質評估
 make evaluate-meeting-prep-grounding  # Meeting-Prep 引用根基評估
+make evaluate-meeting-prep-llm       # Meeting-Prep L3 LLM threshold gate（需先跑 /evaluate-meeting-prep-quality）
+make evaluate-meeting-prep-web       # Meeting-Prep L4 S2 時效性驗證
+make evaluate-meeting-prep-full      # Meeting-Prep 完整 4 層（L1+L2+L3+L4）
 make help              # 顯示所有可用 targets
 ```
 

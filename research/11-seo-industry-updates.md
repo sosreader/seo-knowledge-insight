@@ -72,3 +72,23 @@
 - [2026-03-11] Branded Queries Filter Rolling Out in Search Console
 - [2026-03-11] Google explains undocumented way to disavow entire TLDs
 - [2026-03-10] Survey: PPC is Harder Than 2 Years Ago
+
+---
+
+## 2026-03-21（快照日期：2026-03-21）
+
+### Google 官方
+- [2026-02-05~27] **February 2026 Discover Core Update** — 已完成。67% 網站受影響，clickbait 過濾 + expertise 信號強化 + 在地內容優先。恢復期 2-4 週。
+- [2026-03 起] **March 2026 Core Update** — 滾動中。SEMrush Sensor 9.5（歷史高位），排名持續波動。
+- [2026-02-25] Serving 服務故障 — 已修復。
+
+### 業界報導
+- [almcorp.com] Google Search Ranking Volatility March 2026 — 社群論壇大量報告排名每日變動
+- [Brafton] Google Search Updates: Jan-Feb 2026 Recap — 雙核心更新影響整理
+- [業界共識] Backlinks 仍是 2026 top-3 ranking factor，但品質遠比數量重要
+
+### SER 重點
+- [2026-03-20] Google News Showcase Label In Discover Feed — 測試 Discover 新聞 Showcase 標籤
+- [2026-03-20] AI Overviews Showing For Breaking News More Often And Above Top Stories
+- [2026-03-19] Universal Commerce Protocol Get New Additions Including Cart & Catalog
+- [2026-03-18] Google "Developing" Opt-Out of Generative AI Features in Search — 回應英國 CMA

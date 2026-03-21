@@ -4,6 +4,8 @@
 
 Layer 3 Content Quality 評估：針對已生成的 meeting-prep 報告，評估假設品質、評分合理性、問題實用性。
 
+> CI 批次 threshold gate：`make evaluate-meeting-prep-llm`（讀取本命令的 JSON 輸出）
+
 ---
 
 ## 用法

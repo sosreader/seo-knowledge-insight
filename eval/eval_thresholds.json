@@ -53,5 +53,19 @@
   "chat_maturity_quality": {
     "appropriateness": 0.80,
     "has_answer": 0.80
+  },
+  "meeting_prep_llm": {
+    "s3_hypothesis_grounded": 0.60,
+    "s6_eeat_justified": 0.60,
+    "s9_question_specificity": 0.60,
+    "s4_contradiction_quality": 0.50,
+    "overall_coherence": 0.60,
+    "s8_maturity_justified": 0.60,
+    "avg_score_above_threshold": 0.60
+  },
+  "meeting_prep_web": {
+    "date_freshness_rate": 0.60,
+    "source_diversity": 0.80,
+    "s2_content_density": 0.80
   }
 }
