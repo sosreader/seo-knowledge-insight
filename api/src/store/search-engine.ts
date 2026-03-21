@@ -169,7 +169,7 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
     Discover與AMP: ["discover", "amp", "news", "max-image-preview"],
     內容策略: ["內容", "文章", "eeat", "供給", "更新", "意圖"],
     連結策略: ["連結", "內部連結", "錨點", "反向連結", "錨文本"],
-    平台策略: ["平台", "作者", "/user", "路徑", "cms", "創作者", "自訂網域"],
+    平台策略: ["平台", "作者", "/user", "路徑", "創作者", "自訂網域"],
     演算法與趨勢: [
       "演算法",
       "趨勢",
