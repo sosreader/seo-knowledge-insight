@@ -20,9 +20,19 @@ CREATE INDEX IF NOT EXISTS meeting_prep_meta_gin_idx
 
 ALTER TABLE meeting_prep ENABLE ROW LEVEL SECURITY;
 
--- RLS: service_role only (meeting-prep contains sensitive client strategy data)
-CREATE POLICY "meeting_prep_service_all" ON meeting_prep
-  FOR ALL USING (auth.role() = 'service_role');
+-- RLS: anon can read (API auth middleware protects access), writes restricted to service_role
+CREATE POLICY "meeting_prep_read_all" ON meeting_prep
+  FOR SELECT USING (true);
+
+CREATE POLICY "meeting_prep_service_write" ON meeting_prep
+  FOR INSERT USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
+
+CREATE POLICY "meeting_prep_service_update" ON meeting_prep
+  FOR UPDATE USING (auth.role() = 'service_role');
+
+CREATE POLICY "meeting_prep_service_delete" ON meeting_prep
+  FOR DELETE USING (auth.role() = 'service_role');
 
 -- updated_at trigger (reuses function from migration 001)
 CREATE TRIGGER meeting_prep_updated_at
