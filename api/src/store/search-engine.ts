@@ -137,6 +137,8 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
       "key moments",
       "image pack",
       "圖片搜尋",
+      "伺服器",
+      "回應時間",
     ],
     索引與檢索: ["索引", "coverage", "googlebot", "canonical", "檢索未索引", "url inspection", "inspection api"],
     搜尋表現分析: [
