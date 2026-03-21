@@ -1898,6 +1898,51 @@ python scripts/_eval_laminar.py --mode report
 | 業界研究引用 | 關鍵字匹配足以判斷引用存在                         | 可能過度簡化，但對本量足夠    |
 | 邏輯清晰性   | 需要深度理解「建議是否合理」 → **LLM-as-Judge** ✅ | 現已透過 slash command 提供   |
 
+### L2 連續指標（v3.7，rule-based）
+
+L1 的 5 維度呈二元分布（43 份報告中 72% 在 0.97-1.0），無法鑑別品質差異。L2 新增 6 個連續指標：
+
+| 指標 | 量什麼 | 偵測方式 | 預期鑑別範圍 |
+|------|--------|---------|-------------|
+| `cross_metric_reasoning` | 跨指標因果推理 | 因果連接詞 + 同段 ≥2 個不同指標名 / 5 | 0.0–1.0 |
+| `action_specificity` | 行動建議具體度 | 具體動作詞 vs 模糊詞比例 | 0.2–0.9 |
+| `data_evidence_ratio` | 數據引用密度 | 百分比模式 + 大數字(≥100) / 20 | 0.3–1.0 |
+| `citation_integration` | 引用整合度 | body 內 `[N]` vs 尾部堆積 | 0.0–1.0 |
+| `quadrant_judgment` | 流量象限判斷 | 象限關鍵字 + 解釋信號 | 0.0/0.5/1.0 |
+| `section_depth_variance` | Section 字數均衡度 | 1 - (std / mean) | 0.4–0.9 |
+
+實作：`api/src/services/report-evaluator-l2.ts`（6 個 pure functions + `evaluateReportL2()` 聚合）
+
+### L3 LLM-as-Judge（v3.7，Claude Code as Judge）
+
+3 維度語意評估，由 `/evaluate-report-quality` slash command 執行（和 `/evaluate-meeting-prep-quality` 同模式）：
+
+| 維度 | 1 分 | 3 分 | 5 分 |
+|------|------|------|------|
+| `reasoning_depth` | 只列數字 | 有跨指標比較但無因果 | 多步因果 + 研究佐證 + 反向驗證 |
+| `actionability` | 「注意 X」 | 「檢查 X 的 Y」 | 「在 GSC 的 Y 報表篩選 Z 條件，預期提升 N%」 |
+| `insight_originality` | 複述數字 | 有基本解讀 | 發現非顯而易見的關聯 + 可驗證假設 |
+
+### Composite V2 公式
+
+取代飽和的 `overall`，加權混合 L1+L2+L3（L3 可選）：
+
+```
+有 L3：
+composite_v2 = L1_overall×0.20 + cross_metric×0.10 + action_specificity×0.10
+             + data_evidence×0.08 + citation_integration×0.07
+             + quadrant_judgment×0.05 + section_depth_var×0.05
+             + reasoning_depth/5×0.15 + actionability/5×0.10
+             + insight_originality/5×0.10
+
+無 L3（auto fallback）：
+composite_v2 = L1_overall×0.30 + cross_metric×0.15 + action_specificity×0.15
+             + data_evidence×0.12 + citation_integration×0.10
+             + quadrant_judgment×0.10 + section_depth_var×0.08
+```
+
+設計參照：G-Eval (Liu et al., 2023, NeurIPS)、RAGAS/DeepEval temperature=0 慣例、專案 meeting-prep-eval 分層架構。
+
 ---
 
 ## 20. SEO 成熟度模型（Demand Metric 改編）

@@ -354,6 +354,14 @@ evaluate-meeting-prep-quick: evaluate-meeting-prep-structure evaluate-meeting-pr
 .PHONY: evaluate-meeting-prep-full
 evaluate-meeting-prep-full: evaluate-meeting-prep-structure evaluate-meeting-prep-grounding evaluate-meeting-prep-llm evaluate-meeting-prep-web ## Meeting-Prep 完整 4 層（L1+L2+L3+L4）
 
+# ── 週報品質評估 ──────────────────────────────────
+
+.PHONY: evaluate-report
+evaluate-report: ## 週報品質評估 L1+L2（rule-based，不需 API key）
+	@echo "Usage: make evaluate-report REPORT=output/report_XXXXXXXX.md"
+	@test -n "$(REPORT)" || (echo "ERROR: REPORT 參數必填" && exit 1)
+	$(PYTHON) scripts/_eval_report.py --report "$(REPORT)"
+
 .PHONY: evaluate-maturity-classification
 evaluate-maturity-classification: ## 成熟度分類準確度評估（rule-based，零 LLM 成本）
 	$(PYTHON) evals/eval_maturity_classification.py
