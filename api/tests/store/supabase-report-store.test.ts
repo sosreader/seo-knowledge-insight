@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSupabaseSelect = vi.fn();
 const mockSupabaseInsert = vi.fn();
 const mockSupabaseDelete = vi.fn();
+const mockSupabasePatch = vi.fn();
 
 vi.mock("../../src/config.js", () => ({
   config: {
@@ -28,6 +29,7 @@ vi.mock("../../src/store/supabase-client.js", () => ({
   supabaseSelect: (...args: unknown[]) => mockSupabaseSelect(...args),
   supabaseInsert: (...args: unknown[]) => mockSupabaseInsert(...args),
   supabaseDelete: (...args: unknown[]) => mockSupabaseDelete(...args),
+  supabasePatch: (...args: unknown[]) => mockSupabasePatch(...args),
 }));
 
 import { SupabaseReportStore } from "../../src/store/supabase-report-store.js";
@@ -118,15 +120,22 @@ describe("SupabaseReportStore", () => {
   });
 
   describe("delete", () => {
-    it("deletes existing report", async () => {
+    it("soft-deletes existing report via PATCH", async () => {
       mockSupabaseSelect.mockResolvedValueOnce([{ date_key: "20260301" }]);
-      mockSupabaseDelete.mockResolvedValueOnce(undefined);
+      mockSupabasePatch.mockResolvedValueOnce(undefined);
       expect(await store.delete("20260301")).toBe(true);
+      expect(mockSupabasePatch).toHaveBeenCalledWith(
+        "reports",
+        "?date_key=eq.20260301",
+        expect.objectContaining({ deleted_at: expect.any(String) }),
+      );
+      expect(mockSupabaseDelete).not.toHaveBeenCalled();
     });
 
     it("returns false when report does not exist", async () => {
       mockSupabaseSelect.mockResolvedValueOnce([]);
       expect(await store.delete("99999999")).toBe(false);
+      expect(mockSupabasePatch).not.toHaveBeenCalled();
     });
   });
 });

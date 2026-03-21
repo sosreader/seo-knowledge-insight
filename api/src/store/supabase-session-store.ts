@@ -5,7 +5,7 @@
  * Uses the same Session/SessionMessage interfaces.
  */
 
-import { supabaseSelect, supabaseHeaders, SUPABASE_TIMEOUT_MS } from "./supabase-client.js";
+import { supabaseSelect, supabaseHeaders, supabasePatch, SUPABASE_TIMEOUT_MS } from "./supabase-client.js";
 import { config } from "../config.js";
 import { escapeHtml } from "../utils/sanitize.js";
 import type { Session, SessionMessage, SessionMetadata } from "./session-store.js";
@@ -171,15 +171,15 @@ export class SupabaseSessionStore {
     return rows.length > 0 ? rowToSession(rows[0]!) : null;
   }
 
+  /** Soft-delete a session (sets deleted_at via service key). */
   async deleteSession(sessionId: string): Promise<boolean> {
-    const resp = await fetch(
-      `${config.SUPABASE_URL}/rest/v1/sessions?id=eq.${sessionId}`,
-      {
-        method: "DELETE",
-        headers: supabaseHeaders(),
-        signal: AbortSignal.timeout(SUPABASE_TIMEOUT_MS),
-      },
+    const session = await this.getSession(sessionId);
+    if (!session) return false;
+    await supabasePatch(
+      "sessions",
+      `?id=eq.${encodeURIComponent(sessionId)}`,
+      { deleted_at: new Date().toISOString() },
     );
-    return resp.ok;
+    return true;
   }
 }

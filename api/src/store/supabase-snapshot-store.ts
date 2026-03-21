@@ -2,7 +2,7 @@
  * SupabaseSnapshotStore — Supabase-backed metrics snapshot storage.
  */
 
-import { supabaseSelect, supabaseInsert, supabaseDelete } from "./supabase-client.js";
+import { supabaseSelect, supabaseInsert, supabasePatch } from "./supabase-client.js";
 import type { MetricsSnapshotMeta, MetricsSnapshot } from "../schemas/pipeline.js";
 
 interface SnapshotRow {
@@ -63,15 +63,21 @@ export class SupabaseSnapshotStore {
         metrics: snapshot.metrics,
         ...(snapshot.maturity ? { maturity: snapshot.maturity } : {}),
         created_at: snapshot.created_at,
+        deleted_at: null,
       }],
       { upsert: true, onConflict: "id" },
     );
   }
 
+  /** Soft-delete a snapshot (sets deleted_at). */
   async delete(id: string): Promise<boolean> {
     const existing = await this.getById(id);
     if (!existing) return false;
-    await supabaseDelete("metrics_snapshots", `?id=eq.${encodeURIComponent(id)}`);
+    await supabasePatch(
+      "metrics_snapshots",
+      `?id=eq.${encodeURIComponent(id)}`,
+      { deleted_at: new Date().toISOString() },
+    );
     return true;
   }
 }

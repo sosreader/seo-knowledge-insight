@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSupabaseSelect = vi.fn();
 const mockSupabaseInsert = vi.fn();
 const mockSupabaseDelete = vi.fn();
+const mockSupabasePatch = vi.fn();
 
 vi.mock("../../src/config.js", () => ({
   config: {
@@ -28,6 +29,7 @@ vi.mock("../../src/store/supabase-client.js", () => ({
   supabaseSelect: (...args: unknown[]) => mockSupabaseSelect(...args),
   supabaseInsert: (...args: unknown[]) => mockSupabaseInsert(...args),
   supabaseDelete: (...args: unknown[]) => mockSupabaseDelete(...args),
+  supabasePatch: (...args: unknown[]) => mockSupabasePatch(...args),
 }));
 
 import { SupabaseSnapshotStore } from "../../src/store/supabase-snapshot-store.js";
@@ -92,15 +94,22 @@ describe("SupabaseSnapshotStore", () => {
   });
 
   describe("delete", () => {
-    it("deletes existing snapshot", async () => {
+    it("soft-deletes existing snapshot via PATCH", async () => {
       mockSupabaseSelect.mockResolvedValueOnce([FAKE_SNAPSHOT]);
-      mockSupabaseDelete.mockResolvedValueOnce(undefined);
+      mockSupabasePatch.mockResolvedValueOnce(undefined);
       expect(await store.delete("snap-001")).toBe(true);
+      expect(mockSupabasePatch).toHaveBeenCalledWith(
+        "metrics_snapshots",
+        "?id=eq.snap-001",
+        expect.objectContaining({ deleted_at: expect.any(String) }),
+      );
+      expect(mockSupabaseDelete).not.toHaveBeenCalled();
     });
 
     it("returns false when snapshot does not exist", async () => {
       mockSupabaseSelect.mockResolvedValueOnce([]);
       expect(await store.delete("nonexistent")).toBe(false);
+      expect(mockSupabasePatch).not.toHaveBeenCalled();
     });
   });
 });

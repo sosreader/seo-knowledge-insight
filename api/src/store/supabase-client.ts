@@ -118,9 +118,9 @@ export async function supabaseInsert<T>(
   });
 
   if (!resp.ok) {
-    const body = await resp.text();
+    const body = await readErrorBody(resp);
     throw new Error(
-      `Supabase INSERT ${table} failed (${resp.status}): ${body}`,
+      `Supabase INSERT ${table} failed (${resp.status})${body}`,
     );
   }
 
@@ -145,10 +145,35 @@ export async function supabaseDelete(
   });
 
   if (!resp.ok) {
-    const body = await resp.text();
+    const body = await readErrorBody(resp);
     throw new Error(
-      `Supabase DELETE ${table} failed (${resp.status}): ${body}`,
+      `Supabase DELETE ${table} failed (${resp.status})${body}`,
     );
+  }
+}
+
+/**
+ * Patch rows in a Supabase table via REST API (partial update).
+ * Uses service key for write access (bypasses RLS).
+ */
+export async function supabasePatch(
+  table: string,
+  queryString: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const url = `${config.SUPABASE_URL}/rest/v1/${table}${queryString}`;
+  const resp = await fetch(url, {
+    method: "PATCH",
+    headers: supabaseHeaders(
+      config.SUPABASE_SERVICE_KEY || config.SUPABASE_ANON_KEY,
+    ),
+    body: JSON.stringify(data),
+    signal: AbortSignal.timeout(SUPABASE_TIMEOUT_MS),
+  });
+
+  if (!resp.ok) {
+    const body = await readErrorBody(resp);
+    throw new Error(`Supabase PATCH ${table} failed (${resp.status})${body}`);
   }
 }
 

@@ -32,6 +32,7 @@ vi.mock("../../src/store/supabase-client.js", async (importOriginal) => {
       "Content-Type": "application/json",
     }),
     supabaseSelect: vi.fn(),
+    supabasePatch: vi.fn(),
   };
 });
 
@@ -39,7 +40,7 @@ const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 import { SupabaseSessionStore } from "../../src/store/supabase-session-store.js";
-import { supabaseSelect } from "../../src/store/supabase-client.js";
+import { supabaseSelect, supabasePatch } from "../../src/store/supabase-client.js";
 
 const FAKE_SESSION_ROW = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -199,14 +200,21 @@ describe("SupabaseSessionStore", () => {
   });
 
   describe("deleteSession", () => {
-    it("returns true on success", async () => {
-      mockFetch.mockResolvedValueOnce({ ok: true });
+    it("soft-deletes existing session via PATCH", async () => {
+      vi.mocked(supabaseSelect).mockResolvedValueOnce([FAKE_SESSION_ROW]);
+      vi.mocked(supabasePatch).mockResolvedValueOnce(undefined);
       expect(await store.deleteSession(FAKE_SESSION_ROW.id)).toBe(true);
+      expect(supabasePatch).toHaveBeenCalledWith(
+        "sessions",
+        `?id=eq.${FAKE_SESSION_ROW.id}`,
+        expect.objectContaining({ deleted_at: expect.any(String) }),
+      );
     });
 
-    it("returns false on failure", async () => {
-      mockFetch.mockResolvedValueOnce({ ok: false });
-      expect(await store.deleteSession(FAKE_SESSION_ROW.id)).toBe(false);
+    it("returns false when session does not exist", async () => {
+      vi.mocked(supabaseSelect).mockResolvedValueOnce([]);
+      expect(await store.deleteSession("nonexistent")).toBe(false);
+      expect(supabasePatch).not.toHaveBeenCalled();
     });
   });
 });

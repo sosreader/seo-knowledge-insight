@@ -30,6 +30,7 @@ import {
   supabaseSelect,
   supabaseInsert,
   supabaseDelete,
+  supabasePatch,
   supabaseCount,
   SUPABASE_TIMEOUT_MS,
 } from "../../src/store/supabase-client.js";
@@ -179,6 +180,45 @@ describe("supabase-client", () => {
       await expect(supabaseDelete("qa_items", "?id=eq.1")).rejects.toThrow(
         "Supabase DELETE qa_items failed (500): server error",
       );
+    });
+  });
+
+  describe("supabasePatch", () => {
+    it("patches rows with service key", async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true });
+      await supabasePatch("sessions", "?id=eq.123", { deleted_at: "2026-03-22T00:00:00Z" });
+      const [url, opts] = mockFetch.mock.calls[0]!;
+      expect(url).toBe("https://test.supabase.co/rest/v1/sessions?id=eq.123");
+      expect(opts.method).toBe("PATCH");
+      expect(opts.headers.apikey).toBe("test-service-key");
+      expect(JSON.parse(opts.body)).toEqual({ deleted_at: "2026-03-22T00:00:00Z" });
+    });
+
+    it("throws on HTTP error with truncated body", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => "A".repeat(300),
+      });
+      await expect(supabasePatch("sessions", "?id=eq.1", { deleted_at: "x" }))
+        .rejects.toThrow("Supabase PATCH sessions failed (400)");
+    });
+
+    it("truncates error body to 200 chars", async () => {
+      const longBody = "B".repeat(300);
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => longBody,
+      });
+      try {
+        await supabasePatch("t", "?x=1", {});
+      } catch (e) {
+        const msg = (e as Error).message;
+        // readErrorBody truncates to 200 chars
+        expect(msg.length).toBeLessThan(300);
+        expect(msg).toContain("B".repeat(200));
+      }
     });
   });
 
