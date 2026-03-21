@@ -229,7 +229,14 @@ export function inferQueryLabels(
   const queryLower = query.toLowerCase();
   const labels = new Set<string>();
   for (const [label, hints] of Object.entries(hintMap)) {
-    if (hints.some((hint) => queryLower.includes(hint))) {
+    if (
+      hints.some((hint) => {
+        if (hint.length <= 3 && /^[a-z0-9]+$/.test(hint)) {
+          return new RegExp(`\\b${hint}\\b`).test(queryLower);
+        }
+        return queryLower.includes(hint);
+      })
+    ) {
       labels.add(label);
     }
   }
