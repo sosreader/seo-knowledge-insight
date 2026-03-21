@@ -23,7 +23,7 @@ export class SupabaseReportStore {
   async list(): Promise<readonly ReportSummary[]> {
     const rows = await supabaseSelect<ReportRow>(
       "reports",
-      "?select=date_key,filename,size_bytes,meta&order=created_at.desc",
+      "?select=date_key,filename,size_bytes,meta&order=date_key.desc",
     );
     return rows.map((r) => ({
       date: r.date_key,
