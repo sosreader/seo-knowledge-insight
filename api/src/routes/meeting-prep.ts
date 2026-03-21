@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
 import { paths } from "../config.js";
 import { readTail } from "../utils/report-file.js";
+import { meetingPrepStore } from "../store/store-registry.js";
 import type {
   MeetingPrepMeta,
   MeetingPrepSummary,
@@ -65,7 +66,9 @@ function isInsideDir(filepath: string, baseDir: string): boolean {
   return resolve(filepath).startsWith(resolve(baseDir));
 }
 
-function listMeetingPrepFiles(): readonly MeetingPrepSummary[] {
+/* ── Filesystem helpers (fallback when Supabase is not configured) ── */
+
+function listMeetingPrepFromFs(): readonly MeetingPrepSummary[] {
   const dir = paths.outputDir;
   if (!existsSync(dir)) return [];
 
@@ -97,10 +100,64 @@ function listMeetingPrepFiles(): readonly MeetingPrepSummary[] {
   }));
 }
 
+function getMeetingPrepFromFs(date: string): {
+  date: string;
+  filename: string;
+  content: string;
+  size_bytes: number;
+  meta?: MeetingPrepMeta;
+} | null {
+  const dir = paths.outputDir;
+
+  // Try exact match first
+  const exactFilename = `meeting_prep_${date}.md`;
+  const exactPath = resolve(join(dir, exactFilename));
+
+  if (isInsideDir(exactPath, dir) && existsSync(exactPath)) {
+    const content = readFileSync(exactPath, "utf-8");
+    const size_bytes = statSync(exactPath).size;
+    const meta = parseMeetingPrepMeta(content);
+    return { date, filename: exactFilename, content, size_bytes, meta };
+  }
+
+  // Fuzzy match: find files starting with meeting_prep_YYYYMMDD
+  const datePrefix = date.length === 8 ? date : date.split("_")[0];
+  if (!existsSync(dir)) return null;
+
+  const candidates = readdirSync(dir)
+    .filter((f) => f.startsWith(`meeting_prep_${datePrefix}`) && f.endsWith(".md"))
+    .sort()
+    .reverse();
+
+  if (candidates.length === 0) return null;
+
+  const filename = candidates[0]!;
+  const filepath = resolve(join(dir, filename));
+  if (!isInsideDir(filepath, dir)) return null;
+
+  const content = readFileSync(filepath, "utf-8");
+  const size_bytes = statSync(filepath).size;
+  const meta = parseMeetingPrepMeta(content);
+  const matchedDate = MEETING_PREP_PATTERN.exec(filename);
+  const resolvedDate = matchedDate ? `${matchedDate[1]}_${matchedDate[2]}` : date;
+
+  return { date: resolvedDate, filename, content, size_bytes, meta };
+}
+
+/* ── Route definitions ── */
+
 export const meetingPrepRoute = new Hono();
 
-meetingPrepRoute.get("/", (c) => {
-  const items = listMeetingPrepFiles();
+meetingPrepRoute.get("/", async (c) => {
+  if (meetingPrepStore) {
+    try {
+      const items = await meetingPrepStore.list();
+      return c.json(ok({ items, total: items.length }));
+    } catch {
+      return c.json(fail("Store unavailable"), 503);
+    }
+  }
+  const items = listMeetingPrepFromFs();
   return c.json(ok({ items, total: items.length }));
 });
 
@@ -110,10 +167,40 @@ function parseLevel(level: string): number {
   return m ? parseInt(m[1]!, 10) : 0;
 }
 
-meetingPrepRoute.get("/maturity-trend", (c) => {
-  const all = listMeetingPrepFiles();
-  const withMeta = all.filter((item): item is MeetingPrepSummary & { meta: MeetingPrepMeta } =>
-    item.meta !== undefined,
+/** Compute maturity trend summary from data points (first vs last). */
+function computeTrendSummary(
+  points: readonly MaturityDataPoint[],
+): MaturityTrendSummary | null {
+  if (points.length < 2) return null;
+
+  const first = points[0]!.maturity;
+  const last = points[points.length - 1]!.maturity;
+  const dimensions = ["strategy", "process", "keywords", "metrics"] as const;
+
+  const improved = dimensions.filter((d) => parseLevel(last[d]) > parseLevel(first[d]));
+  const regressed = dimensions.filter((d) => parseLevel(last[d]) < parseLevel(first[d]));
+  const stagnant = dimensions.filter((d) => parseLevel(last[d]) === parseLevel(first[d]));
+
+  return { improved: [...improved], stagnant: [...stagnant], regressed: [...regressed] };
+}
+
+meetingPrepRoute.get("/maturity-trend", async (c) => {
+  if (meetingPrepStore) {
+    try {
+      const data_points = await meetingPrepStore.listWithMeta();
+      const summary = computeTrendSummary(data_points);
+      const response: MaturityTrendResponse = { data_points, summary, total: data_points.length };
+      return c.json(ok(response));
+    } catch {
+      return c.json(fail("Store unavailable"), 503);
+    }
+  }
+
+  // Filesystem fallback
+  const all = listMeetingPrepFromFs();
+  const withMeta = all.filter(
+    (item): item is MeetingPrepSummary & { meta: MeetingPrepMeta } =>
+      item.meta !== undefined,
   );
 
   if (withMeta.length === 0) {
@@ -121,7 +208,6 @@ meetingPrepRoute.get("/maturity-trend", (c) => {
     return c.json(ok(response));
   }
 
-  // Sort by date ascending (YYYYMMDD prefix is lexicographically sortable)
   const sorted = [...withMeta].sort((a, b) => {
     const aDate = a.date.slice(0, 8);
     const bDate = b.date.slice(0, 8);
@@ -139,85 +225,39 @@ meetingPrepRoute.get("/maturity-trend", (c) => {
     };
   });
 
-  let summary: MaturityTrendSummary | null = null;
-
-  if (sorted.length >= 2) {
-    const first = sorted[0]!.meta.scores.maturity;
-    const last = sorted[sorted.length - 1]!.meta.scores.maturity;
-    const dimensions = ["strategy", "process", "keywords", "metrics"] as const;
-
-    const improved: string[] = [];
-    const stagnant: string[] = [];
-    const regressed: string[] = [];
-
-    for (const dim of dimensions) {
-      const firstLevel = parseLevel(first[dim]);
-      const lastLevel = parseLevel(last[dim]);
-      if (lastLevel > firstLevel) {
-        improved.push(dim);
-      } else if (lastLevel < firstLevel) {
-        regressed.push(dim);
-      } else {
-        stagnant.push(dim);
-      }
-    }
-
-    summary = { improved, stagnant, regressed };
-  }
-
+  const summary = computeTrendSummary(data_points);
   const response: MaturityTrendResponse = { data_points, summary, total: data_points.length };
   return c.json(ok(response));
 });
 
-meetingPrepRoute.get("/:date", (c) => {
+meetingPrepRoute.get("/:date", async (c) => {
   const date = c.req.param("date");
   if (!DATE_RE.test(date)) {
     return c.json(fail("Invalid date format, expected YYYYMMDD or YYYYMMDD_hash8"), 400);
   }
 
-  // Try exact match first
-  const exactFilename = `meeting_prep_${date}.md`;
-  const exactPath = resolve(join(paths.outputDir, exactFilename));
-
-  if (!isInsideDir(exactPath, paths.outputDir)) {
-    return c.json(fail("Invalid path"), 400);
+  if (meetingPrepStore) {
+    try {
+      const result = await meetingPrepStore.getByDate(date);
+      if (!result) {
+        return c.json(fail(`Meeting prep report for ${date} not found`), 404);
+      }
+      return c.json(ok({
+        date: result.summary.date,
+        filename: result.summary.filename,
+        content: result.content,
+        size_bytes: result.summary.size_bytes,
+        meta: result.summary.meta,
+      }));
+    } catch {
+      return c.json(fail("Store unavailable"), 503);
+    }
   }
 
-  if (existsSync(exactPath)) {
-    const content = readFileSync(exactPath, "utf-8");
-    const size_bytes = statSync(exactPath).size;
-    const meta = parseMeetingPrepMeta(content);
-    return c.json(ok({ date, filename: exactFilename, content, size_bytes, meta }));
-  }
-
-  // Fuzzy match: find files starting with meeting_prep_YYYYMMDD
-  const datePrefix = date.length === 8 ? date : date.split("_")[0];
-  const dir = paths.outputDir;
-  if (!existsSync(dir)) {
-    return c.json(fail("Meeting prep report not found"), 404);
-  }
-
-  const candidates = readdirSync(dir)
-    .filter((f) => f.startsWith(`meeting_prep_${datePrefix}`) && f.endsWith(".md"))
-    .sort()
-    .reverse();
-
-  if (candidates.length === 0) {
+  // Filesystem fallback
+  const result = getMeetingPrepFromFs(date);
+  if (!result) {
     return c.json(fail(`Meeting prep report for ${date} not found`), 404);
   }
-
-  const filename = candidates[0]!;
-  const filepath = resolve(join(dir, filename));
-
-  if (!isInsideDir(filepath, dir)) {
-    return c.json(fail("Invalid path"), 400);
-  }
-
-  const content = readFileSync(filepath, "utf-8");
-  const size_bytes = statSync(filepath).size;
-  const meta = parseMeetingPrepMeta(content);
-  const matchedDate = MEETING_PREP_PATTERN.exec(filename);
-  const resolvedDate = matchedDate ? `${matchedDate[1]}_${matchedDate[2]}` : date;
-
-  return c.json(ok({ date: resolvedDate, filename, content, size_bytes, meta }));
+  return c.json(ok(result));
 });
