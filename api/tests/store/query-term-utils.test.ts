@@ -15,10 +15,13 @@ describe("query-term-utils", () => {
     ]);
   });
 
-  it("queryTerms keeps mixed Chinese and English multi-character tokens", () => {
-    expect(queryTerms("AI 流量佔比 ChatGPT Perplexity Gemini")).toEqual([
+  it("queryTerms keeps mixed Chinese and English multi-character tokens and adds CJK bigrams", () => {
+    const result = queryTerms("AI 流量佔比 ChatGPT Perplexity Gemini");
+    // "流量佔比" (4 CJK chars) gets split into sliding 2-char bigrams
+    expect(result).toEqual([
       "ai",
       "流量佔比",
+      "流量", "量佔", "佔比",
       "chatgpt",
       "perplexity",
       "gemini",
@@ -35,11 +38,11 @@ describe("query-term-utils", () => {
     ).toEqual(new Set(["chatgpt", "ai"]));
   });
 
-  it("categoryDiversityBoost preserves the original single-category boost and adds a second step", () => {
+  it("categoryDiversityBoost uses conservative base with aggressive step", () => {
     expect(categoryDiversityBoost(0)).toBe(0);
-    expect(categoryDiversityBoost(1)).toBe(0.12);
-    expect(categoryDiversityBoost(2)).toBe(0.18);
-    expect(categoryDiversityBoost(3)).toBe(0.18);
+    expect(categoryDiversityBoost(1)).toBe(0.10);  // base 0.10
+    expect(categoryDiversityBoost(2)).toBe(0.18);  // 0.10 + 0.08
+    expect(categoryDiversityBoost(3)).toBe(0.18);  // capped at 1 step
   });
 
   it("novelQueryTermBoost downweights long queries", () => {
