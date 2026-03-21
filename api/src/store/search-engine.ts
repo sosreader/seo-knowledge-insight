@@ -134,6 +134,9 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
       "行動版",
       "手機",
       "json-ld",
+      "key moments",
+      "image pack",
+      "圖片搜尋",
     ],
     索引與檢索: ["索引", "coverage", "googlebot", "canonical", "檢索未索引"],
     搜尋表現分析: [
@@ -163,10 +166,10 @@ export const QUERY_CATEGORY_HINTS: Readonly<Record<string, readonly string[]>> =
       "share",
       "佔比",
     ],
-    Discover與AMP: ["discover", "amp", "news"],
+    Discover與AMP: ["discover", "amp", "news", "max-image-preview"],
     內容策略: ["內容", "文章", "eeat", "供給", "更新", "意圖"],
     連結策略: ["連結", "內部連結", "錨點", "反向連結", "錨文本"],
-    平台策略: ["平台", "作者", "/user", "路徑", "cms"],
+    平台策略: ["平台", "作者", "/user", "路徑", "cms", "創作者", "自訂網域"],
     演算法與趨勢: [
       "演算法",
       "趨勢",
