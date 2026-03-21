@@ -10,7 +10,7 @@ import { paths } from "../config.js";
 import { resolveCapabilities } from "../utils/capabilities.js";
 import { generateReportLocal, saveReport, getAlertMetricNames } from "../services/report-generator-local.js";
 import { generateReportLlm } from "../services/report-llm.js";
-import { evaluateReport } from "../services/report-evaluator.js";
+import { evaluateReportV2 } from "../services/report-evaluator.js";
 import { scoreEvent } from "../utils/laminar-scoring.js";
 import { qaStore } from "../store/qa-store.js";
 import { reportStore, snapshotStore } from "../store/store-registry.js";
@@ -234,9 +234,11 @@ reportsRoute.post("/generate", async (c) => {
         try {
           const { observe } = await import("@lmnr-ai/lmnr");
           const alertNames = getAlertMetricNames(snapshotMetrics as Record<string, unknown>);
-          const evalResult = evaluateReport(reportContent, alertNames);
+          const v2Result = evaluateReportV2(reportContent, alertNames);
+          const evalResult = v2Result.l1;
           await observe({ name: "report_quality_eval" }, async () => {
             await Promise.all([
+              // L1 scores (backward-compatible)
               scoreEvent("report_section_coverage", evalResult.section_coverage),
               scoreEvent("report_kb_citations", evalResult.kb_citation_count),
               scoreEvent("report_has_research", evalResult.has_research_citations),
@@ -245,6 +247,15 @@ reportsRoute.post("/generate", async (c) => {
               scoreEvent("report_overall", evalResult.overall),
               scoreEvent("report_llm_augmented", evalResult.llm_augmented),
               scoreEvent("report_has_crawled_not_indexed", evalResult.has_crawled_not_indexed_section),
+              // L2 scores
+              scoreEvent("report_cross_metric_reasoning", v2Result.l2.cross_metric_reasoning),
+              scoreEvent("report_action_specificity", v2Result.l2.action_specificity),
+              scoreEvent("report_data_evidence_ratio", v2Result.l2.data_evidence_ratio),
+              scoreEvent("report_citation_integration", v2Result.l2.citation_integration),
+              scoreEvent("report_quadrant_judgment", v2Result.l2.quadrant_judgment),
+              scoreEvent("report_section_depth_variance", v2Result.l2.section_depth_variance),
+              // Composite V2
+              scoreEvent("report_composite_v2", v2Result.composite_v2),
             ]);
           });
         } catch {

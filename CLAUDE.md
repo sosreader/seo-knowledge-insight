@@ -102,6 +102,7 @@ make evaluate-meeting-prep-grounding  # Meeting-Prep 引用根基評估
 make evaluate-meeting-prep-llm       # Meeting-Prep L3 LLM threshold gate（需先跑 /evaluate-meeting-prep-quality）
 make evaluate-meeting-prep-web       # Meeting-Prep L4 S2 時效性驗證
 make evaluate-meeting-prep-full      # Meeting-Prep 完整 4 層（L1+L2+L3+L4）
+make evaluate-report REPORT=output/report_XXXXXXXX.md  # 週報品質評估 L1+L2（rule-based）
 make help              # 顯示所有可用 targets
 ```
 
@@ -174,6 +175,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/evaluate-context-precision-local` — RAGAS Context Precision 評估（Retrieved contexts 有多少真正相關，Claude Code 作為 Judge）
 - `/evaluate-crawled-not-indexed-local` — 檢索未索引分析品質評估（12 golden cases，rule-based）
 - `/evaluate-meeting-prep-quality` — Meeting-Prep 內容品質評估（6 維度，Claude Code 作為 Judge，不需要 OpenAI）
+- `/evaluate-report-quality` — SEO 週報內容品質 L3 評估（3 維度：推理深度/可操作性/洞察原創性，Claude Code 作為 Judge，不需要 OpenAI）
 - `/sync-db` — 本地 Reports + Sessions 上傳至 Supabase（`make sync-db` / `make sync-db-status` / `make sync-db-force`）
 - `/backfill-extraction-model` — 追溯回填 Supabase qa_items 的 extraction_model（`--dry-run` / `--execute`）
 - `/update-freshness` — 批次更新 freshness_score 指數衰減（`--dry-run` / `--execute`）

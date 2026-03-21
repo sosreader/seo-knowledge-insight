@@ -1,9 +1,14 @@
 /**
  * Rule-based report quality evaluator — no LLM API required.
  *
- * Scores a generated report across 5 dimensions and returns an overall score.
- * Used for online scoring (Laminar scoreEvent) immediately after generation.
+ * L1: 5 binary/near-binary dimensions (section_coverage, kb_citation_count, etc.)
+ * L2: 6 continuous rule-based dimensions (cross_metric_reasoning, action_specificity, etc.)
+ * L3: 3 LLM-as-Judge dimensions (reasoning_depth, actionability, insight_originality) — external
+ *
+ * composite_v2 replaces saturated `overall` with a weighted blend of L1+L2 (+ optional L3).
  */
+
+import { evaluateReportL2, type ReportEvalL2Result } from "./report-evaluator-l2.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -24,6 +29,30 @@ export interface ReportEvalResult {
   llm_augmented: number;
   /** 1 if report contains ## 檢索未索引分析 section, else 0 (independent metric, not counted in overall) */
   has_crawled_not_indexed_section: number;
+}
+
+/** L3 LLM-as-Judge scores (injected externally, e.g. from /evaluate-report-quality) */
+export interface ReportEvalL3Scores {
+  /** Multi-step causal reasoning depth (1–5) */
+  reasoning_depth: number;
+  /** Actionability of recommendations (1–5) */
+  actionability: number;
+  /** Non-obvious insight originality (1–5) */
+  insight_originality: number;
+}
+
+/** Full V2 evaluation result: L1 + L2 + optional L3 + composite_v2 */
+export interface ReportEvalV2Result {
+  /** L1 result (backward-compatible) */
+  l1: ReportEvalResult;
+  /** L2 continuous rule-based metrics */
+  l2: ReportEvalL2Result;
+  /** L3 LLM-as-Judge scores (null if not provided) */
+  l3: ReportEvalL3Scores | null;
+  /** Whether L3 was skipped (true when l3 is null) */
+  l3_skipped: boolean;
+  /** Weighted composite replacing saturated `overall` */
+  composite_v2: number;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────
@@ -174,6 +203,83 @@ export function evaluateReport(
     overall,
     llm_augmented,
     has_crawled_not_indexed_section,
+  };
+}
+
+// ── V2 Evaluator ─────────────────────────────────────────────────────
+
+/**
+ * Compute composite_v2 score from L1, L2, and optional L3.
+ *
+ * With L3:
+ *   L1_overall×0.20 + cross_metric×0.10 + action_specificity×0.10
+ *   + data_evidence×0.08 + citation_integration×0.07
+ *   + quadrant_judgment×0.05 + section_depth_var×0.05
+ *   + reasoning_depth/5×0.15 + actionability/5×0.10
+ *   + insight_originality/5×0.10
+ *
+ * Without L3 (auto fallback):
+ *   L1_overall×0.30 + cross_metric×0.15 + action_specificity×0.15
+ *   + data_evidence×0.12 + citation_integration×0.10
+ *   + quadrant_judgment×0.10 + section_depth_var×0.08
+ */
+export function computeCompositeV2(
+  l1: ReportEvalResult,
+  l2: ReportEvalL2Result,
+  l3: ReportEvalL3Scores | null,
+): number {
+  if (l3) {
+    // Clamp L3 scores to [0, 5] to prevent composite exceeding [0, 1]
+    const rd = Math.max(0, Math.min(5, l3.reasoning_depth));
+    const ac = Math.max(0, Math.min(5, l3.actionability));
+    const io = Math.max(0, Math.min(5, l3.insight_originality));
+    return (
+      l1.overall * 0.20 +
+      l2.cross_metric_reasoning * 0.10 +
+      l2.action_specificity * 0.10 +
+      l2.data_evidence_ratio * 0.08 +
+      l2.citation_integration * 0.07 +
+      l2.quadrant_judgment * 0.05 +
+      l2.section_depth_variance * 0.05 +
+      (rd / 5) * 0.15 +
+      (ac / 5) * 0.10 +
+      (io / 5) * 0.10
+    );
+  }
+
+  // No L3 — redistribute weights to L1+L2 only
+  return (
+    l1.overall * 0.30 +
+    l2.cross_metric_reasoning * 0.15 +
+    l2.action_specificity * 0.15 +
+    l2.data_evidence_ratio * 0.12 +
+    l2.citation_integration * 0.10 +
+    l2.quadrant_judgment * 0.10 +
+    l2.section_depth_variance * 0.08
+  );
+}
+
+/**
+ * Full V2 evaluation: L1 + L2 + composite_v2.
+ *
+ * L3 is not computed here (requires LLM) — pass it in via `l3Scores` param
+ * or leave null for auto-fallback composite weights.
+ */
+export function evaluateReportV2(
+  content: string,
+  alertNames: readonly string[],
+  l3Scores?: ReportEvalL3Scores | null,
+): ReportEvalV2Result {
+  const l1 = evaluateReport(content, alertNames);
+  const l2 = evaluateReportL2(content);
+  const l3 = l3Scores ?? null;
+
+  return {
+    l1,
+    l2,
+    l3,
+    l3_skipped: l3 === null,
+    composite_v2: computeCompositeV2(l1, l2, l3),
   };
 }
 

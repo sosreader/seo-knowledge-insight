@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { evaluateReport } from "../../src/services/report-evaluator.js";
+import {
+  evaluateReport,
+  evaluateReportV2,
+  computeCompositeV2,
+  type ReportEvalL3Scores,
+} from "../../src/services/report-evaluator.js";
 
 // ── Test fixtures ─────────────────────────────────────────────────────
 
@@ -280,5 +285,106 @@ Discover 月 -24.1%, 外部連結 -30.5%
     expect(result.section_coverage).toBe(1.0);
     // has_crawled_not_indexed_section is independent
     expect(result.has_crawled_not_indexed_section).toBe(1);
+  });
+});
+
+// ── evaluateReportV2 / computeCompositeV2 ────────────────────────────
+
+describe("evaluateReportV2()", () => {
+  it("returns l1, l2, l3, l3_skipped, and composite_v2 fields", () => {
+    const result = evaluateReportV2(FULL_SEVEN_SECTION_REPORT, []);
+    expect(result).toHaveProperty("l1");
+    expect(result).toHaveProperty("l2");
+    expect(result).toHaveProperty("l3");
+    expect(result).toHaveProperty("l3_skipped");
+    expect(result).toHaveProperty("composite_v2");
+    expect(result.l3_skipped).toBe(true);
+    expect(result.l3).toBeNull();
+  });
+
+  it("l1 matches standalone evaluateReport() output", () => {
+    const v2 = evaluateReportV2(FULL_SEVEN_SECTION_REPORT, []);
+    const standalone = evaluateReport(FULL_SEVEN_SECTION_REPORT, []);
+    expect(v2.l1).toEqual(standalone);
+  });
+
+  it("composite_v2 without L3 uses fallback weights summing to 1.0", () => {
+    // Verify weights: 0.30 + 0.15 + 0.15 + 0.12 + 0.10 + 0.10 + 0.08 = 1.0
+    const result = evaluateReportV2(FULL_SEVEN_SECTION_REPORT, []);
+    expect(result.composite_v2).toBeGreaterThanOrEqual(0);
+    expect(result.composite_v2).toBeLessThanOrEqual(1.0);
+  });
+
+  it("composite_v2 with L3 uses full weights summing to 1.0", () => {
+    const l3: ReportEvalL3Scores = {
+      reasoning_depth: 4,
+      actionability: 4,
+      insight_originality: 3,
+    };
+    const result = evaluateReportV2(FULL_SEVEN_SECTION_REPORT, [], l3);
+    expect(result.l3_skipped).toBe(false);
+    expect(result.l3).toEqual(l3);
+    expect(result.composite_v2).toBeGreaterThanOrEqual(0);
+    expect(result.composite_v2).toBeLessThanOrEqual(1.0);
+  });
+
+  it("empty report produces composite_v2 = 0", () => {
+    const result = evaluateReportV2("", []);
+    expect(result.composite_v2).toBe(0);
+  });
+});
+
+describe("computeCompositeV2()", () => {
+  it("without L3: weights sum to 1.0", () => {
+    // Perfect L1 + L2 scores should produce composite = 1.0
+    const l1 = evaluateReport(FULL_SEVEN_SECTION_REPORT, []);
+    const perfectL2 = {
+      cross_metric_reasoning: 1.0,
+      action_specificity: 1.0,
+      data_evidence_ratio: 1.0,
+      citation_integration: 1.0,
+      quadrant_judgment: 1.0,
+      section_depth_variance: 1.0,
+    };
+    // When l1.overall=1.0 and all L2=1.0, composite should be exactly 1.0
+    const all1L1 = { ...l1, overall: 1.0 };
+    const composite = computeCompositeV2(all1L1, perfectL2, null);
+    expect(composite).toBeCloseTo(1.0, 5);
+  });
+
+  it("with L3: weights sum to 1.0", () => {
+    const all1L1 = {
+      section_coverage: 1, kb_citation_count: 1, has_research_citations: 1,
+      has_kb_links: 1, alert_coverage: 1, overall: 1.0,
+      llm_augmented: 1, has_crawled_not_indexed_section: 1,
+    };
+    const perfectL2 = {
+      cross_metric_reasoning: 1.0, action_specificity: 1.0,
+      data_evidence_ratio: 1.0, citation_integration: 1.0,
+      quadrant_judgment: 1.0, section_depth_variance: 1.0,
+    };
+    const perfectL3: ReportEvalL3Scores = {
+      reasoning_depth: 5, actionability: 5, insight_originality: 5,
+    };
+    const composite = computeCompositeV2(all1L1, perfectL2, perfectL3);
+    expect(composite).toBeCloseTo(1.0, 5);
+  });
+
+  it("all zeros produces composite = 0", () => {
+    const zeroL1 = {
+      section_coverage: 0, kb_citation_count: 0, has_research_citations: 0,
+      has_kb_links: 0, alert_coverage: 0, overall: 0,
+      llm_augmented: 0, has_crawled_not_indexed_section: 0,
+    };
+    const zeroL2 = {
+      cross_metric_reasoning: 0, action_specificity: 0,
+      data_evidence_ratio: 0, citation_integration: 0,
+      quadrant_judgment: 0, section_depth_variance: 0,
+    };
+    expect(computeCompositeV2(zeroL1, zeroL2, null)).toBe(0);
+    const zeroL3: ReportEvalL3Scores = {
+      reasoning_depth: 0, actionability: 0, insight_originality: 0,
+    };
+    expect(computeCompositeV2(zeroL1, zeroL2, zeroL3)).toBe(0);
   });
 });
