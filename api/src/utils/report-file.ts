@@ -28,13 +28,17 @@ export function parseReportMeta(content: string): ReportMeta | undefined {
   if (!m) return undefined;
   try {
     const raw = JSON.parse(m[1]) as Record<string, unknown>;
-    return {
+    const meta: ReportMeta = {
       weeks: typeof raw.weeks === "number" ? raw.weeks : 1,
       generated_at: typeof raw.generated_at === "string" ? raw.generated_at : "",
       generation_mode: typeof raw.generation_mode === "string" ? raw.generation_mode : "template",
       generation_label: typeof raw.generation_label === "string" ? raw.generation_label : "",
       model: typeof raw.model === "string" ? raw.model : undefined,
     };
+    if (typeof raw.experiment_tag === "string") {
+      return { ...meta, experiment_tag: raw.experiment_tag };
+    }
+    return meta;
   } catch {
     return undefined;
   }

@@ -43,7 +43,7 @@ reportsRoute.get("/:date", async (c) => {
     if (!result) {
       return c.json(fail(`Report report_${date}.md not found`), 404);
     }
-    const meta = parseReportMeta(result.content) ?? result.summary.meta;
+    const meta = result.summary.meta ?? parseReportMeta(result.content);
     return c.json(ok({ date, filename: result.summary.filename, content: result.content, size_bytes: result.summary.size_bytes, meta }));
   }
 

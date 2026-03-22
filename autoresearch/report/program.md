@@ -166,6 +166,51 @@ When you run out of incremental ideas:
 
 Once the experiment loop has begun, do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?". The human might be asleep. You are autonomous. If you run out of ideas, think harder — re-read the diagnostic hints, try combining approaches, try more radical prompt rewrites within the allowed scope. The loop runs until the human interrupts you, period.
 
+## Post-experiment: 報告歸檔至 Supabase
+
+實驗結束後，需將 `autoresearch/report/reports/` 的報告上傳至 Supabase 供前端瀏覽。
+
+### 歸檔腳本（手動執行）
+
+```bash
+# 對每份報告：
+# 1. 複製到 output/ 並重命名為 report_YYYYMMDD_<hash8>.md
+# 2. 確保 report_meta 中：
+#    - generated_at 為正確 UTC（用 file mtime 轉換：date -u -r <epoch> +"%Y-%m-%dT%H:%M:%S.000Z"）
+#    - generation_mode 為 "autoresearch"
+#    - generation_label 為中文假設描述（e.g., "Experiment #8 — 假設：要求短段落..."）
+#    - experiment_tag 為英文標籤 + 結果（e.g., "short paragraphs with data in each | keep"）
+# 3. 執行 make sync-db 上傳
+```
+
+### 踩坑紀錄（必讀）
+
+| 問題 | 原因 | 修正方式 |
+|------|------|----------|
+| 前端顯示未來時間 | `generated_at` 用本地時間加 `Z` 後綴，前端 `new Date()` 再加 UTC+8 | **必須用 `date -u`** 取得真正 UTC 時間 |
+| sync-db 抓不到報告 | 檔名格式不符 `report_YYYYMMDD(_hash8)?.md` | 重命名為正確格式再上傳 |
+| Detail API 缺欄位 | `parseReportMeta` 只取已知欄位，`experiment_tag` 被丟棄 | 已修正 `report-file.ts`，新欄位會透傳 |
+| meta JSONB vs content 不一致 | `sync-db` 從 content 解析 meta 寫入 JSONB，但直接 SQL UPDATE meta 不會同步 content | 更新 meta 時必須同時更新 content 嵌入 meta |
+| Detail API 返回舊 meta | `reports.ts` 優先用 `parseReportMeta(content)` 覆蓋 Supabase meta | 已修正為 `result.summary.meta ?? parseReportMeta(content)` |
+
+### report_meta 格式規範
+
+```json
+{
+  "weeks": 1,
+  "generated_at": "2026-03-22T07:23:41.000Z",
+  "generation_mode": "autoresearch",
+  "generation_label": "Experiment #1 — 假設：要求精確象限關鍵字（高曝光低點擊格式）+ 解釋信號詞",
+  "experiment_tag": "exact quadrant keywords + explanation signals | keep",
+  "model": null,
+  "snapshot_id": "20260305-172646"
+}
+```
+
+- `generated_at`：**必須是 UTC**（`date -u` 或 file mtime 轉換）
+- `generation_label`：中文，前端 title 顯示用
+- `experiment_tag`：英文，前端 subtitle 顯示用
+
 ## Context management
 
 - **Compact every 5 rounds**: After every 5 experiment iterations, compact your context to preserve memory.

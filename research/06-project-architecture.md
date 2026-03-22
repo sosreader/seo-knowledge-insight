@@ -2193,6 +2193,21 @@ composite_v3：**0.6383 → 0.9267（+45.2%）**，11 rounds（8 keep + 3 discar
 
 **設計原則**：eval 公式是刻意設計的品質標準，不應為提升 autoresearch 分數而修改 eval 本身。當 prompt 優化收斂時應停止，而非改 eval（teaching to the test）。
 
+#### 實驗報告上架（2026-03-22）
+
+11 份實驗報告已上傳 Supabase，前端可瀏覽。同步修復三個相關問題：
+
+| 檔案 | 修改 | 原因 |
+|------|------|------|
+| `.claude/commands/generate-report.md` | `generated_at` 改用 `date -u` 取代硬編碼假時間 | 13 筆 claude-code 報告 timestamp 錯誤 |
+| `api/src/routes/reports.ts` | Detail API meta 優先序：Supabase JSONB meta > content 內嵌 meta（`result.summary.meta ?? parseReportMeta(...)`） | Supabase 有完整 meta 但被 content parse 覆蓋 |
+| `api/src/utils/report-file.ts` | `parseReportMeta` 新增 `experiment_tag` 欄位 pass-through | autoresearch 報告需帶出英文 tag 供前端顯示 |
+
+前端展示格式（`pages/admin/seoInsight/report.tsx`）：
+- autoresearch 報告 title = `Experiment #N — 假設：<generation_label>`（中文假設）
+- subtitle = `<date> <hash> — <experiment_tag> | keep/discard`
+- 報告清單依 `generated_at` DESC 排序（原為 `date_key`）
+
 ### 24.11 技術決策
 
 | 決策 | 選擇 | 原因 |

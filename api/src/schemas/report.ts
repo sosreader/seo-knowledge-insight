@@ -29,6 +29,7 @@ export interface ReportMeta {
   readonly generation_mode: string;
   readonly generation_label: string;
   readonly model?: string;
+  readonly experiment_tag?: string;
 }
 
 export interface ReportDetail extends ReportSummary {
