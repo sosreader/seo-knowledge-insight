@@ -1,0 +1,27 @@
+{
+  "version": "v3.8",
+  "date": "2026-03-22",
+  "composite_version": "v3",
+  "composite_score": 0.7929,
+  "metrics": {
+    "l1_overall": 1.0,
+    "section_coverage": 1.0,
+    "kb_citations": 1.0,
+    "has_research": 1.0,
+    "has_kb_links": 1.0,
+    "alert_coverage": 1.0,
+    "action_maturity_labeled": 1.0,
+    "cross_metric_reasoning": 1.0,
+    "action_specificity": 0.5,
+    "data_evidence_ratio": 1.0,
+    "citation_integration": 1.0,
+    "quadrant_judgment": 0.0,
+    "section_depth_variance": 0.3787,
+    "temporal_dual_frame": 0.9333,
+    "causal_chain": 0.6,
+    "priority_balance": 0.7778,
+    "top_recommendation": 1.0
+  },
+  "fixture": "eval/fixtures/reports/report_20260321_c202663e.md",
+  "notes": "Golden fixture baseline. Key optimization targets: quadrant_judgment (0.0), section_depth (0.38), action_specificity (0.5), causal_chain (0.6)"
+}
