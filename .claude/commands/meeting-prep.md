@@ -208,9 +208,9 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **Section 2：業界最新動態**
 
-**重要：所有業界動態必須附上原始來源 URL**。WebFetch/WebSearch 結果自帶 URL，S2 中以 markdown hyperlink 格式保留：`[標題](URL)`。若 URL 不可取得（如 JSON API），標注「來源：<描述>」。
+**內容密度要求**：S2 必須包含至少 **15 行**非標題、非分隔線的實質內容（表格行、列表項、段落文字均計入），並引用至少 **5 個不同來源名稱**（如 SearchEngineLand、SearchEngineJournal、Google Search Central、Search Engine Roundtable、Google Trends、Ahrefs、Semrush 等）。
 
-**內容密度要求**：S2 必須至少包含 **15 行**非標題、非分隔線的實質內容（表格行、列表項、段落文字均計入）。必須引用至少 **5 個不同來源名稱**（如 SearchEngineLand、SearchEngineJournal、Google Search Central、SER、Google Trends 等）。
+**重要：所有業界動態必須附上原始來源 URL**。WebFetch/WebSearch 結果自帶 URL，S2 中以 markdown hyperlink 格式保留：`[標題](URL)`。若 URL 不可取得（如 JSON API），標注「來源：<描述>」。
 
 ```markdown
 ### Google 官方更新
