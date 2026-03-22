@@ -43,6 +43,24 @@
 - **Status:** keep — action_specificity improved 0.7231→0.8154
 - **Impact:** action_specificity +0.09 (0.7231→0.8154); citation_relevance 0.9231→1.0; cross_section_coherence 0.5966→0.4750 (fixture difference, not regression)
 
+### #11 — Citation density target 15-18 | KEPT ✅
+- **File:** `.claude/commands/meeting-prep.md`
+- **Change:** Added citation density requirement: "整篇報告應引用 15-18 筆 KB 來源"
+- **Fixture:** 20260309_49530993
+- **Report:** `reports/011_meeting_prep_20260309_49530993_keep_a80feaf.md`
+- **Composite:** 0.857990 | **Delta:** +0.007857
+- **Commit:** a80feaf
+- **Status:** keep — NEW BEST! citation_count_in_range 0.63→0.97 (+0.34!)
+- **Impact:** citation_count 0.6286→0.9714; L2g avg 0.4629→0.5943; cross_section 0.6135 stable
+
+---
+
+### #9-10 — Same prompt (6d8855b) on fixtures 20260227 and 20260306 | discarded
+- Composite: 0.846, 0.841 | Delta: -0.004, -0.009
+- Status: discard — these fixtures have large S1 sets that cap cross_section at 0.52-0.61
+
+---
+
 ### #8 — S9 KW: prefix + S2 density + S4 fill | KEPT ✅
 - **File:** `.claude/commands/meeting-prep.md`
 - **Change:** Combined 3 improvements: (1) S9 KW: prefix format for keyword metrics, (2) S2 content density 15+ lines + 5+ sources, (3) S4 four-column >5 chars fill rule

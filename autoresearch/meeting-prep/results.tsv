@@ -9,3 +9,4 @@ timestamp	composite	l1_avg	l2g_avg	l2c_cross_section	l2c_action_spec	l2c_hypo_fa
 2026-03-22T15:00:00Z	0.850133	1.0000	0.5257	0.6042	0.7846	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	6d8855b	keep	S9 KW: prefix + S2 density 15+ lines 5+ sources + S4 four-column fill
 2026-03-22T15:30:00Z	0.846096	1.0000	0.5371	0.6108	0.7846	1.0000	1.0000	0.9231	1.0000	20260227_765384ce	6d8855b	discard	Same prompt on 16-ALERT fixture (large S1 set caps cross_section at 0.61)
 2026-03-22T16:00:00Z	0.840847	1.0000	0.5029	0.5210	0.8154	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	6d8855b	discard	Same prompt on 9-ALERT fixture (large S1 set with ALERT_UP tables)
+2026-03-22T16:30:00Z	0.857990	1.0000	0.5943	0.6135	0.8462	1.0000	1.0000	0.9412	0.9722	20260309_49530993	a80feaf	keep	Citation density 15-18 target (18 citations → citation_count 0.97!)
