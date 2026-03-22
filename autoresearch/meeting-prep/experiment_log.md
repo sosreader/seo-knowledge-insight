@@ -133,29 +133,61 @@
 
 ---
 
+### #15 — S10 three-component mandatory + remove meta-items | KEPT ✅
+- **File:** `.claude/commands/meeting-prep.md`
+- **Change:** S10 每項必須同時包含 (1) 工具名 (2) 動作動詞 (3) 成熟度標籤。不符合的 meta-item（更新假設/回寫知識庫）不列入 S10。
+- **Fixture:** 20260220_25caf520
+- **Composite:** 0.883232 | **Delta:** +0.019384
+- **Status:** keep — **NEW BEST!** action_specificity 0.78→1.0 (+0.22!)
+- **Impact:** action_specificity 0.7846→1.0; composite breakthrough from 0.864 to 0.883
+
+### #16-18 — Same S10 fix verified on all fixtures | KEPT ✅
+- **Fixtures:** 20260309 (0.872), 20260227 (0.877), 20260306 (0.873)
+- **Status:** all keep — action_specificity=1.0 across all 4 fixtures
+
+### #19 — Section-Citation category guidance | KEPT ✅
+- **File:** `.claude/commands/meeting-prep.md`
+- **Change:** Added citation category guidance for S3/S6: S3 should use 技術SEO/索引與檢索/連結策略 etc. categories; GA與數據追蹤 moved out of S3.
+- **Fixture:** 20260227_765384ce
+- **Composite:** 0.883833 | **Delta:** +0.006924
+- **Status:** keep — citation_relevance 0.92→1.0 on 20260227
+
+---
+
 ## 累計分析
 
-### 10-round summary (2026-03-22)
+### 19-round summary (2026-03-22)
 
-**Results**: 4 keep / 6 discard | Best composite: **0.8501** (baseline 0.8305, **+2.4%**)
+**Results**: 11 keep / 8 discard | Best composite: **0.884** (baseline 0.8305, **+6.4%**)
 
-**Best prompt commit**: `6d8855b` — combines:
+**Best prompt commit**: `c24ea48` — combines:
 1. S3 headings with S1 ALERT_DOWN metric names verbatim (#1)
 2. S10 tool name + action verb format (#2)
 3. S9 metric name 呼應規則 + KW: prefix (#3, #8)
 4. S2 content density 15+ lines, 5+ sources (#8)
 5. S4 four-column >5 chars fill rule (#8)
+6. Citation density 15-18 target (#11)
+7. S10 three-component mandatory, no meta-items (#15)
+8. Section-Citation category guidance for S3/S6 (#19)
+
+**Cross-fixture results (current best)**:
+| Fixture | Composite | action_spec | citation_rel | cross_section |
+|---------|-----------|-------------|--------------|---------------|
+| 20260220 | **0.883** | 1.0 | 1.0 | 0.60 |
+| 20260227 | **0.884** | 1.0 | 1.0 | 0.61 |
+| 20260309 | **0.872** | 1.0 | 0.94 | 0.61 |
+| 20260306 | **0.873** | 1.0 | 1.0 | 0.49 |
 
 **Key findings**:
-- cross_section_coherence is fixture-dependent (S1 table size): 20260220=0.60, 20260309=0.67, 20260227=0.61, 20260306=0.52
-- Adding ALERT_UP to S3 HURTS score (S3 set grows without S9 matches → S3→S9 ratio drops)
-- L1 structure achievable at 1.0 across all fixtures
-- L4 web achievable at 1.0 with S2 density + source requirements
-- L2g grounding capped at ~0.50 without Supabase (citation_id_resolution=0, citation_category_consistency=0)
+- action_specificity pushed to 1.0 by enforcing 3-component rule + removing meta-items
+- citation_relevance pushed to 1.0 by category guidance (except 20260309 = 0.94)
+- cross_section_coherence is fixture-dependent and bounded by eval regex asymmetry
+- L1=1.0, L4≈1.0 fully saturated
+- L2g capped at ~0.59 (Supabase dependency)
 
-**Theoretical ceiling** (given eval constraints):
-- L1=1.0, L2g=0.50, L2.5=0.87, L4=1.0
-- Ceiling ≈ 1.0×0.10 + 0.50×0.20 + 0.87×0.45 + 1.0×0.25 = 0.842
-- Current best (0.850) exceeds this because L2g occasionally gets 0.5257 on some fixtures
+**Remaining ceiling analysis**:
+- L2.5 theoretical max: (cross_section_max + 1.0 + 1.0 + 1.0 + 1.0) / 5
+- cross_section bounded at 0.49-0.61 by eval design
+- Overall composite ceiling ≈ 0.88-0.89 depending on fixture
 
-**Convergence**: last 3 rounds on same prompt across different fixtures produce 0.840-0.850. Prompt optimization near saturation.
+**Convergence**: Rounds 15-19 all KEEP, scores stable at 0.872-0.884. Near ceiling.
