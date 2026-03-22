@@ -410,6 +410,8 @@ echo "<報告內容前 500 字>" | shasum | cut -c1-8
 
 **Citation 密度目標**：整篇報告應引用 **15-18 筆** KB 來源（Step C 搜尋 7-10 輪，每輪 top-k 3，去重後保留 top-20，目標使用其中 15-18 筆）。在 S3（根因假設）、S5（審計缺口）、S6（E-E-A-T）中密集引用。
 
+**Section-Citation 對應**：為確保引用與 section 脈絡一致，在 S3 中優先引用 category 為「技術SEO」「索引與檢索」「連結策略」「演算法與趨勢」「Discover與AMP」「搜尋表現分析」的 KB 來源。在 S6 中優先引用 category 為「技術SEO」「Discover與AMP」「連結策略」「搜尋表現分析」「演算法與趨勢」的 KB 來源。「GA與數據追蹤」等非 SEO 核心類別的引用應放在 S1 或 S5，而非 S3/S6。
+
 報告末尾的 `<!-- citations [...] -->` JSON block 格式同 `/generate-report`。
 
 ---
