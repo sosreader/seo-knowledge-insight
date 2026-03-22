@@ -291,12 +291,14 @@ curl -s -X POST http://localhost:8002/api/v1/reports/generate \
 #### 二、流量信號解讀
 
 根據 CTR / 曝光 / 點擊 / Discover / Organic Search 的實際數值，
-**判斷屬於哪個象限**（你的判斷，不是預設答案）：
+**判斷屬於哪個象限**（你的判斷，不是預設答案）。
 
-- 高曝光 / 低 CTR → Title 吸引力問題或 SERP Feature 搶走點擊（引用 arxiv SERP Features）
-- 低曝光 / 高 CTR → 排名後退，觸及縮小
-- 雙低（曝光 + 點擊同降）→ NavBoost 惡化循環（引用 NavBoost 研究）
-- 雙穩或雙升 → 正常，找驅動因素
+**必須在報告中明確寫出象限名稱**（使用以下四字格式之一），並在同一段落內解釋判斷理由：
+
+- **高曝光低點擊** → 表示 Title 吸引力問題或 SERP Feature 搶走點擊（引用 arxiv SERP Features），建議優先檢查 Title/Description
+- **低曝光高點擊** → 代表排名後退但既有訪客忠誠度高，需要擴大觸及
+- **低曝光低點擊** → 意味 NavBoost 惡化循環（引用 NavBoost 研究），應該優先處理排名基礎
+- **高曝光高點擊** → 表示正向循環，找出驅動因素並強化
 
 對 Discover 單獨分析（季節性 vs. 內容品質信號），引用 First Page Sage 2025。
 結合 qaMap 中 CTR / 曝光相關 QA 佐證。
