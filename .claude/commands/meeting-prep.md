@@ -344,14 +344,12 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 - **工具名**（至少一個）：GSC / Search Console / PageSpeed / Ahrefs / Screaming Frog / GA4 / Google Trends / Semrush / Moz / Chrome DevTools / Lighthouse
 - **動作動詞**（至少一個）：排查 / 篩選 / 檢查 / 驗證 / 監控 / 建立 / 設定 / 測試 / 分析 / 規劃 / 導入
 
-**成熟度升級標籤**：與 S8 成熟度維度直接相關的行動項目，標注 `[{維度} LX→LY]` 升級目標。只有直接推動成熟度升級的行動才加標籤，非成熟度相關的行動項目（如「回寫知識庫」）不加。
+**三要素必備**：每個行動項目**必須同時包含** (1) 工具名、(2) 動作動詞、(3) 成熟度升級標籤 `[{維度} LX→LY]`。不符合三要素的 meta-item（如「更新假設」「回寫知識庫」）**不列入 S10**。
 
 ```markdown
 - [ ] 在 GA4 排查 AMP 頁面追蹤完整性 — **[流程 L2→L3]**
 - [ ] 在 Ahrefs 分析主要關鍵字 SERP Feature 變化 — **[策略 L2→L3]**
 - [ ] 在 GSC 監控索引覆蓋率趨勢 — **[指標 L2→L3]**
-- [ ] 根據顧問回答更新 S3 假設
-- [ ] 記錄新發現，回寫知識庫
 ```
 
 **最後回填 Section 0**：從 S1-S10 蒸餾 5 bullets。
