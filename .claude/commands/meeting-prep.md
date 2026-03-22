@@ -208,6 +208,8 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **Section 2：業界最新動態**
 
+**內容密度要求**：S2 必須包含至少 **15 行**非標題、非分隔線的實質內容，並引用至少 **5 個不同來源名稱**（如 SearchEngineLand、SearchEngineJournal、Google Search Central、Search Engine Roundtable、Google Trends、Ahrefs、Semrush 等）。
+
 **重要：所有業界動態必須附上原始來源 URL**。WebFetch/WebSearch 結果自帶 URL，S2 中以 markdown hyperlink 格式保留：`[標題](URL)`。若 URL 不可取得（如 JSON API），標注「來源：<描述>」。
 
 ```markdown
@@ -250,8 +252,6 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 - 假設 3：外部面（L4-L5 或業界動態）——**必須引用 B5 Google Trends 和/或 B6 SERP Feature 數據**。若 Google Trends 顯示全市場下降，應在假設中標注「外部因素」以降低本站問題的權重。
 每個假設結尾標注「**可驗證**」「**需人工確認**」或「**需顧問判斷**」。
 
-**正向信號對比**：每個 ALERT_DOWN 群組的分析中，**必須順帶提及至少一個 ALERT_UP 指標作為對比脈絡**（如「Discover 月趨勢下滑，但 /salon/ +123.4% 顯示 UGC 內容仍有吸引力」）。使用 S1 ALERT_UP 表格中的原始指標名稱（如 /salon/、/article/、KW: 電影、檢索未索引、Video、Discover 等）。
-
 **Section 4：顧問視角交叉比對**
 交叉比對 4 個資料來源，找出矛盾與一致：
 - KB 知識庫觀點
@@ -265,6 +265,8 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 |------|---------|-------------|---------|---------|------|
 | ... | ... | ... | ... | ... | 一致/矛盾/缺口 |
 ```
+
+**四欄必填規則**：KB 觀點、顧問文章觀點、指標數據、業界動態四個來源欄位**每格必須有 >5 個字元的實質內容**。若該來源無直接對應資訊，寫「目前無直接觀點，需進一步研究」而非留空或寫「—」。
 
 #### 第二批：S5-S8
 
@@ -309,7 +311,13 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 四類提問，每類都要標注來源 section。
 
-**指標名稱呼應規則**：每個問題中**必須包含至少一個 S1/S3 的指標原始名稱**（如 Discover、CTR、AMP、Organic Search、GPT、Gemini、Perplexity、AI 占比、News(new)、檢索未索引、外部連結、營運 KW 等），以確保問題與前文分析的跨 Section 一致性。
+**指標名稱呼應規則**：每個問題中**必須包含至少一個 S1/S3 的指標原始名稱**，以確保問題與前文分析的跨 Section 一致性。
+
+**可用的指標名稱格式**（eval 可辨識的 pattern，優先使用這些）：
+- `Discover`、`CTR`、`AMP`、`Coverage`、`外部連結`、`檢索未索引`
+- `KW: {關鍵字}`（如 `KW: 電影`、`KW: 影評`）——關鍵字類指標**必須使用 `KW:` 前綴**
+- `營運 KW: {關鍵字}`（如 `營運 KW: 保養`）
+- `AMP Ratio`、`探索比例`、`結構化 Ratio`、`新網頁`
 
 **A 類：確認事實（3-5 題）**
 從 S3 根因假設中「需人工確認」的項目推導。
