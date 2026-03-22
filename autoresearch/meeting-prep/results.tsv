@@ -19,3 +19,4 @@ timestamp	composite	l1_avg	l2g_avg	l2c_cross_section	l2c_action_spec	l2c_hypo_fa
 2026-03-22T13:59:00Z	0.872571	1.0000	0.5943	0.4857	1.0000	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	8941e8e	keep	Same S10 fix on 20260306 fixture (action_specificity 1.0, citation_rel 1.0)
 2026-03-22T14:05:00Z	0.883833	1.0000	0.5943	0.6108	1.0000	1.0000	1.0000	1.0000	1.0000	20260227_765384ce	a30f926	keep	Section-Citation category guidance (citation_relevance 0.92→1.0)
 2026-03-22T14:08:00Z	0.877130	1.0000	0.5943	0.6135	1.0000	1.0000	1.0000	1.0000	1.0000	20260309_49530993	7c6d569	keep	Remove mismatched citation from S6 (citation_relevance 0.94→1.0)
+2026-03-22T14:10:00Z	0.884075	1.0000	0.5943	0.6135	1.0000	1.0000	1.0000	1.0000	1.0000	20260309_49530993	c7dde82	keep	Fix S2 date freshness (2/5→2/7 within ±30d window)
