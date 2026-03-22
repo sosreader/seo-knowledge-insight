@@ -2113,19 +2113,85 @@ bash autoresearch/runner.sh "baseline"
 
 > 注意：baseline.json（v3.1）與首次 eval 有差異，可能因 QA 資料庫已從 1,469 擴展至 1,939 筆（v3.7 L4 擴充），相同參數在不同資料集上產生不同分數。
 
-### 24.10 Report 版 AutoResearch（計畫中）
+### 24.10 Report 版 AutoResearch（實驗進行中，2026-03-22）
 
-除 Retrieval 優化外，還有 Report 版計畫（`plans/active/autoresearch-report.md`），核心差異：
+**基礎建設重設計**：吸取 Retrieval 版教訓（experiment_log 被刪除），Report 版新增：
+- 報告歸檔目錄（`autoresearch/report/reports/`，gitignored），每份報告永久保留
+- `snapshots.md` 快照 registry（3 有效 + 1 損壞）
+- `results.tsv` 23 欄（加 snapshot 欄位）
+- pending→keep/discard 重命名機制
 
 | 面向 | Retrieval | Report |
 |------|-----------|--------|
 | 可修改物 | TS 數值參數（25 個） | Prompt template（generate-report.md） |
-| 每輪耗時 | ~40 秒 | ~3-5 分鐘（需 LLM 生成報告） |
-| 一晚實驗量 | ~400 輪 | ~100-150 輪 |
-| Evaluator | 8 個 retrieval metrics（rule-based） | composite_v2（6 個 report metrics） |
-| 執行方式 | runner.sh（外部腳本） | Agent 內循環（自己改 prompt → 自己生成報告 → 自己跑 eval） |
+| 每輪耗時 | ~40 秒 | ~5-8 分鐘（需 LLM 生成 ~5000 字報告） |
+| Evaluator | 8 個 retrieval metrics | composite_v3（12 個 report metrics，L1+L2） |
+| 執行方式 | runner.sh（外部腳本） | Agent 內循環（改 prompt → 生成報告 → eval） |
+| 歸檔 | 無產出物（只改參數） | 每輪報告永久保留於 reports/ |
 
-Report 版的瓶頸在於 agent 必須同時扮演「修改者」和「執行者」，context window 壓力較大，建議先驗證 Retrieval 版再啟動。
+**實驗結果**（branch `autoresearch/report-mar22` → merged `19d4a0b`）
+
+composite_v3：**0.6383 → 0.9267（+45.2%）**，11 rounds（8 keep + 3 discard）
+
+#### 逐輪實驗帳本
+
+| # | 假設 | Composite | Delta | 結果 | 關鍵指標變化 |
+|---|------|-----------|-------|------|-------------|
+| BL | golden fixture baseline | 0.6383 | — | — | quadrant 0.0, action_spec 0.31, section_depth 0.38 |
+| 1 | 完整象限關鍵字（高曝光低點擊） | 0.6841 | +7.2% | keep | quadrant 0→1.0 |
+| 2 | ≥5 結構化 現象→原因→行動 區塊 | 0.7428 | +8.6% | keep | causal_chain 0→1.0 |
+| 3 | 每行動項 🔴/🟡/🟢 emoji | 0.7431 | +0.04% | keep | priority_balance 0.44→1.0 |
+| 4 | 具體動詞 + 工具名 + 減少分析 list | 0.8149 | +9.7% | **keep** | action_specificity 0.33→1.0（最大單輪提升） |
+| 5 | 因果連接詞（導致/因此/反映） | 0.8529 | +4.7% | keep | cross_metric 0.6→1.0 |
+| 6 | 壓縮所有 section 為均衡字數 | 0.8305 | -2.6% | **discard** | section_depth +0.13 但 causal_chain -0.4 |
+| 7 | 只擴展短 section，不壓縮長的 | 0.8715 | +2.2% | keep | section_depth 0.53→0.71 |
+| 8 | 短段落（1-2 句）每段含數據 | 0.9036 | +3.7% | keep | data_evidence 0.27→0.67（段落 41→101） |
+| 9 | 雙時間框架（月+週同行）≥15 段 | 0.9267 | +2.6% | **keep** | temporal_dual 0.67→1.0（最終 best） |
+| 10 | 限制 Section 一 + 擴展三四五 | 0.9061 | -2.2% | **discard** | section_depth +0.16 但 cross_metric -0.27 |
+| 11 | 移除冗餘 Section 字數均衡規範 | 0.9144 | -1.3% | **discard** | 簡化反而降低 cross_metric |
+
+#### 核心方法論：Eval-Regex-Prompt Alignment
+
+每輪實驗的成功關鍵：**先讀 eval 的 regex/detection 邏輯，再反向設計 prompt 使 LLM 輸出 match eval pattern**。
+
+範例：
+- `quadrant_judgment` eval 用 `content.find("高曝光低點擊")` exact match → prompt 從 `高曝光 / 低 CTR` 改為 `**高曝光低點擊**`
+- `action_specificity` = `specific_items / all_list_items` → 降低分母（分析改用段落不用 list）比提升分子更有效
+- `causal_chain` 找 `**現象**...**原因**...**行動**` bold markdown → prompt 明確要求此格式
+
+#### 飽和指標分析（best #9）
+
+| 指標 | 分數 | 權重 | 狀態 |
+|------|------|------|------|
+| L1 overall | 0.981 | 0.26 | 近飽和 |
+| cross_metric | 1.000 | 0.15 | 飽和（但不穩定，與 section_depth 反向） |
+| action_specificity | 1.000 | 0.15 | 飽和 |
+| section_depth | 0.599 | 0.10 | **瓶頸**（trade-off） |
+| data_evidence | 0.657 | 0.09 | 瓶頸（報告長度天花板） |
+| citation_integration | 1.000 | 0.08 | 飽和 |
+| quadrant_judgment | 1.000 | 0.07 | 飽和 |
+| temporal_dual | 1.000 | 0.07 | 飽和 |
+| causal_chain | 1.000 | 0.06 | 飽和 |
+| priority_balance | 1.000 | 0.05 | 飽和 |
+| maturity_labeled | 1.000 | 0.04 | 飽和 |
+| top_recommendation | 1.000 | 0.02 | 飽和 |
+
+#### 失敗模式索引
+
+| 模式 | 出現次數 | 實驗 | 根因 |
+|------|---------|------|------|
+| section_depth vs cross_metric trade-off | 3 | #6, #10, #11 | Section 一 含因果區塊和連接詞，壓縮 = 犧牲兩個高權重指標 |
+| data_evidence 低於 baseline | 全部 | #1-#11 | 短段落風格增加段落數但 eval 分母 70 太嚴苛，golden fixture 也只有 53/70 |
+| prompt 指令間隱性依賴 | 1 | #11 | 移除看似冗餘的規範反而降低 cross_metric，規範之間有未預期的相互增強效果 |
+
+#### 收斂判據
+
+實驗在以下條件同時成立時停止：
+1. 連續 3 輪 discard 在同一維度（section_depth）
+2. 剩餘未飽和指標的 eval 面向（KB 搜尋、Citation、研究引用）全已飽和 = 無鑑別度
+3. 理論上限 ≈ 0.97（section_depth + data_evidence 同時滿分），但兩者存在 trade-off 無法同時達到
+
+**設計原則**：eval 公式是刻意設計的品質標準，不應為提升 autoresearch 分數而修改 eval 本身。當 prompt 優化收斂時應停止，而非改 eval（teaching to the test）。
 
 ### 24.11 技術決策
 
