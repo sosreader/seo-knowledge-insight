@@ -210,6 +210,8 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **重要：所有業界動態必須附上原始來源 URL**。WebFetch/WebSearch 結果自帶 URL，S2 中以 markdown hyperlink 格式保留：`[標題](URL)`。若 URL 不可取得（如 JSON API），標注「來源：<描述>」。
 
+**內容密度要求**：S2 必須至少包含 **15 行**非標題、非分隔線的實質內容（表格行、列表項、段落文字均計入）。必須引用至少 **5 個不同來源名稱**（如 SearchEngineLand、SearchEngineJournal、Google Search Central、SER、Google Trends 等）。
+
 ```markdown
 ### Google 官方更新
 <!-- 從 B1 industryMap 填入 -->
@@ -264,7 +266,7 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 | ... | ... | ... | ... | ... | 一致/矛盾/缺口 |
 ```
 
-**四欄必填規則**：KB 觀點、顧問文章觀點、指標數據、業界動態四個來源欄位**每格必須有 >5 個字元的實質內容**。若該來源確實無對應資訊，寫「目前無直接觀點，需進一步研究」而非留空或寫「—」。
+**四欄必填規則**：KB 觀點、顧問文章觀點、指標數據、業界動態四個來源欄位**每格必須有 >5 個字元的實質內容**。若該來源無直接對應資訊，寫「目前無直接觀點，需進一步研究」而非留空或寫「—」。
 
 #### 第二批：S5-S8
 
