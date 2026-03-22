@@ -1,1 +1,11 @@
 timestamp	composite	l1_avg	l2g_avg	l2c_cross_section	l2c_action_spec	l2c_hypo_falsif	l2c_temporal	l2c_citation_rel	l4_avg	fixture_id	git_hash	status	description
+2026-03-22T11:30:00Z	0.835105	1.0000	0.5371	0.5966	0.7231	1.0000	1.0000	0.9231	0.9833	20260227_765384ce	664900b	keep	S3 headings include S1 ALERT_DOWN metric names verbatim (7 groups)
+2026-03-22T12:00:00Z	0.836706	1.0000	0.5029	0.4750	0.8154	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	1c6906d	keep	S10 action items require tool name + action verb format
+2026-03-22T12:30:00Z	0.841627	1.0000	0.4629	0.6746	0.8462	1.0000	1.0000	1.0000	0.9688	20260309_49530993	fa1df53	keep	S9 questions must include S1/S3 metric names for cross-section coherence
+2026-03-22T13:00:00Z	0.834550	1.0000	0.5257	0.6625	0.7846	1.0000	1.0000	1.0000	0.9167	20260220_25caf520	5a01ca9	discard	S4 cross-reference table >5 chars requirement (L4 metrics regressed)
+2026-03-22T13:30:00Z	0.839272	1.0000	0.5371	0.5966	0.7231	1.0000	1.0000	0.9231	1.0000	20260227_765384ce	bae547b	discard	S2 density + S4 fill (copied from round 1 without S9 improvements)
+2026-03-22T14:00:00Z	0.837670	1.0000	0.5029	0.4857	0.8154	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	0b9070c	discard	S2 density + S4 fill fresh gen (fixture cross_section low due to large S1 set)
+2026-03-22T14:30:00Z	0.839422	1.0000	0.4629	0.6501	0.8462	1.0000	1.0000	1.0000	0.9688	20260309_49530993	fc01e54	discard	S3 ALERT_UP references (INCREASED S3 set without S9 matches = S3→S9 ratio drop)
+2026-03-22T15:00:00Z	0.850133	1.0000	0.5257	0.6042	0.7846	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	6d8855b	keep	S9 KW: prefix + S2 density 15+ lines 5+ sources + S4 four-column fill
+2026-03-22T15:30:00Z	0.846096	1.0000	0.5371	0.6108	0.7846	1.0000	1.0000	0.9231	1.0000	20260227_765384ce	6d8855b	discard	Same prompt on 16-ALERT fixture (large S1 set caps cross_section at 0.61)
+2026-03-22T16:00:00Z	0.840847	1.0000	0.5029	0.5210	0.8154	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	6d8855b	discard	Same prompt on 9-ALERT fixture (large S1 set with ALERT_UP tables)
