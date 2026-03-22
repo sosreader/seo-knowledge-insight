@@ -4,14 +4,11 @@ import { chatRequestSchema, itemToSource } from "../schemas/chat.js";
 import { ok, fail } from "../schemas/api-response.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
 import { ragChatStream } from "../services/rag-chat-stream.js";
-import { anthropicRagChatObserved as anthropicRagChat } from "../services/anthropic-chat.js";
-import { anthropicRagChatStream } from "../services/anthropic-chat-stream.js";
 import { qaStore } from "../store/qa-store.js";
-import { resolveMode, getChatProvider } from "../utils/mode-detect.js";
+import { resolveMode } from "../utils/mode-detect.js";
 import { resolveCapabilities, formatCapabilityTag } from "../utils/capabilities.js";
 import { config } from "../config.js";
 import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
-import { anthropicAgentChatObserved as anthropicAgentChat } from "../agent/anthropic-agent-loop.js";
 import { createAgentDeps } from "../agent/agent-deps.js";
 
 export const chatRoute = new Hono();
@@ -62,14 +59,12 @@ chatRoute.post("/", async (c) => {
     content: h.content,
   }));
   const effectiveMode = resolveMode(requestMode);
-  const provider = getChatProvider();
 
   try {
     // Agent mode: LLM autonomously decides when to search
     if (effectiveMode === "agent") {
       const deps = createAgentDeps();
-      const agentFn = provider === "anthropic" ? anthropicAgentChat : agentChat;
-      const result = await agentFn(
+      const result = await agentChat(
         message,
         historyDicts.length > 0 ? historyDicts : null,
         deps,
@@ -90,9 +85,8 @@ chatRoute.post("/", async (c) => {
       );
     }
 
-    // RAG mode: single-pass retrieval + generation
-    const ragFn = provider === "anthropic" ? anthropicRagChat : ragChat;
-    const result = await ragFn(
+    // Full mode: single-pass RAG
+    const result = await ragChat(
       message,
       historyDicts.length > 0 ? historyDicts : null,
       maturityLevel ?? null,
@@ -107,11 +101,11 @@ chatRoute.post("/", async (c) => {
       }),
     );
   } catch (err: unknown) {
-    // LLM auth/quota errors — fall back to context-only mode
+    // OpenAI auth/quota errors — fall back to context-only mode
     const status = (err as { status?: number }).status;
     if (status === 401 || status === 403 || status === 429) {
       console.warn(
-        `LLM API error (${status}), falling back to context-only mode`,
+        `OpenAI API error (${status}), falling back to context-only mode`,
       );
       const result = contextOnlyResponse(message);
       return c.json(ok(result));
@@ -143,6 +137,7 @@ chatRoute.post("/stream", async (c) => {
   const streamCaps = resolveCapabilities(c.req.header("user-agent"));
 
   if (streamCaps.llm === "none") {
+    // Streaming not available without OpenAI — return non-streaming fallback
     const result = { ...contextOnlyResponse(message), execution_context: formatCapabilityTag(streamCaps) };
     return c.json(ok(result));
   }
@@ -161,13 +156,10 @@ chatRoute.post("/stream", async (c) => {
     content: h.content,
   }));
 
-  const provider = getChatProvider();
-  const streamFn = provider === "anthropic" ? anthropicRagChatStream : ragChatStream;
-
   return streamSSE(c, async (stream) => {
     let eventId = 0;
 
-    await streamFn(
+    await ragChatStream(
       message,
       historyDicts.length > 0 ? historyDicts : null,
       {

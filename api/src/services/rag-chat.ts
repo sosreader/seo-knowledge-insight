@@ -118,7 +118,6 @@ export async function ragChat(
   const usage = resp.usage;
   const metadata = buildMetadata({
     model: resp.model ?? config.CHAT_MODEL,
-    provider: "openai",
     embeddingModel: config.OPENAI_EMBEDDING_MODEL,
     inputTokens: usage?.prompt_tokens,
     outputTokens: usage?.completion_tokens,

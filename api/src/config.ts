@@ -39,8 +39,6 @@ const envSchema = z.object({
   RATE_LIMIT_GENERATE: z.coerce.number().int().positive().default(5),
 
   ANTHROPIC_API_KEY: z.string().default(""),
-  CHAT_LLM_PROVIDER: z.enum(["openai", "anthropic"]).default("openai"),
-  CHAT_ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-5"),
   CONTEXT_EMBEDDING_WEIGHT: z.coerce.number().min(0).max(1).default(0.6),
   RERANKER_ENABLED: z
     .string()

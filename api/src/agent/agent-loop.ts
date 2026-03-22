@@ -51,7 +51,6 @@ function getOpenAI(): OpenAI {
 
 function buildMetadata(
   model: string,
-  provider: string,
   inputTokens: number,
   outputTokens: number,
   startMs: number,
@@ -61,7 +60,7 @@ function buildMetadata(
 ): AgentResponse["metadata"] {
   return {
     model,
-    provider,
+    provider: "openai",
     mode: "agent",
     embedding_model: config.OPENAI_EMBEDDING_MODEL,
     input_tokens: inputTokens,
@@ -188,7 +187,7 @@ export async function agentChat(
         answer,
         sources,
         mode: "agent",
-        metadata: buildMetadata(resp.model ?? cfg.model, "openai", totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
+        metadata: buildMetadata(resp.model ?? cfg.model, totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
       };
     }
 
@@ -269,7 +268,7 @@ export async function agentChat(
     answer: finalAnswer,
     sources,
     mode: "agent",
-    metadata: buildMetadata(finalModel, "openai", totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
+    metadata: buildMetadata(finalModel, totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
   };
 }
 
