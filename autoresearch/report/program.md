@@ -11,14 +11,16 @@ To set up a new experiment, work with the user to:
 1. **Agree on a run tag**: propose a tag based on today's date (e.g. `report-mar22`). The branch `autoresearch/<tag>` must not already exist.
 2. **Create the branch**: `git checkout -b autoresearch/<tag>` from current HEAD.
 3. **Read the in-scope files** for full context:
-   - `autoresearch/baseline_report.json` — baseline metrics (composite_v3)
-   - `autoresearch/eval_report_local.py` — fixed evaluation harness. **Do not modify.**
+   - `autoresearch/report/baseline.json` — baseline metrics (composite_v3)
+   - `autoresearch/report/eval_local.py` — fixed evaluation harness. **Do not modify.**
+   - `autoresearch/report/snapshots.md` — snapshot registry (which are valid, which are corrupted)
    - `.claude/commands/generate-report.md` — the **only file you modify**
-   - `autoresearch/results_report.tsv` — experiment ledger
-   - `output/metrics_snapshots/*.json` — 4 snapshots to rotate through
+   - `autoresearch/report/results.tsv` — experiment ledger
+   - `autoresearch/report/experiment_log.md` — structured experiment history
+   - `output/metrics_snapshots/*.json` — snapshots to rotate through (see snapshots.md for validity)
 4. **Verify eval works**:
    ```bash
-   .venv/bin/python autoresearch/eval_report_local.py \
+   .venv/bin/python autoresearch/report/eval_local.py \
      --report eval/fixtures/reports/report_20260321_c202663e.md --alert-names ""
    ```
    Last line should print `REPORT_COMPOSITE=0.XXXXXX`.
@@ -42,8 +44,8 @@ To set up a new experiment, work with the user to:
 
 ## What you CANNOT modify
 
-- `autoresearch/eval_report_local.py` — fixed evaluator
-- `autoresearch/baseline_report.json` — baseline reference
+- `autoresearch/report/eval_local.py` — fixed evaluator
+- `autoresearch/report/baseline.json` — baseline reference
 - `scripts/_eval_report.py` — evaluation functions
 - `eval/fixtures/reports/` — golden fixtures
 - `output/metrics_snapshots/` — input data
@@ -55,28 +57,77 @@ To set up a new experiment, work with the user to:
 
 **LOOP FOREVER:**
 
-1. **Read** `autoresearch/results_report.tsv` — understand current best score and what has been tried.
+1. **Read** `autoresearch/report/results.tsv` and `autoresearch/report/experiment_log.md` — understand current best score, what has been tried, and failure patterns.
 2. **Read** `.claude/commands/generate-report.md` — current prompt content.
 3. **Choose ONE hypothesis** to test (change one aspect at a time for clear signal).
-4. **Modify** `generate-report.md` → `git commit -m "experiment: <hypothesis description>"`.
-5. **Select snapshot**: use `round_number % 4` to rotate through the 4 available snapshots in `output/metrics_snapshots/`.
-6. **Extract alert names** from the snapshot: metrics where `monthly < -0.15` OR `weekly < -0.20`. Format as comma-separated string.
-7. **Generate the report**: Follow the modified `generate-report.md` prompt using the selected snapshot. Write the report to `/tmp/autoresearch_report_<short_hash>.md`.
+4. **Modify** `generate-report.md` → `git commit -m "experiment: <hypothesis description>"` → record the git hash.
+5. **Select snapshot**: Read `autoresearch/report/snapshots.md` for the valid snapshot list. Use `round_number % <valid_count>` to rotate through valid snapshots only. **Skip corrupted snapshots.**
+6. **Extract alert names** from the snapshot: metrics where `monthly < -0.15` OR `weekly < -0.20`. Skip null/undefined values. Format as comma-separated string.
+7. **Generate the report**: Follow the modified `generate-report.md` prompt using the selected snapshot. Ensure the reports directory exists:
+   ```bash
+   mkdir -p autoresearch/report/reports
+   ```
+   Write the report to `autoresearch/report/reports/<round>_<snapshot_id>_pending_<hash>.md` where:
+   - `<round>` = 3-digit zero-padded sequence (001, 002, ...)
+   - `<snapshot_id>` = snapshot filename without .json extension
+   - `<hash>` = 7-char git commit hash from step 4
 8. **Run eval**:
    ```bash
-   .venv/bin/python autoresearch/eval_report_local.py \
-     --report /tmp/autoresearch_report_<hash>.md \
+   .venv/bin/python autoresearch/report/eval_local.py \
+     --report autoresearch/report/reports/<round>_<snapshot_id>_pending_<hash>.md \
      --alert-names "<comma-separated alerts>"
    ```
 9. **Parse** the last line: `REPORT_COMPOSITE=X.XXXXXX`.
 10. **Compare**: `DELTA = current_composite - best_composite_from_keep_rows_in_TSV`.
     - **DELTA > 0** → status = `keep`. The commit stays.
     - **DELTA ≤ 0** → status = `discard`. Revert: `git checkout .claude/commands/generate-report.md`.
-11. **Append row** to `results_report.tsv`:
+11. **Rename the report file**: Change `pending` to `keep` or `discard` in the filename. **Both keep and discard reports are preserved** — never delete a generated report.
+    ```bash
+    mv autoresearch/report/reports/<round>_<snapshot_id>_pending_<hash>.md \
+       autoresearch/report/reports/<round>_<snapshot_id>_<status>_<hash>.md
     ```
-    <timestamp>\t<composite>\t<17 metrics>\t<git_hash>\t<keep|discard>\t<description>
+12. **Append row** to `autoresearch/report/results.tsv`:
     ```
-12. **Go back to step 1.**
+    <timestamp>\t<composite>\t<17 metrics>\t<snapshot_id>\t<git_hash>\t<status>\t<description>
+    ```
+    Note: `snapshot_id` column is between `top_recommendation` and `git_hash`.
+13. **Append structured entry** to `autoresearch/report/experiment_log.md` (MANDATORY — no record = experiment never happened):
+    ```markdown
+    ### #<N> — <description> | <KEPT ✅ / discarded>
+    - **File:** `.claude/commands/generate-report.md`
+    - **Change:** <what was modified in the prompt — which section, what wording>
+    - **Diff:**
+      ```diff
+      - old wording
+      + new wording
+      ```
+    - **Snapshot:** <snapshot_id>
+    - **Alert names:** <comma-separated alerts extracted from snapshot>
+    - **Report:** `reports/<round>_<snapshot_id>_<status>_<hash>.md`
+    - **Composite:** <score> | **Delta:** <+/-change>
+    - **Commit:** <hash> (KEPT only)
+    - **Status:** <keep/discard — reason>
+    - **Impact:** <which metrics improved/regressed, by how much>
+    - **失敗分類:** <if discard: which metric regressed most> (discarded only)
+    ```
+14. **Go back to step 1.**
+
+### Cumulative analysis (every 10 rounds)
+
+After every 10th experiment, update the `## 累計分析` section at the bottom of `experiment_log.md`:
+
+```markdown
+### Round N-(N+9) 小結
+- Best composite: 0.XXXX（+X.X% from baseline）
+- 最有效的假設類型：[category hints / section structure / ...]
+- 反復失敗的面向：[quadrant_judgment 嘗試 N 次均失敗]
+- 失敗報告中的共同問題：[section 六 過長 / citation 集中在前 3 section]
+
+### 失敗模式索引
+| 模式 | 出現次數 | 實驗編號 |
+|------|---------|---------|
+| ... | ... | ... |
+```
 
 ## Diagnostic hints
 
@@ -118,6 +169,7 @@ Once the experiment loop has begun, do NOT pause to ask the human if you should 
 ## Context management
 
 - **Compact every 5 rounds**: After every 5 experiment iterations, compact your context to preserve memory.
-- **Reports go to /tmp/**: Write generated reports to `/tmp/autoresearch_report_<hash>.md` — never to the repo.
+- **Reports stay in repo**: All reports go to `autoresearch/report/reports/` (gitignored). Never delete them.
 - **Read selectively**: Only read the sections of `generate-report.md` you plan to modify, not the entire file every round.
 - **TSV is your memory**: The results TSV contains everything you need to know about past experiments.
+- **experiment_log.md is your analysis**: Read it for failure patterns and cumulative insights.

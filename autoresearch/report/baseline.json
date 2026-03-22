@@ -2,7 +2,7 @@
   "version": "v3.8",
   "date": "2026-03-22",
   "composite_version": "v3",
-  "composite_score": 0.7929,
+  "composite_score": 0.6383,
   "metrics": {
     "l1_overall": 1.0,
     "section_coverage": 1.0,
@@ -10,11 +10,11 @@
     "has_research": 1.0,
     "has_kb_links": 1.0,
     "alert_coverage": 1.0,
-    "action_maturity_labeled": 1.0,
-    "cross_metric_reasoning": 1.0,
-    "action_specificity": 0.5,
-    "data_evidence_ratio": 1.0,
-    "citation_integration": 1.0,
+    "action_maturity_labeled": 0.6667,
+    "cross_metric_reasoning": 0.7333,
+    "action_specificity": 0.3125,
+    "data_evidence_ratio": 0.7571,
+    "citation_integration": 0.8571,
     "quadrant_judgment": 0.0,
     "section_depth_variance": 0.3787,
     "temporal_dual_frame": 0.9333,
@@ -23,5 +23,5 @@
     "top_recommendation": 1.0
   },
   "fixture": "eval/fixtures/reports/report_20260321_c202663e.md",
-  "notes": "Golden fixture baseline. Key optimization targets: quadrant_judgment (0.0), section_depth (0.38), action_specificity (0.5), causal_chain (0.6)"
+  "notes": "Recalibrated baseline. Saturated: 2/12 (weight 14%). Key targets: action_specificity (0.31), quadrant_judgment (0.0), section_depth (0.38), causal_chain (0.6)"
 }

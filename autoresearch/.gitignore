@@ -1,4 +1,5 @@
-results.tsv
-results_report.tsv
+retrieval/results.tsv
+report/results.tsv
+report/reports/
 run.log
 __pycache__/

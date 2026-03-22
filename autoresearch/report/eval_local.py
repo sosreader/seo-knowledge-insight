@@ -6,9 +6,9 @@ scripts/_eval_report.py and outputs machine-readable results for the
 autoresearch report optimization loop.
 
 Usage:
-    .venv/bin/python autoresearch/eval_report_local.py \
+    .venv/bin/python autoresearch/report/eval_local.py \
         --report eval/fixtures/reports/report_20260321_c202663e.md
-    .venv/bin/python autoresearch/eval_report_local.py \
+    .venv/bin/python autoresearch/report/eval_local.py \
         --report /tmp/autoresearch_report.md \
         --alert-names "Discover,外部連結,檢索未索引"
 """
@@ -18,7 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts._eval_report import (  # noqa: E402

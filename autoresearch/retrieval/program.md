@@ -9,22 +9,22 @@ To set up a new experiment, work with the user to:
 1. **Agree on a run tag**: propose a tag based on today's date (e.g. `mar21`). The branch `autoresearch/<tag>` must not already exist.
 2. **Create the branch**: `git checkout -b autoresearch/<tag>` from current HEAD.
 3. **Read the in-scope files** for full context:
-   - `autoresearch/baseline.json` — v3.1 baseline metrics
-   - `autoresearch/eval_local.py` — fixed evaluation harness. Do not modify.
+   - `autoresearch/retrieval/baseline.json` — v3.1 baseline metrics
+   - `autoresearch/retrieval/eval_local.py` — fixed evaluation harness. Do not modify.
    - `api/src/store/search-engine.ts` — the primary file you modify (scoring formula + reranking)
    - `api/src/utils/keyword-boost.ts` — keyword matching layers
    - `api/src/store/query-term-utils.ts` — query term utilities
    - `eval/eval_thresholds.json` — minimum thresholds (retrieval_stable section)
 4. **Verify server is running**: `curl -sf http://localhost:8002/health`
    - If not: `cd api && RATE_LIMIT_DEFAULT=9999 pnpm dev`
-5. **Run the baseline**: `bash autoresearch/runner.sh "baseline"` — first entry in results.tsv.
+5. **Run the baseline**: `bash autoresearch/retrieval/runner.sh "baseline"` — first entry in results.tsv.
 6. **Confirm and go**.
 
 Once you get confirmation, kick off the experimentation.
 
 ## Experimentation
 
-Each experiment runs against 35 golden retrieval cases via the search API. The eval script takes ~30-45 seconds. You launch it as: `bash autoresearch/runner.sh "description"`.
+Each experiment runs against 35 golden retrieval cases via the search API. The eval script takes ~30-45 seconds. You launch it as: `bash autoresearch/retrieval/runner.sh "description"`.
 
 **What you CAN do:**
 
@@ -81,7 +81,7 @@ rerankCandidates weights (4 params):
 
 **What you CANNOT do:**
 
-- Modify `autoresearch/eval_local.py`, `autoresearch/runner.sh`, `autoresearch/baseline.json`
+- Modify `autoresearch/retrieval/eval_local.py`, `autoresearch/retrieval/runner.sh`, `autoresearch/retrieval/baseline.json`
 - Modify `eval/golden_retrieval.json` or `eval/eval_thresholds.json`
 - Modify `evals/eval_retrieval.py`
 - Modify any files in `api/src/routes/`, `api/src/services/`
@@ -113,16 +113,30 @@ GIT_HASH=a1b2c3d
 
 LOOP FOREVER:
 
-1. Read `autoresearch/results.tsv` — understand current best score and what has been tried.
+1. Read `autoresearch/retrieval/results.tsv` — understand current best score and what has been tried.
 2. Read the current values in the target files.
 3. Choose ONE hypothesis to test (change one aspect at a time for clear signal).
 4. Modify the code.
 5. **Wait 5 seconds** for tsx watch to hot-reload the server.
-6. Run: `bash autoresearch/runner.sh "description of change"`
+6. Run: `bash autoresearch/retrieval/runner.sh "description of change"`
 7. Parse the output:
    - If DELTA > 0 (composite improved): `git add api/src/store/search-engine.ts api/src/utils/keyword-boost.ts api/src/store/query-term-utils.ts && git commit -m "perf: [score] description"`
    - If DELTA <= 0: `git checkout api/src/store/search-engine.ts api/src/utils/keyword-boost.ts api/src/store/query-term-utils.ts`
-8. Go back to step 1.
+8. **Append structured entry** to `autoresearch/retrieval/experiment_log.md` (MANDATORY — no record = experiment never happened):
+   ```markdown
+   ### #<N> — <description> | <KEPT ✅ / discarded>
+   - **File:** <which file was modified>
+   - **Change:** <specific parameter/value change>
+   - **Diff:** (for KEPT experiments, include the actual diff)
+     ```diff
+     - old value
+     + new value
+     ```
+   - **Composite:** <score> | **Delta:** <+/-change>
+   - **Commit:** <hash> (KEPT only)
+   - **Status:** <keep/discard — reason, which cases regressed>
+   ```
+9. Go back to step 1.
 
 ## Diagnostic hints
 
