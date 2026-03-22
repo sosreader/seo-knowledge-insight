@@ -37,6 +37,8 @@ vi.mock("../../src/config.js", () => ({
 
 vi.mock("../../src/utils/mode-detect.js", () => ({
   hasOpenAI: vi.fn(() => false),
+  hasChatLLM: vi.fn(() => false),
+  getChatProvider: vi.fn(() => "none"),
 }));
 
 let app: Hono;

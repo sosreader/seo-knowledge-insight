@@ -1,46 +1,46 @@
 /**
- * RAG Chat — embedding query + GPT completion.
+ * Anthropic RAG Chat — hybrid search + Claude completion.
  *
- * Translated from Python app/core/chat.py
+ * Parallel implementation to rag-chat.ts (OpenAI).
+ * When OpenAI key is unavailable, falls back to keyword-only search.
  */
 
-import OpenAI from "openai";
 import { config } from "../config.js";
-import { getEmbedding } from "./embedding.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
-import { itemToSource, type ChatResponse, type MessageMetadata } from "../schemas/chat.js";
+import { itemToSource, type ChatResponse } from "../schemas/chat.js";
 import { observe } from "../utils/observability.js";
 import { scoreRagResponse } from "../utils/laminar-scoring.js";
 import { normalizeQuery, hashQuery, lookupCache, saveCache } from "./response-cache.js";
 import { logLLMUsage } from "../utils/llm-usage-logger.js";
 import { evaluateRetrievalQuality, validateCitations, type RetrievalQuality } from "./retrieval-gate.js";
 import { recordMiss } from "../store/learning-store.js";
+import { hasOpenAI } from "../utils/mode-detect.js";
 import type { MaturityLevel } from "../utils/maturity.js";
 import {
   formatContext,
-  buildSystemPrompt,
-  buildMessages,
   buildMetadata,
   appendDisclaimer,
 } from "./rag-chat-pure.js";
+import { buildAnthropicSystem, buildAnthropicMessages } from "./anthropic-chat-pure.js";
 
-
-let openaiClient: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: config.OPENAI_API_KEY });
+/** Retrieve hits: hybrid search when OpenAI available, keyword-only otherwise. */
+async function retrieveHits(message: string, retrieveK: number) {
+  if (hasOpenAI()) {
+    const { getEmbedding } = await import("./embedding.js");
+    const queryVec = await getEmbedding(message);
+    return qaStore.hybridSearch(message, queryVec, retrieveK);
   }
-  return openaiClient;
+  return qaStore.keywordSearch(message, retrieveK);
 }
 
-export async function ragChat(
+export async function anthropicRagChat(
   message: string,
   history: ReadonlyArray<{ role: string; content: string }> | null = null,
   maturityLevel: MaturityLevel | null = null,
 ): Promise<ChatResponse> {
   const startMs = Date.now();
 
-  // 0. Cache lookup (only for first message without history, skip when maturity-aware)
+  // 0. Cache lookup
   if ((!history || history.length === 0) && !maturityLevel) {
     const normalized = normalizeQuery(message);
     const qHash = hashQuery(normalized);
@@ -54,27 +54,23 @@ export async function ragChat(
     }
   }
 
-  // 1. Embed user question
-  const queryVec = await getEmbedding(message);
-
-  // 2. Hybrid search (over-retrieve for reranker)
+  // 1. Retrieve (hybrid or keyword-only)
   const retrieveK = config.ANTHROPIC_API_KEY ? config.CHAT_CONTEXT_K * 3 : config.CHAT_CONTEXT_K;
-  const hits = await qaStore.hybridSearch(message, queryVec, retrieveK);
+  const hits = await retrieveHits(message, retrieveK);
 
-  // 2b. Re-ranking (Phase 3)
+  // 1b. Re-ranking
   const { rerank } = await import("./reranker.js");
   const rerankerUsed = !!config.ANTHROPIC_API_KEY;
   const finalHits = rerankerUsed
     ? await rerank(message, hits as Array<{ item: QAItem; score: number }>, config.CHAT_CONTEXT_K)
     : hits.slice(0, config.CHAT_CONTEXT_K);
 
-  // 3. Retrieval quality gate (CRAG-inspired)
+  // 2. Retrieval quality gate
   const retrievalQuality: RetrievalQuality = evaluateRetrievalQuality(finalHits);
 
-  // 3a. Incorrect — no good match, return context-only without LLM call
   if (retrievalQuality === "incorrect") {
     const topScore = finalHits.length > 0 ? finalHits[0].score : 0;
-    recordMiss({ query: message, top_score: topScore, context: "rag-chat" });
+    recordMiss({ query: message, top_score: topScore, context: "anthropic-rag-chat" });
     const sources = finalHits.map(({ item, score }) => itemToSource(item, score));
     return {
       answer: null,
@@ -90,62 +86,59 @@ export async function ragChat(
     };
   }
 
-  // 4. Build context + messages (pure functions)
+  // 3. Build context + system prompt
   const context = formatContext(finalHits);
-  const systemPrompt = buildSystemPrompt(maturityLevel, retrievalQuality);
-  const messages = buildMessages({ systemPrompt, context, history, message });
+  const system = buildAnthropicSystem(maturityLevel, retrievalQuality, context);
+  const messages = buildAnthropicMessages(history, message);
 
-  // 5. Call GPT (max_completion_tokens for reasoning models like gpt-5.x)
-  const resp = await getOpenAI().chat.completions.create({
-    model: config.CHAT_MODEL,
-    messages: messages as Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  // 4. Call Claude
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
+
+  const resp = await client.messages.create({
+    model: config.CHAT_ANTHROPIC_MODEL,
+    max_tokens: 2000,
+    system,
+    messages,
     temperature: 0.3,
-    max_completion_tokens: 2000,
   });
 
-  const rawAnswer = resp.choices[0]?.message?.content ?? "";
+  const rawAnswer = resp.content[0]?.type === "text" ? resp.content[0].text : "";
   const sources = finalHits.map(({ item, score }) => itemToSource(item, score));
 
-  // 5a. Append disclaimer for ambiguous retrieval
   const answer = appendDisclaimer(rawAnswer, retrievalQuality);
-
-  // 5b. Validate inline citations
   const { citationCount } = validateCitations(answer, sources.length);
 
-  // Online scoring (safe no-op when Laminar not initialized)
   await scoreRagResponse(answer, sources);
 
-  const usage = resp.usage;
+  const embeddingModel = hasOpenAI() ? config.OPENAI_EMBEDDING_MODEL : "none";
   const metadata = buildMetadata({
-    model: resp.model ?? config.CHAT_MODEL,
-    provider: "openai",
-    embeddingModel: config.OPENAI_EMBEDDING_MODEL,
-    inputTokens: usage?.prompt_tokens,
-    outputTokens: usage?.completion_tokens,
-    totalTokens: usage?.total_tokens,
-    reasoningTokens: (usage as unknown as Record<string, unknown>)?.completion_tokens_details
-      ? ((usage as unknown as Record<string, unknown>).completion_tokens_details as Record<string, number>)?.reasoning_tokens
-      : undefined,
+    model: resp.model,
+    provider: "anthropic",
+    embeddingModel,
+    inputTokens: resp.usage.input_tokens,
+    outputTokens: resp.usage.output_tokens,
+    totalTokens: resp.usage.input_tokens + resp.usage.output_tokens,
+    reasoningTokens: undefined,
     durationMs: Date.now() - startMs,
     retrievalCount: finalHits.length,
-    rerankerUsed: rerankerUsed,
+    rerankerUsed,
     cacheHit: false,
-    retrievalQuality: retrievalQuality,
-    citationCount: citationCount,
+    retrievalQuality,
+    citationCount,
   });
 
-  // Log LLM usage (fire-and-forget)
   logLLMUsage({
     endpoint: "/api/v1/chat",
-    model: resp.model ?? config.CHAT_MODEL,
-    input_tokens: usage?.prompt_tokens ?? 0,
-    output_tokens: usage?.completion_tokens ?? 0,
+    model: resp.model,
+    input_tokens: resp.usage.input_tokens,
+    output_tokens: resp.usage.output_tokens,
     latency_ms: Date.now() - startMs,
   });
 
   const result: ChatResponse = { answer, sources, mode: "rag", metadata };
 
-  // Save to cache (first message only, skip when maturity-aware, fire-and-forget)
+  // Cache (first message only)
   if ((!history || history.length === 0) && !maturityLevel) {
     const normalized = normalizeQuery(message);
     const qHash = hashQuery(normalized);
@@ -155,5 +148,4 @@ export async function ragChat(
   return result;
 }
 
-/** Observed version — wraps ragChat as a Laminar span. */
-export const ragChatObserved = observe("rag_chat", ragChat);
+export const anthropicRagChatObserved = observe("anthropic_rag_chat", anthropicRagChat);

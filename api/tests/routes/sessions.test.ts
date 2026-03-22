@@ -4,6 +4,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/config.js", () => ({
   config: {
     OPENAI_API_KEY: "",
+    ANTHROPIC_API_KEY: "",
+    CHAT_LLM_PROVIDER: "openai",
+    CHAT_ANTHROPIC_MODEL: "claude-sonnet-4-5",
     SEO_API_KEY: "",
     CORS_ORIGINS: ["*"],
     RATE_LIMIT_DEFAULT: 1000,
@@ -101,6 +104,17 @@ vi.mock("../../src/agent/agent-loop.js", () => ({
 
 vi.mock("../../src/agent/agent-deps.js", () => ({
   createAgentDeps: () => ({}),
+}));
+
+// Mock Anthropic services (imported by sessions.ts)
+vi.mock("../../src/services/anthropic-chat.js", () => ({
+  anthropicRagChat: vi.fn(),
+  anthropicRagChatObserved: vi.fn(),
+}));
+
+vi.mock("../../src/agent/anthropic-agent-loop.js", () => ({
+  anthropicAgentChat: vi.fn(),
+  anthropicAgentChatObserved: vi.fn(),
 }));
 
 // Mock session-store with in-memory store

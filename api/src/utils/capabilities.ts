@@ -5,7 +5,7 @@
  * with a single structured record that makes the execution context visible.
  */
 
-import { hasOpenAI, isAgentEnabled } from "./mode-detect.js";
+import { getChatProvider, isAgentEnabled } from "./mode-detect.js";
 import { hasSupabase } from "../store/supabase-client.js";
 
 /** Runtime environment. Server-level only returns "lambda" | "local-server".
@@ -15,7 +15,7 @@ export type Runtime = "lambda" | "local-server" | "cli";
 /** LLM provider. Server-level only returns "openai" | "none".
  *  "claude-code" is used by Python-layer (qa_tools.py, openai_helper.py)
  *  when Claude Code itself acts as the LLM engine. */
-export type LLMProvider = "openai" | "claude-code" | "none";
+export type LLMProvider = "openai" | "anthropic" | "claude-code" | "none";
 export type StoreBackend = "supabase" | "file";
 export type AgentMode = "enabled" | "disabled";
 export type Caller = "browser" | "cli" | "claude-code" | "lambda" | "unknown";
@@ -39,7 +39,7 @@ export function resolveServerCapabilities(): Omit<Capabilities, "caller"> {
 
   return {
     runtime: isLambda ? "lambda" : "local-server",
-    llm: hasOpenAI() ? "openai" : "none",
+    llm: getChatProvider(),
     store: hasSupabase() ? "supabase" : "file",
     agent: isAgentEnabled() ? "enabled" : "disabled",
   };

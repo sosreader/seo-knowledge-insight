@@ -4,6 +4,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/config.js", () => ({
   config: {
     OPENAI_API_KEY: "",
+    ANTHROPIC_API_KEY: "",
+    CHAT_LLM_PROVIDER: "openai",
+    CHAT_ANTHROPIC_MODEL: "claude-sonnet-4-5",
     SEO_API_KEY: "",
     CORS_ORIGINS: ["*"],
     RATE_LIMIT_DEFAULT: 1000,
@@ -137,6 +140,22 @@ vi.mock("../../src/agent/agent-deps.js", () => ({
 const mockRagChatStream = vi.fn();
 vi.mock("../../src/services/rag-chat-stream.js", () => ({
   ragChatStream: (...args: unknown[]) => mockRagChatStream(...args),
+}));
+
+// Mock Anthropic services (not used by default, but imported by chat.ts)
+const mockAnthropicRagChat = vi.fn();
+vi.mock("../../src/services/anthropic-chat.js", () => ({
+  anthropicRagChat: (...args: unknown[]) => mockAnthropicRagChat(...args),
+  anthropicRagChatObserved: (...args: unknown[]) => mockAnthropicRagChat(...args),
+}));
+
+vi.mock("../../src/services/anthropic-chat-stream.js", () => ({
+  anthropicRagChatStream: vi.fn(),
+}));
+
+vi.mock("../../src/agent/anthropic-agent-loop.js", () => ({
+  anthropicAgentChat: vi.fn(),
+  anthropicAgentChatObserved: vi.fn(),
 }));
 
 import { Hono } from "hono";

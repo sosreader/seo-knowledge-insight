@@ -107,6 +107,7 @@ export function buildMessages(
 
 export interface BuildMetadataParams {
   readonly model: string;
+  readonly provider: string;
   readonly embeddingModel: string;
   readonly inputTokens: number | undefined;
   readonly outputTokens: number | undefined;
@@ -124,7 +125,7 @@ export interface BuildMetadataParams {
 export function buildMetadata(params: BuildMetadataParams): MessageMetadata {
   return {
     model: params.model,
-    provider: "openai",
+    provider: params.provider,
     mode: "rag",
     embedding_model: params.embeddingModel,
     input_tokens: params.inputTokens,

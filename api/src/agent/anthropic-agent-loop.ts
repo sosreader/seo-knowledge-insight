@@ -1,12 +1,17 @@
 /**
- * Agent loop — OpenAI function calling while-loop with termination conditions.
+ * Anthropic Agent loop — Claude tool_use while-loop with termination conditions.
  *
- * Termination: finish_reason === "stop" | MAX_TURNS | TIMEOUT | loop detection
+ * Parallel implementation to agent-loop.ts (OpenAI function calling).
+ * Termination: stop_reason === "end_turn" | MAX_TURNS | TIMEOUT | loop detection
  */
 
-import OpenAI from "openai";
 import { config } from "../config.js";
-import { getOpenAITools, type ToolName } from "./tool-definitions.js";
+import { getAnthropicTools, type ToolName } from "./tool-definitions.js";
+import { executeTool } from "./tool-executor.js";
+import type { AgentConfig, AgentDeps, AgentResponse, ToolResult } from "./types.js";
+import { itemToSource, type SourceItem } from "../schemas/chat.js";
+import { observe } from "../utils/observability.js";
+import { hasOpenAI } from "../utils/mode-detect.js";
 
 const ALLOWED_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   "search_knowledge_base",
@@ -14,10 +19,6 @@ const ALLOWED_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   "list_categories",
   "get_stats",
 ]);
-import { executeTool } from "./tool-executor.js";
-import type { AgentConfig, AgentDeps, AgentResponse, ToolResult } from "./types.js";
-import { itemToSource, type SourceItem, type MessageMetadata } from "../schemas/chat.js";
-import { observe } from "../utils/observability.js";
 
 const SYSTEM_PROMPT = `你是一位資深 SEO 顧問，可以使用工具搜尋 SEO 知識庫來回答問題。
 
@@ -37,21 +38,12 @@ const SYSTEM_PROMPT = `你是一位資深 SEO 顧問，可以使用工具搜尋 
 const DEFAULT_CONFIG: AgentConfig = {
   maxTurns: 5,
   timeoutMs: 90_000,
-  model: config.CHAT_MODEL,
+  model: config.CHAT_ANTHROPIC_MODEL,
   temperature: 0.3,
 };
 
-let openaiClient: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: config.OPENAI_API_KEY });
-  }
-  return openaiClient;
-}
-
 function buildMetadata(
   model: string,
-  provider: string,
   inputTokens: number,
   outputTokens: number,
   startMs: number,
@@ -61,9 +53,9 @@ function buildMetadata(
 ): AgentResponse["metadata"] {
   return {
     model,
-    provider,
+    provider: "anthropic",
     mode: "agent",
-    embedding_model: config.OPENAI_EMBEDDING_MODEL,
+    embedding_model: hasOpenAI() ? config.OPENAI_EMBEDDING_MODEL : "none",
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     total_tokens: inputTokens + outputTokens,
@@ -75,7 +67,6 @@ function buildMetadata(
   };
 }
 
-/** Detect repeated tool calls (same name + same args). */
 function hasLoopDetection(toolCalls: readonly ToolResult[]): boolean {
   if (toolCalls.length < 2) return false;
   const last = toolCalls[toolCalls.length - 1]!;
@@ -83,7 +74,6 @@ function hasLoopDetection(toolCalls: readonly ToolResult[]): boolean {
   return last.toolName === prev.toolName && JSON.stringify(last.args) === JSON.stringify(prev.args);
 }
 
-/** Collect unique sources from tool call results. */
 function collectSources(toolCalls: readonly ToolResult[]): readonly SourceItem[] {
   const seen = new Set<string>();
   const sources: SourceItem[] = [];
@@ -121,7 +111,13 @@ function collectSources(toolCalls: readonly ToolResult[]): readonly SourceItem[]
   return sources;
 }
 
-export async function agentChat(
+/** Anthropic message type for the conversation loop. */
+interface AnthropicMessage {
+  readonly role: "user" | "assistant";
+  readonly content: string | ReadonlyArray<Record<string, unknown>>;
+}
+
+export async function anthropicAgentChat(
   message: string,
   history: ReadonlyArray<{ role: string; content: string }> | null,
   deps: AgentDeps,
@@ -132,7 +128,7 @@ export async function agentChat(
   const startMs = Date.now();
   const allToolCalls: ToolResult[] = [];
 
-  // Build system prompt — inject maturity context when provided
+  // Build system prompt
   let systemPrompt = SYSTEM_PROMPT;
   if (maturityLevel) {
     const { buildMaturityContext, parseMaturityLevel } = await import("../utils/maturity.js");
@@ -142,124 +138,128 @@ export async function agentChat(
     }
   }
 
-  // Build initial messages
-  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: "system", content: systemPrompt },
-  ];
-
+  // Build initial messages (Anthropic: user/assistant only, no system role)
+  const messages: AnthropicMessage[] = [];
   if (history) {
     for (const h of history) {
-      messages.push({ role: h.role as "user" | "assistant", content: h.content });
+      if (h.role === "user" || h.role === "assistant") {
+        messages.push({ role: h.role, content: h.content });
+      }
     }
   }
-
   messages.push({ role: "user", content: message });
 
-  const tools = getOpenAITools();
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
+  const tools = getAnthropicTools();
+
   let turns = 0;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
   while (turns < cfg.maxTurns) {
-    // Timeout check
     if (Date.now() - startMs > cfg.timeoutMs) break;
 
     turns++;
 
-    const resp = await getOpenAI().chat.completions.create({
+    const resp = await client.messages.create({
       model: cfg.model,
-      messages,
-      tools,
+      system: systemPrompt,
+      messages: messages as Array<{ role: "user" | "assistant"; content: string | Array<Record<string, unknown>> }>,
+      tools: tools as Array<{ name: string; description: string; input_schema: Record<string, unknown> }>,
+      max_tokens: 2000,
       temperature: cfg.temperature,
-      max_completion_tokens: 2000,
     });
 
-    const choice = resp.choices[0]!;
-    const usage = resp.usage;
-    totalInputTokens += usage?.prompt_tokens ?? 0;
-    totalOutputTokens += usage?.completion_tokens ?? 0;
+    totalInputTokens += resp.usage.input_tokens;
+    totalOutputTokens += resp.usage.output_tokens;
 
-    // Terminal: LLM decided to stop (no tool calls)
-    if (choice.finish_reason === "stop" || !choice.message.tool_calls?.length) {
-      const answer = choice.message.content ?? "";
+    // Extract text and tool_use blocks
+    const textBlocks = resp.content.filter((b) => b.type === "text");
+    const toolUseBlocks = resp.content.filter((b) => b.type === "tool_use");
+
+    // Terminal: no tool_use or stop_reason is end_turn
+    if (toolUseBlocks.length === 0 || resp.stop_reason === "end_turn") {
+      const answer = textBlocks.map((b) => "text" in b ? b.text : "").join("");
       const sources = collectSources(allToolCalls);
 
       return {
         answer,
         sources,
         mode: "agent",
-        metadata: buildMetadata(resp.model ?? cfg.model, "openai", totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
+        metadata: buildMetadata(resp.model, totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
       };
     }
 
-    // Process tool calls
-    messages.push(choice.message);
+    // Process tool_use blocks
+    // Add assistant message with the full content (text + tool_use blocks)
+    messages.push({
+      role: "assistant",
+      content: resp.content as unknown as Array<Record<string, unknown>>,
+    });
 
-    for (const toolCall of choice.message.tool_calls) {
-      // Skip non-function tool calls (e.g. custom tools)
-      if (toolCall.type !== "function") continue;
+    // Build tool_result for each tool_use
+    const toolResults: Array<Record<string, unknown>> = [];
 
-      const name = toolCall.function.name;
+    for (const block of toolUseBlocks) {
+      if (block.type !== "tool_use") continue;
+      const name = block.name;
 
-      // Runtime whitelist — reject unknown tool names from LLM
       if (!ALLOWED_TOOLS.has(name)) {
-        messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: block.id ?? "",
           content: JSON.stringify({ error: "Unknown tool" }),
         });
         continue;
       }
 
-      // Safe JSON.parse — LLM may return malformed arguments
-      let args: Record<string, unknown>;
-      try {
-        args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-      } catch {
-        messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: "Invalid tool arguments" }),
-        });
-        continue;
-      }
-
+      const args = (block.input ?? {}) as Record<string, unknown>;
       const toolResult = await executeTool(name as ToolName, args, deps);
       allToolCalls.push(toolResult);
 
-      messages.push({
-        role: "tool",
-        tool_call_id: toolCall.id,
+      toolResults.push({
+        type: "tool_result",
+        tool_use_id: block.id ?? "",
         content: toolResult.result,
       });
     }
 
-    // Loop detection: if last two calls are identical, break
+    // Append user message with tool_result blocks
+    messages.push({
+      role: "user",
+      content: toolResults,
+    });
+
     if (hasLoopDetection(allToolCalls)) break;
   }
 
-  // Fell through max turns or timeout — make one final call without tools
+  // Fell through max turns or timeout — final call without tools
   let finalAnswer = "";
   let finalModel = cfg.model;
 
   try {
-    const finalResp = await getOpenAI().chat.completions.create({
+    const finalMessages: AnthropicMessage[] = [
+      ...messages,
+      { role: "user" as const, content: "你已收集到足夠的資訊。請根據已有的搜尋結果直接回答使用者的問題。" },
+    ];
+
+    const finalResp = await client.messages.create({
       model: cfg.model,
-      messages: [
-        ...messages,
-        { role: "system", content: "你已收集到足夠的資訊。請根據已有的搜尋結果直接回答使用者的問題。" },
-      ],
+      system: systemPrompt,
+      messages: finalMessages as Array<{ role: "user" | "assistant"; content: string | Array<Record<string, unknown>> }>,
+      max_tokens: 2000,
       temperature: cfg.temperature,
-      max_completion_tokens: 2000,
     });
 
-    const finalUsage = finalResp.usage;
-    totalInputTokens += finalUsage?.prompt_tokens ?? 0;
-    totalOutputTokens += finalUsage?.completion_tokens ?? 0;
-    finalAnswer = finalResp.choices[0]?.message?.content ?? "";
-    finalModel = finalResp.model ?? cfg.model;
+    totalInputTokens += finalResp.usage.input_tokens;
+    totalOutputTokens += finalResp.usage.output_tokens;
+    finalAnswer = finalResp.content
+      .filter((b) => b.type === "text")
+      .map((b) => "text" in b ? b.text : "")
+      .join("");
+    finalModel = finalResp.model;
   } catch {
-    // Final synthesis failed — return with already-collected sources
     finalAnswer = "";
   }
 
@@ -269,9 +269,8 @@ export async function agentChat(
     answer: finalAnswer,
     sources,
     mode: "agent",
-    metadata: buildMetadata(finalModel, "openai", totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
+    metadata: buildMetadata(finalModel, totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
   };
 }
 
-/** Observed version — wraps agentChat as a Laminar span. */
-export const agentChatObserved = observe("agent_chat", agentChat);
+export const anthropicAgentChatObserved = observe("anthropic_agent_chat", anthropicAgentChat);
