@@ -241,11 +241,14 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 ```
 
 **Section 3：深度根因假設**
-對每個 ALERT_DOWN 指標，提出 3 個假設：
+
+**子標題格式**：將相關 ALERT_DOWN 指標分群，每群使用 `### H{N}：{S1 指標名稱}` 子標題。指標名稱**必須與 Section 1 表格第一欄完全一致**（如 `### H1：AMP Article`、`### H2：CTR`、`### H3：Discover 月趨勢`）。可將高度相關的指標合併為一群（如 GPT + Gemini + Perplexity → `### H4：GPT / Gemini / Perplexity`），但每個 S1 ALERT_DOWN 名稱至少出現一次。
+
+對每群 ALERT_DOWN 指標，提出 3 個假設（使用 `**假設 1（技術面）**` 格式）：
 - 假設 1：技術面（L1-L2）
 - 假設 2：內容面（L3）
 - 假設 3：外部面（L4-L5 或業界動態）——**必須引用 B5 Google Trends 和/或 B6 SERP Feature 數據**。若 Google Trends 顯示全市場下降，應在假設中標注「外部因素」以降低本站問題的權重。
-每個假設標注「可驗證/需人工確認/需顧問判斷」。
+每個假設結尾標注「**可驗證**」「**需人工確認**」或「**需顧問判斷**」。
 
 **Section 4：顧問視角交叉比對**
 交叉比對 4 個資料來源，找出矛盾與一致：
