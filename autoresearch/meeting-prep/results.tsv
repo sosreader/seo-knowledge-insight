@@ -12,3 +12,4 @@ timestamp	composite	l1_avg	l2g_avg	l2c_cross_section	l2c_action_spec	l2c_hypo_fa
 2026-03-22T16:30:00Z	0.857990	1.0000	0.5943	0.6135	0.8462	1.0000	1.0000	0.9412	0.9722	20260309_49530993	a80feaf	keep	Citation density 15-18 target (18 citations → citation_count 0.97!)
 2026-03-22T17:00:00Z	0.863848	1.0000	0.5943	0.6042	0.7846	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	a80feaf	keep	Same prompt on 20260220 fixture (17 citations, citation_count 0.97, L4+citation_rel all 1.0)
 2026-03-22T17:30:00Z	0.857525	1.0000	0.5943	0.6108	0.7846	1.0000	1.0000	0.9231	1.0000	20260227_765384ce	a80feaf	discard	16-ALERT fixture: citation_rel 0.92 not 1.0 (copied base had mismatched S3/citation categories)
+2026-03-22T18:00:00Z	0.855956	1.0000	0.5943	0.4857	0.8154	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	a80feaf	discard	20260306 fixture: cross_section 0.49 (large S1 set ceiling) with 17 citations
