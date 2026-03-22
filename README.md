@@ -1,6 +1,6 @@
 # SEO Q&A 知識庫建構 Pipeline
 
-從 Notion 上累積兩年的 SEO 顧問會議紀錄與多來源文章中，自動萃取結構化的問答知識庫。目前收錄 **1,809 筆 Q&A**（8 個來源），提供 REST API、語意搜尋、RAG 問答與自動化品質評估。
+從 Notion 上累積兩年的 SEO 顧問會議紀錄與多來源文章中，自動萃取結構化的問答知識庫。目前收錄 **1,939 筆 Q&A**（8 個來源），提供 REST API、語意搜尋、RAG 問答與自動化品質評估。
 
 ---
 
@@ -25,7 +25,7 @@
 
 - **五維度 LLM-as-Judge** — Relevance、Accuracy、Completeness、Granularity、Faithfulness
 - **Retrieval 品質指標** — Hit Rate、MRR、Precision@K、Recall@K
-- **13 個 Laminar Eval Groups** — CI 自動化監控
+- **14 個 Laminar Eval Groups** — CI 自動化監控
 
 > 評估維度詳見 [research/03-evaluation.md](research/03-evaluation.md)
 > 操作細節見 [research/15-pipeline-operations.md](research/15-pipeline-operations.md)
@@ -174,7 +174,7 @@ Notion/Medium/iThome/Google Cases/Ahrefs/SEJ/Growth Memo
 
 ## REST API
 
-TypeScript Hono（port 8002），42 個端點、734 tests、80%+ coverage。
+TypeScript Hono（port 8002），42 個端點、811 tests、80%+ coverage。
 
 ```bash
 cd api && pnpm install && pnpm dev   # 啟動開發伺服器
@@ -239,7 +239,7 @@ make extract-qa-test   # 小量驗證（--limit 3）
 
 # 4. API 開發
 cd api && pnpm install && pnpm dev    # port 8002
-pnpm test                              # 734 tests
+pnpm test                              # 811 tests
 
 # 5. 部署
 git push origin main   # 自動觸發 GitHub Actions → Lambda

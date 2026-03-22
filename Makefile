@@ -384,6 +384,12 @@ meeting-prep-topics: ## 最近 3 份會議的主題詞
 meeting-prep-topics-json: ## 最近 3 份會議的主題詞（JSON）
 	$(PYTHON) scripts/meeting_prep_helper.py extract-recent-topics --json
 
+# ── AutoResearch（自主循環優化）──────────────────────
+
+.PHONY: autoresearch-baseline
+autoresearch-baseline: ## AutoResearch baseline eval（需先啟動 API server + RATE_LIMIT_DEFAULT=9999）
+	bash autoresearch/runner.sh "baseline"
+
 # ── 說明 ─────────────────────────────────────────────
 
 .PHONY: help

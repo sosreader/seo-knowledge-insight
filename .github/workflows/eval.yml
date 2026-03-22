@@ -51,3 +51,9 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         # 讀取 fixtures + KB lookup（local → Supabase fallback）
         run: lmnr eval evals/eval_meeting_prep_grounding.py
+
+      - name: Run report quality eval
+        env:
+          LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
+        # 純 file-based，fixtures committed 至 eval/fixtures/reports/
+        run: lmnr eval evals/eval_report_quality.py

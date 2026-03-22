@@ -20,10 +20,13 @@ const REPORT_SYSTEM_PROMPT = `你是資深 SEO 分析師，任務是把本週指
 - 知識庫沒有直接對應時，根據 SEO 原理推論，標明「（推論）」。
 - 避免泛泛 SEO 建議；結合本週具體變化給出針對性分析。
 
-## Health Score 演算法
+## Health Score v2 演算法
 \`\`\`
-score = 100 - (ALERT_DOWN 數量 × 10)
-若所有 CORE 指標同時下滑，額外扣 20
+core_penalty = core_alert_down_count × 10      # CORE 觸發 ALERT_DOWN
+non_core_penalty = non_core_alert_down_count × 3  # 非 CORE ALERT_DOWN
+core_bonus = min(core_healthy_count × 2, 20)   # CORE 月趨勢 > 0% 的加分
+all_core_penalty = 15 if ALL core monthly < 0%
+score = clamp(100 - core_penalty - non_core_penalty + core_bonus - all_core_penalty, 0, 100)
 ≥80 良好 / ≥60 需關注 / <60 警示
 \`\`\`
 

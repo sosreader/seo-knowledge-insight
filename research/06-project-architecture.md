@@ -1866,7 +1866,14 @@ seo-knowledge-insight/
 │   ├── eval_extraction.py       # Q&A 萃取品質評估
 │   ├── eval_chat.py             # RAG chat 端到端品質評估
 │   ├── eval_meeting_prep_structure.py  # Meeting-Prep Layer 1 結構 eval（11 evaluators）
-│   └── eval_meeting_prep_grounding.py  # Meeting-Prep Layer 2 grounding eval（5 evaluators）
+│   ├── eval_meeting_prep_grounding.py  # Meeting-Prep Layer 2 grounding eval（5 evaluators）
+│   └── eval_report_quality.py         # Report quality L1+L2 threshold gate（composite_v2，golden fixture）
+├── autoresearch/                # Agent 自主循環優化（v3.7，Loop-Forever pattern）
+│   ├── program.md               # Agent 研究指令（可修改範圍 + 禁止清單 + 循環流程）
+│   ├── eval_local.py            # 評估腳本（不依賴 Laminar，純 HTTP + 本地計算）
+│   ├── runner.sh                # 實驗執行器（health check → eval → TSV 記錄）
+│   ├── baseline.json            # v3.1 基準線（composite ≈ 0.905）
+│   └── results.tsv              # 實驗記錄（.gitignore 排除）
 ├── raw_data/                    # 原始資料（source of truth）
 │   ├── notion_json/             # Notion API 回傳的原始 JSON
 │   ├── markdown/                # Notion 會議 Markdown（87 份）
@@ -1890,5 +1897,198 @@ seo-knowledge-insight/
     ├── fetch_logs/              # Step 1 fetch 事件 JSONL（Audit Trail）
     └── access_logs/             # API 存取事件 JSONL（Audit Trail）
 ```
+
+---
+
+## 24. AutoResearch — Agent 自主循環優化（v3.7，2026-03-21）
+
+### 24.1 概述與動機
+
+借鑑 [karpathy/autoresearch](https://github.com/karpathy/autoresearch)（47K stars，2026-03）的 **Loop-Forever** 模式，讓 AI agent 在隔離分支中自主循環修改搜尋引擎參數 → 跑 eval → 保留改善 / 丟棄退化。無需人類介入，agent 自行閱讀實驗記錄、形成假設、測試、判斷，直到人類中斷為止。
+
+**核心洞察**：搜尋引擎的 hyperparameter space 是約 25 個數值參數（非 neural net），不需要梯度，agent 直接讀程式碼修改即可。每輪 eval 約 30–45 秒，理論上 8 小時可跑 400+ 輪實驗。
+
+**與 karpathy/autoresearch 的對應關係**：
+
+| autoresearch 原始概念 | 本專案實作 | 說明 |
+|----------------------|-----------|------|
+| `program.md`（研究指令） | `autoresearch/program.md` | 可修改範圍 + 禁止清單 + 循環流程 + 診斷提示 |
+| `prepare.py`（固定評估） | `autoresearch/eval_local.py` | 35 golden cases × 8 metrics → composite score |
+| `uv run train.py`（執行入口） | `autoresearch/runner.sh` | health check → eval → parse → TSV 記錄 |
+| `val_bpb`（單一優化目標） | `COMPOSITE_SCORE`（加權平均） | 8 個 retrieval metrics 的加權 composite |
+| `results.tsv`（實驗記錄） | `autoresearch/results.tsv` | timestamp + composite + 8 metrics + git hash + status + description |
+| git-based 實驗追蹤 | `autoresearch/<tag>` branch | 每次 improve → commit，退化 → checkout restore |
+
+### 24.2 架構與檔案結構
+
+```
+autoresearch/
+├── program.md         # Agent 研究指令（~154 行）——唯一的「需求文件」
+├── eval_local.py      # 評估腳本（~297 行）——不依賴 Laminar，純 HTTP + 本地計算
+├── runner.sh          # 實驗執行器（~102 行）——health check → eval → TSV 記錄
+├── baseline.json      # v3.1 基準線（composite ≈ 0.905）
+├── results.tsv        # 實驗記錄（.gitignore 排除）
+└── .gitignore         # 排除 results.tsv、run.log、__pycache__/
+```
+
+**設計原則**：
+
+1. **Eval 與 production 解耦** — `eval_local.py` 從 `evals/eval_retrieval.py` 萃取核心邏輯，移除 Laminar 依賴，用純 HTTP 呼叫 search API
+2. **Runner 不做 git 操作** — keep/discard 由 agent 決定，保持完全可見性
+3. **Runner 不管理 server 生命週期** — 需人工先啟動 `RATE_LIMIT_DEFAULT=9999 pnpm dev`
+4. **results.tsv 不追蹤** — runtime 產物，避免 git history 汙染
+5. **Composite score 公式固定** — 不可由 agent 修改（等同 prepare.py 不可碰）
+
+### 24.3 Composite Score 公式
+
+```
+composite = (
+  hit_rate                    × 0.20 +   # 有無相關結果（已 1.0，護欄）
+  mrr                         × 0.20 +   # 相關結果排名
+  precision_at_k              × 0.15 +   # top-K 精準度
+  ndcg_at_k                   × 0.15 +   # 排序品質
+  keyword_hit_rate            × 0.15 +   # 關鍵字覆蓋
+  multi_label_f1_at_k         × 0.10 +   # 多標籤平衡
+  dual_category_recall_at_k   × 0.03 +   # 雙標籤 recall
+  boosterless_precision_at_k  × 0.02     # 去 booster 精準度
+)
+```
+
+**Baseline composite ≈ 0.905**（v3.1，2026-03-12）
+
+**安全約束**：任何單一指標不得低於 `eval/eval_thresholds.json` 中 `retrieval_stable` 的閾值。
+
+**簡潔性準則**：同等效果下，越簡潔越好。刪除程式碼得到等同或更好結果 > 加 20 行得到 0.001 提升。
+
+### 24.4 Agent 可修改的參數空間（25 個）
+
+| 檔案 | 參數群組 | 數量 |
+|------|---------|------|
+| `api/src/store/search-engine.ts` | DEFAULT_CONFIG（semanticWeight, synonymBoost, kwBoost.*） | 6 |
+| `api/src/store/search-engine.ts` | metadataFeatureScore 權重（phrase/surface/category/intent/scenario/exactTerm/hardNegative/servingTier） | 11 |
+| `api/src/store/search-engine.ts` | rerankCandidates 權重（duplicate penalty, intent diversity） | 2 |
+| `api/src/store/query-term-utils.ts` | MIN_QUERY_TERM_LENGTH + novelQueryTermBoost 3 tiers + categoryDiversityBoost（base + step） | 6 |
+
+另外 `api/src/utils/keyword-boost.ts` 可新增 matching layers（不可移除現有 4 層）+ bigram prefix length（目前 2，範圍 2–4）。
+
+### 24.5 禁止修改清單
+
+```
+autoresearch/eval_local.py       # 評估腳本（建好後不可改）
+autoresearch/runner.sh           # 執行器
+autoresearch/baseline.json       # 基準線
+eval/golden_retrieval.json       # Golden dataset
+eval/golden_report_quality.json  # Golden dataset for report quality eval
+eval/fixtures/reports/           # Golden report fixtures directory
+eval/eval_thresholds.json        # 閾值
+evals/eval_retrieval.py          # Laminar 版 eval
+api/src/routes/                  # 所有 routes
+api/src/store/qa-store.ts        # QA Store
+api/src/store/supabase-qa-store.ts
+api/src/services/                # 所有 services
+output/qa_final.json             # QA 資料
+*.test.ts                        # 所有測試
+# 行為約束：禁止安裝新套件或新增依賴
+```
+
+### 24.6 實驗循環流程
+
+```
+LOOP FOREVER:
+  1. 讀 results.tsv → 了解 best score 和已嘗試的修改
+  2. 讀目前 search-engine.ts 參數值
+  3. 選一個假設（每次只改一個面向，確保因果清晰）
+  4. 修改程式碼
+  5. 等 5 秒（tsx watch hot-reload）
+  6. bash autoresearch/runner.sh "description"
+  7. 判斷：
+     - DELTA > 0 → git add + git commit -m "perf: [score] description"
+     - DELTA ≤ 0 → git checkout 還原修改
+  8. 回到步驟 1
+```
+
+**探索策略**（當增量改進耗盡時）：
+
+1. 合併近失敗：兩個被丟棄的修改各改善了不同指標 → 合併測試
+2. 反轉已保留的修改：早期改善可能變成後期限制
+3. 極端值測試：推到範圍邊界觀察效應方向
+4. 相關參數連動：semanticWeight + kwBoost.boost 反相關
+5. 聚焦 rerank：base scores 好但最終輸出差 → 專注 rerankCandidates
+
+### 24.7 實驗結果記錄格式
+
+`results.tsv` 欄位：
+
+```
+timestamp | composite | hit_rate | mrr | precision_at_k | ndcg_at_k |
+keyword_hit_rate | multi_label_f1 | dual_cat_recall | boosterless_prec |
+git_hash | status | description
+```
+
+`runner.sh` 輸出格式：
+
+```
+---
+COMPOSITE_SCORE=0.905432
+PREV_BEST=0.905000
+DELTA=+0.000432
+GIT_HASH=a1b2c3d
+---
+```
+
+### 24.8 前置條件
+
+```bash
+# 1. 建立實驗分支
+git checkout -b autoresearch/<tag>
+
+# 2. 啟動 API server（需 rate limit bypass）
+cd api && RATE_LIMIT_DEFAULT=9999 pnpm dev
+
+# 3. 確認 server 可用
+curl -sf http://localhost:8002/health
+
+# 4. 跑 baseline
+bash autoresearch/runner.sh "baseline"
+```
+
+### 24.9 Baseline 快照（2026-03-21 首次實驗）
+
+| 指標 | Baseline（baseline.json） | 首次 eval 實際值 |
+|------|--------------------------|-----------------|
+| hit_rate | 1.000 | 0.975 |
+| mrr | 0.952 | 0.933 |
+| precision_at_k | 0.863 | 0.795 |
+| ndcg_at_k | 0.802 | 0.864 |
+| keyword_hit_rate | 0.856 | 0.918 |
+| composite | 0.905 | 0.890 |
+
+> 注意：baseline.json（v3.1）與首次 eval 有差異，可能因 QA 資料庫已從 1,469 擴展至 1,939 筆（v3.7 L4 擴充），相同參數在不同資料集上產生不同分數。
+
+### 24.10 Report 版 AutoResearch（計畫中）
+
+除 Retrieval 優化外，還有 Report 版計畫（`plans/active/autoresearch-report.md`），核心差異：
+
+| 面向 | Retrieval | Report |
+|------|-----------|--------|
+| 可修改物 | TS 數值參數（25 個） | Prompt template（generate-report.md） |
+| 每輪耗時 | ~40 秒 | ~3-5 分鐘（需 LLM 生成報告） |
+| 一晚實驗量 | ~400 輪 | ~100-150 輪 |
+| Evaluator | 8 個 retrieval metrics（rule-based） | composite_v2（6 個 report metrics） |
+| 執行方式 | runner.sh（外部腳本） | Agent 內循環（自己改 prompt → 自己生成報告 → 自己跑 eval） |
+
+Report 版的瓶頸在於 agent 必須同時扮演「修改者」和「執行者」，context window 壓力較大，建議先驗證 Retrieval 版再啟動。
+
+### 24.11 技術決策
+
+| 決策 | 選擇 | 原因 |
+|------|------|------|
+| Eval 獨立於 Laminar | 純 HTTP + 本地計算 | 自主循環不應依賴外部 SaaS |
+| Git 操作由 agent 執行 | runner.sh 不做 git | 保持 agent 完全掌控 keep/discard 決策 |
+| 分支隔離 | `autoresearch/<tag>` branch | 實驗不影響 main，成功後手動 merge |
+| results.tsv 不追蹤 | .gitignore 排除 | runtime 產物，避免 git noise |
+| 單一 composite 目標 | 加權平均 8 metrics | 對齊 karpathy 的 `val_bpb` 單一指標優化哲學 |
+| 簡潔性準則 | 刪程式碼 > 加程式碼 | 防止 agent 累積不必要的 hack |
+| 安全護欄 | 單一指標不得低於閾值 | 防止 agent 犧牲某指標換取 composite 提升 |
 
 ---

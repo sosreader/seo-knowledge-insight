@@ -251,7 +251,7 @@ function calcHealthScore(
 ): HealthScore {
   const deductions: HealthDeduction[] = [];
 
-  // CORE metrics that breach alert thresholds (prioritized)
+  // Step 1: CORE metrics that breach alert thresholds (×10 each)
   const coreAlertDown = core
     .filter(
       (m) =>
@@ -263,33 +263,39 @@ function calcHealthScore(
   for (const m of coreAlertDown) {
     deductions.push({
       metric: m.name,
-      reason: `MoM ${fmtPct(m.monthly)}`,
+      reason: `CORE MoM ${fmtPct(m.monthly)}`,
       points: 10,
     });
   }
 
-  // Non-CORE ALERT_DOWN (fill remaining slots up to 5 total)
-  const remaining = 5 - deductions.length;
-  for (const m of down.slice(0, Math.max(0, remaining))) {
+  // Step 2: Non-CORE ALERT_DOWN (×3 each, all counted)
+  const coreNames = new Set(core.map((m) => m.name));
+  const nonCoreDown = down.filter((m) => !coreNames.has(m.name));
+  const nonCorePenalty = nonCoreDown.length * 3;
+  if (nonCoreDown.length > 0) {
     deductions.push({
-      metric: m.name,
-      reason: `MoM ${fmtPct(m.monthly)}`,
-      points: 10,
+      metric: `非 CORE ALERT_DOWN ×${nonCoreDown.length}`,
+      reason: `${nonCoreDown.length} 個次要指標 ×3`,
+      points: nonCorePenalty,
     });
   }
 
-  // Extra penalty when all core metrics are declining
+  // Step 3: CORE healthy bonus (month > 0%, ×2 each, cap 20)
+  const coreHealthy = core.filter((m) => (m.monthly ?? 0) > 0);
+  const coreBonus = Math.min(coreHealthy.length * 2, 20);
+
+  // Step 4: Extra penalty when ALL core metrics are declining
   const coreDown = core.filter((m) => (m.monthly ?? 0) < 0);
   if (coreDown.length > 0 && coreDown.length === core.length && core.length > 0) {
     deductions.push({
       metric: "全 CORE 同時下滑",
       reason: `${coreDown.length} 個核心指標月趨勢皆為負`,
-      points: 20,
+      points: 15,
     });
   }
 
   const totalDeduction = deductions.reduce((sum, d) => sum + d.points, 0);
-  const score = Math.max(0, 100 - totalDeduction);
+  const score = Math.max(0, Math.min(100, 100 - totalDeduction + coreBonus));
 
   const label = score >= 80 ? "良好" : score >= 60 ? "需關注" : "警示";
   return { score, label, deductions };
