@@ -305,7 +305,9 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **Section 9：會議提問清單（核心輸出）**
 
-四類提問，每類都要標注來源 section：
+四類提問，每類都要標注來源 section。
+
+**指標名稱呼應規則**：每個問題中**必須包含至少一個 S1/S3 的指標原始名稱**（如 Discover、CTR、AMP、Organic Search、GPT、Gemini、Perplexity、AI 占比、News(new)、檢索未索引、外部連結、營運 KW 等），以確保問題與前文分析的跨 Section 一致性。
 
 **A 類：確認事實（3-5 題）**
 從 S3 根因假設中「需人工確認」的項目推導。
