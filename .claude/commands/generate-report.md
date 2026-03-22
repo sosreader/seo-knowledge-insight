@@ -17,12 +17,25 @@
 
 ## 分析框架（你的推理依據）
 
-### Health Score 演算法
+### Health Score v2 演算法
 ```
-score = 100 - (ALERT_DOWN 數量 × 10)
-若所有 CORE 指標同時下滑，額外扣 20
-score 範圍 [0, 100]，標籤：≥80 良好 / ≥60 需關注 / <60 警示
+# Step 1：CORE 指標中觸發 ALERT_DOWN 的（高衝擊）
+core_penalty = core_alert_down_count × 10
+
+# Step 2：非 CORE 的 ALERT_DOWN（衍生/次要指標）
+non_core_penalty = non_core_alert_down_count × 3
+
+# Step 3：CORE 健康加分（月趨勢 > 0% 的 CORE 指標）
+core_bonus = min(core_healthy_count × 2, 20)
+
+# Step 4：全面崩盤懲罰（所有 CORE 月趨勢皆為負時）
+all_core_penalty = 15 if ALL core monthly < 0% else 0
+
+score = clamp(100 - core_penalty - non_core_penalty + core_bonus - all_core_penalty, 0, 100)
+標籤：≥80 良好 / ≥60 需關注 / <60 警示
 ```
+> 設計原理：CORE ALERT_DOWN 每個扣 10 分（核心流量信號），非 CORE 每個僅扣 3 分（避免衍生指標灌水），
+> 健康的 CORE 指標提供正面抵銷（cap 20），確保「核心流量上揚但次要警報多」不會被誤判為嚴重警示。
 
 ### 異常閾值
 - `ALERT_DOWN`：月趨勢 < -15% 或週趨勢 < -20%
