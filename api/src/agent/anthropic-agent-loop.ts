@@ -12,6 +12,7 @@ import type { AgentConfig, AgentDeps, AgentResponse, ToolResult } from "./types.
 import { itemToSource, type SourceItem } from "../schemas/chat.js";
 import { observe } from "../utils/observability.js";
 import { hasOpenAI } from "../utils/mode-detect.js";
+import type { MessageParam, ToolResultBlockParam, Tool } from "@anthropic-ai/sdk/resources/messages.js";
 
 const ALLOWED_TOOLS: ReadonlySet<string> = new Set<ToolName>([
   "search_knowledge_base",
@@ -111,12 +112,6 @@ function collectSources(toolCalls: readonly ToolResult[]): readonly SourceItem[]
   return sources;
 }
 
-/** Anthropic message type for the conversation loop. */
-interface AnthropicMessage {
-  readonly role: "user" | "assistant";
-  readonly content: string | ReadonlyArray<Record<string, unknown>>;
-}
-
 export async function anthropicAgentChat(
   message: string,
   history: ReadonlyArray<{ role: string; content: string }> | null,
@@ -139,7 +134,7 @@ export async function anthropicAgentChat(
   }
 
   // Build initial messages (Anthropic: user/assistant only, no system role)
-  const messages: AnthropicMessage[] = [];
+  const messages: MessageParam[] = [];
   if (history) {
     for (const h of history) {
       if (h.role === "user" || h.role === "assistant") {
@@ -165,8 +160,8 @@ export async function anthropicAgentChat(
     const resp = await client.messages.create({
       model: cfg.model,
       system: systemPrompt,
-      messages: messages as Array<{ role: "user" | "assistant"; content: string | Array<Record<string, unknown>> }>,
-      tools: tools as Array<{ name: string; description: string; input_schema: Record<string, unknown> }>,
+      messages,
+      tools: tools as Tool[],
       max_tokens: 2000,
       temperature: cfg.temperature,
     });
@@ -195,11 +190,11 @@ export async function anthropicAgentChat(
     // Add assistant message with the full content (text + tool_use blocks)
     messages.push({
       role: "assistant",
-      content: resp.content as unknown as Array<Record<string, unknown>>,
+      content: resp.content,
     });
 
     // Build tool_result for each tool_use
-    const toolResults: Array<Record<string, unknown>> = [];
+    const toolResults: ToolResultBlockParam[] = [];
 
     for (const block of toolUseBlocks) {
       if (block.type !== "tool_use") continue;
@@ -239,7 +234,7 @@ export async function anthropicAgentChat(
   let finalModel = cfg.model;
 
   try {
-    const finalMessages: AnthropicMessage[] = [
+    const finalMessages: MessageParam[] = [
       ...messages,
       { role: "user" as const, content: "你已收集到足夠的資訊。請根據已有的搜尋結果直接回答使用者的問題。" },
     ];
@@ -247,7 +242,7 @@ export async function anthropicAgentChat(
     const finalResp = await client.messages.create({
       model: cfg.model,
       system: systemPrompt,
-      messages: finalMessages as Array<{ role: "user" | "assistant"; content: string | Array<Record<string, unknown>> }>,
+      messages: finalMessages,
       max_tokens: 2000,
       temperature: cfg.temperature,
     });
