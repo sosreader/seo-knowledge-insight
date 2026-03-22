@@ -59,8 +59,9 @@ if _args.limit > 0:
 
 _golden_filtered = [
     c for c in _golden_raw
-    if (PROJECT_ROOT / c["report_path"]).exists()
-    or not print(f"[eval_meeting_prep_web] Skipping {c['id']}: fixture not found", file=sys.stderr)
+    if not c.get("calibration_only", False)
+    and ((PROJECT_ROOT / c["report_path"]).exists()
+         or not print(f"[eval_meeting_prep_web] Skipping {c['id']}: fixture not found", file=sys.stderr))
 ]
 if not _golden_filtered:
     print("[eval_meeting_prep_web] No fixture files found. Skipping.", file=sys.stderr)
@@ -221,11 +222,10 @@ def date_freshness_rate(output: dict, target: dict) -> float:
 
 
 def source_diversity(output: dict, target: dict) -> float:
-    """Unique source count / min_source_diversity, capped at 1.0."""
+    """Unique source count / 5, capped at 1.0. Requires 5 distinct sources for full score."""
     if "error" in output:
         return 0.0
-    min_div = target.get("min_source_diversity", 2)
-    return min(len(set(output["sources"])) / min_div, 1.0) if min_div > 0 else 1.0
+    return min(len(set(output["sources"])) / 5.0, 1.0)
 
 
 def url_accessibility_rate(output: dict, target: dict) -> float | None:
@@ -247,11 +247,11 @@ def url_accessibility_rate(output: dict, target: dict) -> float | None:
 
 
 def s2_content_density(output: dict, target: dict) -> float:
-    """Effective content lines >= 5 → 1.0, otherwise lines/5."""
+    """Effective content lines / 15, capped at 1.0. Requires 15 lines for full score."""
     if "error" in output:
         return 0.0
     lines = output.get("content_lines", [])
-    return min(len(lines) / 5.0, 1.0) if lines else 0.0
+    return min(len(lines) / 15.0, 1.0) if lines else 0.0
 
 # ── Evaluator map ─────────────────────────────────────────────────────────────
 _EVALUATOR_MAP = {

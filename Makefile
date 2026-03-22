@@ -351,8 +351,12 @@ evaluate-meeting-prep-web: ## Meeting-Prep L4 S2 時效性驗證（rule-based）
 .PHONY: evaluate-meeting-prep-quick
 evaluate-meeting-prep-quick: evaluate-meeting-prep-structure evaluate-meeting-prep-grounding ## Meeting-Prep L1+L2 快速評估（零 LLM 成本）
 
+.PHONY: evaluate-meeting-prep-coherence
+evaluate-meeting-prep-coherence: ## Meeting-Prep L2.5 跨 Section 邏輯一致性（零 LLM 成本）
+	$(PYTHON) evals/eval_meeting_prep_coherence.py
+
 .PHONY: evaluate-meeting-prep-full
-evaluate-meeting-prep-full: evaluate-meeting-prep-structure evaluate-meeting-prep-grounding evaluate-meeting-prep-llm evaluate-meeting-prep-web ## Meeting-Prep 完整 4 層（L1+L2+L3+L4）
+evaluate-meeting-prep-full: evaluate-meeting-prep-structure evaluate-meeting-prep-grounding evaluate-meeting-prep-coherence evaluate-meeting-prep-llm evaluate-meeting-prep-web ## Meeting-Prep 完整 5 層（L1+L2+L2.5+L3+L4）
 
 # ── 週報品質評估 ──────────────────────────────────
 
@@ -387,8 +391,12 @@ meeting-prep-topics-json: ## 最近 3 份會議的主題詞（JSON）
 # ── AutoResearch（自主循環優化）──────────────────────
 
 .PHONY: autoresearch-baseline
-autoresearch-baseline: ## AutoResearch baseline eval（需先啟動 API server + RATE_LIMIT_DEFAULT=9999）
+autoresearch-baseline: ## AutoResearch retrieval baseline eval（需先啟動 API server + RATE_LIMIT_DEFAULT=9999）
 	bash autoresearch/retrieval/runner.sh "baseline"
+
+.PHONY: autoresearch-meeting-prep-baseline
+autoresearch-meeting-prep-baseline: ## AutoResearch meeting-prep baseline eval（rule-based composite，零 LLM）
+	$(PYTHON) autoresearch/meeting-prep/eval_local.py --report eval/fixtures/meeting_prep/meeting_prep_20260306_ea576a4f.md
 
 # ── 說明 ─────────────────────────────────────────────
 

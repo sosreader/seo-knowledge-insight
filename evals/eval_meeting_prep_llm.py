@@ -106,6 +106,7 @@ _dataset = [
         "target": case.get("expected_llm", {}),
     }
     for case in _golden_raw
+    if not case.get("calibration_only", False)
 ]
 
 # ── Executor ───────────────────────────────────────────────────────────────────
@@ -122,22 +123,61 @@ def executor(data: dict) -> dict:
         return {"error": str(exc), "scores": {}, "average_score": 0.0}
 
     dims = quality_data.get("dimensions", {})
+    raw_scores = {k: v.get("score", 0) for k, v in dims.items()}
+    resolved = _resolve_scores(raw_scores)
     return {
-        "scores": {k: v.get("score", 0) for k, v in dims.items()},
+        "scores": resolved,
         "average_score": quality_data.get("average_score", 0.0),
     }
 
 
 # ── Evaluators ─────────────────────────────────────────────────────────────────
 
-_DIMENSION_KEYS = (
-    "s3_hypothesis_grounded",
+# New 9 dimensions (v2) with backward-compatible mapping from old 6 dimensions (v1)
+_DIMENSION_KEYS_V2 = (
+    "s3_data_support",
+    "s3_causal_logic",
+    "s3_alternative_considered",
     "s6_eeat_justified",
     "s9_question_specificity",
-    "s4_contradiction_quality",
+    "s4_genuine_tension",
+    "s4_source_diversity",
     "overall_coherence",
     "s8_maturity_justified",
 )
+
+# v1 → v2 mapping: when JSON has old keys, map to new keys
+_V1_TO_V2_MAP = {
+    "s3_hypothesis_grounded": ("s3_data_support", "s3_causal_logic", "s3_alternative_considered"),
+    "s4_contradiction_quality": ("s4_genuine_tension", "s4_source_diversity"),
+}
+
+
+def _resolve_scores(raw_scores: dict[str, float]) -> dict[str, float]:
+    """Resolve v1 or v2 dimension scores to v2 keys.
+
+    If v2 keys present → use directly.
+    If v1 keys present → fan out: parent score copied to all children.
+    """
+    resolved: dict[str, float] = {}
+    for key in _DIMENSION_KEYS_V2:
+        if key in raw_scores:
+            resolved[key] = raw_scores[key]
+
+    # Backfill from v1 parent keys if v2 children missing
+    for v1_key, v2_children in _V1_TO_V2_MAP.items():
+        if v1_key in raw_scores:
+            parent_score = raw_scores[v1_key]
+            for child in v2_children:
+                if child not in resolved:
+                    resolved[child] = parent_score
+
+    # Direct passthrough for keys that didn't change
+    for key in ("s6_eeat_justified", "s9_question_specificity", "overall_coherence", "s8_maturity_justified"):
+        if key not in resolved and key in raw_scores:
+            resolved[key] = raw_scores[key]
+
+    return resolved
 
 
 def _make_dimension_evaluator(key: str):
@@ -161,7 +201,50 @@ def avg_score_above_threshold(output: dict, target: dict) -> float:
     return sum(scores) / len(scores) / 5.0 if scores else 0.0
 
 
-_EVALUATOR_MAP: dict = {key: _make_dimension_evaluator(key) for key in _DIMENSION_KEYS}
+def compute_meeting_prep_composite(
+    l1: dict[str, float],
+    l2_grounding: dict[str, float],
+    l2_coherence: dict[str, float],
+    l3: dict[str, float] | None,
+    l4: dict[str, float],
+) -> float:
+    """Weighted composite score for meeting prep quality.
+
+    With L3 (Claude Code judge):
+      l1_overall × 0.10 + l2_grounding_avg × 0.15 + l2_coherence_avg × 0.25
+      + l3_avg × 0.35 + l4_avg × 0.15
+
+    Without L3 (fallback):
+      l1_overall × 0.15 + l2_grounding_avg × 0.25 + l2_coherence_avg × 0.40
+      + l4_avg × 0.20
+    """
+    def _avg(d: dict[str, float]) -> float:
+        vals = [v for v in d.values() if v is not None]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    l1_avg = _avg(l1)
+    l2g_avg = _avg(l2_grounding)
+    l2c_avg = _avg(l2_coherence)
+    l4_avg = _avg(l4)
+
+    if l3 is not None and l3:
+        l3_avg = _avg(l3)
+        return (
+            l1_avg * 0.10
+            + l2g_avg * 0.15
+            + l2c_avg * 0.25
+            + l3_avg * 0.35
+            + l4_avg * 0.15
+        )
+    return (
+        l1_avg * 0.15
+        + l2g_avg * 0.25
+        + l2c_avg * 0.40
+        + l4_avg * 0.20
+    )
+
+
+_EVALUATOR_MAP: dict = {key: _make_dimension_evaluator(key) for key in _DIMENSION_KEYS_V2}
 _EVALUATOR_MAP["avg_score_above_threshold"] = avg_score_above_threshold
 
 # ── Threshold gate (CI eval gate) ─────────────────────────────────────────────

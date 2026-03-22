@@ -1,0 +1,15 @@
+{
+  "composite_metric": "meeting_prep_composite_v1",
+  "description": "Rule-based composite: L1(0.10) + L2-grounding(0.20) + L2.5-coherence(0.45) + L4-web(0.25). No LLM judge.",
+  "fixtures": {
+    "meeting_prep_20260220_25caf520": 0.8738,
+    "meeting_prep_20260227_765384ce": 0.8397,
+    "meeting_prep_20260306_ea576a4f": 0.8095,
+    "meeting_prep_20260309_49530993": 0.7989
+  },
+  "average": 0.8305,
+  "best": 0.8738,
+  "worst": 0.7989,
+  "measured_at": "2026-03-22T10:58:00.000Z",
+  "notes": "Baseline before autoresearch. New report format (Section N:) scores lower due to heading mismatch — autoresearch should use Chinese headings (一、二、) for consistency."
+}

@@ -25,57 +25,80 @@ Layer 3 Content Quality 評估：針對已生成的 meeting-prep 報告，評估
 
 讀取完整報告內容。
 
-### Step B：六維度評分（你是 Judge）
+### Step A2：校準錨點（Calibration Anchor）
 
-對報告的 6 個維度逐一評分（1-5 分）：
+在評分目標報告**前**，先評估校準 fixture，建立評分基準：
 
-#### 1. `s3_hypothesis_grounded`（根因假設扎根度）
+1. 讀取 `eval/fixtures/meeting_prep/calibration_anchor_low.md`
+2. 按 Step B 的 9 維度快速評分（不需輸出完整報告，只需內心校準）
+3. 期望分數：`s3_data_support=2, s3_causal_logic=1, s3_alternative_considered=1, s6_eeat_justified=2, s9_question_specificity=2, s4_genuine_tension=1, s4_source_diversity=2, overall_coherence=2, s8_maturity_justified=2`
+4. 若你的校準評分與期望偏差 > 1.5 分（任一維度），調低你的評分標準——校準 anchor 是刻意寫的低品質報告
 
-評估 S3「深度根因假設」是否引用 S1 的具體指標數據。
+接著再評估目標報告（Step B）。
 
-- **1 分**：假設完全是泛泛的 SEO 建議，未引用任何本次指標
-- **3 分**：部分假設引用了指標，但多數假設可套用於任何網站
-- **5 分**：每個假設都明確引用 S1 的具體指標（例如「保養 -57%」），假設與數據直接對應
+### Step B：九維度評分（你是 Judge）
 
-#### 2. `s6_eeat_justified`（E-E-A-T 評分依據充分度）
+對報告的 9 個維度逐一評分（1-5 分）。原 6 維度拆分為 9 維度以增加鑑別度：
 
-評估 S6 每個 E-E-A-T 分數是否有具體依據。
+#### 1. `s3_data_support`（假設數據佐證）— 從 `s3_hypothesis_grounded` 拆出
+
+評估 S3 假設是否引用 S1 的**具體指標百分比和數值**。
+
+- **1 分**：假設未引用任何數字（「可能是技術問題」）
+- **3 分**：部分假設引用了百分比，但數據點稀疏
+- **5 分**：每個假設都引用具體指標名 + 百分比 + latest 值（如「Discover -55.4%、latest 915,917」）
+
+#### 2. `s3_causal_logic`（假設因果推理）— 從 `s3_hypothesis_grounded` 拆出
+
+評估 S3 假設是否有多步因果推理鏈。
+
+- **1 分**：只有結論無推理（「CTR 下降是因為 SERP 變化」）
+- **3 分**：有一步推理但未解釋機制
+- **5 分**：有多步推理鏈（「AIO 觸發 48% 查詢 → 有機 CTR 降 61% → Position 1 CTR 年降 32% → 影評類資訊型查詢被直接回答」）
+
+#### 3. `s3_alternative_considered`（替代解釋考量）— 從 `s3_hypothesis_grounded` 拆出
+
+評估 S3 是否考慮了替代解釋，而非只提出單一假設。
+
+- **1 分**：每個異常只有 1 個假設
+- **3 分**：有 2-3 個假設但都是同一方向
+- **5 分**：每個異常有技術面 + 內容面 + 外部面三層假設，且互相排斥
+
+#### 4. `s6_eeat_justified`（E-E-A-T 評分依據充分度）
 
 - **1 分**：分數無依據或只有空泛描述（「品質不錯」）
 - **3 分**：有部分依據但某些維度缺乏具體觀察
 - **5 分**：每個分數都有具體依據（引用指標、KB 知識、業界比較）
 
-#### 3. `s9_question_specificity`（提問特異性）
-
-評估 S9 提問是否針對本次客戶/情境。
+#### 5. `s9_question_specificity`（提問特異性）
 
 - **1 分**：提問可以套用於任何 SEO 專案（「你覺得 SEO 重要嗎？」）
 - **3 分**：提問有 SEO 針對性但未引用本次數據
 - **5 分**：提問明確引用本次指標/異常，只有了解本報告內容才能提出
 
-#### 4. `s4_contradiction_quality`（矛盾項目品質）
-
-評估 S4 交叉比對中標記為「矛盾」的項目是否存在真正的張力。
+#### 6. `s4_genuine_tension`（矛盾真實性）— 從 `s4_contradiction_quality` 拆出
 
 - **1 分**：矛盾是人為製造的，實際觀點並無衝突
 - **3 分**：有一定張力但過度簡化了觀點差異
-- **5 分**：矛盾真實存在，且清楚標示了 KB/顧問/指標/業界四方觀點的具體分歧
+- **5 分**：矛盾真實存在，有清楚的邏輯衝突（「KB 說不要優化 Discover，但 Google 首次推出 Discover 獨立更新」）
 
-#### 5. `overall_coherence`（整體邏輯鏈通順度）
+#### 7. `s4_source_diversity`（四方來源實質內容）— 從 `s4_contradiction_quality` 拆出
 
-評估 S1 異常 → S3 假設 → S9 提問 的邏輯鏈是否通順。
+- **1 分**：四方來源（KB/顧問/指標/業界）多數是空或「不明」
+- **3 分**：3/4 方有實質內容但某些只是摘要
+- **5 分**：4/4 方都有獨立觀點且互相比較，判斷欄有具體結論
+
+#### 8. `overall_coherence`（整體邏輯鏈通順度）
 
 - **1 分**：三者各自獨立，無邏輯連結
 - **3 分**：有部分連結但存在邏輯跳躍
-- **5 分**：S1 每個重要異常都有 S3 假設對應，S3 假設都衍生出 S9 提問，形成完整推理鏈
+- **5 分**：S1 每個重要異常都有 S3 假設對應，S3 假設都衍生出 S9 提問
 
-#### 6. `s8_maturity_justified`（成熟度評分依據充分度）
+#### 9. `s8_maturity_justified`（成熟度評分依據充分度）
 
-評估 S8 每個成熟度等級是否有具體依據，且「下一步」建議是否對應正確的鄰近等級。
-
-- **1 分**：等級無依據，或下一步目標與當前等級不連貫（如 L1 直接建議 L4 行動）
-- **3 分**：有部分依據但某些維度缺乏具體觀察，下一步建議偏泛
-- **5 分**：每個等級都有 S1/S3/S5 的具體證據支撐，下一步明確描述目標等級特徵
+- **1 分**：等級無依據，或下一步目標與當前等級不連貫
+- **3 分**：有部分依據但某些維度缺乏具體觀察
+- **5 分**：每個等級都有具體證據支撐，下一步明確描述目標等級特徵
 
 ### Step C：彙整結果並儲存
 
@@ -84,25 +107,31 @@ Layer 3 Content Quality 評估：針對已生成的 meeting-prep 報告，評估
 ```json
 {
   "report_path": "output/meeting_prep_XXXXXXXX_XXXXXXXX.md",
-  "evaluated_at": "2026-03-12T...",
+  "evaluated_at": "2026-03-22T...",
   "dimensions": {
-    "s3_hypothesis_grounded": {"score": 4, "reason": "..."},
+    "s3_data_support": {"score": 4, "reason": "..."},
+    "s3_causal_logic": {"score": 3, "reason": "..."},
+    "s3_alternative_considered": {"score": 4, "reason": "..."},
     "s6_eeat_justified": {"score": 3, "reason": "..."},
     "s9_question_specificity": {"score": 5, "reason": "..."},
-    "s4_contradiction_quality": {"score": 4, "reason": "..."},
+    "s4_genuine_tension": {"score": 4, "reason": "..."},
+    "s4_source_diversity": {"score": 3, "reason": "..."},
     "overall_coherence": {"score": 4, "reason": "..."},
     "s8_maturity_justified": {"score": 4, "reason": "..."}
   },
-  "average_score": 4.0,
+  "average_score": 3.78,
   "summary": "一句話總結品質"
 }
 ```
+
+> **向下相容**：`eval_meeting_prep_llm.py` 支援新 9 維度和舊 6 維度 JSON。
+> 若 JSON 有 `s3_data_support` 則用 9 維度；否則從 `s3_hypothesis_grounded` 映射。
 
 寫入 `output/eval_meeting_prep_quality_YYYYMMDD.json`。
 
 ### Step C2：推送至 Laminar Dashboard
 
-將 6 個維度分數推送至 Laminar group `meeting_prep_quality`：
+將 9 個維度分數推送至 Laminar group `meeting_prep_quality`：
 
 ```bash
 .venv/bin/python scripts/_push_laminar_score.py \
@@ -121,14 +150,17 @@ Layer 3 Content Quality 評估：針對已生成的 meeting-prep 報告，評估
 
 | 維度 | 分數 | 評語 |
 |------|------|------|
-| 根因假設扎根度 | X/5 | ... |
+| 假設數據佐證 | X/5 | ... |
+| 假設因果推理 | X/5 | ... |
+| 替代解釋考量 | X/5 | ... |
 | E-E-A-T 評分依據 | X/5 | ... |
 | 提問特異性 | X/5 | ... |
-| 矛盾項目品質 | X/5 | ... |
+| 矛盾真實性 | X/5 | ... |
+| 四方來源實質內容 | X/5 | ... |
 | 整體邏輯鏈 | X/5 | ... |
 | 成熟度評分依據 | X/5 | ... |
 
-**平均分：X.X/5**（6 維度）
+**平均分：X.X/5**（9 維度）
 
 ### 改善建議
 {列出 1-3 個可操作的改善項目}

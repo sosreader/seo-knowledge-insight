@@ -41,9 +41,9 @@
   "meeting_prep_grounding": {
     "citation_id_resolution": 0.9,
     "citation_category_consistency": 0.8,
-    "citation_count_in_range": 1.0,
+    "citation_count_in_range": 0.70,
     "s4_four_sources_populated": 0.8,
-    "inline_citation_coverage": 0.55
+    "inline_citation_coverage": 0.70
   },
   "maturity_classification": {
     "accuracy": 0.80,
@@ -55,18 +55,28 @@
     "has_answer": 0.80
   },
   "meeting_prep_llm": {
-    "s3_hypothesis_grounded": 0.60,
+    "s3_data_support": 0.70,
+    "s3_causal_logic": 0.60,
+    "s3_alternative_considered": 0.60,
     "s6_eeat_justified": 0.60,
-    "s9_question_specificity": 0.60,
-    "s4_contradiction_quality": 0.50,
-    "overall_coherence": 0.60,
-    "s8_maturity_justified": 0.60,
-    "avg_score_above_threshold": 0.60
+    "s9_question_specificity": 0.70,
+    "s4_genuine_tension": 0.60,
+    "s4_source_diversity": 0.60,
+    "overall_coherence": 0.70,
+    "s8_maturity_justified": 0.70,
+    "avg_score_above_threshold": 0.70
   },
   "meeting_prep_web": {
     "date_freshness_rate": 0.60,
-    "source_diversity": 0.80,
-    "s2_content_density": 0.80
+    "source_diversity": 0.60,
+    "s2_content_density": 0.50
+  },
+  "meeting_prep_coherence": {
+    "cross_section_coherence": 0.40,
+    "action_specificity": 0.30,
+    "hypothesis_falsifiability": 0.60,
+    "temporal_consistency": 0.80,
+    "citation_relevance": 0.50
   },
   "report_quality_v2": {
     "composite_v2": 0.65,

@@ -7,6 +7,28 @@
 
 <!-- 以下為自動累積區域，請勿手動編輯格式 -->
 
+## 2026-03-22
+
+### Google 官方
+- [2026-02-25] Serving 服務故障 — 已修復（15 分鐘）
+- [2026-03] **February 2026 Discover Core Update** — 已完成部署。首次 Discover 專屬核心更新，收緊域名池（美國 172→158）。目標：減少 clickbait、優先原創深度報導、增加本地內容。目前僅英語市場，計畫擴展至其他語言。
+- [2026-03] **March 2026 Core Update** — 滾動中。與 Feb Discover Update 同步進行。
+
+### Google Search Central 公告
+- [2026-03] Search Central Live Asia Pacific 2026（Sydney 等亞太城市）
+- [2026-03] Google's February 2026 Discover Core Update 官方說明
+
+### 業界報導
+- AI Overviews 觸發 48% 搜尋查詢（2026 數據），有機 CTR 降 61%，Position 1 CTR 年降 32%
+- AI Overview 引用 Top-10 頁面佔比從 76% 降至 38%，被引用品牌反獲 +35% 有機點擊
+- AI Overviews 在突發新聞中排在 Top Stories 上方（SER 2026-03-20）
+
+### SER 重點
+- Google News Showcase Label 在 Discover Feed 測試中
+- AI Overviews 在 Breaking News 出現頻率上升且排在 Top Stories 之上
+
+---
+
 ## 2026-03-12（快照日期：2026-02-20）
 
 ### Google 官方

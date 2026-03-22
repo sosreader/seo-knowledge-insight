@@ -85,6 +85,8 @@ if _args.limit > 0:
 # Filter to only existing fixture files
 _golden_filtered: list[dict] = []
 for case in _golden_raw:
+    if case.get("calibration_only", False):
+        continue
     report_file = PROJECT_ROOT / case["report_path"]
     if report_file.exists():
         _golden_filtered.append(case)

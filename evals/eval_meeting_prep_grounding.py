@@ -91,6 +91,8 @@ if _args.limit > 0:
 # Filter to only existing fixture files
 _golden_filtered: list[dict] = []
 for case in _golden_raw:
+    if case.get("calibration_only", False):
+        continue
     report_file = PROJECT_ROOT / case["report_path"]
     if report_file.exists():
         _golden_filtered.append(case)
@@ -365,15 +367,16 @@ def citation_category_consistency(output: dict, target: dict) -> float:
 
 
 def citation_count_in_range(output: dict, target: dict) -> float:
-    """1.0 if total citation count is within expected range."""
+    """Bell curve scoring: peak at 15-20 citations, decay outside. Continuous 0-1."""
     if "error" in output:
         return 0.0
-    citations = output.get("citations", [])
-    count_range = target.get("citation_count_range", [10, 30])
-    if not isinstance(count_range, (list, tuple)) or len(count_range) != 2:
+    count = len(output.get("citations", []))
+    if count == 0:
         return 0.0
-    lo, hi = count_range
-    return 1.0 if lo <= len(citations) <= hi else 0.0
+    # Optimal range center = 17.5, max distance = 17.5 (at 0 or 35)
+    center = 17.5
+    score = 1.0 - abs(count - center) / center
+    return max(0.0, min(1.0, score))
 
 
 def s4_four_sources_populated(output: dict, target: dict) -> float:
