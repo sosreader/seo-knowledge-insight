@@ -15,3 +15,4 @@ timestamp	composite	l1_avg	l2g_avg	l2c_cross_section	l2c_action_spec	l2c_hypo_fa
 2026-03-22T18:00:00Z	0.855956	1.0000	0.5943	0.4857	0.8154	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	a80feaf	discard	20260306 fixture: cross_section 0.49 (large S1 set ceiling) with 17 citations
 2026-03-22T13:55:00Z	0.883232	1.0000	0.5943	0.6042	1.0000	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	7fd064c	keep	S10 three-component mandatory + remove meta-items (action_specificity 0.78→1.0)
 2026-03-22T13:56:00Z	0.871836	1.0000	0.5943	0.6135	1.0000	1.0000	1.0000	1.0000	0.9412	20260309_49530993	fc1e0f8	keep	Same S10 fix on 20260309 fixture (action_specificity 0.85→1.0)
+2026-03-22T13:58:00Z	0.876909	1.0000	0.5943	0.6108	1.0000	1.0000	1.0000	1.0000	0.9231	20260227_765384ce	5d79cd7	keep	Same S10 fix on 20260227 fixture (action_specificity 1.0, tool names added)
