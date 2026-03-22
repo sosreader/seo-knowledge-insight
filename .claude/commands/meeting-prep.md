@@ -410,6 +410,8 @@ echo "<報告內容前 500 字>" | shasum | cut -c1-8
 與 `/generate-report` 相同的 Perplexity 風格 `[N]` 標記。
 維護 citation map：`{qa_id → N}`，依首次出現順序遞增。
 
+**Citation 密度目標**：整篇報告應引用 **15-18 筆** KB 來源（Step C 搜尋 7-10 輪，每輪 top-k 3，去重後保留 top-20，目標使用其中 15-18 筆）。在 S3（根因假設）、S5（審計缺口）、S6（E-E-A-T）中密集引用。
+
 報告末尾的 `<!-- citations [...] -->` JSON block 格式同 `/generate-report`。
 
 ---
