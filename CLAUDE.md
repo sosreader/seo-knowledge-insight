@@ -307,7 +307,9 @@ Meeting Prep API 端點（v3.3 新增 maturity-trend）：
 環境變數（v2.11 新增，均可選）：
 
 ```env
-ANTHROPIC_API_KEY=sk-ant-...     # Reranker（實驗性，auto 模式下自動偵測）
+ANTHROPIC_API_KEY=sk-ant-...     # Reranker + Chat LLM（設定後可用）
+CHAT_LLM_PROVIDER=anthropic      # "openai"（預設）/"anthropic"，切換 chat 生成用的 LLM
+CHAT_ANTHROPIC_MODEL=claude-sonnet-4-5  # Claude 模型（預設 claude-sonnet-4-5）
 CONTEXT_EMBEDDING_WEIGHT=0.6     # Contextual embedding 加權（預設 0.6）
 RERANKER_ENABLED=auto            # "auto"/"true"/"false"，預設 auto
 ```
@@ -373,17 +375,19 @@ make autoresearch-baseline
 
 ### Claude Code 模式 vs OpenAI 模式
 
-| 功能              | OpenAI 模式                                                  | Claude Code 模式                                                      |
-| ----------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- |
-| Q&A 萃取          | `gpt-5.2` API                                                | Claude Code 直接讀 Markdown                                           |
-| 去重 + 分類       | `text-embedding-3-small` + `gpt-5.2`                         | 語意理解取代向量                                                      |
-| 指標解析          | `metrics-parser.ts`（純 TS，v2.26）                          | `qa_tools.py load-metrics`                                            |
-| 知識庫搜尋        | `text-embedding-3-small` + cosine                            | `qa_tools.py search`（關鍵字加權）                                    |
-| 週報生成          | `report-llm.ts` + OpenAI API（純 TS，v2.26）                 | `/generate-report` 指令（Claude Code 直接推理，支援 snapshot）        |
-| Q&A 品質評估      | `gpt-5.2` + `gpt-5-mini`                                     | `/evaluate-qa-local`（Claude Code 作為 Judge）                        |
-| Provider 品質評估 | 無對應                                                       | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
-| API 伺服器        | `cd api && pnpm dev`（Hono, port 8002，需要 OPENAI_API_KEY） | `cd api && pnpm dev`（Hono, port 8002）                               |
-| 需要 API key      | OPENAI_API_KEY                                               | 不需要                                                                |
+| 功能              | OpenAI 模式                                                  | Claude Code 模式                                                      | Anthropic 模式（v3.8）                                                |
+| ----------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Q&A 萃取          | `gpt-5.2` API                                                | Claude Code 直接讀 Markdown                                           | 同 Claude Code                                                        |
+| 去重 + 分類       | `text-embedding-3-small` + `gpt-5.2`                         | 語意理解取代向量                                                      | 同 Claude Code                                                        |
+| 指標解析          | `metrics-parser.ts`（純 TS，v2.26）                          | `qa_tools.py load-metrics`                                            | 同 OpenAI                                                             |
+| 知識庫搜尋        | `text-embedding-3-small` + cosine                            | `qa_tools.py search`（關鍵字加權）                                    | hybrid（有 OpenAI key）/ keyword-only（無 OpenAI key）                |
+| Chat 生成         | `gpt-5.2`                                                    | Claude Code 直接推理                                                  | `claude-sonnet-4-5`（API server 內建）                                |
+| Agent 模式        | OpenAI function calling                                      | 無                                                                    | Claude tool_use                                                       |
+| 週報生成          | `report-llm.ts` + OpenAI API（純 TS，v2.26）                 | `/generate-report` 指令（Claude Code 直接推理，支援 snapshot）        | 同 OpenAI                                                             |
+| Q&A 品質評估      | `gpt-5.2` + `gpt-5-mini`                                     | `/evaluate-qa-local`（Claude Code 作為 Judge）                        | 同 OpenAI                                                             |
+| Provider 品質評估 | 無對應                                                       | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） | 無對應                                                                |
+| API 伺服器        | `cd api && pnpm dev`（Hono, port 8002，需要 OPENAI_API_KEY） | `cd api && pnpm dev`（Hono, port 8002）                               | `cd api && CHAT_LLM_PROVIDER=anthropic pnpm dev`（port 8002）         |
+| 需要 API key      | OPENAI_API_KEY                                               | 不需要                                                                | ANTHROPIC_API_KEY（Embedding 可選加 OPENAI_API_KEY）                  |
 
 ---
 

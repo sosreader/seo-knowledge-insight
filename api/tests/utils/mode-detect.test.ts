@@ -3,16 +3,26 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/config.js", () => ({
   config: {
     OPENAI_API_KEY: "",
+    ANTHROPIC_API_KEY: "",
+    CHAT_LLM_PROVIDER: "openai",
     AGENT_ENABLED: false,
   },
 }));
 
 import { config } from "../../src/config.js";
-import { resolveMode, isAgentEnabled, hasOpenAI } from "../../src/utils/mode-detect.js";
+import {
+  resolveMode,
+  isAgentEnabled,
+  hasOpenAI,
+  hasChatLLM,
+  getChatProvider,
+} from "../../src/utils/mode-detect.js";
 
 describe("mode-detect", () => {
   beforeEach(() => {
     (config as Record<string, unknown>).OPENAI_API_KEY = "";
+    (config as Record<string, unknown>).ANTHROPIC_API_KEY = "";
+    (config as Record<string, unknown>).CHAT_LLM_PROVIDER = "openai";
     (config as Record<string, unknown>).AGENT_ENABLED = false;
   });
 
@@ -60,6 +70,51 @@ describe("mode-detect", () => {
     });
   });
 
+  describe("getChatProvider", () => {
+    it("returns none when provider=openai but no OpenAI key", () => {
+      expect(getChatProvider()).toBe("none");
+    });
+
+    it("returns openai when provider=openai and OpenAI key set", () => {
+      (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test";
+      expect(getChatProvider()).toBe("openai");
+    });
+
+    it("returns anthropic when provider=anthropic and Anthropic key set", () => {
+      (config as Record<string, unknown>).CHAT_LLM_PROVIDER = "anthropic";
+      (config as Record<string, unknown>).ANTHROPIC_API_KEY = "sk-ant-test";
+      expect(getChatProvider()).toBe("anthropic");
+    });
+
+    it("returns none when provider=anthropic but no Anthropic key", () => {
+      (config as Record<string, unknown>).CHAT_LLM_PROVIDER = "anthropic";
+      expect(getChatProvider()).toBe("none");
+    });
+
+    it("returns openai when both keys set but provider=openai", () => {
+      (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test";
+      (config as Record<string, unknown>).ANTHROPIC_API_KEY = "sk-ant-test";
+      expect(getChatProvider()).toBe("openai");
+    });
+  });
+
+  describe("hasChatLLM", () => {
+    it("returns false when no keys", () => {
+      expect(hasChatLLM()).toBe(false);
+    });
+
+    it("returns true when OpenAI key set (default provider)", () => {
+      (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test";
+      expect(hasChatLLM()).toBe(true);
+    });
+
+    it("returns true when Anthropic key set and provider=anthropic", () => {
+      (config as Record<string, unknown>).CHAT_LLM_PROVIDER = "anthropic";
+      (config as Record<string, unknown>).ANTHROPIC_API_KEY = "sk-ant-test";
+      expect(hasChatLLM()).toBe(true);
+    });
+  });
+
   describe("isAgentEnabled", () => {
     it("returns false when AGENT_ENABLED=false", () => {
       expect(isAgentEnabled()).toBe(false);
@@ -72,6 +127,13 @@ describe("mode-detect", () => {
 
     it("returns true in auto mode with OpenAI key", () => {
       (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test";
+      (config as Record<string, unknown>).AGENT_ENABLED = "auto";
+      expect(isAgentEnabled()).toBe(true);
+    });
+
+    it("returns true in auto mode with Anthropic provider", () => {
+      (config as Record<string, unknown>).CHAT_LLM_PROVIDER = "anthropic";
+      (config as Record<string, unknown>).ANTHROPIC_API_KEY = "sk-ant-test";
       (config as Record<string, unknown>).AGENT_ENABLED = "auto";
       expect(isAgentEnabled()).toBe(true);
     });

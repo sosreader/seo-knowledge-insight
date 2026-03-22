@@ -39,6 +39,8 @@ vi.mock("../../src/config.js", () => ({
 
 vi.mock("../../src/utils/mode-detect.js", () => ({
   hasOpenAI: vi.fn(() => false),
+  hasChatLLM: vi.fn(() => false),
+  getChatProvider: vi.fn(() => "none"),
   isAgentEnabled: vi.fn(() => false),
   resolveMode: vi.fn(() => "rag"),
 }));

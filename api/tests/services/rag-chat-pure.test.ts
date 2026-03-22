@@ -205,6 +205,7 @@ describe("rag-chat-pure", () => {
     it("builds complete metadata object", () => {
       const meta = buildMetadata({
         model: "gpt-5.2",
+        provider: "openai",
         embeddingModel: "text-embedding-3-small",
         inputTokens: 100,
         outputTokens: 50,
