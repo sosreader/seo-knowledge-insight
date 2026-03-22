@@ -1869,6 +1869,49 @@ score = clamp(100 - core_penalty - non_core_penalty + core_bonus - all_core_pena
 | CORE 健康加分 | 純扣分制無法反映「核心健康但邊緣有噪音」的真實狀態 | FICO 信用評分同時考慮正面與負面因素；Google Lighthouse 的 Performance Score 以正面指標為基底 |
 | 全 CORE 下滑懲罰 | 所有核心同時下滑是系統性問題，應額外警告 | Semrush Site Audit 的 critical/warning/notice 三級分類 |
 
+#### 業界工具評分機制對照
+
+**1. Ahrefs Site Health Score**
+- 公式：`100% - (error_pages / total_crawled_pages × 100)`
+- 問題按嚴重度分三級（errors / warnings / notices），只有 errors 計入分數
+- **本專案借鑑**：CORE ALERT_DOWN 對應 errors（×10），非 CORE 對應 warnings（×3），notice 級忽略
+- 來源：Ahrefs Blog "What Is a Good Site Health Score?" (2024)
+
+**2. Google Lighthouse Performance Score**
+- 加權公式（v10）：TBT 30% + LCP 25% + CLS 25% + FCP 10% + SI 10%
+- 使用 log-normal CDF 將原始值映射至 0-100 分（非線性，避免極端值主導）
+- **本專案借鑑**：不同指標不同權重的概念（CORE ×10 vs 非 CORE ×3）；cap 機制（core_bonus cap 20）防止單一正面因素過度膨脹
+- 來源：web.dev "Lighthouse Performance Scoring" (2024)
+
+**3. Semrush Site Audit Scoring**
+- 分三級：Errors（嚴重，影響索引/爬取）、Warnings（中度，影響排名）、Notices（輕度，最佳實踐）
+- Health Score = (passed_checks / total_checks) × 100
+- 各 check 不等權——broken pages 的權重遠高於缺少 alt text
+- **本專案借鑑**：三級嚴重度概念；全 CORE 下滑的 -15 懲罰對應 Semrush 的 "site-wide critical" 等級
+- 來源：Semrush Knowledge Base "Site Audit – Site Health Score" (2025)
+
+**4. Balanced Scorecard（Kaplan & Norton, 1992）**
+- 四構面：財務、顧客、內部流程、學習與成長
+- 核心概念：**leading indicators**（前瞻性，如顧客滿意度）vs **lagging indicators**（回顧性，如營收）
+- Leading indicators 應有更高監控權重，因為它們是未來績效的預測指標
+- **本專案借鑑**：曝光/點擊/CTR 是 leading indicators（直接反映搜尋需求），AMP Ratio / 探索比例是 lagging derived metrics（事後衍生計算）
+- 來源：Harvard Business Review "The Balanced Scorecard" (1992)
+
+**5. FICO 信用評分模型**
+- 五構面加權：Payment History 35% + Amounts Owed 30% + Credit History Length 15% + New Credit 10% + Credit Mix 10%
+- 關鍵設計：正面因素（按時還款紀錄）和負面因素（逾期）同時計入，非純扣分
+- 近期逾期比遠期逾期懲罰更重（時間衰減）
+- **本專案借鑑**：core_bonus（CORE 健康指標加分）概念直接對應 FICO 的正面因素抵銷；避免「有一個壞指標就全盤否定」的偏誤
+
+#### 權重數值選擇依據
+
+| 權重 | 數值 | 選擇理由 |
+|------|------|----------|
+| CORE ALERT_DOWN | ×10 | 單一核心指標崩跌（如 Discover -55%）應立即觸發關注。以 13 個 CORE 為基準，3 個同時 ALERT_DOWN 即扣 30 分，落入「警示」區間 |
+| 非 CORE ALERT_DOWN | ×3 | 歷史資料顯示典型週會有 10-20 個非 CORE alerts（多為衍生/ratio 指標）。×3 確保 15 個 alerts = -45，配合 CORE bonus 後仍有鑑別空間 |
+| CORE 健康加分 | ×2（cap 20） | 13 個 CORE 全健康 = 26 → cap 20。防止正面因素無限膨脹（否則 100+26=126 再扣也不痛）。20 分的 buffer 足以區分「核心健康+邊緣噪音」vs「核心也有問題」 |
+| 全 CORE 下滑 | -15 | v1 用 -20 太重（與 2 個 CORE ALERT_DOWN 等價），v2 降為 -15（與 5 個非 CORE alerts 等價），作為系統性警告但不主導分數 |
+
 **鑑別力驗算**：
 
 | 情境 | 計算 | 分數 | 標籤 |
