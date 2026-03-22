@@ -29,6 +29,8 @@ export interface ReportEvalResult {
   llm_augmented: number;
   /** 1 if report contains ## 檢索未索引分析 section, else 0 (independent metric, not counted in overall) */
   has_crawled_not_indexed_section: number;
+  /** Maturity labels in action items: 1.0 (ref+labels), 0.5 (no ref line), 0.0 (ref but no labels) */
+  action_maturity_labeled: number;
 }
 
 /** L3 LLM-as-Judge scores (injected externally, e.g. from /evaluate-report-quality) */
@@ -41,7 +43,7 @@ export interface ReportEvalL3Scores {
   insight_originality: number;
 }
 
-/** Full V2 evaluation result: L1 + L2 + optional L3 + composite_v2 */
+/** Full V2 evaluation result: L1 + L2 + optional L3 + composite_v2 + composite_v3 */
 export interface ReportEvalV2Result {
   /** L1 result (backward-compatible) */
   l1: ReportEvalResult;
@@ -51,8 +53,10 @@ export interface ReportEvalV2Result {
   l3: ReportEvalL3Scores | null;
   /** Whether L3 was skipped (true when l3 is null) */
   l3_skipped: boolean;
-  /** Weighted composite replacing saturated `overall` */
+  /** Weighted composite replacing saturated `overall` (7 metrics) */
   composite_v2: number;
+  /** Composite V3: 12 metrics including new L2 dimensions (0–1) */
+  composite_v3: number;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────
@@ -106,6 +110,7 @@ export function evaluateReport(
       overall: 0,
       llm_augmented: 0,
       has_crawled_not_indexed_section: 0,
+      action_maturity_labeled: 0.5,
     };
   }
 
@@ -194,6 +199,9 @@ export function evaluateReport(
 
   const has_crawled_not_indexed_section = body.includes("## 檢索未索引分析") ? 1 : 0;
 
+  // action_maturity_labeled: check if action items contain maturity level markers
+  const action_maturity_labeled = actionMaturityLabeled(body);
+
   return {
     section_coverage,
     kb_citation_count,
@@ -203,6 +211,7 @@ export function evaluateReport(
     overall,
     llm_augmented,
     has_crawled_not_indexed_section,
+    action_maturity_labeled,
   };
 }
 
@@ -280,10 +289,74 @@ export function evaluateReportV2(
     l3,
     l3_skipped: l3 === null,
     composite_v2: computeCompositeV2(l1, l2, l3),
+    composite_v3: computeCompositeV3(l1, l2),
   };
 }
 
+// ── Composite V3 ─────────────────────────────────────────────────────
+
+/**
+ * Composite V3: 12 metrics (L1 overall + maturity + 10 L2). Sum = 1.00.
+ *
+ * Used by autoresearch report optimization loop.
+ */
+export function computeCompositeV3(
+  l1: ReportEvalResult,
+  l2: ReportEvalL2Result,
+): number {
+  return (
+    // Core analysis quality (0.46)
+    l1.overall * 0.22 +
+    l2.cross_metric_reasoning * 0.12 +
+    l2.action_specificity * 0.12 +
+    // Content richness (0.30)
+    l2.data_evidence_ratio * 0.09 +
+    l2.citation_integration * 0.08 +
+    l2.quadrant_judgment * 0.07 +
+    l2.section_depth_variance * 0.06 +
+    // New dimensions (0.24)
+    l2.temporal_dual_frame * 0.07 +
+    l2.causal_chain * 0.06 +
+    l2.priority_balance * 0.05 +
+    l1.action_maturity_labeled * 0.04 +
+    l2.top_recommendation * 0.02
+  );
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────
+
+const MATURITY_DIMENSIONS = new Set(["策略", "流程", "關鍵字", "指標"]);
+const MATURITY_LABEL_RE = /\[(策略|流程|關鍵字|指標)\s*L[1-4]→L[1-4]\]/g;
+
+/**
+ * Check action items for maturity level markers — graded by coverage.
+ *
+ * - No action section → 0.5 (degraded gracefully)
+ * - No maturity reference line → 0.5 (no meeting-prep available)
+ * - Has ref line but no labels → 0.0
+ * - Has ref line + labels → unique dimensions covered / 4 (max 1.0)
+ */
+function actionMaturityLabeled(content: string): number {
+  let actionSection = extractSectionByKeyword(content, "優先行動清單");
+  if (!actionSection) {
+    actionSection =
+      extractSection(content, "## 六、") ||
+      extractSection(content, "## 五、");
+  }
+  if (!actionSection) return 0.5;
+
+  const hasRefLine = actionSection.includes("成熟度參考");
+  if (!hasRefLine) return 0.5;
+
+  const dims = new Set<string>();
+  let match: RegExpExecArray | null;
+  const re = new RegExp(MATURITY_LABEL_RE.source, "g");
+  while ((match = re.exec(actionSection)) !== null) {
+    dims.add(match[1]);
+  }
+  if (dims.size === 0) return 0.0;
+  return Math.min(dims.size / MATURITY_DIMENSIONS.size, 1.0);
+}
 
 /**
  * Extract text from a given section heading until the next ## heading.
@@ -295,4 +368,18 @@ function extractSection(content: string, heading: string): string {
   return nextHeadingIdx === -1
     ? content.slice(startIdx)
     : content.slice(startIdx, nextHeadingIdx);
+}
+
+/**
+ * Extract text from a section containing a keyword in its heading.
+ */
+function extractSectionByKeyword(content: string, keyword: string): string {
+  const idx = content.indexOf(keyword);
+  if (idx === -1) return "";
+  const lineStart = content.lastIndexOf("\n", idx);
+  const start = lineStart === -1 ? 0 : lineStart;
+  const nextHeading = content.indexOf("\n## ", idx);
+  return nextHeading === -1
+    ? content.slice(start)
+    : content.slice(start, nextHeading);
 }

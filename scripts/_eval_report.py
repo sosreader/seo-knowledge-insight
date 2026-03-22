@@ -93,31 +93,34 @@ def _extract_section(content: str, header: str) -> str:
     return after[: next_h.start()] if next_h else after
 
 
-def _report_action_maturity_labeled(content: str) -> float:
-    """Check if S5/S6 action items contain maturity level markers.
+MATURITY_DIMENSIONS = {"策略", "流程", "關鍵字", "指標"}
 
-    Special scoring:
-    - Has maturity reference line + >=1 label → 1.0
-    - No maturity reference line → 0.5 (acceptable: no meeting-prep report)
-    - Has reference line but no labels → 0.0
+
+def _report_action_maturity_labeled(content: str) -> float:
+    """Check action items for maturity level markers — graded by coverage.
+
+    Scoring:
+    - No action section → 0.5 (degraded gracefully)
+    - No maturity reference line → 0.5 (no meeting-prep available)
+    - Has ref line but no labels → 0.0
+    - Has ref line + labels → unique dimensions covered / 4 (max 1.0)
     """
-    # Try to find the action section by title first, then fall back to section number
     s_action = _extract_section(content, "優先行動清單")
     if not s_action:
-        # Fall back to section numbers: S6 (7-section fallback) or S5 (API mode)
         s_action = _extract_section(content, "## 六、") or _extract_section(content, "## 五、")
     if not s_action:
-        return 0.5  # No action section found, degrade gracefully
+        return 0.5
 
     labels = re.findall(
-        r"\[(?:策略|流程|關鍵字|指標)\s*L[1-4]→L[1-4]\]", s_action
+        r"\[(策略|流程|關鍵字|指標)\s*L[1-4]→L[1-4]\]", s_action
     )
     has_ref_line = "成熟度參考" in s_action
-    if has_ref_line and len(labels) >= 1:
-        return 1.0
     if not has_ref_line:
-        return 0.5  # No meeting-prep report available → degraded OK
-    return 0.0
+        return 0.5
+    if not labels:
+        return 0.0
+    unique_dims = len(set(labels))
+    return min(unique_dims / len(MATURITY_DIMENSIONS), 1.0)
 
 
 def evaluate_report(content: str, alert_names: list[str]) -> dict[str, float]:
@@ -306,8 +309,74 @@ def section_depth_variance(content: str) -> float:
     return max(0.0, min(1.0, 1.0 - cv))
 
 
+WEEK_PCT_RE = re.compile(r"週.*?[+-]?\d+(?:\.\d+)?%|[+-]?\d+(?:\.\d+)?%.*?週")
+MONTH_PCT_RE = re.compile(r"月.*?[+-]?\d+(?:\.\d+)?%|[+-]?\d+(?:\.\d+)?%.*?月")
+
+
+def temporal_dual_frame(content: str) -> float:
+    """Lines with BOTH weekly AND monthly percentage data (strict dual-frame)."""
+    if not content.strip():
+        return 0.0
+    count = 0
+    for line in content.split("\n"):
+        if WEEK_PCT_RE.search(line) and MONTH_PCT_RE.search(line):
+            count += 1
+    return min(count / 15, 1.0)
+
+
+def priority_balance(content: str) -> float:
+    """🔴/🟡/🟢 distribution balance — count lines containing each emoji."""
+    if not content.strip():
+        return 0.0
+    lines = content.split("\n")
+    red = sum(1 for ln in lines if "🔴" in ln)
+    yellow = sum(1 for ln in lines if "🟡" in ln)
+    green = sum(1 for ln in lines if "🟢" in ln)
+    total = red + yellow + green
+    if total == 0:
+        return 0.0
+    # Thresholds: 🔴≥4, 🟡≥3, 🟢≥2 (higher than previous /3, /2, /1)
+    return round(
+        (min(red / 4, 1.0) + min(yellow / 3, 1.0) + min(green / 2, 1.0)) / 3,
+        4,
+    )
+
+
+def causal_chain(content: str) -> float:
+    """Count structured **現象** → **原因** → **行動** analysis blocks."""
+    if not content.strip():
+        return 0.0
+    blocks = re.findall(
+        r"\*\*現象\*\*.*?\*\*原因\*\*.*?\*\*行動\*\*", content, re.DOTALL
+    )
+    return min(len(blocks) / 5, 1.0)
+
+
+TOP_REC_REASON_RES = [
+    re.compile(r"雖然"), re.compile(r"因為"), re.compile(r"理由"),
+    re.compile(r"原因"), re.compile(r"而"), re.compile(r"但"),
+    re.compile(r"相比"), re.compile(r"優先"),
+]
+
+
+def top_recommendation(content: str) -> float:
+    """Graded: has 💡/最值得投入 (0.5) + has justification reason (0.5)."""
+    if not content.strip():
+        return 0.0
+    has_marker = "最值得投入" in content or "💡" in content
+    if not has_marker:
+        return 0.0
+    # Find the marker's surrounding text (200 chars after)
+    idx = content.find("最值得投入")
+    if idx == -1:
+        idx = content.find("💡")
+    nearby = content[idx: idx + 300]
+    has_reason = any(r.search(nearby) for r in TOP_REC_REASON_RES)
+    return 1.0 if has_reason else 0.5
+
+
 def evaluate_report_l2(content: str) -> dict[str, float]:
-    """Run all 6 L2 metrics."""
+    """Run all 10 L2 metrics."""
     return {
         "report_cross_metric_reasoning": round(cross_metric_reasoning(content), 4),
         "report_action_specificity": round(action_specificity(content), 4),
@@ -315,6 +384,10 @@ def evaluate_report_l2(content: str) -> dict[str, float]:
         "report_citation_integration": round(citation_integration(content), 4),
         "report_quadrant_judgment": round(quadrant_judgment(content), 4),
         "report_section_depth_variance": round(section_depth_variance(content), 4),
+        "report_temporal_dual_frame": round(temporal_dual_frame(content), 4),
+        "report_priority_balance": round(priority_balance(content), 4),
+        "report_causal_chain": round(causal_chain(content), 4),
+        "report_top_recommendation": round(top_recommendation(content), 4),
     }
 
 
@@ -328,6 +401,28 @@ def compute_composite_v2(l1_overall: float, l2: dict[str, float]) -> float:
         + l2["report_citation_integration"] * 0.10
         + l2["report_quadrant_judgment"] * 0.10
         + l2["report_section_depth_variance"] * 0.08,
+        4,
+    )
+
+
+def compute_composite_v3(l1: dict[str, float], l2: dict[str, float]) -> float:
+    """Composite V3: 12 metrics (L1 overall + maturity + 10 L2). Sum = 1.00."""
+    return round(
+        # Core analysis quality (0.46)
+        l1["report_overall"] * 0.22
+        + l2["report_cross_metric_reasoning"] * 0.12
+        + l2["report_action_specificity"] * 0.12
+        # Content richness (0.30)
+        + l2["report_data_evidence_ratio"] * 0.09
+        + l2["report_citation_integration"] * 0.08
+        + l2["report_quadrant_judgment"] * 0.07
+        + l2["report_section_depth_variance"] * 0.06
+        # New dimensions (0.24)
+        + l2["report_temporal_dual_frame"] * 0.07
+        + l2["report_causal_chain"] * 0.06
+        + l2["report_priority_balance"] * 0.05
+        + l1["report_action_maturity_labeled"] * 0.04
+        + l2["report_top_recommendation"] * 0.02,
         4,
     )
 

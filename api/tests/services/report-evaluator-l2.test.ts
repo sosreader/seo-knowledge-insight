@@ -6,6 +6,10 @@ import {
   citationIntegration,
   quadrantJudgment,
   sectionDepthVariance,
+  temporalDualFrame,
+  priorityBalance,
+  causalChain,
+  topRecommendation,
   evaluateReportL2,
   type ReportEvalL2Result,
 } from "../../src/services/report-evaluator-l2.js";
@@ -374,10 +378,118 @@ ${"深入分析。".repeat(50)}
   });
 });
 
+// ── temporalDualFrame ─────────────────────────────────────────────────
+
+describe("temporalDualFrame()", () => {
+  it("scores based on lines with both weekly AND monthly percentages", () => {
+    const content = `Discover 週崩 -55.4%（月 -24.1%）
+外部連結月跌 -30.5% / 週跌 -21.3%
+「電影」關鍵字月跌 -25.5% / 週跌 -37.0%
+Video 月漲 +293.2% / 週漲 +42.2%
+AI 流量佔比月漲 +20.9% / 週漲 +29.9%`;
+    const score = temporalDualFrame(content);
+    expect(score).toBeGreaterThan(0.3);
+    expect(score).toBeLessThanOrEqual(1.0);
+  });
+
+  it("returns 0 when only one timeframe mentioned", () => {
+    expect(temporalDualFrame("本週流量下降 10%。")).toBe(0);
+  });
+
+  it("returns 0 for empty content", () => {
+    expect(temporalDualFrame("")).toBe(0);
+  });
+
+  it("partial score for fewer lines (denominator is 15)", () => {
+    const content = `Discover 週跌 -55% 且月跌 -24%。`;
+    const score = temporalDualFrame(content);
+    expect(score).toBeCloseTo(1 / 15, 2);
+  });
+});
+
+// ── priorityBalance ──────────────────────────────────────────────────
+
+describe("priorityBalance()", () => {
+  it("scores 1.0 for well-balanced emoji distribution", () => {
+    const content = `🔴 A\n🔴 B\n🔴 C\n🔴 D\n🟡 E\n🟡 F\n🟡 G\n🟢 H\n🟢 I`;
+    expect(priorityBalance(content)).toBeCloseTo(1.0);
+  });
+
+  it("partial score when 🟡 is underrepresented", () => {
+    // 🔴=4, 🟡=1, 🟢=3 → (1 + 0.33 + 1) / 3 ≈ 0.78
+    const content = `🔴 A\n🔴 B\n🔴 C\n🔴 D\n🟡 E\n🟢 F\n🟢 G\n🟢 H`;
+    const score = priorityBalance(content);
+    expect(score).toBeGreaterThan(0.7);
+    expect(score).toBeLessThan(0.9);
+  });
+
+  it("returns 0 for no priority markers", () => {
+    expect(priorityBalance("一般內容，沒有優先級標記。")).toBe(0);
+  });
+
+  it("returns 0 for empty content", () => {
+    expect(priorityBalance("")).toBe(0);
+  });
+});
+
+// ── causalChain ──────────────────────────────────────────────────────
+
+describe("causalChain()", () => {
+  it("partial score for 3 blocks (denominator is 5)", () => {
+    const content = `> **現象** 流量下降
+> **原因** 演算法更新
+> **行動** 調整內容
+
+> **現象** CTR 下滑
+> **原因** 標題過時
+> **行動** 重寫標題
+
+> **現象** 索引減少
+> **原因** 內容稀薄
+> **行動** 充實內容`;
+    expect(causalChain(content)).toBeCloseTo(0.6);
+  });
+
+  it("scores 1.0 for 5+ blocks", () => {
+    const blocks = Array.from({ length: 5 }, (_, i) =>
+      `> **現象** 問題${i}\n> **原因** 原因${i}\n> **行動** 處理${i}`
+    ).join("\n\n");
+    expect(causalChain(blocks)).toBe(1.0);
+  });
+
+  it("returns 0 for no structured blocks", () => {
+    expect(causalChain("流量下降了，原因不明。")).toBe(0);
+  });
+
+  it("returns 0 for empty content", () => {
+    expect(causalChain("")).toBe(0);
+  });
+});
+
+// ── topRecommendation ────────────────────────────────────────────────
+
+describe("topRecommendation()", () => {
+  it("returns 1.0 when marker + justification present", () => {
+    expect(topRecommendation("💡 **最值得投入時間的 1 項**：修復索引問題。雖然 Discover 跌幅最大，但索引問題更關鍵。")).toBe(1.0);
+  });
+
+  it("returns 0.5 when marker present but no justification", () => {
+    expect(topRecommendation("💡 修復索引")).toBe(0.5);
+  });
+
+  it("returns 0 when neither marker is present", () => {
+    expect(topRecommendation("一般報告內容。")).toBe(0);
+  });
+
+  it("returns 0 for empty content", () => {
+    expect(topRecommendation("")).toBe(0);
+  });
+});
+
 // ── evaluateReportL2 (aggregate) ─────────────────────────────────────
 
 describe("evaluateReportL2()", () => {
-  it("returns all fields in ReportEvalL2Result", () => {
+  it("returns all 10 fields in ReportEvalL2Result", () => {
     const result = evaluateReportL2(GOOD_REPORT);
     expect(result).toHaveProperty("cross_metric_reasoning");
     expect(result).toHaveProperty("action_specificity");
@@ -385,9 +497,13 @@ describe("evaluateReportL2()", () => {
     expect(result).toHaveProperty("citation_integration");
     expect(result).toHaveProperty("quadrant_judgment");
     expect(result).toHaveProperty("section_depth_variance");
+    expect(result).toHaveProperty("temporal_dual_frame");
+    expect(result).toHaveProperty("priority_balance");
+    expect(result).toHaveProperty("causal_chain");
+    expect(result).toHaveProperty("top_recommendation");
   });
 
-  it("good report scores higher than poor report across all dimensions", () => {
+  it("good report scores higher than poor report across original dimensions", () => {
     const good = evaluateReportL2(GOOD_REPORT);
     const poor = evaluateReportL2(POOR_REPORT);
 
@@ -411,6 +527,10 @@ describe("evaluateReportL2()", () => {
     expect(result.citation_integration).toBe(0);
     expect(result.quadrant_judgment).toBe(0);
     expect(result.section_depth_variance).toBe(0);
+    expect(result.temporal_dual_frame).toBe(0);
+    expect(result.priority_balance).toBe(0);
+    expect(result.causal_chain).toBe(0);
+    expect(result.top_recommendation).toBe(0);
   });
 
   it("all scores are in [0, 1] range", () => {

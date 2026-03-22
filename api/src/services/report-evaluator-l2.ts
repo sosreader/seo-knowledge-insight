@@ -22,6 +22,14 @@ export interface ReportEvalL2Result {
   quadrant_judgment: number;
   /** Section word-count balance: 1 - (std / mean) (0–1) */
   section_depth_variance: number;
+  /** Paragraphs comparing both weekly and monthly trends (0–1) */
+  temporal_dual_frame: number;
+  /** 🔴/🟡/🟢 action item distribution balance (0–1) */
+  priority_balance: number;
+  /** Structured 現象→原因→行動 analysis blocks (0–1) */
+  causal_chain: number;
+  /** Single "most important" recommendation summary present (0 or 1) */
+  top_recommendation: number;
 }
 
 // ── SEO metric vocabulary ─────────────────────────────────────────────
@@ -344,10 +352,93 @@ export function sectionDepthVariance(content: string): number {
   return Math.max(0, Math.min(1, 1 - cv));
 }
 
+// ── New L2 metrics (v3) ──────────────────────────────────────────────
+
+const WEEK_PCT_RE = /週.*?[+-]?\d+(?:\.\d+)?%|[+-]?\d+(?:\.\d+)?%.*?週/;
+const MONTH_PCT_RE = /月.*?[+-]?\d+(?:\.\d+)?%|[+-]?\d+(?:\.\d+)?%.*?月/;
+
+/**
+ * Measure temporal dual-frame analysis.
+ *
+ * Counts LINES with BOTH weekly AND monthly percentage data.
+ * Returns count / 12 (capped at 1.0). Stricter than paragraph-level matching.
+ */
+export function temporalDualFrame(content: string): number {
+  if (!content || content.trim().length === 0) return 0;
+
+  let count = 0;
+  for (const line of content.split("\n")) {
+    if (WEEK_PCT_RE.test(line) && MONTH_PCT_RE.test(line)) {
+      count++;
+    }
+  }
+  return Math.min(count / 15, 1.0);
+}
+
+/**
+ * Measure action priority balance — count lines containing each emoji.
+ *
+ * Thresholds: 🔴≥4, 🟡≥3, 🟢≥2 (higher than v2 to increase discrimination).
+ */
+export function priorityBalance(content: string): number {
+  if (!content || content.trim().length === 0) return 0;
+
+  const lines = content.split("\n");
+  let red = 0;
+  let yellow = 0;
+  let green = 0;
+
+  for (const ln of lines) {
+    if (ln.includes("🔴")) red++;
+    if (ln.includes("🟡")) yellow++;
+    if (ln.includes("🟢")) green++;
+  }
+
+  const total = red + yellow + green;
+  if (total === 0) return 0;
+
+  return (
+    (Math.min(red / 4, 1.0) + Math.min(yellow / 3, 1.0) + Math.min(green / 2, 1.0)) / 3
+  );
+}
+
+/**
+ * Count structured **現象** → **原因** → **行動** analysis blocks.
+ *
+ * Returns count / 5 (capped at 1.0).
+ */
+export function causalChain(content: string): number {
+  if (!content || content.trim().length === 0) return 0;
+
+  const blocks = content.match(/\*\*現象\*\*[\s\S]*?\*\*原因\*\*[\s\S]*?\*\*行動\*\*/g) ?? [];
+  return Math.min(blocks.length / 5, 1.0);
+}
+
+const TOP_REC_REASON_PATTERNS = [
+  /雖然/, /因為/, /理由/, /原因/, /而/, /但/, /相比/, /優先/,
+] as const;
+
+/**
+ * Graded: has 💡/最值得投入 (0.5) + has justification reason (0.5).
+ */
+export function topRecommendation(content: string): number {
+  if (!content || content.trim().length === 0) return 0;
+
+  const hasMarker =
+    content.includes("最值得投入") || content.includes("💡");
+  if (!hasMarker) return 0;
+
+  let idx = content.indexOf("最值得投入");
+  if (idx === -1) idx = content.indexOf("💡");
+  const nearby = content.slice(idx, idx + 300);
+  const hasReason = TOP_REC_REASON_PATTERNS.some((p) => p.test(nearby));
+  return hasReason ? 1.0 : 0.5;
+}
+
 // ── Aggregate ─────────────────────────────────────────────────────────
 
 /**
- * Run all 6 L2 metrics on a report and return the result.
+ * Run all 10 L2 metrics on a report and return the result.
  */
 export function evaluateReportL2(content: string): ReportEvalL2Result {
   return {
@@ -357,5 +448,9 @@ export function evaluateReportL2(content: string): ReportEvalL2Result {
     citation_integration: citationIntegration(content),
     quadrant_judgment: quadrantJudgment(content),
     section_depth_variance: sectionDepthVariance(content),
+    temporal_dual_frame: temporalDualFrame(content),
+    priority_balance: priorityBalance(content),
+    causal_chain: causalChain(content),
+    top_recommendation: topRecommendation(content),
   };
 }

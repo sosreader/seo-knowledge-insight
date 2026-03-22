@@ -2015,6 +2015,54 @@ LOOP FOREVER:
 4. 相關參數連動：semanticWeight + kwBoost.boost 反相關
 5. 聚焦 rerank：base scores 好但最終輸出差 → 專注 rerankCandidates
 
+### 24.7 Report 版 AutoResearch（v3.8）
+
+與 Retrieval 版的核心差異：**無 runner.sh** — agent 本身就是 LLM，在循環中自己改 prompt → 自己生成報告 → 呼叫 eval script → keep/discard。
+
+```
+autoresearch/
+├── program_report.md         # Agent 研究指令（~123 行）
+├── eval_report_local.py      # 評估腳本（~105 行）——匯入 scripts/_eval_report.py
+├── baseline_report.json      # composite_v3 基準線（0.7929）
+├── results_report.tsv        # 實驗記錄（.gitignore 排除）
+├── program.md                # [Retrieval] 研究指令
+├── eval_local.py             # [Retrieval] 評估腳本
+├── runner.sh                 # [Retrieval] 實驗執行器
+├── baseline.json             # [Retrieval] 基準線
+└── results.tsv               # [Retrieval] 實驗記錄
+```
+
+**Retrieval vs Report 對比：**
+
+| 面向 | Retrieval | Report |
+|------|-----------|--------|
+| 可修改物 | TS 數值參數（25 個） | `.claude/commands/generate-report.md`（1 個 prompt） |
+| 每輪執行 | `runner.sh` → API × 35 queries | Agent 自己生成報告 → eval |
+| 每輪耗時 | ~40 秒 | ~3-5 分鐘 |
+| Eval 指標 | 8 個 retrieval metrics | 17 個 report metrics（L1+L2） |
+| Composite | retrieval composite（0.905 baseline） | composite_v3（0.7929 baseline，12 加權指標） |
+
+**composite_v3 公式（12 指標，sum = 1.00）：**
+
+```
+composite_v3 = (
+  l1_overall              × 0.22 +   # L1 五指標平均
+  cross_metric_reasoning  × 0.12 +   # 跨指標因果推理
+  action_specificity      × 0.12 +   # 行動具體度
+  data_evidence_ratio     × 0.09 +   # 數據密度
+  citation_integration    × 0.08 +   # 引用分布品質
+  quadrant_judgment       × 0.07 +   # 象限分析
+  section_depth_variance  × 0.06 +   # 段落均衡度
+  temporal_dual_frame     × 0.07 +   # 週/月雙框架 (NEW)
+  causal_chain            × 0.06 +   # 現象→原因→行動 (NEW)
+  priority_balance        × 0.05 +   # 🔴/🟡/🟢分布 (NEW)
+  action_maturity_labeled × 0.04 +   # 成熟度維度覆蓋 (NEW)
+  top_recommendation      × 0.02     # 單一推薦摘要 (NEW)
+)
+```
+
+**新指標設計依據：** 詳見 `memory/report-eval-v3-design.md`（G-Eval / RAGAS / MoSCoW / RCA / Pyramid Principle / CMMI）
+
 ### 24.7 實驗結果記錄格式
 
 `results.tsv` 欄位：
