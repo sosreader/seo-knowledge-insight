@@ -388,7 +388,7 @@ meeting-prep-topics-json: ## 最近 3 份會議的主題詞（JSON）
 
 .PHONY: autoresearch-baseline
 autoresearch-baseline: ## AutoResearch baseline eval（需先啟動 API server + RATE_LIMIT_DEFAULT=9999）
-	bash autoresearch/runner.sh "baseline"
+	bash autoresearch/retrieval/runner.sh "baseline"
 
 # ── 說明 ─────────────────────────────────────────────
 

@@ -305,16 +305,16 @@ export function computeCompositeV3(
   l2: ReportEvalL2Result,
 ): number {
   return (
-    // Core analysis quality (0.46)
-    l1.overall * 0.22 +
-    l2.cross_metric_reasoning * 0.12 +
-    l2.action_specificity * 0.12 +
-    // Content richness (0.30)
+    // Core analysis quality
+    l1.overall * 0.12 +
+    l2.cross_metric_reasoning * 0.15 +
+    l2.action_specificity * 0.15 +
+    // Content richness
     l2.data_evidence_ratio * 0.09 +
     l2.citation_integration * 0.08 +
     l2.quadrant_judgment * 0.07 +
-    l2.section_depth_variance * 0.06 +
-    // New dimensions (0.24)
+    l2.section_depth_variance * 0.10 +
+    // New dimensions
     l2.temporal_dual_frame * 0.07 +
     l2.causal_chain * 0.06 +
     l2.priority_balance * 0.05 +
@@ -348,14 +348,14 @@ function actionMaturityLabeled(content: string): number {
   const hasRefLine = actionSection.includes("成熟度參考");
   if (!hasRefLine) return 0.5;
 
-  const dims = new Set<string>();
+  let totalLabels = 0;
   let match: RegExpExecArray | null;
   const re = new RegExp(MATURITY_LABEL_RE.source, "g");
   while ((match = re.exec(actionSection)) !== null) {
-    dims.add(match[1]);
+    totalLabels++;
   }
-  if (dims.size === 0) return 0.0;
-  return Math.min(dims.size / MATURITY_DIMENSIONS.size, 1.0);
+  if (totalLabels === 0) return 0.0;
+  return Math.min(totalLabels / 6, 1.0);
 }
 
 /**

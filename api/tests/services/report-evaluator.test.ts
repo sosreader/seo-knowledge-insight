@@ -403,7 +403,22 @@ describe("computeCompositeV2()", () => {
 // ── action_maturity_labeled ──────────────────────────────────────────
 
 describe("action_maturity_labeled", () => {
-  it("returns 1.0 when all 4 maturity dimensions labeled", () => {
+  it("returns 1.0 when 6+ maturity labels present", () => {
+    const content = `## 五、優先行動清單
+
+> 成熟度參考：策略 L2 / 流程 L2
+
+- 🔴 修復索引 — **[策略 L2→L3]**
+- 🔴 檢查結構 — **[策略 L2→L3]**
+- 🟡 優化標題 — **[關鍵字 L3→L3]**
+- 🟡 改善流程 — **[流程 L2→L3]**
+- 🟡 追蹤工具 — **[流程 L2→L3]**
+- 🟢 追蹤指標 — **[指標 L2→L3]**`;
+    const result = evaluateReport(content, []);
+    expect(result.action_maturity_labeled).toBe(1.0);
+  });
+
+  it("returns 0.67 for 4 total labels", () => {
     const content = `## 五、優先行動清單
 
 > 成熟度參考：策略 L2 / 流程 L2
@@ -413,19 +428,8 @@ describe("action_maturity_labeled", () => {
 - 🟡 改善流程 — **[流程 L2→L3]**
 - 🟢 追蹤指標 — **[指標 L2→L3]**`;
     const result = evaluateReport(content, []);
-    expect(result.action_maturity_labeled).toBe(1.0);
-  });
-
-  it("returns 0.75 for 3 unique dimensions", () => {
-    const content = `## 五、優先行動清單
-
-> 成熟度參考：策略 L2 / 流程 L2
-
-- 🔴 修復索引 — **[策略 L2→L3]**
-- 🟡 優化標題 — **[關鍵字 L3→L3]**
-- 🟡 改善流程 — **[流程 L2→L3]**`;
-    const result = evaluateReport(content, []);
-    expect(result.action_maturity_labeled).toBe(0.75);
+    // 4 labels / 6 ≈ 0.667
+    expect(result.action_maturity_labeled).toBeCloseTo(0.667, 2);
   });
 
   it("returns 0.5 when no maturity ref line", () => {

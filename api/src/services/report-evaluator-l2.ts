@@ -182,7 +182,7 @@ export function crossMetricReasoning(content: string): number {
     }
   }
 
-  return Math.min(crossMetricCount / 5, 1.0);
+  return Math.min(crossMetricCount / 15, 1.0);
 }
 
 /**
@@ -197,55 +197,54 @@ export function actionSpecificity(content: string): number {
 
   const actionLines = content
     .split("\n")
-    .filter((line) => /^\s*-\s/.test(line))
+    .filter((line) => /^\s*(?:-|\d+\.)\s/.test(line))
     .map((line) => line.trim());
 
   if (actionLines.length === 0) return 0;
 
   let specificCount = 0;
-  let vagueCount = 0;
 
   for (const line of actionLines) {
-    const isSpecific = SPECIFIC_ACTION_PATTERNS.some((p) => p.test(line));
-    const isVague = VAGUE_ACTION_PATTERNS.some((p) => p.test(line));
-
-    if (isSpecific) {
+    if (SPECIFIC_ACTION_PATTERNS.some((p) => p.test(line))) {
       specificCount++;
-    } else if (isVague) {
-      vagueCount++;
     }
-    // Lines matching neither are neutral — don't count toward either side
   }
 
-  const scoredTotal = specificCount + vagueCount;
-  if (scoredTotal === 0) return 0.5; // All neutral → middle score
-
-  return specificCount / scoredTotal;
+  // All action lines count as denominator (not just specific + vague)
+  return specificCount / actionLines.length;
 }
 
+const PERCENT_RE = /[+-]?\d+(?:\.\d+)?%/;
+const LARGE_NUMBER_RE = /\b(?:\d{1,3}(?:,\d{3})+|\d{3,})\b(?!%)/g;
+
 /**
- * Measure data evidence density.
+ * Measure data evidence density at paragraph level.
  *
- * Counts percentage patterns (N%, +N%, -N.N%) and large numbers (≥100)
- * in the content. Returns count / 20 (capped at 1.0).
+ * Splits content into paragraphs, counts paragraphs containing a percentage
+ * pattern OR a large number (≥100). Returns count / 15 (capped at 1.0).
  */
 export function dataEvidenceRatio(content: string): number {
   if (!content || content.trim().length === 0) return 0;
 
-  // Count percentage patterns: 3.36%, +5.9%, -17.4%, 82.3%
-  const percentMatches = content.match(/[+-]?\d+(?:\.\d+)?%/g) ?? [];
+  const paragraphs = content.split(/\n\n+/).filter((p) => p.trim().length > 0);
 
-  // Count large numbers: 125,000 or 4200 (≥100), excluding those followed by %
-  const numberMatches =
-    content.match(/\b(?:\d{1,3}(?:,\d{3})+|\d{3,})\b(?!%)/g) ?? [];
-  // Filter to numbers ≥ 100
-  const largeNumbers = numberMatches.filter((n) => {
-    const num = parseInt(n.replace(/,/g, ""), 10);
-    return num >= 100;
-  });
+  let count = 0;
+  for (const para of paragraphs) {
+    if (PERCENT_RE.test(para)) {
+      count++;
+      continue;
+    }
+    const numberMatches = para.match(LARGE_NUMBER_RE) ?? [];
+    const hasLargeNumber = numberMatches.some((n) => {
+      const num = parseInt(n.replace(/,/g, ""), 10);
+      return num >= 100;
+    });
+    if (hasLargeNumber) {
+      count++;
+    }
+  }
 
-  const totalEvidence = percentMatches.length + largeNumbers.length;
-  return Math.min(totalEvidence / 20, 1.0);
+  return Math.min(count / 70, 1.0);
 }
 
 /**
@@ -272,7 +271,29 @@ export function citationIntegration(content: string): number {
 
   if (uniqueAllCitations.size === 0) return 0;
 
-  return uniqueBodyCitations.size / uniqueAllCitations.size;
+  const inline_ratio = uniqueBodyCitations.size / uniqueAllCitations.size;
+
+  // Section diversity: how many of the 7 sections contain a [N] citation
+  let sectionsWithCitation = 0;
+  for (let i = 0; i < SECTION_MARKERS.length; i++) {
+    const marker = SECTION_MARKERS[i];
+    const startIdx = content.indexOf(marker);
+    if (startIdx === -1) continue;
+    const nextIdx =
+      i + 1 < SECTION_MARKERS.length
+        ? content.indexOf(SECTION_MARKERS[i + 1], startIdx + marker.length)
+        : -1;
+    const sectionText =
+      nextIdx === -1
+        ? content.slice(startIdx)
+        : content.slice(startIdx, nextIdx);
+    if (/\[\d+\]/.test(sectionText)) {
+      sectionsWithCitation++;
+    }
+  }
+  const section_diversity = sectionsWithCitation / SECTION_MARKERS.length;
+
+  return inline_ratio * section_diversity;
 }
 
 /**

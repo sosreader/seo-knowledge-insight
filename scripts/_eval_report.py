@@ -103,7 +103,7 @@ def _report_action_maturity_labeled(content: str) -> float:
     - No action section → 0.5 (degraded gracefully)
     - No maturity reference line → 0.5 (no meeting-prep available)
     - Has ref line but no labels → 0.0
-    - Has ref line + labels → unique dimensions covered / 4 (max 1.0)
+    - Has ref line + labels → total label count / 6 (max 1.0)
     """
     s_action = _extract_section(content, "優先行動清單")
     if not s_action:
@@ -112,15 +112,14 @@ def _report_action_maturity_labeled(content: str) -> float:
         return 0.5
 
     labels = re.findall(
-        r"\[(策略|流程|關鍵字|指標)\s*L[1-4]→L[1-4]\]", s_action
+        r"\[(?:策略|流程|關鍵字|指標)\s*L[1-4]→L[1-4]\]", s_action
     )
     has_ref_line = "成熟度參考" in s_action
     if not has_ref_line:
         return 0.5
     if not labels:
         return 0.0
-    unique_dims = len(set(labels))
-    return min(unique_dims / len(MATURITY_DIMENSIONS), 1.0)
+    return min(len(labels) / 6, 1.0)
 
 
 def evaluate_report(content: str, alert_names: list[str]) -> dict[str, float]:
@@ -224,35 +223,35 @@ def cross_metric_reasoning(content: str) -> float:
         found = {m for m in SEO_METRICS if m in para}
         if len(found) >= 2:
             count += 1
-    return min(count / 5, 1.0)
+    return min(count / 15, 1.0)
 
 
 def action_specificity(content: str) -> float:
     """Ratio of specific vs vague action items."""
     if not content.strip():
         return 0.0
-    lines = [ln.strip() for ln in content.split("\n") if re.match(r"^\s*-\s", ln)]
+    lines = [ln.strip() for ln in content.split("\n") if re.match(r"^\s*(?:-|\d+\.)\s", ln)]
     if not lines:
         return 0.0
     specific = sum(1 for ln in lines if any(p.search(ln) for p in SPECIFIC_ACTION_RES))
-    vague = sum(1 for ln in lines if any(p.search(ln) for p in VAGUE_ACTION_RES))
-    total = specific + vague
-    if total == 0:
-        return 0.5
-    return specific / total
+    # All action lines count as denominator (not just specific + vague)
+    return specific / len(lines) if lines else 0.0
 
 
 def data_evidence_ratio(content: str) -> float:
-    """Percentage patterns + large numbers (≥100) / 20."""
+    """Paragraph-level data coverage: paragraphs containing % or large numbers / 15."""
     if not content.strip():
         return 0.0
-    pct = len(PERCENT_RE.findall(content))
-    nums = [n for n in LARGE_NUMBER_RE.findall(content) if int(n.replace(",", "")) >= 100]
-    return min((pct + len(nums)) / 20, 1.0)
+    paragraphs = [p.strip() for p in re.split(r"\n\n+", content) if p.strip()]
+    count = sum(
+        1 for p in paragraphs
+        if PERCENT_RE.search(p) or LARGE_NUMBER_RE.search(p)
+    )
+    return min(count / 70, 1.0)
 
 
 def citation_integration(content: str) -> float:
-    """Inline [N] in body vs total [N] — 1.0 = woven in, 0 = tail-stacked."""
+    """Inline [N] ratio × section diversity — citations spread across sections."""
     if not content.strip():
         return 0.0
     all_cites = set(CITATION_RE.findall(content))
@@ -261,7 +260,17 @@ def citation_integration(content: str) -> float:
     ref_idx = content.find("## 七、")
     body = content[:ref_idx] if ref_idx != -1 else content
     body_cites = set(CITATION_RE.findall(body))
-    return len(body_cites) / len(all_cites)
+    inline_ratio = len(body_cites) / len(all_cites)
+
+    # Section diversity: how many sections contain citations
+    sections_with_cite = 0
+    for marker in L2_SECTION_MARKERS:
+        section = _extract_section(content, marker)
+        if section and CITATION_RE.search(section):
+            sections_with_cite += 1
+    section_diversity = sections_with_cite / len(L2_SECTION_MARKERS) if L2_SECTION_MARKERS else 1.0
+
+    return inline_ratio * section_diversity
 
 
 def quadrant_judgment(content: str) -> float:
@@ -408,16 +417,17 @@ def compute_composite_v2(l1_overall: float, l2: dict[str, float]) -> float:
 def compute_composite_v3(l1: dict[str, float], l2: dict[str, float]) -> float:
     """Composite V3: 12 metrics (L1 overall + maturity + 10 L2). Sum = 1.00."""
     return round(
-        # Core analysis quality (0.46)
-        l1["report_overall"] * 0.22
-        + l2["report_cross_metric_reasoning"] * 0.12
-        + l2["report_action_specificity"] * 0.12
-        # Content richness (0.30)
+        # Guardrail (0.12)
+        l1["report_overall"] * 0.12
+        # Core analysis quality (0.30)
+        + l2["report_cross_metric_reasoning"] * 0.15
+        + l2["report_action_specificity"] * 0.15
+        # Content richness (0.34)
         + l2["report_data_evidence_ratio"] * 0.09
         + l2["report_citation_integration"] * 0.08
         + l2["report_quadrant_judgment"] * 0.07
-        + l2["report_section_depth_variance"] * 0.06
-        # New dimensions (0.24)
+        + l2["report_section_depth_variance"] * 0.10
+        # Structure + new dimensions (0.24)
         + l2["report_temporal_dual_frame"] * 0.07
         + l2["report_causal_chain"] * 0.06
         + l2["report_priority_balance"] * 0.05

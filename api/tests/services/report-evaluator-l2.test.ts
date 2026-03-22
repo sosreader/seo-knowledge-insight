@@ -111,8 +111,9 @@ describe("crossMetricReasoning()", () => {
 因此排名位置下移導致 CTR 斷崖式下降。
 Discover 流量月減 24.1%，但有機搜尋點擊僅減 12.5%，導致 Discover 佔比下降。`;
     const score = crossMetricReasoning(content);
-    expect(score).toBeGreaterThanOrEqual(0.5);
-    expect(score).toBeLessThanOrEqual(1.0);
+    // 3 qualifying lines / 15 = 0.2
+    expect(score).toBeGreaterThanOrEqual(0.1);
+    expect(score).toBeLessThanOrEqual(0.3);
   });
 
   it("returns 0 for content with no cross-metric reasoning", () => {
@@ -185,12 +186,26 @@ describe("actionSpecificity()", () => {
 // ── dataEvidenceRatio ────────────────────────────────────────────────
 
 describe("dataEvidenceRatio()", () => {
-  it("returns high score for data-rich content", () => {
-    const content = `CTR 從 4.07% 下降至 3.36%（-17.4%），曝光 125,000 次，點擊 4,200 次。
-Discover 流量月減 24.1%（從 8,500 降至 6,452）。索引覆蓋率 82.3%。
-Position 3 CTR 約 11% vs Position 7 僅 3.5%。`;
+  it("returns score based on paragraph-level data coverage (/70)", () => {
+    const content = `CTR 從 4.07% 下降至 3.36%。
+
+Discover 流量月減 24.1%。
+
+索引覆蓋率 82.3%。
+
+Position 3 CTR 約 11%。
+
+曝光 125,000 次。
+
+點擊 -12.5%。
+
+Core Web Vitals LCP 2.1s（+15%）。
+
+有機搜尋成長 +5.9%。`;
     const score = dataEvidenceRatio(content);
-    expect(score).toBeGreaterThanOrEqual(0.5);
+    // 8 paragraphs with data / 70 ≈ 0.114
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThan(0.3);
   });
 
   it("returns low score for content with no data", () => {
@@ -229,9 +244,14 @@ Position 3 CTR 約 11% vs Position 7 僅 3.5%。`;
 // ── citationIntegration ──────────────────────────────────────────────
 
 describe("citationIntegration()", () => {
-  it("returns high score for inline citations distributed in body", () => {
-    const content = `根據 [1] 的分析，CTR 趨勢顯示下滑。
+  it("returns high score when inline citations spread across sections", () => {
+    const content = `## 一、情勢快照
+根據 [1] 的分析，CTR 趨勢顯示下滑。
+
+## 二、流量解讀
 另外 [2] 指出 Discover 流量受季節影響。
+
+## 三、技術健康
 技術面參考 [3] 建議的 CLS 優化方式。
 
 ## 七、知識庫引用
@@ -239,7 +259,8 @@ describe("citationIntegration()", () => {
 [2] Discover 研究
 [3] CLS 優化`;
     const score = citationIntegration(content);
-    expect(score).toBeGreaterThanOrEqual(0.6);
+    // inline: 3/3=1.0, diversity: 3/7≈0.43, product ≈ 0.43
+    expect(score).toBeGreaterThanOrEqual(0.3);
   });
 
   it("returns low score for citations only stacked at the end", () => {
