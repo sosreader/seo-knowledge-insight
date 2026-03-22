@@ -207,11 +207,11 @@ pnpm install
 pnpm dev               # 啟動前端伺服器（http://localhost:3000）
 ```
 
-測試（811 個測試，80% 覆蓋率）：
+測試（835 個測試，80% 覆蓋率）：
 
 ```bash
 cd api
-pnpm test              # 執行所有 vitest 測試（811 tests, 67 files）
+pnpm test              # 執行所有 vitest 測試（835 tests, 67 files）
 pnpm test:watch       # 監視模式下執行測試
 pnpm test:coverage    # 生成測試覆蓋率報告
 ```
