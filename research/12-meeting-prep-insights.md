@@ -17,6 +17,14 @@
 
 | 2026-03-22 | E:3 E:3 A:2 T:3 (avg 2.75) | 策略:L2 流程:L2 KW:L3 指標:L2 | Feb Discover Core Update 完成、域名池-8%；AI 流量全面正成長驗證顧問假說；外鏈連續4期降→升級必做；AIO 觸發 48% 查詢、有機 CTR -61% |
 
+### Autoresearch Meeting-Prep 實驗結果 (2026-03-22~23)
+
+33 rounds 自主 prompt 優化（`autoresearch/meeting-prep-mar22`），composite eval 0.831→0.903（+8.7%）。
+
+**關鍵改進**：S10 三要素（tool+verb+maturity）、S3→S9 cross-section coverage（KW heading、大型 S1 分群策略）、citation category 指引、heading no-parenthesis rule。
+
+**瓶頸**：cross_section_coherence 受 eval S3/S9 regex 不對稱限制（S3 broad regex 提取 GPT/Gemini/Video/salon，S9 narrow regex 無法匹配），theoretical ceiling 0.919。
+
 <!-- 以下為自動累積區域 -->
 
 ---

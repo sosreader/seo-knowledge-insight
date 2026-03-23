@@ -20,6 +20,14 @@ const MEETING_PREP_META_RE = /<!-- meeting_prep_meta ({[\s\S]*?}) -->/;
 
 const DATE_RE = /^\d{8}(?:_[0-9a-f]{8})?$/;
 
+/** Extract source report date from content header: 來源：`output/report_XXXXXXXX_XXXXXXXX.md` */
+const SOURCE_REPORT_RE = /來源：`?output\/report_([0-9a-zA-Z_]+)\.md`?/;
+
+function parseSourceReportDate(content: string): string | undefined {
+  const m = SOURCE_REPORT_RE.exec(content);
+  return m?.[1] ?? undefined;
+}
+
 /** Parse meeting_prep_meta JSON with field-by-field validation. */
 function parseMeetingPrepMeta(content: string): MeetingPrepMeta | undefined {
   const m = content.match(MEETING_PREP_META_RE);
@@ -55,6 +63,9 @@ function parseMeetingPrepMeta(content: string): MeetingPrepMeta | undefined {
       alert_down_count: typeof raw.alert_down_count === "number" ? raw.alert_down_count : 0,
       question_count: typeof raw.question_count === "number" ? raw.question_count : 0,
       generation_mode: raw.generation_mode,
+      ...(typeof raw.source_report_date === "string"
+        ? { source_report_date: raw.source_report_date }
+        : {}),
     };
   } catch {
     return undefined;
@@ -148,10 +159,23 @@ function getMeetingPrepFromFs(date: string): {
 
 export const meetingPrepRoute = new Hono();
 
+/** Enrich list items: inject source_report_date into meta from content, strip content from response. */
+function enrichSourceReportDate(
+  items: readonly (MeetingPrepSummary & { content: string })[],
+): MeetingPrepSummary[] {
+  return items.map(({ content, ...summary }) => {
+    if (summary.meta?.source_report_date) return summary;
+    const srcDate = parseSourceReportDate(content);
+    if (!srcDate || !summary.meta) return summary;
+    return { ...summary, meta: { ...summary.meta, source_report_date: srcDate } };
+  });
+}
+
 meetingPrepRoute.get("/", async (c) => {
   if (meetingPrepStore) {
     try {
-      const items = await meetingPrepStore.list();
+      const raw = await meetingPrepStore.listWithContent();
+      const items = enrichSourceReportDate(raw);
       return c.json(ok({ items, total: items.length }));
     } catch {
       return c.json(fail("Store unavailable"), 503);
@@ -242,12 +266,16 @@ meetingPrepRoute.get("/:date", async (c) => {
       if (!result) {
         return c.json(fail(`Meeting prep report for ${date} not found`), 404);
       }
+      const meta = result.summary.meta;
+      const enrichedMeta = meta && !meta.source_report_date
+        ? { ...meta, source_report_date: parseSourceReportDate(result.content) }
+        : meta;
       return c.json(ok({
         date: result.summary.date,
         filename: result.summary.filename,
         content: result.content,
         size_bytes: result.summary.size_bytes,
-        meta: result.summary.meta,
+        meta: enrichedMeta,
       }));
     } catch {
       return c.json(fail("Store unavailable"), 503);

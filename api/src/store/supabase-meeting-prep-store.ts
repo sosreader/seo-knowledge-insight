@@ -45,6 +45,21 @@ export class SupabaseMeetingPrepStore {
     }));
   }
 
+  /** List with content (for enrichment). */
+  async listWithContent(): Promise<readonly (MeetingPrepSummary & { content: string })[]> {
+    const rows = await supabaseSelect<MeetingPrepRow>(
+      "meeting_prep",
+      "?select=date_key,filename,size_bytes,meta,content&order=date_key.desc",
+    );
+    return rows.map((r) => ({
+      date: r.date_key,
+      filename: r.filename,
+      size_bytes: r.size_bytes,
+      meta: r.meta,
+      content: r.content,
+    }));
+  }
+
   /** Get a single report by exact or fuzzy date_key match. */
   async getByDate(dateKey: string): Promise<{ summary: MeetingPrepSummary; content: string } | null> {
     assertSafeDateKey(dateKey);

@@ -17,6 +17,7 @@ export interface MeetingPrepMeta {
   readonly alert_down_count: number;
   readonly question_count: number;
   readonly generation_mode: string;
+  readonly source_report_date?: string;
 }
 
 export interface MeetingPrepSummary {
