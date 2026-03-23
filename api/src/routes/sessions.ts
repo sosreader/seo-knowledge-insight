@@ -11,13 +11,11 @@ import { ok, fail } from "../schemas/api-response.js";
 import { sessionStore } from "../store/session-store.js";
 import type { Session } from "../store/session-store.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
-import { anthropicRagChatObserved as anthropicRagChat } from "../services/anthropic-chat.js";
-import { resolveMode, getChatProvider } from "../utils/mode-detect.js";
+import { resolveMode } from "../utils/mode-detect.js";
 import { resolveCapabilities, formatCapabilityTag } from "../utils/capabilities.js";
 import { qaStore } from "../store/qa-store.js";
 import { config } from "../config.js";
 import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
-import { anthropicAgentChatObserved as anthropicAgentChat } from "../agent/anthropic-agent-loop.js";
 import { createAgentDeps } from "../agent/agent-deps.js";
 
 export const sessionsRoute = new Hono();
@@ -160,19 +158,17 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     content: m.content,
   }));
 
-  // 3. Call RAG chat (with context-only fallback when no LLM)
+  // 3. Call RAG chat (with context-only fallback when no OpenAI)
   let result: { answer: string | null; sources: Record<string, unknown>[]; mode: string; metadata?: Record<string, unknown> };
   const ragStartMs = Date.now();
   const caps = resolveCapabilities(c.req.header("user-agent"));
 
-  if (caps.llm !== "none") {
+  if (caps.llm === "openai") {
     const effectiveMode = resolveMode(requestMode);
-    const provider = getChatProvider();
     try {
       if (effectiveMode === "agent") {
         const deps = createAgentDeps();
-        const agentFn = provider === "anthropic" ? anthropicAgentChat : agentChat;
-        const agentResult = await agentFn(
+        const agentResult = await agentChat(
           userMessage,
           history.length > 0 ? history : null,
           deps,
@@ -186,8 +182,7 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
           metadata: agentResult.metadata as unknown as Record<string, unknown>,
         };
       } else {
-        const ragFn = provider === "anthropic" ? anthropicRagChat : ragChat;
-        const ragResult = await ragFn(userMessage, history.length > 0 ? history : null, effectiveMaturity);
+        const ragResult = await ragChat(userMessage, history.length > 0 ? history : null, effectiveMaturity);
         result = {
           answer: ragResult.answer,
           sources: ragResult.sources as unknown as Record<string, unknown>[],

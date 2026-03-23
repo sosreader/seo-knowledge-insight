@@ -1,5 +1,5 @@
 /**
- * Agent tool definitions — Zod schemas + OpenAI/Anthropic tool formats.
+ * Agent tool definitions — Zod schemas + OpenAI function calling format.
  */
 
 import { z } from "zod";
@@ -73,15 +73,4 @@ export function getOpenAITools() {
       },
     },
   ];
-}
-
-// --- Anthropic tool_use definitions ---
-
-/** Same 4 tools in Anthropic's format (input_schema instead of parameters). */
-export function getAnthropicTools() {
-  return getOpenAITools().map((t) => ({
-    name: t.function.name,
-    description: t.function.description,
-    input_schema: t.function.parameters,
-  }));
 }

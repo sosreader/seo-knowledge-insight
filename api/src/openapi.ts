@@ -299,9 +299,9 @@ const paths: Record<string, Record<string, unknown>> = {
                   },
                   llm: {
                     type: "string",
-                    enum: ["openai", "anthropic", "claude-code", "none"],
+                    enum: ["openai", "claude-code", "none"],
                     description:
-                      "有效 LLM。openai = GPT；anthropic = Claude；claude-code = Claude Code 作為 LLM 引擎；none = 無 LLM。\n\nEffective LLM. `openai` = GPT; `anthropic` = Claude; `claude-code` = Claude Code acts as LLM engine; `none` = no LLM available.",
+                      "有效 LLM。openai = server 內建；claude-code = Claude Code 作為 LLM 引擎；none = 無 LLM。\n\nEffective LLM. `openai` = server built-in; `claude-code` = Claude Code acts as LLM engine; `none` = no LLM available.",
                   },
                   store: {
                     type: "string",
