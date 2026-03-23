@@ -27,3 +27,4 @@ timestamp	composite	l1_avg	l2g_avg	l2c_cross_section	l2c_action_spec	l2c_hypo_fa
 2026-03-23T04:37:00Z	0.899357	1.0000	0.5943	0.7833	1.0000	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	b10f55c	keep	Fix S9 KW spacing (KW: 電影和→KW: 電影 和) cross_section 0.68→0.78
 2026-03-23T04:38:00Z	0.898151	1.0000	0.5943	0.7699	1.0000	1.0000	1.0000	1.0000	1.0000	20260309_49530993	05b4c05	discard	D3 KW spacing fix redundant — S9 already covers KW: 電影 from B4
 2026-03-23T04:40:00Z	0.893390	1.0000	0.5943	0.7170	1.0000	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	a1171e6	discard	Colon fix added duplicate S3 term, cross_section 0.722→0.717
+2026-03-23T04:41:00Z	0.893612	1.0000	0.5943	0.7195	1.0000	1.0000	1.0000	1.0000	1.0000	20260227_765384ce	0c32312	keep	S3/S9 KW spacing fix (cross_section 0.70→0.72)
