@@ -1,1 +1,34 @@
 timestamp	composite	l1_avg	l2g_avg	l2c_cross_section	l2c_action_spec	l2c_hypo_falsif	l2c_temporal	l2c_citation_rel	l4_avg	fixture_id	git_hash	status	description
+2026-03-22T11:30:00Z	0.835105	1.0000	0.5371	0.5966	0.7231	1.0000	1.0000	0.9231	0.9833	20260227_765384ce	664900b	keep	S3 headings include S1 ALERT_DOWN metric names verbatim (7 groups)
+2026-03-22T12:00:00Z	0.836706	1.0000	0.5029	0.4750	0.8154	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	1c6906d	keep	S10 action items require tool name + action verb format
+2026-03-22T12:30:00Z	0.841627	1.0000	0.4629	0.6746	0.8462	1.0000	1.0000	1.0000	0.9688	20260309_49530993	fa1df53	keep	S9 questions must include S1/S3 metric names for cross-section coherence
+2026-03-22T13:00:00Z	0.834550	1.0000	0.5257	0.6625	0.7846	1.0000	1.0000	1.0000	0.9167	20260220_25caf520	5a01ca9	discard	S4 cross-reference table >5 chars requirement (L4 metrics regressed)
+2026-03-22T13:30:00Z	0.839272	1.0000	0.5371	0.5966	0.7231	1.0000	1.0000	0.9231	1.0000	20260227_765384ce	bae547b	discard	S2 density + S4 fill (copied from round 1 without S9 improvements)
+2026-03-22T14:00:00Z	0.837670	1.0000	0.5029	0.4857	0.8154	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	0b9070c	discard	S2 density + S4 fill fresh gen (fixture cross_section low due to large S1 set)
+2026-03-22T14:30:00Z	0.839422	1.0000	0.4629	0.6501	0.8462	1.0000	1.0000	1.0000	0.9688	20260309_49530993	fc01e54	discard	S3 ALERT_UP references (INCREASED S3 set without S9 matches = S3→S9 ratio drop)
+2026-03-22T15:00:00Z	0.850133	1.0000	0.5257	0.6042	0.7846	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	6d8855b	keep	S9 KW: prefix + S2 density 15+ lines 5+ sources + S4 four-column fill
+2026-03-22T15:30:00Z	0.846096	1.0000	0.5371	0.6108	0.7846	1.0000	1.0000	0.9231	1.0000	20260227_765384ce	6d8855b	discard	Same prompt on 16-ALERT fixture (large S1 set caps cross_section at 0.61)
+2026-03-22T16:00:00Z	0.840847	1.0000	0.5029	0.5210	0.8154	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	6d8855b	discard	Same prompt on 9-ALERT fixture (large S1 set with ALERT_UP tables)
+2026-03-22T16:30:00Z	0.857990	1.0000	0.5943	0.6135	0.8462	1.0000	1.0000	0.9412	0.9722	20260309_49530993	a80feaf	keep	Citation density 15-18 target (18 citations → citation_count 0.97!)
+2026-03-22T17:00:00Z	0.863848	1.0000	0.5943	0.6042	0.7846	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	a80feaf	keep	Same prompt on 20260220 fixture (17 citations, citation_count 0.97, L4+citation_rel all 1.0)
+2026-03-22T17:30:00Z	0.857525	1.0000	0.5943	0.6108	0.7846	1.0000	1.0000	0.9231	1.0000	20260227_765384ce	a80feaf	discard	16-ALERT fixture: citation_rel 0.92 not 1.0 (copied base had mismatched S3/citation categories)
+2026-03-22T18:00:00Z	0.855956	1.0000	0.5943	0.4857	0.8154	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	a80feaf	discard	20260306 fixture: cross_section 0.49 (large S1 set ceiling) with 17 citations
+2026-03-22T13:55:00Z	0.883232	1.0000	0.5943	0.6042	1.0000	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	7fd064c	keep	S10 three-component mandatory + remove meta-items (action_specificity 0.78→1.0)
+2026-03-22T13:56:00Z	0.871836	1.0000	0.5943	0.6135	1.0000	1.0000	1.0000	1.0000	0.9412	20260309_49530993	fc1e0f8	keep	Same S10 fix on 20260309 fixture (action_specificity 0.85→1.0)
+2026-03-22T13:58:00Z	0.876909	1.0000	0.5943	0.6108	1.0000	1.0000	1.0000	1.0000	0.9231	20260227_765384ce	5d79cd7	keep	Same S10 fix on 20260227 fixture (action_specificity 1.0, tool names added)
+2026-03-22T13:59:00Z	0.872571	1.0000	0.5943	0.4857	1.0000	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	8941e8e	keep	Same S10 fix on 20260306 fixture (action_specificity 1.0, citation_rel 1.0)
+2026-03-22T14:05:00Z	0.883833	1.0000	0.5943	0.6108	1.0000	1.0000	1.0000	1.0000	1.0000	20260227_765384ce	a30f926	keep	Section-Citation category guidance (citation_relevance 0.92→1.0)
+2026-03-22T14:08:00Z	0.877130	1.0000	0.5943	0.6135	1.0000	1.0000	1.0000	1.0000	1.0000	20260309_49530993	7c6d569	keep	Remove mismatched citation from S6 (citation_relevance 0.94→1.0)
+2026-03-22T14:10:00Z	0.884075	1.0000	0.5943	0.6135	1.0000	1.0000	1.0000	1.0000	1.0000	20260309_49530993	c7dde82	keep	Fix S2 date freshness (2/5→2/7 within ±30d window)
+2026-03-23T03:49:00Z	0.893802	1.0000	0.5943	0.7216	1.0000	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	cb9a0ca	keep	S3 coverage: add H5(檢索未索引) H6(KW:) + S9 matchable format (cross_section 0.49→0.72!)
+2026-03-23T04:12:00Z	0.890357	1.0000	0.5943	0.6833	1.0000	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	c092e11	keep	S3 add H5(KW: 影評/KW: 電影) cross_section 0.60→0.68
+2026-03-23T04:19:00Z	0.898151	1.0000	0.5943	0.7699	1.0000	1.0000	1.0000	1.0000	1.0000	20260309_49530993	07c3592	keep	S3 H5(檢索未索引) H6(KW:) cross_section 0.61→0.77!
+2026-03-23T04:28:00Z	0.891702	1.0000	0.5943	0.6983	1.0000	1.0000	1.0000	1.0000	1.0000	20260227_765384ce	ba72873	keep	S3 H6→檢索未索引 + H8(KW: 電影/影評/攻略) cross_section 0.61→0.70
+2026-03-23T04:37:00Z	0.899357	1.0000	0.5943	0.7833	1.0000	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	b10f55c	keep	Fix S9 KW spacing (KW: 電影和→KW: 電影 和) cross_section 0.68→0.78
+2026-03-23T04:38:00Z	0.898151	1.0000	0.5943	0.7699	1.0000	1.0000	1.0000	1.0000	1.0000	20260309_49530993	05b4c05	discard	D3 KW spacing fix redundant — S9 already covers KW: 電影 from B4
+2026-03-23T04:40:00Z	0.893390	1.0000	0.5943	0.7170	1.0000	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	a1171e6	discard	Colon fix added duplicate S3 term, cross_section 0.722→0.717
+2026-03-23T04:41:00Z	0.893612	1.0000	0.5943	0.7195	1.0000	1.0000	1.0000	1.0000	1.0000	20260227_765384ce	0c32312	keep	S3/S9 KW spacing fix (cross_section 0.70→0.72)
+2026-03-23T04:58:00Z	0.903107	1.0000	0.5943	0.8250	1.0000	1.0000	1.0000	1.0000	1.0000	20260220_25caf520	ab454c6	keep	Fix heading parenthesis truncation + add GSC曝光 (cross_section 0.78→0.83!)
+2026-03-23T05:00:00Z	0.898151	1.0000	0.5943	0.7699	1.0000	1.0000	1.0000	1.0000	1.0000	20260309_49530993	9ed6d40	discard	Heading fix no effect — 20260309 H1 had no Google News
+2026-03-23T05:00:00Z	0.895945	1.0000	0.5943	0.7454	1.0000	1.0000	1.0000	1.0000	1.0000	20260306_ea576a4f	9ed6d40	keep	Heading parenthesis fix — Google News added (cross_section 0.72→0.75)
+2026-03-23T05:00:00Z	0.895164	1.0000	0.5943	0.7367	1.0000	1.0000	1.0000	1.0000	1.0000	20260227_765384ce	9ed6d40	keep	Heading parenthesis fix — Google News added (cross_section 0.72→0.74)

@@ -208,6 +208,8 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **Section 2：業界最新動態**
 
+**內容密度要求**：S2 必須包含至少 **15 行**非標題、非分隔線的實質內容，並引用至少 **5 個不同來源名稱**（如 SearchEngineLand、SearchEngineJournal、Google Search Central、Search Engine Roundtable、Google Trends、Ahrefs、Semrush 等）。
+
 **重要：所有業界動態必須附上原始來源 URL**。WebFetch/WebSearch 結果自帶 URL，S2 中以 markdown hyperlink 格式保留：`[標題](URL)`。若 URL 不可取得（如 JSON API），標注「來源：<描述>」。
 
 ```markdown
@@ -241,11 +243,16 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 ```
 
 **Section 3：深度根因假設**
-對每個 ALERT_DOWN 指標，提出 3 個假設：
+
+**子標題格式**：將相關 ALERT_DOWN 指標分群，每群使用 `### H{N}：{S1 指標名稱}` 子標題。指標名稱**必須與 Section 1 表格第一欄完全一致**（如 `### H1：AMP Article`、`### H2：CTR`、`### H3：Discover 月趨勢`）。可將高度相關的指標合併為一群，但每個 S1 ALERT_DOWN 名稱至少出現一次。**注意：子標題中禁止使用括號** `()` `（）`——會導致 eval heading regex 截斷（如 `News(new)` 改寫為 `News` 或歸入其他群組）。
+
+**大型 S1 集合時的分群策略**（>8 項 ALERT_DOWN）：分群數控制在 5-7 群。優先使用 S9 eval 可辨識的指標名稱作為群組主標題（Discover、AMP、外部連結、檢索未索引、Coverage、CTR、KW: {關鍵字}、營運 KW: {關鍵字}）。非 S9 可辨識的指標（如 GPT、Gemini、Video、/salon/、News(new)）歸入相關的 S9 可辨識群組下方討論，**不另立獨立子標題**。
+
+對每群 ALERT_DOWN 指標，提出 3 個假設（使用 `**假設 1（技術面）**` 格式）：
 - 假設 1：技術面（L1-L2）
 - 假設 2：內容面（L3）
 - 假設 3：外部面（L4-L5 或業界動態）——**必須引用 B5 Google Trends 和/或 B6 SERP Feature 數據**。若 Google Trends 顯示全市場下降，應在假設中標注「外部因素」以降低本站問題的權重。
-每個假設標注「可驗證/需人工確認/需顧問判斷」。
+每個假設結尾標注「**可驗證**」「**需人工確認**」或「**需顧問判斷**」。
 
 **Section 4：顧問視角交叉比對**
 交叉比對 4 個資料來源，找出矛盾與一致：
@@ -260,6 +267,8 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 |------|---------|-------------|---------|---------|------|
 | ... | ... | ... | ... | ... | 一致/矛盾/缺口 |
 ```
+
+**四欄必填規則**：KB 觀點、顧問文章觀點、指標數據、業界動態四個來源欄位**每格必須有 >5 個字元的實質內容**。若該來源無直接對應資訊，寫「目前無直接觀點，需進一步研究」而非留空或寫「—」。
 
 #### 第二批：S5-S8
 
@@ -302,7 +311,15 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **Section 9：會議提問清單（核心輸出）**
 
-四類提問，每類都要標注來源 section：
+四類提問，每類都要標注來源 section。
+
+**指標名稱呼應規則**：每個問題中**必須包含至少一個 S1/S3 的指標原始名稱**，以確保問題與前文分析的跨 Section 一致性。
+
+**可用的指標名稱格式**（eval 可辨識的 pattern，優先使用這些）：
+- `Discover`、`CTR`、`AMP`、`Coverage`、`外部連結`、`檢索未索引`
+- `KW: {關鍵字}`（如 `KW: 電影`、`KW: 影評`）——關鍵字類指標**必須使用 `KW:` 前綴**，且**關鍵字後必須有空格**再接其他文字（如 `KW: 電影 +56%`，不寫 `KW: 電影和`）
+- `營運 KW: {關鍵字}`（如 `營運 KW: 保養`）——同樣規則，關鍵字後加空格（如 `營運 KW: 保養 等商業 KW`）
+- `AMP Ratio`、`探索比例`、`結構化 Ratio`、`新網頁`
 
 **A 類：確認事實（3-5 題）**
 從 S3 根因假設中「需人工確認」的項目推導。
@@ -323,15 +340,18 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 **Section 10：會議後行動核查表**
 從 S5（缺口）和 S9（提問）推導。
 
-**成熟度升級標籤**：與 S8 成熟度維度直接相關的行動項目，標注 `[LX→LY]` 升級目標（X = 當前等級，Y = 目標等級）。只有直接推動成熟度升級的行動才加標籤，非成熟度相關的行動項目（如「回寫知識庫」）不加。
+**每個行動項目格式**：`- [ ] 在 {工具名} {動作動詞} {具體對象} — **[{維度} L{X}→L{Y}]**`
+
+**必備要素**：
+- **工具名**（至少一個）：GSC / Search Console / PageSpeed / Ahrefs / Screaming Frog / GA4 / Google Trends / Semrush / Moz / Chrome DevTools / Lighthouse
+- **動作動詞**（至少一個）：排查 / 篩選 / 檢查 / 驗證 / 監控 / 建立 / 設定 / 測試 / 分析 / 規劃 / 導入
+
+**三要素必備**：每個行動項目**必須同時包含** (1) 工具名、(2) 動作動詞、(3) 成熟度升級標籤 `[{維度} LX→LY]`。不符合三要素的 meta-item（如「更新假設」「回寫知識庫」）**不列入 S10**。
 
 ```markdown
-- [ ] 建立內容日曆並追蹤執行率 **[流程 L2→L3]**
-- [ ] 導入多維度指標儀表板 **[指標 L2→L3]**
-- [ ] 根據顧問回答更新 S3 假設
-- [ ] 確認 S5 缺口的優先序
-- [ ] 記錄新發現，回寫知識庫
-- [ ] 安排下週行動項目
+- [ ] 在 GA4 排查 AMP 頁面追蹤完整性 — **[流程 L2→L3]**
+- [ ] 在 Ahrefs 分析主要關鍵字 SERP Feature 變化 — **[策略 L2→L3]**
+- [ ] 在 GSC 監控索引覆蓋率趨勢 — **[指標 L2→L3]**
 ```
 
 **最後回填 Section 0**：從 S1-S10 蒸餾 5 bullets。
@@ -389,6 +409,10 @@ echo "<報告內容前 500 字>" | shasum | cut -c1-8
 
 與 `/generate-report` 相同的 Perplexity 風格 `[N]` 標記。
 維護 citation map：`{qa_id → N}`，依首次出現順序遞增。
+
+**Citation 密度目標**：整篇報告應引用 **15-18 筆** KB 來源（Step C 搜尋 7-10 輪，每輪 top-k 3，去重後保留 top-20，目標使用其中 15-18 筆）。在 S3（根因假設）、S5（審計缺口）、S6（E-E-A-T）中密集引用。
+
+**Section-Citation 對應**：為確保引用與 section 脈絡一致，在 S3 中優先引用 category 為「技術SEO」「索引與檢索」「連結策略」「演算法與趨勢」「Discover與AMP」「搜尋表現分析」的 KB 來源。在 S6 中優先引用 category 為「技術SEO」「Discover與AMP」「連結策略」「搜尋表現分析」「演算法與趨勢」的 KB 來源。「GA與數據追蹤」等非 SEO 核心類別的引用應放在 S1 或 S5，而非 S3/S6。
 
 報告末尾的 `<!-- citations [...] -->` JSON block 格式同 `/generate-report`。
 
