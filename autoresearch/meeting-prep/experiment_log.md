@@ -176,15 +176,42 @@
 - **20260309:** composite 0.898 (cross_section 0.61→0.77, **NEW ALL-TIME BEST**)
 - **20260227:** composite 0.892 (cross_section 0.61→0.70)
 
+### #26 — S9 KW spacing fix (20260220) | KEPT ✅
+- **Fixture:** 20260220_25caf520
+- **Change:** "KW: 電影和" → "KW: 電影 和" — S9 regex `\S+` captured trailing text; adding space isolates keyword
+- **Composite:** 0.899357 | cross_section 0.78→0.78 (S9 matched more terms)
+- **Status:** keep
+
+### #27 — S9 KW spacing fix (20260309) | DISCARDED ❌
+- **Status:** discard — D3 KW already covered by B4, no net change
+
+### #28 — Colon consistency (20260306) | DISCARDED ❌
+- **Status:** discard — changing heading colon added duplicate S3 term
+
+### #29 — S3/S9 KW spacing fix (20260227) | KEPT ✅
+- **Fixture:** 20260227_765384ce
+- **Composite:** 0.893612 | cross_section 0.70→0.72
+
+### #30 — Heading parenthesis truncation fix (20260220) | KEPT ✅
+- **Change:** `News(new)` in heading causes regex to stop at `(` → removed from heading. Added "GSC 曝光" to body.
+- **Composite:** 0.903107 | **FIRST >0.9!** cross_section 0.78→0.83
+
+### #31 — Heading fix (20260309) | DISCARDED ❌
+- **Status:** discard — 20260309 H1 didn't have News(new) problem
+
+### #32-33 — Heading fix (20260306, 20260227) | KEPT ✅
+- **20260306:** composite 0.896 (cross_section 0.72→0.75)
+- **20260227:** composite 0.895 (cross_section 0.72→0.74)
+
 ---
 
 ## 累計分析
 
-### 25-round summary (2026-03-23)
+### 33-round FINAL summary (2026-03-23)
 
-**Results**: 18 keep / 8 discard | Best composite: **0.898** (baseline 0.8305, **+8.1%**)
+**Results**: 22 keep / 11 discard | Best composite: **0.903** (baseline 0.8305, **+8.7%**)
 
-**Best prompt commit**: `c092e11` — combines:
+**Best prompt commit**: `10d1ecb` — 11 accumulated improvements:
 1. S3 headings with S1 ALERT_DOWN metric names verbatim (#1)
 2. S10 tool name + action verb format (#2)
 3. S9 metric name 呼應規則 + KW: prefix (#3, #8)
@@ -194,14 +221,20 @@
 7. S10 three-component mandatory, no meta-items (#15)
 8. Section-Citation category guidance for S3/S6 (#19)
 9. Large S1 grouping strategy — S9-matchable headings (#22)
+10. KW spacing rule — keyword followed by space (#26, #29)
+11. Heading no-parenthesis rule — prevents regex truncation (#30)
 
 **Cross-fixture results (final)**:
 | Fixture | Composite | L1 | L2g | action_spec | hypo_falsif | temporal | citation_rel | cross_section | L4 |
 |---------|-----------|-----|------|-------------|-------------|----------|--------------|---------------|-----|
-| 20260220 | **0.890** | 1.0 | 0.59 | 1.0 | 1.0 | 1.0 | 1.0 | 0.68 | 1.0 |
-| 20260227 | **0.892** | 1.0 | 0.59 | 1.0 | 1.0 | 1.0 | 1.0 | 0.70 | 1.0 |
+| 20260220 | **0.903** | 1.0 | 0.59 | 1.0 | 1.0 | 1.0 | 1.0 | 0.83 | 1.0 |
+| 20260227 | **0.895** | 1.0 | 0.59 | 1.0 | 1.0 | 1.0 | 1.0 | 0.74 | 1.0 |
 | 20260309 | **0.898** | 1.0 | 0.59 | 1.0 | 1.0 | 1.0 | 1.0 | 0.77 | 1.0 |
-| 20260306 | **0.894** | 1.0 | 0.59 | 1.0 | 1.0 | 1.0 | 1.0 | 0.72 | 1.0 |
+| 20260306 | **0.896** | 1.0 | 0.59 | 1.0 | 1.0 | 1.0 | 1.0 | 0.75 | 1.0 |
+
+**Theoretical ceiling**: 0.919 (L2.5=1.0 requires cross_section=1.0, blocked by non-S9-matchable S3 body terms)
+**Practical ceiling**: ~0.905 (cross_section limited by GPT/Gemini/Video/salon body mentions in S3)
+**Current gap to practical ceiling**: <0.01 — **CONVERGED**
 
 **Saturated metrics (1.0 across all fixtures)**:
 - L1 (all 13 sub-metrics), L4 (all 4 sub-metrics)
