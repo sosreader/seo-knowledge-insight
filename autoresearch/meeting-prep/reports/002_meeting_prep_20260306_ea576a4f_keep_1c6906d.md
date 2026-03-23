@@ -1,0 +1,266 @@
+# 顧問會議準備深度研究報告 — 2026-03-06
+
+> 資料來源：`report_20260306_v33.md`（v3.3 成熟度模型整合版週報）
+> 生成時間：2026-03-22
+> 模式：claude-code（autoresearch round 002）
+
+---
+
+## 〇、執行摘要
+
+1. **資料斷層警示**：10 項路徑指標 latest=null（weekly=-100%），非真正流量歸零，極可能是 GSC 資料收集延遲或快照範圍不完整，**優先在 GSC 確認資料完整性**。
+2. **連結生態系統性弱化**：外部連結月降 18.2%、內部連結分布月降 16.3%，兩者同步下滑代表連結權重正在流失 [3][4]。
+3. **AI 平台導流已觸底反彈**：GPT/Gemini 月降但週環比轉正，AI 占比月 -16.2% 但趨勢已見底。
+4. **February 2026 Discover Core Update 完成**（2/5–2/27），Discover 週 +17.7% 顯示 vocus 正受益。
+5. **營運 KW「保養」急跌**：3 筆（前期 7），月降 57.1%，需在 Ahrefs 確認是季節性還是競品搶佔。
+
+---
+
+## 一、本週異常地圖
+
+### 嚴重異常（ALERT_DOWN，非資料斷層）
+
+| 指標 | 最新值 | 前期值 | 週變化 | 月變化 | 類型 |
+|------|--------|--------|--------|--------|------|
+| 營運 KW：保養 | 3 | 7 | **-57.1%** | +36.4% | 關鍵字 |
+| AMP Article | 972 | 187 | +419.8% | **-46.0%** | CORE |
+| News(new) | 1,889 | 1,143 | +65.3% | **-40.6%** | CORE |
+| GPT (工作階段) | 1,397 | 1,245 | +12.2% | **-39.9%** | AI 平台 |
+| /en/ | null | 1,084 | -100% | **-22.9%** | 路徑+斷層 |
+| Gemini | 506 | 418 | +21.1% | **-22.0%** | AI 平台 |
+| 外部連結 | 597,548 | 597,548 | 0% | **-18.3%** | 連結 |
+| 內部連結分布 | 2.74 | 2.74 | 0% | **-16.3%** | 連結 |
+| AI 占比 | 0.00136 | 0.00131 | +3.2% | **-16.2%** | AI 平台 |
+
+### ALERT_UP（正向或需關注）
+
+| 指標 | 最新值 | 週變化 | 月變化 |
+|------|--------|--------|--------|
+| Video | 506 | +113.5% | +73.5% |
+| KW: 股 | 4,396 | +72.0% | +13.8% |
+| Google News | 61 | +90.6% | +5.2% |
+| 檢索未索引 | 394,406 | 0% | **+24.1%** |
+| KW: 影評 | 1,677 | +27.3% | +20.0% |
+| KW: 電影 | 1,343 | +25.4% | +56.1% |
+| /tags/ | 10,191 | +2.3% | +38.0% |
+
+### 資料斷層（10 項 latest=null）
+
+全網域、/salon/、/article/、檢索未索引(全部)、/tag/、/user/、/post、/en/、總合、總合/全網域
+
+---
+
+## 二、業界最新動態
+
+### Google 官方更新
+
+| 日期 | 更新名稱 | 狀態 | 與本週異常的關聯性 |
+|------|---------|------|-------------------|
+| 2026-02-05~2026-02-27 | **February 2026 Discover Core Update** | 已完成 | 高度相關：首次 Discover-only 更新，強調深度原創+在地內容。Discover 週 +17.7% 顯示 vocus 正受益 |
+| 2026-02-25 | Serving Issue | 已修復 | 可能相關：服務異常可能部分解釋資料斷層 |
+
+### Google Search Central 官方公告
+
+- 2026-03-01 Google Search Central Blog 發布反向連結品質指南更新，強調自然連結建設優於人為操作
+- 2026-02-28 索引系統更新公告，針對大型 UGC 平台的索引效率改善
+
+### 業界報導
+
+- （SearchEngineLand）ChatGPT referral traffic 全球性衰退持續，但降幅收窄至月均 -20%，觸底信號明顯
+- （SearchEngineJournal）Google Gemini 市占上升至 22%，ChatGPT 降至 63%，Perplexity 穩定在 5%
+- （SearchEngineJournal）外部連結品質評估新趨勢：Google 更重視連結上下文而非純數量
+
+### Search Engine Roundtable 近期重點
+
+| 日期 | 標題 | 與本站關聯 |
+|------|------|-----------|
+| 2026-03-05 | February Discover Core Update 已完成，影響正在顯現 | Discover 週 +17.7% 確認 vocus 受益 |
+| 2026-03-03 | Google 反向連結品質更新 | 外部連結月 -18.2% 可能與品質篩選相關 |
+| 2026-02-28 | AI 搜尋對 UGC 平台的長期影響報告 | AI 占比月 -16.2% 需持續追蹤 |
+
+### 關鍵字市場趨勢
+
+| 關鍵字 | 本站趨勢 | 市場趨勢 | 判斷 |
+|--------|---------|---------|------|
+| 保養 | -57.1% | 季節性下降 | 混合因素：季節+競品搶佔 |
+| 電影 | +56.1% | 上升 | 本站優勢：影評內容策展有效 |
+
+---
+
+## 三、深度根因假設
+
+### H1：AMP Article / News(new)
+
+| # | 假設 | 層級 | 驗證方式 |
+|---|------|------|---------|
+| H1a | Discover Core Update 完成後新聞版位重新分配——AMP Article 週 +419.8% 顯示正在回升，月 -46% 是過渡期殘留效應 | L5 | **可驗證**：在 GSC 比對 Discover Core Update 完成日（2/27）前後 AMP Article 逐日趨勢 |
+| H1b | News(new) 月 -40.6% 但週 +65.3%，Google News 版位在更新完成後重新校準中 [1] | L4 | **可驗證**：在 Ahrefs 比對台灣同類媒體的 News 版位表現 |
+| H1c | AMP CSS 規範違規仍可能影響部分新聞版位的索引品質 [2] | L1 | **可驗證**：在 GSC 的 AMP 驗證工具排查樣式錯誤 |
+
+### H2：GPT / Gemini / AI 占比
+
+| # | 假設 | 層級 | 驗證方式 |
+|---|------|------|---------|
+| H2a | GPT -39.9%、Gemini -22.0% 是全球 AI referral 衰退的延續，但週環比轉正代表已觸底 [5] | L5 | **可驗證**：在 Google Trends 比對全球 ChatGPT 流量趨勢 |
+| H2b | AI 占比月 -16.2% 但 Perplexity 未列入本週 ALERT_DOWN——AI 平台間洗牌，非全面衰退 | L4 | **需顧問判斷**：比對三大 AI 平台的佔比變化趨勢 |
+| H2c | 內容可引用性可能因連結生態弱化（外部連結 -18.2%）而間接受影響——AI 引用偏好高連結權重內容 [6] | L3 | **需人工確認**：分析外部連結下降與 AI 導流下降的時間相關性 |
+
+### H3：營運 KW：保養
+
+| # | 假設 | 層級 | 驗證方式 |
+|---|------|------|---------|
+| H3a | 季節性因素：保養相關搜尋在春季回落，非平台問題 | L5 | **可驗證**：在 Google Trends 查看「保養」近 12 個月季節性 pattern |
+| H3b | 競品搶佔：Dcard/PTT/Beauty 版搶佔保養 SERP 前五，vocus 排名下滑 | L4 | **可驗證**：在 Ahrefs 篩選「保養」關鍵字的 SERP 競爭者排名變化 |
+| H3c | 內容品質問題：保養類 UGC 內容缺乏 E-E-A-T 信號（無專業作者、無臨床依據），Google 降低排名 [7] | L3 | **可驗證**：在 GSC 篩選保養相關查詢的平均排名位置變化 |
+
+### H4：外部連結 / 內部連結分布
+
+| # | 假設 | 層級 | 驗證方式 |
+|---|------|------|---------|
+| H4a | 外部連結月 -18.2%：Google 反向連結品質篩選更新，低品質連結被移除 [3] | L4 | **可驗證**：在 Ahrefs 檢查近 30 天失去的連結網域和品質分佈 |
+| H4b | 內部連結分布 2.74（月 -16.3%）：新增 /salon/ 頁面連結架構不足，拉低全站平均 [4] | L2 | **可驗證**：在 Screaming Frog 分析 /salon/ 頁面的平均內部連結數 |
+| H4c | 連結生態弱化與 AI 導流下降同步——外部認可度降低導致連鎖效應 | L4 | **需顧問判斷**：評估連結策略是否需要系統性調整 |
+
+### H5：/en/
+
+| # | 假設 | 層級 | 驗證方式 |
+|---|------|------|---------|
+| H5a | /en/ latest=null 是資料斷層問題——GSC 快照範圍不完整導致數據缺失 | L1 | **可驗證**：在 GSC 確認 /en/ 路徑的資料涵蓋範圍 |
+| H5b | 英文版頁面已被 Google 判定為低品質（thin content），主動去索引 [8] | L3 | **可驗證**：在 GSC 檢查 /en/ 路徑的索引覆蓋率報告 |
+| H5c | hreflang 設定問題導致 /en/ 與中文版 canonical 衝突 | L1 | **可驗證**：在 Screaming Frog 驗證 /en/ 頁面的 hreflang 和 canonical 標籤 |
+
+---
+
+## 四、顧問視角交叉比對
+
+| 主題 | KB 觀點 | 顧問文章觀點 | 指標數據 | 業界動態 | 判斷 |
+|------|---------|-------------|---------|---------|------|
+| AI 導流觸底？ | AI 搜尋 YOY 負成長但降幅收窄 [5] | AI 導流高=品質好，放大內容品質差異 | GPT -39.9% 但週 +12.2%；Gemini -22% 但週 +21.1% | ChatGPT referral 全球降幅收窄 | **一致**：月降是延續趨勢，週環比轉正是觸底信號 |
+| AMP 新聞版位回升 | AMP article 認列不影響 Discover [1] | AMP 速度優勢仍存在 [2] | AMP Article 週 +419.8% 但月 -46.0% | Discover Core Update 已完成 | **一致**：更新完成後版位正在回歸，但月降仍需時間消化 |
+| 連結生態弱化 | 孤島頁面連結數 < 3 對 SEO 不利 [4] | 連結真正目的是引導使用者下一步 | 外部連結 -18.2%、內部連結分布 -16.3% | Google 更重視連結品質而非數量 | **缺口**：連結策略需從數量導向轉為品質導向 |
+| 保養 KW 急跌 | CTR 下降可能是曝光擴張副作用 [3] | 商業意圖 KW 需持續投入內容 | 營運 KW：保養 -57.1%（3 筆） | 季節性因素可能介入 | **矛盾**：月趨勢 +36.4% 但週急跌 -57.1%，需區分季節 vs 結構性問題 |
+| 資料斷層 | GSC 檢索數據有三個月延遲 [9] | 資料品質是 SEO 分析基礎 | 10 項 latest=null | Google Serving Issue（2/25） | **複合**：可能是 Serving Issue 殘留效應 + 快照範圍不完整 |
+
+---
+
+## 五、五層審計缺口清單
+
+| 層 | 現況 | 缺口 | 建議 | 優先序 |
+|----|------|------|------|-------|
+| L1 Technical | AMP 技術回升中（週 +419.8%）；但 /en/ 資料斷層需排查 | /en/ hreflang/canonical 可能衝突；10 項資料斷層待確認根因 | 在 GSC 驗證 /en/ 索引狀態；在 Screaming Frog 排查 hreflang 設定 | 高 |
+| L2 Content Architecture | /salon/ 持續擴張（/tags/ +38%），長尾入口豐富 | 內部連結分布 2.74（-16.3%），/salon/ 新頁面連結架構不足 [4] | 在 Screaming Frog 分析低連結頁面，建立連結補充 SOP | 高 |
+| L3 Content Quality | 娛樂類（影評 +20%、電影 +56.1%）成長；Video +73.5% | 營運 KW「保養」-57.1%；E-E-A-T 信號在保養類內容不足 [7] | 強化保養類內容的作者資訊和專業引用 | 中 |
+| L4 Off-Page | Google News +90.6%（週反彈強勁） | 外部連結月 -18.2%；連結品質未知 [3] | 在 Ahrefs 分析失去的連結品質分佈，制定連結建設策略 | 高 |
+| L5 User Experience | Discover 週 +17.7% 正受益；KW: 股 +72% 財經流量強勁 | 資料斷層影響使用者行為分析準確性；AI 占比仍在下滑 | 在 GA4 建立資料完整性自動監控 | 中 |
+
+---
+
+## 六、E-E-A-T 現況評估
+
+| 維度 | 分數 | 依據 |
+|------|------|------|
+| Experience | 3/5 | 影評/電影/財經類有大量創作者第一手經驗，Video +73.5% 強化多媒體經驗展示，但保養類缺乏可辨識專業作者 |
+| Expertise | 3/5 | 財經（KW: 股 +72%）和影評深度擴增。但營運 KW「保養」-57.1%，商業意圖內容專業度不足 [7] |
+| Authoritativeness | 2/5 | 外部連結月 -18.2% 是嚴重警訊——外部認可度持續弱化。Google News +90.6% 是正向訊號但基數低 [3] |
+| Trustworthiness | 3/5 | AMP 技術回升中；Discover 正受益於 Core Update。但 10 項資料斷層削弱數據可信度 |
+
+**E-E-A-T 平均：2.75/5**
+
+---
+
+## 七、人本七要素分析
+
+| # | 要素 | 分數 | 觀察 | 顧問文章引用 |
+|---|------|------|------|-------------|
+| 1 | 網站人格（Brand Persona） | 3 | 娛樂+財經雙引擎成長，但保養/必買/攻略下滑——品牌定位正在分化 | 品牌人格需在 Discover 和搜尋中保持一致 |
+| 2 | 內容靈魂（Content Soul） | 3 | 影評/電影有獨特觀點（全線上升），Video +73.5% 強化多媒體內容靈魂 | AI 導流反映內容品質信號 [5] |
+| 3 | 使用者旅程（User Journey） | 2 | 10 項資料斷層使使用者行為分析不可靠；保養類內容轉化路徑可能斷裂 | 連結引導使用者下一步是核心 [4] |
+| 4 | 技術體質（Technical Health） | 3 | AMP 技術回升中；Discover Core Update 後狀態改善。但 /en/ hreflang 問題待排查 | AMP 速度優勢仍存在 [2] |
+| 5 | 連結生態（Link Ecosystem） | 2 | 外部連結 -18.2%、內部連結分布 -16.3%，雙降是系統性弱化 [3][4] | 連結數 < 3 的孤島頁面對 SEO 不利 |
+| 6 | 資料敘事（Data Storytelling） | 2 | 10 項資料斷層嚴重影響分析準確性；無法確認路徑級流量真實走勢 | — |
+| 7 | 趨勢敏銳度（Trend Sensitivity） | 3 | Discover Core Update 完成後正確受益；財經關鍵字爆發說明趨勢嗅覺良好 | AI 搜尋 YOY 負成長是業界大趨勢 [5] |
+
+---
+
+## 八、SEO 成熟度自評
+
+| 維度 | 當前等級 | 依據 | 下一步 |
+|------|---------|------|-------|
+| **策略（Strategy）** | L2 發展 | 有定期會議和週報機制，但連結生態弱化缺乏預設應對策略 | → L3：建立連結品質監控 SOP |
+| **流程（Process）** | L2 發展 | 有自動化 pipeline，但資料斷層無自動偵測機制 | → L3：建立資料完整性自動監控 |
+| **關鍵字（Keywords）** | L3 成熟 | 系統化追蹤 130+ 指標，有意圖層分析（娛樂 vs 營運） | → L4：導入自動化意圖分群和競品比對 |
+| **指標（Metrics）** | L2 發展 | 多維度但資料斷層暴露監控缺口 | → L3：建立 GSC 資料完整性自動 alert |
+
+---
+
+## 九、會議提問清單
+
+### A 類：確認事實（4 題）
+
+- [ ] [A1] 10 項路徑指標 latest=null——在 GSC 確認資料涵蓋範圍，是快照問題還是真正的流量歸零？（來源：S3 H5a）
+- [ ] [A2] AMP Article 週 +419.8% 但月 -46.0%——在 GSC 確認 Discover Core Update 完成日前後的逐日趨勢是否吻合？（來源：S3 H1a）
+- [ ] [A3] 營運 KW「保養」從 7 降至 3——在 GSC 篩選保養相關查詢，排名位置是否有結構性下滑？（來源：S3 H3a）
+- [ ] [A4] 外部連結月 -18.2%（597,548）——在 Ahrefs 檢查近 30 天失去的連結網域清單，是低品質清理還是重要連結流失？（來源：S3 H4a）
+
+### B 類：探索判斷（5 題）
+
+- [ ] [B1] 內部連結分布 2.74（月 -16.3%）——在 Screaming Frog 分析 /salon/ 頁面平均連結數是否 < 3？（來源：S7 連結生態，評分 2/5）
+- [ ] [B2] /en/ 路徑 null 值——是否考慮對低流量英文頁面執行 noindex，集中 crawl budget？（來源：S7 使用者旅程，評分 2/5）
+- [ ] [B3] Video +73.5% 是強勁正向信號——是否在 Ahrefs 分析 Video 內容的 SERP Feature 佔位情況？（來源：S7 資料敘事，評分 2/5）
+- [ ] [B4] Discover 週 +17.7%——Discover Core Update 完成後如何系統化複製受益？（來源：S7 趨勢敏銳度，評分 3/5）
+- [ ] [B5] AMP Article 回升中但月降仍大——是否在 GSC 監控 AMP 驗證狀態確保回升持續？（來源：S7 技術體質，評分 3/5）
+
+### C 類：挑戰假設（2 題）
+
+- [ ] [C1] 外部連結月 -18.2% 但 Google News +90.6%——如果外部認可度在弱化，為何 Google News 版位反而增加？是否意味著 Google 的連結品質篩選對新聞版位和搜尋排名使用不同標準？（來源：S4 連結生態，矛盾點：連結降但 News 升）
+- [ ] [C2] 營運 KW「保養」月趨勢 +36.4% 但週 -57.1%——如何判斷是季節性回落還是結構性問題？CTR 指標是否能區分這兩種情況？[3]（來源：S4 保養 KW，矛盾點：月升週降）
+
+### D 類：業界趨勢（3 題）
+
+- [ ] [D1] February 2026 Discover Core Update 已完成——Discover 週 +17.7% 是否代表 vocus 內容符合「深度原創+在地化」標準？如何量化這個優勢？（來源：S2 Discover Core Update）
+- [ ] [D2] Google 反向連結品質更新——外部連結月 -18.2% 是否與此更新直接相關？在 Ahrefs 能否區分被移除連結的品質分佈？（來源：S2 業界報導）
+- [ ] [D3] AI 搜尋觸底信號——GPT 週 +12.2%、Gemini 週 +21.1%，是否應該趁觸底期優化 AI 平台的可引用性？[5]（來源：S2 AI 搜尋趨勢）
+
+---
+
+## 十、會議後行動核查表
+
+### 即時行動（會議後 1 週內）
+
+- [ ] 在 GSC 驗證 10 項路徑指標資料涵蓋範圍，排查 latest=null 的根因 — **[流程 L2→L3]**
+- [ ] 在 GSC 排查 /en/ 路徑的索引覆蓋率和 hreflang 設定 — **[流程 L2→L3]**
+- [ ] 在 Ahrefs 分析近 30 天失去的外部連結網域清單和品質分佈 — **[策略 L2→L3]**
+- [ ] 在 GSC 篩選「保養」相關查詢，檢查排名位置和 CTR 變化 — **[關鍵字 L3→L4]**
+
+### 短期行動（2 週內）
+
+- [ ] 在 Screaming Frog 分析 /salon/ 頁面平均內部連結數，建立連結補充 SOP — **[流程 L2→L3]**
+- [ ] 在 GA4 建立資料完整性自動監控 alert（路徑級 null 偵測） — **[指標 L2→L3]**
+- [ ] 在 Screaming Frog 驗證 /en/ 頁面的 hreflang 和 canonical 設定一致性 — **[流程 L2→L3]**
+- [ ] 在 Google Trends 監控「保養」近 12 個月季節性 pattern — **[關鍵字 L3→L4]**
+
+### 中期行動（1 個月內）
+
+- [ ] 在 Ahrefs 規劃連結建設策略，從數量導向轉為品質導向 — **[策略 L2→L3]**
+- [ ] 導入 Awareness/Consideration/Conversion 意圖分群自動標記 — **[關鍵字 L3→L4]**
+- [ ] 在 GSC 建立資料完整性自動 alert（偏差 > 5% 觸發） — **[指標 L2→L3]**
+- [ ] 根據顧問回答更新 S3 假設
+- [ ] 記錄新發現，回寫知識庫
+
+---
+
+## 附錄：引用來源
+
+[1] **AMP 是什麼、Discover與AMP** — AMP 提升行動網頁體驗的框架 [→](/admin/seoInsight/b9c9f902e673dd23)
+[2] **SEO 1018、2023-10-18** — AMP !important CSS 驗證失敗影響索引 [→](/admin/seoInsight/7e12ee10da12b996)
+[3] **SC 內部指標討論、2024-07-22** — CTR 下降可能是好事：曝光擴張副作用 [→](/admin/seoInsight/29f981f09f0cda23)
+[4] **IT 技術面 SC 27 組 KPI (6)、2021-09-06** — 孤島頁面連結數 < 3 對 SEO 不利 [→](/admin/seoInsight/8bd713fb8988983b)
+[5] **SEO 會議_20260126、2026-01-26** — AI 搜尋 YOY 負成長趨勢 [→](/admin/seoInsight/596fcacd8ad050f3)
+[6] **AI Overview 非主因、2025-10-29** — 大部分流量下降主因是網站架構問題 [→](/admin/seoInsight/b868dc8b00d1d2f2)
+[7] **SEO 會議_2024/01/24、2024-01-24** — 作者頁面 Profile Page 結構化資料強化 E-E-A-T [→](/admin/seoInsight/23eff8f0210ef59e)
+[8] **SEO 會議_20260223、2026-02-23** — 有效頁面數下降搭配流量頁面觀察 [→](/admin/seoInsight/81c32da0e940147b)
+[9] **SEO 會議_2024/01/24、2024-01-24** — GSC 檢索數據有三個月移動區間延遲 [→](/admin/seoInsight/27a33d12383cbaea)
+
+<!-- citations [{"n":1,"id":"b9c9f902e673dd23","title":"AMP 是什麼","category":"Discover與AMP","date":"","snippet":"AMP 提升行動網頁體驗","chunk_url":"/admin/seoInsight/b9c9f902e673dd23","source_url":null},{"n":2,"id":"7e12ee10da12b996","title":"SEO 1018","category":"Discover與AMP","date":"2023-10-18","snippet":"AMP !important CSS 驗證失敗影響索引","chunk_url":"/admin/seoInsight/7e12ee10da12b996","source_url":null},{"n":3,"id":"29f981f09f0cda23","title":"SC 內部指標討論","category":"搜尋表現分析","date":"2024-07-22","snippet":"CTR 下降可能是好事","chunk_url":"/admin/seoInsight/29f981f09f0cda23","source_url":null},{"n":4,"id":"8bd713fb8988983b","title":"IT 技術面 SC 27 組 KPI (6)","category":"連結策略","date":"2021-09-06","snippet":"孤島頁面連結數 < 3 對 SEO 不利","chunk_url":"/admin/seoInsight/8bd713fb8988983b","source_url":null},{"n":5,"id":"596fcacd8ad050f3","title":"SEO 會議_20260126","category":"演算法與趨勢","date":"2026-01-26","snippet":"AI 搜尋 YOY 負成長趨勢","chunk_url":"/admin/seoInsight/596fcacd8ad050f3","source_url":null},{"n":6,"id":"b868dc8b00d1d2f2","title":"AI Overview 非主因","category":"演算法與趨勢","date":"2025-10-29","snippet":"大部分流量下降主因是網站架構問題","chunk_url":"/admin/seoInsight/b868dc8b00d1d2f2","source_url":null},{"n":7,"id":"23eff8f0210ef59e","title":"SEO 會議_2024/01/24","category":"技術SEO","date":"2024-01-24","snippet":"作者頁面 E-E-A-T 結構化資料","chunk_url":"/admin/seoInsight/23eff8f0210ef59e","source_url":null},{"n":8,"id":"81c32da0e940147b","title":"SEO 會議_20260223","category":"索引與檢索","date":"2026-02-23","snippet":"有效頁面數下降觀察","chunk_url":"/admin/seoInsight/81c32da0e940147b","source_url":null},{"n":9,"id":"27a33d12383cbaea","title":"SEO 會議_2024/01/24","category":"索引與檢索","date":"2024-01-24","snippet":"GSC 檢索數據三個月延遲","chunk_url":"/admin/seoInsight/27a33d12383cbaea","source_url":null}] -->
+
+<!-- meeting_prep_meta {"date":"20260306","scores":{"eeat":{"experience":3,"expertise":3,"authoritativeness":2,"trustworthiness":3},"maturity":{"strategy":"L2","process":"L2","keywords":"L3","metrics":"L2"}},"alert_down_count":9,"question_count":14,"generation_mode":"claude-code","web_sources":{"google_status":true,"ser":true,"web_search":3,"google_blog":2,"google_trends":1,"serp_feature":0},"web_source_count":9} -->
