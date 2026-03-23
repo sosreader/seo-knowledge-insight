@@ -244,7 +244,9 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **Section 3：深度根因假設**
 
-**子標題格式**：將相關 ALERT_DOWN 指標分群，每群使用 `### H{N}：{S1 指標名稱}` 子標題。指標名稱**必須與 Section 1 表格第一欄完全一致**（如 `### H1：AMP Article`、`### H2：CTR`、`### H3：Discover 月趨勢`）。可將高度相關的指標合併為一群（如 GPT + Gemini + Perplexity → `### H4：GPT / Gemini / Perplexity`），但每個 S1 ALERT_DOWN 名稱至少出現一次。
+**子標題格式**：將相關 ALERT_DOWN 指標分群，每群使用 `### H{N}：{S1 指標名稱}` 子標題。指標名稱**必須與 Section 1 表格第一欄完全一致**（如 `### H1：AMP Article`、`### H2：CTR`、`### H3：Discover 月趨勢`）。可將高度相關的指標合併為一群，但每個 S1 ALERT_DOWN 名稱至少出現一次。
+
+**大型 S1 集合時的分群策略**（>8 項 ALERT_DOWN）：分群數控制在 5-7 群。優先使用 S9 eval 可辨識的指標名稱作為群組主標題（Discover、AMP、外部連結、檢索未索引、Coverage、CTR、KW: {關鍵字}、營運 KW: {關鍵字}）。非 S9 可辨識的指標（如 GPT、Gemini、Video、/salon/、News(new)）歸入相關的 S9 可辨識群組下方討論，**不另立獨立子標題**。
 
 對每群 ALERT_DOWN 指標，提出 3 個假設（使用 `**假設 1（技術面）**` 格式）：
 - 假設 1：技術面（L1-L2）
