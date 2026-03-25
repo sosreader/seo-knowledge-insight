@@ -9,7 +9,7 @@
 ### 1. 知識庫建構 Pipeline（步驟 1–3）
 
 - **多來源擷取** — Notion 增量擷取 + Medium RSS + iThome HTML + Google Case Studies + Ahrefs + SEJ + Growth Memo
-- **AI 自動萃取** — 用 `gpt-5.2` 將 Markdown 解析為結構化 Q&A（What/Why/How/Evidence）
+- **AI 自動萃取** — 用 `gpt-5.4-nano` 將 Markdown 解析為結構化 Q&A（What/Why/How/Evidence）
 - **Collection-Scoped 去重合併** — 各 collection 內部獨立去重，跨 collection 保留
 - **智能分類標籤** — 12 個分類 × 難度 × 時效性，雙層 metadata（source_type + source_collection）
 
@@ -87,7 +87,7 @@ cp .env.example .env
 NOTION_TOKEN=ntn_你的token
 NOTION_PARENT_PAGE_ID=你的母頁面ID
 OPENAI_API_KEY=sk-你的key
-OPENAI_MODEL=gpt-5.2
+OPENAI_MODEL=gpt-5.4-nano
 ANTHROPIC_API_KEY=sk-ant-你的key  # 可選：用於 Reranker
 LMNR_PROJECT_API_KEY=your-laminar-key  # 可選：用於 Observability
 ```
@@ -194,9 +194,9 @@ cd api && pnpm install && pnpm dev   # 啟動開發伺服器
 
 | 用途      | 模型                     |
 | --------- | ------------------------ |
-| Q&A 萃取  | `gpt-5.2`                |
-| 分類標籤  | `gpt-5-mini`             |
-| 週報生成  | `gpt-5.2`                |
+| Q&A 萃取  | `gpt-5.4-nano`           |
+| 分類標籤  | `gpt-5.4-nano`           |
+| 週報生成  | `gpt-5.4`（REPORT_MODEL）|
 | Embedding | `text-embedding-3-small` |
 
 > 完整模型政策見 [research/05-models.md](research/05-models.md)

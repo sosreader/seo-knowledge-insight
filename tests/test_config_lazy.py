@@ -33,7 +33,7 @@ class TestLazyEnvAccess:
         import config
 
         config._LAZY_ATTRS["OPENAI_MODEL"]._resolved = False
-        assert config.OPENAI_MODEL == "gpt-5.2"
+        assert config.OPENAI_MODEL == "gpt-5.4-nano"
 
     def test_set_env_returns_value(self, monkeypatch):
         """已設定的 env var 應回傳設定值"""

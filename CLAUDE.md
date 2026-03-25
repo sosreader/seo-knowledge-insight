@@ -375,12 +375,12 @@ make autoresearch-baseline
 
 | 功能              | OpenAI 模式                                                  | Claude Code 模式                                                      |
 | ----------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- |
-| Q&A 萃取          | `gpt-5.2` API                                                | Claude Code 直接讀 Markdown                                           |
-| 去重 + 分類       | `text-embedding-3-small` + `gpt-5.2`                         | 語意理解取代向量                                                      |
+| Q&A 萃取          | `gpt-5.4-nano` API                                           | Claude Code 直接讀 Markdown                                           |
+| 去重 + 分類       | `text-embedding-3-small` + `gpt-5.4-nano`                    | 語意理解取代向量                                                      |
 | 指標解析          | `metrics-parser.ts`（純 TS，v2.26）                          | `qa_tools.py load-metrics`                                            |
 | 知識庫搜尋        | `text-embedding-3-small` + cosine                            | `qa_tools.py search`（關鍵字加權）                                    |
-| 週報生成          | `report-llm.ts` + OpenAI API（純 TS，v2.26）                 | `/generate-report` 指令（Claude Code 直接推理，支援 snapshot）        |
-| Q&A 品質評估      | `gpt-5.2` + `gpt-5-mini`                                     | `/evaluate-qa-local`（Claude Code 作為 Judge）                        |
+| 週報生成          | `report-llm.ts` + `gpt-5.4`（純 TS，v2.26）                  | `/generate-report` 指令（Claude Code 直接推理，支援 snapshot）        |
+| Q&A 品質評估      | `gpt-5.4-nano`                                               | `/evaluate-qa-local`（Claude Code 作為 Judge）                        |
 | Provider 品質評估 | 無對應                                                       | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
 | API 伺服器        | `cd api && pnpm dev`（Hono, port 8002，需要 OPENAI_API_KEY） | `cd api && pnpm dev`（Hono, port 8002）                               |
 | 需要 API key      | OPENAI_API_KEY                                               | 不需要                                                                |

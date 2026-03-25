@@ -739,7 +739,7 @@ def classify_qa(question: str, answer: str) -> dict:
     client = _client()
 
     response = client.chat.completions.create(
-        model=config.CLASSIFY_MODEL,  # 分類用小模型省成本，預設 gpt-5-mini，可透過 CLASSIFY_MODEL env 覆蓋
+        model=config.CLASSIFY_MODEL,  # 分類用小模型省成本，預設 gpt-5.4-nano，可透過 CLASSIFY_MODEL env 覆蓋
         messages=[
             {"role": "system", "content": CLASSIFY_SYSTEM_PROMPT},
             {"role": "user", "content": f"Q: {question}\n\nA: {answer}"},
@@ -771,7 +771,7 @@ def classify_qa(question: str, answer: str) -> dict:
                 },
             },
         },
-        max_completion_tokens=2048,  # gpt-5-mini 推理模型需要足夠空間給 reasoning + JSON output
+        max_completion_tokens=2048,  # 推理模型需要足夠空間給 reasoning + JSON output
     )
 
     content = response.choices[0].message.content or "{}"

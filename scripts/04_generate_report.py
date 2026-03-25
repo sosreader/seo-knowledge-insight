@@ -635,7 +635,7 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
     except Exception as e:
         logger.warning("無法讀取 qa_final.json 以取得 KB 大小：%s", e)
     _kb_label = f"{_total_qa} Q&A" if _total_qa else "知識庫"
-    _model_name = config.OPENAI_MODEL
+    _model_name = config.REPORT_MODEL
     meta_block = f"""---
 **報告資訊**
 - 生成方式：OpenAI {_model_name} 生成
@@ -680,7 +680,7 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
     )
 
     response = client.chat.completions.create(
-        model=config.OPENAI_MODEL,
+        model=config.REPORT_MODEL,
         messages=[
             {"role": "system", "content": REPORT_SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
@@ -746,7 +746,7 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
             span.set_metadata({
                 "step": "generate_report",
                 "execution_mode": "openai_api",
-                "model": config.OPENAI_MODEL,
+                "model": config.REPORT_MODEL,
                 "knowledge_base_size": _total_qa,
                 "generation_timestamp": metrics_date,
                 "character_count": len(full_report),

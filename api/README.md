@@ -472,8 +472,9 @@ SUPABASE_ANON_KEY=your_anon_key
 
 # Optional
 OPENAI_API_KEY=sk-...          # 若無，則 search/chat 自動降級
-OPENAI_MODEL=gpt-5.2
-CHAT_MODEL=gpt-5.2             # RAG Chat 問答模型（獨立於 OPENAI_MODEL）
+OPENAI_MODEL=gpt-5.4-nano
+CHAT_MODEL=gpt-5.4-nano        # RAG Chat 問答模型（獨立於 OPENAI_MODEL）
+REPORT_MODEL=gpt-5.4           # 週報生成模型（需要深度分析）
 ANTHROPIC_API_KEY=sk-ant-...   # Reranker + Context Relevance
 CONTEXT_EMBEDDING_WEIGHT=0.6   # Contextual embedding 加權
 RERANKER_ENABLED=auto          # Reranker 開關（auto/true/false）

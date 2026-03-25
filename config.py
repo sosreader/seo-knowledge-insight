@@ -134,13 +134,14 @@ _LAZY_ATTRS: Dict[str, _LazyEnv] = {
     "NOTION_TOKEN": _LazyEnv("NOTION_TOKEN"),
     "NOTION_PARENT_PAGE_ID": _LazyEnv("NOTION_PARENT_PAGE_ID", default=""),
     "OPENAI_API_KEY": _LazyEnv("OPENAI_API_KEY"),
-    "OPENAI_MODEL": _LazyEnv("OPENAI_MODEL", default="gpt-5.2"),
+    "OPENAI_MODEL": _LazyEnv("OPENAI_MODEL", default="gpt-5.4-nano"),
+    "REPORT_MODEL": _LazyEnv("REPORT_MODEL", default="gpt-5.4"),
     "OPENAI_EMBEDDING_MODEL": _LazyEnv(
         "OPENAI_EMBEDDING_MODEL", default="text-embedding-3-small"
     ),
-    "CLASSIFY_MODEL": _LazyEnv("CLASSIFY_MODEL", default="gpt-5-mini"),
-    "EVAL_JUDGE_MODEL": _LazyEnv("EVAL_JUDGE_MODEL", default="gpt-5-mini"),
-    "EVAL_RERANK_MODEL": _LazyEnv("EVAL_RERANK_MODEL", default="gpt-5-nano"),
+    "CLASSIFY_MODEL": _LazyEnv("CLASSIFY_MODEL", default="gpt-5.4-nano"),
+    "EVAL_JUDGE_MODEL": _LazyEnv("EVAL_JUDGE_MODEL", default="gpt-5.4-nano"),
+    "EVAL_RERANK_MODEL": _LazyEnv("EVAL_RERANK_MODEL", default="gpt-5.4-nano"),
     "SHEETS_URL": _LazyEnv("SHEETS_URL", default=""),
 }
 

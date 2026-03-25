@@ -124,16 +124,16 @@ Notion 會議紀錄（87 份，2023–2026）
             ↓ raw_data/markdown/*.md
 
 [Step 2] extract_qa.py — LLM 萃取 Q&A
-  模型：gpt-5.2（需要高品質理解）
+  模型：gpt-5.4-nano（需要高品質理解）
   長文處理：超過 6000 tokens 自動切段
   產出：670 筆原始 Q&A
             ↓ output/qa_per_meeting/*.json
 
 [Step 3] dedupe_classify.py — 去重 + 分類
   去重：text-embedding-3-small 計算向量
-        cosine ≥ 0.88 → gpt-5.2 判斷是否合併
+        cosine ≥ 0.88 → gpt-5.4-nano 判斷是否合併
         或 Claude Code 本地語意去重（不需要 OpenAI）
-  分類：gpt-5-mini 貼 10 種標籤 + difficulty + evergreen
+  分類：gpt-5.4-nano 貼 10 種標籤 + difficulty + evergreen
         或 Claude Code 本地評分式關鍵字分類（不需要 OpenAI）
   產出：歷史上曾生成 1,317 筆去重後 Q&A（v2.12 基線）+ 1536 維 embedding 向量
     ↓ Step 3 基線快照 / qa_embeddings.npy
@@ -148,13 +148,13 @@ Notion 會議紀錄（87 份，2023–2026）
 
 [Step 4] generate_report.py — RAG 週報生成
   資料：Google Sheets 指標（TSV）
-  流程：異常偵測 → Hybrid Search → RAG 組裝 → gpt-5.2 生成
+  流程：異常偵測 → Hybrid Search → RAG 組裝 → gpt-5.4 生成
             ↓ output/report_YYYYMMDD.md
 
 [Step 5] evaluate.py — 評估
-  Q&A 品質：gpt-5.2 LLM-as-Judge（4 維度）或 Claude Code 本地評估（不需要 OpenAI）
-  分類品質：gpt-5-mini 驗證分類正確率
-  Retrieval 品質：語意搜尋 + gpt-5-mini 相關性判斷
+  Q&A 品質：gpt-5.4-nano LLM-as-Judge（4 維度）或 Claude Code 本地評估（不需要 OpenAI）
+  分類品質：gpt-5.4-nano 驗證分類正確率
+  Retrieval 品質：語意搜尋 + gpt-5.4-nano 相關性判斷
             ↓ output/eval_report.json / output/evals/eval_local_*.json
 
 ══════════════ API 層（v1.9 安全層；v2.2 stable_id + reports/sessions；v2.3 Hono TypeScript）══════════════
@@ -168,7 +168,7 @@ Notion 會議紀錄（87 份，2023–2026）
   QA ID：stable_id（SHA256[:16] hex），QAItem.id: str + seq: int
   endpoints：
     POST /api/v1/search    → hybrid_search（語意 + 關鍵字）
-    POST /api/v1/chat      → RAG 問答（gpt-5.2）
+    POST /api/v1/chat      → RAG 問答（gpt-5.4-nano）
     GET  /api/v1/qa        → 篩選列表（id=stable_id hex）
     GET  /api/v1/qa/{id}   → 單筆查詢（^[0-9a-f]{16}$ 驗證）
     POST /api/v1/feedback  → 使用者回饋（helpful / not_relevant）
@@ -732,7 +732,7 @@ Phase 3（4 週後）：下線 Python API (port 8001)
    - API 呼叫 `generateReportLlm(snapshotMetrics, weeks)`（`services/report-llm.ts`）
    - 純 TypeScript 實作：從 Supabase/本地讀取指標快照，建構 QA context，呼叫 OpenAI API
    - System prompt：ECC 6 維度框架（Situation Snapshot + Health Score + CTR 四象限分析 + 研究引用 + KB 連結 + 行動建議）
-   - 回傳 markdown + `report_meta` JSON comment（`<!-- report_meta {"generation_mode":"openai","model":"gpt-5.2",...} -->`）
+   - 回傳 markdown + `report_meta` JSON comment（`<!-- report_meta {"generation_mode":"openai","model":"gpt-5.4",...} -->`）
    - 前端 `cache_hit` 欄位：指示是否命中快取
 
    **Report Metadata 格式**（附加於報告尾部）：
@@ -742,8 +742,8 @@ Phase 3（4 週後）：下線 Python API (port 8001)
      "weeks": 1,
      "generated_at": "2026-03-06T10:30:00Z",
      "generation_mode": "openai",
-     "generation_label": "OpenAI gpt-5.2 生成",
-     "model": "gpt-5.2"
+     "generation_label": "OpenAI gpt-5.4 生成",
+     "model": "gpt-5.4"
    } -->
    ```
 
@@ -766,15 +766,19 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 
 ```
 需要理解複雜文本、推理、生成高品質輸出
-  → gpt-5.2（主力模型，OPENAI_MODEL env var）
-  → 用於：Q&A 萃取、Q&A 合併、週報生成、LLM Judge
+  → gpt-5.4-nano（主力模型，OPENAI_MODEL env var）
+  → 用於：Q&A 萃取、Q&A 合併、LLM Judge
+
+需要深度分析與知識引用（週報生成）
+  → gpt-5.4（REPORT_MODEL env var）
+  → 用於：週報生成（04_generate_report.py / report-llm.ts）
 
 需要即時對話回應（RAG Chat）
-  → gpt-5.2（預設，CHAT_MODEL env var，可降至 gpt-5-mini 節省成本）
+  → gpt-5.4-nano（預設，CHAT_MODEL env var）
   → 用於：POST /chat endpoint（v2.22 獨立設定）
 
 需要結構化輸出、分類、簡單判斷
-  → gpt-5-mini（省成本，CLASSIFY_MODEL env var）
+  → gpt-5.4-nano（CLASSIFY_MODEL env var）
   → 用於：Q&A 分類、Retrieval 相關性判斷
 
 需要計算語意向量

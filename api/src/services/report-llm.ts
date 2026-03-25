@@ -293,7 +293,7 @@ export async function generateReportLlm(
   weeks: number,
 ): Promise<LlmReportResult> {
   const typedMetrics = metrics as Record<string, MetricData>;
-  const model = config.OPENAI_MODEL;
+  const model = config.REPORT_MODEL;
   const client = new OpenAI({ apiKey: config.OPENAI_API_KEY });
 
   // Build context
