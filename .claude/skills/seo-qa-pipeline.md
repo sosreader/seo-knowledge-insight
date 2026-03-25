@@ -83,10 +83,10 @@ Notion API → [步驟1] fetch → raw_data/notion_json/ + markdown/
 | 步驟 | 腳本                            | 功能                                                | 使用的模型                                  |
 | ---- | ------------------------------- | --------------------------------------------------- | ------------------------------------------- |
 | 1    | `scripts/01_fetch_notion.py`    | Notion 擷取 + Markdown 轉換                         | —                                           |
-| 2    | `scripts/02_extract_qa.py`      | 會議紀錄 → Q&A pairs                                | gpt-5.2                                     |
-| 3    | `scripts/03_dedupe_classify.py` | embedding 去重 + LLM 合併 + 分類 + embedding 持久化 | text-embedding-3-small, gpt-5.2, gpt-5-mini |
-| 4    | `scripts/04_generate_report.py` | 指標異常偵測 + Hybrid Search + RAG 週報             | text-embedding-3-small, gpt-5.2             |
-| 5    | `scripts/05_evaluate.py`        | Q&A 品質 + 分類 + Retrieval 評估                    | gpt-5.2, gpt-5-mini                         |
+| 2    | `scripts/02_extract_qa.py`      | 會議紀錄 → Q&A pairs                                | gpt-5.4-nano                                     |
+| 3    | `scripts/03_dedupe_classify.py` | embedding 去重 + LLM 合併 + 分類 + embedding 持久化 | text-embedding-3-small, gpt-5.4-nano             |
+| 4    | `scripts/04_generate_report.py` | 指標異常偵測 + Hybrid Search + RAG 週報             | text-embedding-3-small, gpt-5.4 (REPORT_MODEL)  |
+| 5    | `scripts/05_evaluate.py`        | Q&A 品質 + 分類 + Retrieval 評估                    | gpt-5.4-nano                                     |
 
 ### 工具模組（utils/）
 
@@ -105,7 +105,8 @@ Notion API → [步驟1] fetch → raw_data/notion_json/ + markdown/
 
 所有 API key 從 `.env` 讀取（參考 `.env.example`）。重要參數：
 
-- `OPENAI_MODEL`: gpt-5.2（萃取與合併）
+- `OPENAI_MODEL`: gpt-5.4-nano（萃取與合併）
+- `REPORT_MODEL`: gpt-5.4（週報生成）
 - `OPENAI_EMBEDDING_MODEL`: text-embedding-3-small
 - `MAX_TOKENS_PER_CHUNK`: 6000（長文分段閾值）
 - `SIMILARITY_THRESHOLD`: 0.88（去重 cosine similarity 閾值）
@@ -121,11 +122,11 @@ Notion API → [步驟1] fetch → raw_data/notion_json/ + markdown/
 
 | 用途      | 模型                     | 說明                               |
 | --------- | ------------------------ | ---------------------------------- |
-| Q&A 萃取  | `gpt-5.2`                | 主力模型，需要高品質理解與生成     |
-| Q&A 合併  | `gpt-5.2`                | 合併多源資訊需要強推理             |
-| 分類標籤  | `gpt-5-mini`             | 結構化輸出，省成本                 |
-| 週報生成  | `gpt-5.2`                | 需要深度分析與知識引用             |
-| 品質評估  | `gpt-5.2` + `gpt-5-mini` | Judge 用主力模型，分類驗證用小模型 |
+| Q&A 萃取  | `gpt-5.4-nano`           | 低成本高效率，萃取品質足夠         |
+| Q&A 合併  | `gpt-5.4-nano`           | 合併多源資訊                       |
+| 分類標籤  | `gpt-5.4-nano`           | 結構化輸出，省成本                 |
+| 週報生成  | `gpt-5.4`（REPORT_MODEL）| 需要深度分析與知識引用             |
+| 品質評估  | `gpt-5.4-nano`           | Judge + 分類驗證                   |
 | Embedding | `text-embedding-3-small` | 去重與語意搜尋                     |
 
 ---
