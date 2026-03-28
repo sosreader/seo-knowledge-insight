@@ -117,9 +117,11 @@ eval.tsx、useEvalDashboard.ts 及四個 Eval 組件（EvalMetricsCards/EvalProv
 | （評估層）    | Step 5：evaluate                   | LLM-as-Judge 品質評估                                                                |
 
 ```
-Notion 會議紀錄（87 份，2023–2026）
+Notion 會議紀錄（89 份，2023–2026）
             ↓
 [Step 1] fetch_notion.py — Notion API 擷取
+  Database Query：server-side last_edited_time filter（--since Nd）
+  Title filter：--filter SEO（只抓標題含 SEO 的頁面）
   增量機制：比對 last_edited_time，只抓更新的頁面
             ↓ raw_data/markdown/*.md
 
