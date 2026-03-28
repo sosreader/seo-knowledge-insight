@@ -92,12 +92,19 @@ async def _api_post(
 async def list_child_pages(
     client: httpx.AsyncClient,
     parent_page_id: str,
-) -> list[dict[str, str]]:
+    since_time: str | None = None,
+) -> tuple[list[dict[str, str]], bool]:
     """
     自動偵測 parent_page_id 是頁面還是資料庫：
     - 資料庫 → 用 POST /databases/{id}/query 查詢所有紀錄
     - 頁面 → 列出所有 child_page 類型 block
-    回傳 [{id, title}]
+
+    Args:
+        since_time: ISO 時間戳，資料庫模式下會用 Notion 原生 filter 在 server side 篩選
+
+    Returns:
+        (pages, server_filtered): pages 為 [{id, title}]，
+        server_filtered 為 True 表示已在 DB 層做 since_time 過濾
     """
     # 先試資料庫 API
     db_url = f"{config.NOTION_BASE_URL}/databases/{parent_page_id}"
@@ -105,23 +112,42 @@ async def list_child_pages(
 
     if db_check.get("object") == "database":
         logger.info("偵測到資料庫，使用 Database Query API ...")
-        return await _list_database_pages(client, parent_page_id)
+        pages = await _list_database_pages(client, parent_page_id, since_time=since_time)
+        return pages, since_time is not None
     else:
         logger.info("偵測到頁面，使用 Blocks Children API ...")
-        return await _list_page_children(client, parent_page_id)
+        pages = await _list_page_children(client, parent_page_id)
+        return pages, False
 
 
 async def _list_database_pages(
     client: httpx.AsyncClient,
     database_id: str,
+    since_time: str | None = None,
 ) -> list[dict[str, str]]:
-    """查詢資料庫中所有 page records"""
+    """查詢資料庫中的 page records，支援 server-side 時間篩選。
+
+    Args:
+        since_time: ISO 時間戳（如 "2026-02-27T00:00:00.000Z"），
+                    會轉為 Notion Database filter 的 last_edited_time >= since_time
+    """
     pages: list[dict[str, str]] = []
     url = f"{config.NOTION_BASE_URL}/databases/{database_id}/query"
     cursor: str | None = None
 
+    # Notion Database filter：server-side 篩選 last_edited_time
+    db_filter: dict[str, Any] | None = None
+    if since_time:
+        db_filter = {
+            "timestamp": "last_edited_time",
+            "last_edited_time": {"on_or_after": since_time},
+        }
+        logger.info("Database filter: last_edited_time >= %s", since_time)
+
     while True:
         body: dict[str, Any] = {"page_size": 100}
+        if db_filter:
+            body["filter"] = db_filter
         if cursor:
             body["start_cursor"] = cursor
 
@@ -341,7 +367,8 @@ async def fetch_all_meetings(
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         logger.info("正在列出子頁面 ...")
-        child_pages = await list_child_pages(client, parent_id)
+        # 傳遞 since_time 讓 Database Query 在 server side 篩選
+        child_pages, db_filtered = await list_child_pages(client, parent_id, since_time=since_time)
         logger.info("找到 %d 個子頁面", len(child_pages))
 
         # 篩選：關鍵字
@@ -352,9 +379,9 @@ async def fetch_all_meetings(
             ]
             logger.info("篩選後剩 %d 個（含 '%s'）", len(child_pages), filter_keyword)
 
-        # 篩選：時間戳（如果指定）
-        # 此時需要查詢 meta 來比對 last_edited_time，所以預先做過濾
-        if since_time:
+        # 篩選：時間戳（如果指定且尚未在 DB 層過濾）
+        # Database 模式已在 server side 過濾，無需逐一查 meta
+        if since_time and not db_filtered:
             logger.info("篩選：只抓 %s 後更新的頁面 ...", since_time)
             filtered = []
             for page in child_pages:
