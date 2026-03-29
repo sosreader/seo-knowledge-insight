@@ -42,6 +42,13 @@
       "temporal_consistency_min": 0.8,
       "citation_relevance_min": 0.6
     },
+    "expected_novelty": {
+      "s2_novelty_min": 0.30,
+      "s4_novelty_min": 0.20,
+      "score_drift_novelty_min": 0.0,
+      "s7_citation_novelty_min": 0.20,
+      "toggle_structure_min": 0.0
+    },
     "notes": "v3.3 全 pipeline 重生（snapshot → 週報 → meeting-prep），S8 成熟度表 + S10 含 9 個 [LX→LY] 升級標籤"
   },
   {
@@ -86,6 +93,13 @@
       "hypothesis_falsifiability_min": 0.6,
       "temporal_consistency_min": 0.8,
       "citation_relevance_min": 0.6
+    },
+    "expected_novelty": {
+      "s2_novelty_min": 0.30,
+      "s4_novelty_min": 0.20,
+      "score_drift_novelty_min": 0.0,
+      "s7_citation_novelty_min": 0.20,
+      "toggle_structure_min": 0.0
     },
     "notes": "v3.3 重生，週報萃取模式，S8 成熟度表 + S10 含 8 個 [LX→LY] 升級標籤"
   },
@@ -132,6 +146,13 @@
       "temporal_consistency_min": 0.8,
       "citation_relevance_min": 0.6
     },
+    "expected_novelty": {
+      "s2_novelty_min": 0.30,
+      "s4_novelty_min": 0.20,
+      "score_drift_novelty_min": 0.0,
+      "s7_citation_novelty_min": 0.20,
+      "toggle_structure_min": 0.0
+    },
     "notes": "v3.3 重生，Health Score 0，S8 成熟度表 + S10 含 11 個 [LX→LY] 升級標籤"
   },
   {
@@ -176,6 +197,13 @@
       "hypothesis_falsifiability_min": 0.6,
       "temporal_consistency_min": 0.8,
       "citation_relevance_min": 0.6
+    },
+    "expected_novelty": {
+      "s2_novelty_min": 0.30,
+      "s4_novelty_min": 0.20,
+      "score_drift_novelty_min": 0.0,
+      "s7_citation_novelty_min": 0.20,
+      "toggle_structure_min": 0.0
     },
     "notes": "v3.3 重生，Health Score 10，S8 成熟度表 + S10 含 9 個 [LX→LY] 升級標籤"
   },

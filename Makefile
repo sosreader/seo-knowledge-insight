@@ -355,8 +355,12 @@ evaluate-meeting-prep-quick: evaluate-meeting-prep-structure evaluate-meeting-pr
 evaluate-meeting-prep-coherence: ## Meeting-Prep L2.5 跨 Section 邏輯一致性（零 LLM 成本）
 	$(PYTHON) evals/eval_meeting_prep_coherence.py
 
+.PHONY: evaluate-meeting-prep-novelty
+evaluate-meeting-prep-novelty: ## Meeting-Prep L2.6 內容新穎度評估（跨週重複偵測，零 LLM 成本）
+	$(PYTHON) evals/eval_meeting_prep_novelty.py
+
 .PHONY: evaluate-meeting-prep-full
-evaluate-meeting-prep-full: evaluate-meeting-prep-structure evaluate-meeting-prep-grounding evaluate-meeting-prep-coherence evaluate-meeting-prep-llm evaluate-meeting-prep-web ## Meeting-Prep 完整 5 層（L1+L2+L2.5+L3+L4）
+evaluate-meeting-prep-full: evaluate-meeting-prep-structure evaluate-meeting-prep-grounding evaluate-meeting-prep-coherence evaluate-meeting-prep-novelty evaluate-meeting-prep-llm evaluate-meeting-prep-web ## Meeting-Prep 完整 6 層（L1+L2+L2.5+L2.6+L3+L4）
 
 # ── 週報品質評估 ──────────────────────────────────
 
