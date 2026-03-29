@@ -7,6 +7,28 @@
 
 <!-- 以下為自動累積區域，請勿手動編輯格式 -->
 
+## 2026-03-29
+
+### Google 官方
+- [2026-03-27] **March 2026 Core Update** — 部署中（預計 2 週完成）。首次包含 Discover 專屬組件的廣泛核心更新。早期數據顯示部分網站 organic traffic 下降 20-35%。
+- [2026-03-24~25] **March 2026 Spam Update** — 已完成。影響 Ranking，可能強化 UGC 品質篩選。
+
+### Google Search Central 公告
+- [2026-03] Search Central Live is coming to Canada
+- [2026-03] Search Central Live Asia Pacific 2026（Sydney）
+
+### 業界報導
+- [9to5Google] Google Search referrals to the web have plummeted, AI links are 'less than 1%' of traffic（2026-03-18）
+- [Press Gazette] Global publisher Google traffic dropped by a third in 2025 — Search -34%, Discover -15% YoY
+- [Axios] Small publishers hit hardest by search traffic declines（2026-03-17）
+- [ALM Corp] Semrush AI Overviews Study: AI Overviews 出現在 ~58% 搜尋中，Featured Snippets 34%→18%
+- [ALM Corp] Google Search Ranking Volatility March 2026 — 部分網站 organic traffic -20~35%
+
+### SER 重點
+- SER 首頁 403（2026-03-29 存取失敗），無法取得最新報導
+
+---
+
 ## 2026-03-22
 
 ### Google 官方
