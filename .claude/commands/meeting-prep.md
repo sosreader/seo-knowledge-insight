@@ -175,6 +175,56 @@ WebSearch: "<關鍵字> SERP feature AI Overview Knowledge Panel 2026"
 
 ---
 
+### Step C-prime：前週報告差異偵測（自動執行）
+
+在生成任何 Section 之前，先讀取最近一份已存在的 meeting-prep 報告，建立差異化基準：
+
+```bash
+Glob: output/meeting_prep_*.md  # 找出所有報告，取日期最新且早於本次的一份
+```
+
+若找到前一份報告，用 Read tool 讀取其 S2、S4、S6、S7、S8 段落，建立 `prevReport` 物件：
+
+- `prev_s2_items`：每個動態項的 {url, title, status}（用於 SITREP 標注）
+- `prev_s4_topics`：S4 表格的主題欄 + 判斷欄（用於 CF 標注）
+- `prev_s6_scores`：E-E-A-T 4 維度分數 + 依據摘要
+- `prev_s7_scores`：人本 7 要素分數 + 引用 citation IDs
+- `prev_s8_levels`：成熟度 4 維度等級 + 依據摘要
+- `prev_s9_questions`：S9 提問 ID 列表（用於 CARRY 標注）
+
+若找不到前一份，所有項目標注 `[NEW]`，不使用 toggle 折疊。
+
+**SITREP 標注規則（CRITICAL — 必須遵守）：**
+
+| 元素 | 標注 | 條件 |
+|------|------|------|
+| S2 動態項 | `[NEW]` | URL 未出現在前週 S2 |
+| S2 動態項 | `[ONGOING-W{n}]` | URL 與前週相同（n = 連續出現週數） |
+| S2 動態項 | `[RESOLVED]` | 前週有但本週不再相關 |
+| S4 topic | `[NEW]` | 主題名稱未出現在前週 S4 |
+| S4 topic | `[CF]` | 主題與前週相同（Carry Forward） |
+| S6/S7/S8 維度 | Changed | 分數與前週不同 → 展開 |
+| S6/S7/S8 維度 | No Change | 分數與前週相同 → `<details>` toggle 折疊 |
+| S9 提問 | `[NEW]` | 新增提問 |
+| S9 提問 | `[CARRY-W{n}]` | 與前週相同指標+來源的提問 |
+
+**Toggle 折疊模板（用於 No Change 內容）：**
+
+```html
+<details>
+<summary>No Change（{N} 維度，點擊展開上週評估）</summary>
+
+| 維度 | 分數 | 上週依據（carry forward） |
+|------|------|------------------------|
+| ... | ... | ... |
+
+</details>
+```
+
+S2 的 ONGOING 項目、S4 的 CF topic 同樣使用 `<details>` toggle，只展開「本週新發展」。
+
+---
+
 ### Step D：顧問文章定向讀取
 
 用 helper 腳本找出顧問文章清單（去重）：
@@ -208,151 +258,100 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **Section 2：業界最新動態**
 
-**內容密度要求**：S2 必須包含至少 **15 行**非標題、非分隔線的實質內容，並引用至少 **5 個不同來源名稱**（如 SearchEngineLand、SearchEngineJournal、Google Search Central、Search Engine Roundtable、Google Trends、Ahrefs、Semrush 等）。
+**內容密度要求**：S2 必須包含至少 **15 行**非標題、非分隔線的實質內容，並引用至少 **5 個不同來源名稱**。
 
-**重要：所有業界動態必須附上原始來源 URL**。WebFetch/WebSearch 結果自帶 URL，S2 中以 markdown hyperlink 格式保留：`[標題](URL)`。若 URL 不可取得（如 JSON API），標注「來源：<描述>」。
+**重要：所有業界動態必須附上原始來源 URL**。
+
+**Delta 指引（若有 prevReport）**：
+- `[ONGOING-W{n}]` 項用 `<details>` toggle 折疊，只寫「本週新發展」
+- `[NEW]` 項完整展開
+- `[RESOLVED]` 項一句帶過
+- Google 官方更新若無新 incident，篇幅讓給新的業界報導
 
 ```markdown
 ### Google 官方更新
-<!-- 從 B1 industryMap 填入 -->
 - [日期] [更新名稱](URL) — [狀態/影響] — [與本週異常的關聯性]
 
-### Google Search Central 官方公告
-<!-- 從 B4 填入 -->
-- [日期] [標題](URL) — [與本週異常的關聯性]
-
 ### 業界報導
-<!-- 從 B3 搜尋結果填入 -->
 - [來源] [標題](URL) — [摘要] — [與本站異常的可能關聯]
 
-### Search Engine Roundtable 近期重點
-<!-- 從 B2 填入，每篇附上 SER 原文 URL -->
-- [日期] [標題](URL) — [摘要]
-
 ### 關鍵字市場趨勢（Google Trends）
-<!-- 從 B5 填入，來源欄附 WebSearch 結果 URL -->
-| 關鍵字 | 本站趨勢 | 市場趨勢（Google Trends） | 判斷 | 來源 |
-|--------|---------|--------------------------|------|------|
-| <KW> | -XX.X% | ↓ 全市場下降 / → 持平 / ↑ 上升 | 外部因素 / 本站問題 | [來源標題](URL) |
+| 關鍵字 | 本站趨勢 | 市場趨勢 | 判斷 | 來源 |
+|--------|---------|---------|------|------|
 
 ### SERP Feature 偵測
-<!-- 從 B6 填入，來源欄附 WebSearch 結果 URL -->
 | 關鍵字 | 觀察到的 SERP Feature | 對有機 CTR 的影響 | 來源 |
 |--------|---------------------|-----------------|------|
-| <KW> | AI Overview / Knowledge Panel / Video Carousel | 高 / 中 / 低 | [來源標題](URL) |
 ```
 
 **Section 3：深度根因假設**
 
-**子標題格式**：將相關 ALERT_DOWN 指標分群，每群使用 `### H{N}：{S1 指標名稱}` 子標題。指標名稱**必須與 Section 1 表格第一欄完全一致**（如 `### H1：AMP Article`、`### H2：CTR`、`### H3：Discover 月趨勢`）。可將高度相關的指標合併為一群，但每個 S1 ALERT_DOWN 名稱至少出現一次。**注意：子標題中禁止使用括號** `()` `（）`——會導致 eval heading regex 截斷（如 `News(new)` 改寫為 `News` 或歸入其他群組）。
+**子標題格式**：`### H{N}：{S1 指標名稱}`。指標名稱**必須與 S1 表格一致**。子標題中**禁止使用括號**。
 
-**大型 S1 集合時的分群策略**（>8 項 ALERT_DOWN）：分群數控制在 5-7 群。優先使用 S9 eval 可辨識的指標名稱作為群組主標題（Discover、AMP、外部連結、檢索未索引、Coverage、CTR、KW: {關鍵字}、營運 KW: {關鍵字}）。非 S9 可辨識的指標（如 GPT、Gemini、Video、/salon/、News(new)）歸入相關的 S9 可辨識群組下方討論，**不另立獨立子標題**。
+**大型 S1 集合時的分群策略**（>8 項 ALERT_DOWN）：分群數 5-7 群。
 
-對每群 ALERT_DOWN 指標，提出 3 個假設（使用 `**假設 1（技術面）**` 格式）：
-- 假設 1：技術面（L1-L2）
-- 假設 2：內容面（L3）
-- 假設 3：外部面（L4-L5 或業界動態）——**必須引用 B5 Google Trends 和/或 B6 SERP Feature 數據**。若 Google Trends 顯示全市場下降，應在假設中標注「外部因素」以降低本站問題的權重。
-每個假設結尾標注「**可驗證**」「**需人工確認**」或「**需顧問判斷**」。
+**假設生命週期標注（若有 prevReport）**：`New Hypothesis` / `Updated` / `Validated` / `Discarded`
+
+對每群提出 3 個假設（`**假設 1（技術面）**` 格式），每個結尾標注「**可驗證**」「**需人工確認**」或「**需顧問判斷**」。
 
 **Section 4：顧問視角交叉比對**
-交叉比對 4 個資料來源，找出矛盾與一致：
-- KB 知識庫觀點
-- 顧問 Medium 文章觀點
-- 本週指標數據
-- 業界最新動態
 
-格式：
+**Delta 指引（若有 prevReport）**：
+- `[NEW]` topic ≥ 2 個；`[CF]` topic 用 `<details>` toggle，只寫「本週進展」
+
 ```markdown
-| 主題 | KB 觀點 | 顧問文章觀點 | 指標數據 | 業界動態 | 判斷 |
-|------|---------|-------------|---------|---------|------|
-| ... | ... | ... | ... | ... | 一致/矛盾/缺口 |
+| 狀態 | 主題 | KB 觀點 | 顧問文章觀點 | 指標數據 | 業界動態 | 判斷 |
+|------|------|---------|-------------|---------|---------|------|
 ```
 
-**四欄必填規則**：KB 觀點、顧問文章觀點、指標數據、業界動態四個來源欄位**每格必須有 >5 個字元的實質內容**。若該來源無直接對應資訊，寫「目前無直接觀點，需進一步研究」而非留空或寫「—」。
+**四欄必填規則**：每格 >5 字元實質內容。
 
 #### 第二批：S5-S8
 
 **Section 5：五層審計缺口清單**
-基於 S3-S4 的分析，列出 5-Layer Audit 中的缺口：
-```markdown
-| 層 | 現況 | 缺口 | 建議 | 優先序 |
-|----|------|------|------|-------|
-| L1 Technical | ... | ... | ... | 高/中/低 |
-```
 
 **Section 6：E-E-A-T 現況評估**
-對 4 個維度各給 1-5 分，並說明評分依據：
+
+**Delta 指引（若有 prevReport）**：
+- Changed 維度展開，標注 ↑↓ + 變動原因
+- No Change 維度用 `<details>` toggle 折疊，carry forward 上週依據
+- 若所有維度相同，**必須說明原因**
+
 ```markdown
-| 維度 | 分數 | 依據 |
-|------|------|------|
-| Experience | 3 | KB 搜尋發現作者署名不一致... |
-| Expertise | 4 | 有深度技術文章但... |
-| Authoritativeness | 3 | ... |
-| Trustworthiness | 4 | ... |
+**Changed this week:**
+| 維度 | 分數 | 變化 | 原因 |
+|------|------|------|------|
+
+<details>
+<summary>No Change（{N} 維度，點擊展開上週評估）</summary>
+
+| 維度 | 分數 | 上週依據（carry forward） |
+|------|------|------------------------|
+
+</details>
 ```
 
-**Section 7：人本七要素分析**
-對 7 個維度各給 1-5 分，引用顧問文章佐證：
-```markdown
-| # | 要素 | 分數 | 觀察 | 顧問文章引用 |
-|---|------|------|------|-------------|
-| 1 | 網站人格 | 3 | ... | [文章標題] 提到... |
-```
+若無 prevReport，使用原始格式（完整表格，無 toggle）。
 
-**Section 8：SEO 成熟度自評**
-4 維度 × 4 級，標注當前等級 + 下一步：
-```markdown
-| 維度 | 當前等級 | 依據 | 下一步 |
-|------|---------|------|-------|
-| 策略 | L2 | ... | ... |
-```
+**Section 7：人本七要素分析** — Delta 指引同 S6。
+
+**Section 8：SEO 成熟度自評** — Delta 指引同 S6。
 
 #### 第三批：S9-S10 + S0
 
 **Section 9：會議提問清單（核心輸出）**
 
-四類提問，每類都要標注來源 section。
+**指標名稱呼應規則**：每個問題中必須包含至少一個 S1/S3 的指標原始名稱。
 
-**指標名稱呼應規則**：每個問題中**必須包含至少一個 S1/S3 的指標原始名稱**，以確保問題與前文分析的跨 Section 一致性。
+**Delta 指引（若有 prevReport）**：`[NEW]` 完整展開；`[CARRY-W{n}]` 用 toggle 折疊 + 補充新 context。
 
-**可用的指標名稱格式**（eval 可辨識的 pattern，優先使用這些）：
-- `Discover`、`CTR`、`AMP`、`Coverage`、`外部連結`、`檢索未索引`
-- `KW: {關鍵字}`（如 `KW: 電影`、`KW: 影評`）——關鍵字類指標**必須使用 `KW:` 前綴**，且**關鍵字後必須有空格**再接其他文字（如 `KW: 電影 +56%`，不寫 `KW: 電影和`）
-- `營運 KW: {關鍵字}`（如 `營運 KW: 保養`）——同樣規則，關鍵字後加空格（如 `營運 KW: 保養 等商業 KW`）
-- `AMP Ratio`、`探索比例`、`結構化 Ratio`、`新網頁`
-
-**A 類：確認事實（3-5 題）**
-從 S3 根因假設中「需人工確認」的項目推導。
-格式：`- [ ] [A1] <問題> （來源：S3 假設 X）`
-
-**B 類：探索判斷（4-6 題）**
-從 S7 人本七要素評分 ≤ 2 的維度推導。
-格式：`- [ ] [B1] <問題> （來源：S7 <要素名>，評分 N/5）`
-
-**C 類：挑戰假設（2-3 題）**
-從 S4 交叉比對中「矛盾」項推導，引用顧問文章反問。
-格式：`- [ ] [C1] <問題> （來源：S4，矛盾點：<描述>）`
-
-**D 類：業界趨勢（2-3 題）**
-從 S2 業界動態中與本站相關的項目推導。
-格式：`- [ ] [D1] <問題> （來源：S2 <動態標題>）`
+四類提問（A 確認事實 3-5 題、B 探索判斷 4-6 題、C 挑戰假設 2-3 題、D 業界趨勢 2-3 題）。
 
 **Section 10：會議後行動核查表**
-從 S5（缺口）和 S9（提問）推導。
 
-**每個行動項目格式**：`- [ ] 在 {工具名} {動作動詞} {具體對象} — **[{維度} L{X}→L{Y}]**`
+每項格式：`- [ ] 在 {工具名} {動作動詞} {具體對象} — **[{維度} L{X}→L{Y}]**`
 
-**必備要素**：
-- **工具名**（至少一個）：GSC / Search Console / PageSpeed / Ahrefs / Screaming Frog / GA4 / Google Trends / Semrush / Moz / Chrome DevTools / Lighthouse
-- **動作動詞**（至少一個）：排查 / 篩選 / 檢查 / 驗證 / 監控 / 建立 / 設定 / 測試 / 分析 / 規劃 / 導入
-
-**三要素必備**：每個行動項目**必須同時包含** (1) 工具名、(2) 動作動詞、(3) 成熟度升級標籤 `[{維度} LX→LY]`。不符合三要素的 meta-item（如「更新假設」「回寫知識庫」）**不列入 S10**。
-
-```markdown
-- [ ] 在 GA4 排查 AMP 頁面追蹤完整性 — **[流程 L2→L3]**
-- [ ] 在 Ahrefs 分析主要關鍵字 SERP Feature 變化 — **[策略 L2→L3]**
-- [ ] 在 GSC 監控索引覆蓋率趨勢 — **[指標 L2→L3]**
-```
+三要素必備：(1) 工具名 (2) 動作動詞 (3) 成熟度標籤。
 
 **最後回填 Section 0**：從 S1-S10 蒸餾 5 bullets。
 
@@ -362,74 +361,26 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 #### F1：完整報告存檔
 
-在報告末尾附加 metadata JSON blocks：
-
-```markdown
-<!-- citations [{"n":1,"id":"abc123","title":"...","category":"...","snippet":"..."},...] -->
-<!-- meeting_prep_meta {"date":"2026-03-12","scores":{"eeat":{"experience":3,"expertise":4,"authoritativeness":3,"trustworthiness":4},"maturity":{"strategy":"L2","process":"L2","keywords":"L3","metrics":"L2"}},"alert_down_count":5,"question_count":15,"generation_mode":"claude-code","web_sources":{"google_status":true,"ser":true,"web_search":3,"google_blog":2,"google_trends":3,"serp_feature":2},"web_source_count":13} -->
-```
-
-計算 content hash：
-```bash
-echo "<報告內容前 500 字>" | shasum | cut -c1-8
-```
-
-存至：`output/meeting_prep_YYYYMMDD_{hash8}.md`
+附加 metadata JSON blocks → 計算 hash → 存至 `output/meeting_prep_YYYYMMDD_{hash8}.md`
 
 #### F2：業界動態累積（research/11-seo-industry-updates.md）
 
-在檔案末尾 append 一個新的日期 section：
-```markdown
-## YYYY-MM-DD
-
-### Google 官方
-- ...
-
-### 業界報導
-- ...
-
-### SER 重點
-- ...
-```
-
-若檔案超過 12 個 dated sections（約 6 個月），移除最舊的 section。
+Append 新日期 section。超過 12 sections 時移除最舊。
 
 #### F3：評分與洞察累積（research/12-meeting-prep-insights.md）
 
-在評分追蹤表 append 一行：
-```markdown
-| YYYY-MM-DD | E:3 E:4 A:3 T:4 | 策略:L2 流程:L2 KW:L3 指標:L2 | 重要發現摘要 |
-```
-
-在交叉比對發現區 append 新發現（若有矛盾或重要一致性）。
+Append 評分追蹤行 + 交叉比對新發現。
 
 ---
 
 ## Citation 標記規則
 
-與 `/generate-report` 相同的 Perplexity 風格 `[N]` 標記。
-維護 citation map：`{qa_id → N}`，依首次出現順序遞增。
+Perplexity 風格 `[N]` 標記。密度目標 15-18 筆。
 
-**Citation 密度目標**：整篇報告應引用 **15-18 筆** KB 來源（Step C 搜尋 7-10 輪，每輪 top-k 3，去重後保留 top-20，目標使用其中 15-18 筆）。在 S3（根因假設）、S5（審計缺口）、S6（E-E-A-T）中密集引用。
-
-**Section-Citation 對應**：為確保引用與 section 脈絡一致，在 S3 中優先引用 category 為「技術SEO」「索引與檢索」「連結策略」「演算法與趨勢」「Discover與AMP」「搜尋表現分析」的 KB 來源。在 S6 中優先引用 category 為「技術SEO」「Discover與AMP」「連結策略」「搜尋表現分析」「演算法與趨勢」的 KB 來源。「GA與數據追蹤」等非 SEO 核心類別的引用應放在 S1 或 S5，而非 S3/S6。
-
-報告末尾的 `<!-- citations [...] -->` JSON block 格式同 `/generate-report`。
+**Section-Citation 對應**：S3 優先引用技術SEO/索引與檢索/連結策略/演算法與趨勢/Discover與AMP/搜尋表現分析。S6 同理。
 
 ---
 
 ## 輸出摘要
 
-完成後告訴使用者：
-- 輸入來源類型（snapshot / sheets / report）
-- ALERT_DOWN 指標數量
-- 業界動態筆數（B1 + B2 + B3 + B4 + B5 + B6）
-- KB 引用筆數
-- 顧問文章引用數
-- E-E-A-T 平均分
-- SEO 成熟度概覽
-- Google Trends 驗證結果（幾個為外部因素 vs 本站問題）
-- SERP Feature 偵測結果（哪些關鍵字被 AI Overview / Knowledge Panel 搶佔）
-- 提問清單總數（A + B + C + D 各幾題）
-- 儲存路徑
-- research/ 更新狀態
+完成後告訴使用者：輸入來源、ALERT_DOWN 數量、業界動態筆數、KB 引用數、顧問文章引用數、E-E-A-T 平均分、成熟度概覽、Google Trends 驗證結果、SERP Feature 偵測結果、提問清單總數、儲存路徑、research/ 更新狀態。
