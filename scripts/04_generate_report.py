@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 import csv
 import io
+import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -42,7 +43,7 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import config
 
-from utils.openai_helper import get_embeddings
+from utils.openai_helper import get_embeddings, get_local_embeddings
 from utils.pipeline_deps import preflight_check, StepDependency
 from utils.observability import init_laminar, flush_laminar, observe
 from utils.search_engine import compute_keyword_boost
@@ -70,6 +71,29 @@ from utils.metrics_parser import (
 # ──────────────────────────────────────────────────────
 # Google Sheets 自動擷取
 # ──────────────────────────────────────────────────────
+
+# ── Retry utility (from claude-reports report_exec pattern) ──
+
+def _retry(fn, max_attempts=3, base_delay=15, label="",
+           retryable: type | tuple = (OSError, TimeoutError, urllib.error.URLError)):
+    """Execute fn() with exponential backoff. Only retries retryable exceptions."""
+    last_exc = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return fn()
+        except retryable as e:
+            last_exc = e
+            if attempt < max_attempts:
+                delay = base_delay * (2 ** (attempt - 1))
+                logger.warning(
+                    "RETRY %s attempt %d/%d — %s, waiting %ds",
+                    label, attempt, max_attempts, e, delay,
+                )
+                time.sleep(delay)
+            else:
+                logger.error("FAILED %s after %d attempts — %s", label, max_attempts, e)
+    raise last_exc
+
 
 _SHEET_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{10,60}$")
 _GID_RE = re.compile(r"^\d{1,10}$")
@@ -161,11 +185,14 @@ def fetch_from_sheets(url_or_id: str, tab: str = "vocus") -> str:
         f"/export?format=csv&id={sheet_id}&gid={gid}"
     )
     logger.info("下載: %s", csv_url)
-    req = urllib.request.Request(csv_url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        if resp.status != 200:
-            raise ValueError(f"Google Sheets 回應異常，HTTP 狀態碼：{resp.status}")
-        raw = resp.read(_MAX_RESPONSE_BYTES)
+    def _fetch():
+        req = urllib.request.Request(csv_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            if resp.status != 200:
+                raise ValueError(f"Google Sheets 回應異常，HTTP 狀態碼：{resp.status}")
+            return resp.read(_MAX_RESPONSE_BYTES)
+
+    raw = _retry(_fetch, label="fetch_from_sheets")
     # Sheets CSV 為 UTF-8-BOM
     text = raw.decode("utf-8-sig")
 
@@ -326,6 +353,9 @@ def _load_persisted_embeddings(qa_count: int) -> np.ndarray | None:
     if not emb_path.exists():
         return None
     emb = np.load(emb_path)
+    if emb.ndim != 2 or emb.shape[1] <= 0:
+        logger.warning("Embedding shape %s 無效，重新計算", emb.shape)
+        return None
     if emb.shape[0] != qa_count:
         logger.warning("Embedding 數量 (%d) 與 Q&A 數量 (%d) 不匹配，重新計算", emb.shape[0], qa_count)
         return None
@@ -342,6 +372,36 @@ def _compute_keyword_boost(
 ) -> np.ndarray:
     """Thin wrapper → delegates to compute_keyword_boost in utils/search_engine."""
     return compute_keyword_boost(queries, qa_pairs, boost=boost, max_hits=max_hits)
+
+
+def _embed_queries_for_qa_dim(queries: list[str], target_dim: int) -> np.ndarray:
+    """Embed queries with a vector dimension compatible with persisted QA embeddings."""
+    query_embeddings = get_embeddings(queries)
+    if not query_embeddings:
+        return np.zeros((0, target_dim))
+
+    current_dim = len(query_embeddings[0])
+    if current_dim == target_dim:
+        return np.array(query_embeddings)
+
+    logger.warning(
+        "Query embedding 維度 (%d) 與持久化 QA embedding 維度 (%d) 不一致，改用 local fallback；檢索品質可能下降",
+        current_dim,
+        target_dim,
+    )
+
+    local_query_embeddings = get_local_embeddings(queries)
+    if local_query_embeddings and len(local_query_embeddings[0]) == target_dim:
+        logger.info("   ↪ 使用 local embeddings 對齊持久化 QA 向量")
+        return np.array(local_query_embeddings)
+
+    fallback_dim = len(local_query_embeddings[0]) if local_query_embeddings else 0
+
+    raise ValueError(
+        f"Query embedding 維度 ({current_dim}) 與持久化 QA embedding 維度 ({target_dim}) 不一致，"
+        f"local fallback 維度 ({fallback_dim}) 仍無法相容；"
+        "請執行 python scripts/03_dedupe_classify.py --rebuild-embeddings 重建 qa_embeddings.npy。"
+    )
 
 
 @observe(name="find_relevant_qas_multi")
@@ -364,15 +424,17 @@ def find_relevant_qas_multi(
     persisted_embs = _load_persisted_embeddings(len(qa_pairs))
     if persisted_embs is not None:
         logger.info("   ✨ 使用持久化 embedding（免重算）")
-        # 只需 embed queries
-        query_embeddings = get_embeddings(queries)
-        query_embs = np.array(query_embeddings)
+        query_embs = _embed_queries_for_qa_dim(queries, persisted_embs.shape[1])
         qa_embs = persisted_embs
     else:
         # Fallback: 一次批次 embed 所有 queries + 所有 QA 問題
         questions = [qa.get("question", "") for qa in qa_pairs]
         all_texts = queries + questions
-        all_embeddings = get_embeddings(all_texts)
+        all_embeddings = _retry(
+            lambda: get_embeddings(all_texts),
+            retryable=(OSError, TimeoutError),
+            label="get_embeddings",
+        )
         query_embs = np.array(all_embeddings[: len(queries)])
         qa_embs = np.array(all_embeddings[len(queries) :])
 
@@ -494,6 +556,109 @@ def _fmt_num(v) -> str:
             return f"{v:.4f}"
         return f"{v:.1f}"
     return str(v)
+
+
+# ── Report Validation (from claude-reports report_validate pattern) ──
+
+_SECTION_MARKERS = ["一、", "二、", "三、", "四、", "五、", "六、", "七、"]
+
+
+def _validate_report(report_md: str, anomalies: list[dict]) -> list[str]:
+    """
+    Pre-write validation. Returns list of warnings (empty = all passed).
+    Logs each warning. Does NOT block write — reports are still saved.
+    """
+    issues = []
+
+    # 1. Section completeness
+    found_sections = [m for m in _SECTION_MARKERS if m in report_md]
+    if len(found_sections) < len(_SECTION_MARKERS):
+        missing = [m for m in _SECTION_MARKERS if m not in report_md]
+        issues.append(f"Missing sections: {missing}")
+
+    # 2. Minimum size
+    if len(report_md) < 2000:
+        issues.append(f"Report too short: {len(report_md)} chars (min 2000)")
+
+    # 3. Citation count
+    citations = re.findall(r"\[\d+\]", report_md)
+    if len(set(citations)) < 4:
+        issues.append(f"Citation count {len(set(citations))} < 4 minimum")
+
+    # 4. Action emoji distribution
+    red_count = report_md.count("🔴")
+    yellow_count = report_md.count("🟡")
+    if red_count < 2:
+        issues.append(f"🔴 actions: {red_count} < 2")
+    if yellow_count < 1:
+        issues.append(f"🟡 actions: {yellow_count} < 1")
+
+    # 5. ALERT_DOWN coverage in action section (slice between 六 and 七)
+    alert_down_names = [a["name"] for a in anomalies if a.get("flag") == "ALERT_DOWN"]
+    if alert_down_names:
+        if "六、" in report_md and "七、" in report_md:
+            start = report_md.index("六、")
+            end = report_md.index("七、")
+            action_section = report_md[start:end]
+        elif "六、" in report_md:
+            action_section = report_md[report_md.index("六、"):]
+        else:
+            action_section = report_md
+        covered = sum(1 for name in alert_down_names if name in action_section)
+        coverage = covered / len(alert_down_names)
+        if coverage < 0.5:
+            issues.append(f"ALERT coverage {coverage:.0%} < 50% ({covered}/{len(alert_down_names)})")
+
+    for issue in issues:
+        logger.warning("VALIDATION: %s", issue)
+
+    return issues
+
+
+# ── Trend Memory (from claude-reports report-trends.sh pattern) ──
+
+
+def _store_seo_trend(report_md: str, anomalies: list[dict], date_str: str) -> None:
+    """Append structured KPIs to data/seo-trends.jsonl for week-over-week comparison."""
+    trends_dir = config.OUTPUT_DIR.parent / "data"
+    trends_dir.mkdir(parents=True, exist_ok=True)
+    trends_file = trends_dir / "seo-trends.jsonl"
+
+    # Extract Health Score from report
+    health_match = re.search(r"Health Score[：:]\s*(\d+)", report_md)
+    health_score = int(health_match.group(1)) if health_match else None
+
+    # Count anomalies by flag
+    alert_down = sum(1 for a in anomalies if a.get("flag") == "ALERT_DOWN")
+    alert_up = sum(1 for a in anomalies if a.get("flag") == "ALERT_UP")
+    core_count = sum(1 for a in anomalies if a.get("flag") == "CORE")
+
+    # Count citations
+    citations = len(set(re.findall(r"\[\d+\]", report_md)))
+
+    # Count action items
+    red_actions = report_md.count("🔴")
+    yellow_actions = report_md.count("🟡")
+
+    trend_entry = {
+        "date": date_str,
+        "report": "generate-report",
+        "health_score": health_score,
+        "alert_down": alert_down,
+        "alert_up": alert_up,
+        "core_alerts": core_count,
+        "citations": citations,
+        "red_actions": red_actions,
+        "yellow_actions": yellow_actions,
+        "report_chars": len(report_md),
+    }
+
+    try:
+        with open(trends_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(trend_entry, ensure_ascii=False) + "\n")
+        logger.info("   📊 Trend stored: %s", trends_file)
+    except OSError as e:
+        logger.warning("Trend storage failed: %s", e)
 
 
 def _build_metrics_summary(alerts: list[dict]) -> str:
@@ -679,13 +844,17 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
         f"{qa_context}"
     )
 
-    response = client.chat.completions.create(
-        model=config.REPORT_MODEL,
-        messages=[
-            {"role": "system", "content": REPORT_SYSTEM_PROMPT},
-            {"role": "user", "content": user_msg},
-        ],
-        max_completion_tokens=16384,  # gpt-5 推理模型：reasoning + output 共享，需預留足夠空間
+    response = _retry(
+        lambda: client.chat.completions.create(
+            model=config.REPORT_MODEL,
+            messages=[
+                {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
+            ],
+            max_completion_tokens=16384,
+        ),
+        retryable=(OSError, TimeoutError),
+        label="generate_report",
     )
 
     msg = response.choices[0].message
@@ -985,6 +1154,9 @@ def main() -> None:
         report_md = generate_report(metrics_summary, relevant_qas, report_date, weeks=args.weeks)
         cache_set("report", report_cache_key, {"report_text": report_md})
 
+    # ── Pre-write validation (from claude-reports report_validate pattern) ──
+    _validate_report(report_md, alerts)
+
     # 輸出
     if args.output:
         out_path = Path(args.output)
@@ -994,6 +1166,9 @@ def main() -> None:
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report_md, encoding="utf-8")
+
+    # ── Trend Memory (from claude-reports report-trends.sh pattern) ──
+    _store_seo_trend(report_md, alerts, date_str)
 
     # ── Layer 2: Version Registry ──────────────────────────────
     version_entry = record_artifact(

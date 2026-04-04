@@ -7,6 +7,35 @@
 
 <!-- 以下為自動累積區域，請勿手動編輯格式 -->
 
+## 2026-04-05
+
+### Google 官方
+- [2026-03-27~進行中] **March 2026 Core Update** — 第 2 週滾動中（預計 ~4/10 完成）。早期數據：AI 生成內容流量降 71%，原創數據內容升 22%。Information Gain 確認為核心排名信號。55%+ 監控網站出現排名波動。
+- [2026-03-24~25] **March 2026 Spam Update** — 已完成，無後續異常。
+- [2026-02-05~27] **February 2026 Discover Core Update** — 已完成，影響消退。
+
+### Google Search Central 公告
+- [2026-03] Inside Googlebot: demystifying crawling, fetching, and the bytes we process
+- [2026-03] New Location for the Google Crawlers' IP Range Files
+- [2026-04] Search Central Live is Coming to Shanghai
+
+### 業界報導
+- [SearchEngineLand] Google AI Overviews cut search clicks 42%
+- [SearchEngineLand] News publishers expect search traffic to drop 43% by 2029
+- [SearchEngineLand] Small publisher search traffic fell 60% over two years
+- [SearchEngineLand] Breaking news traffic grew 103% since Nov 2024
+- [TempEmailNow] Google Knowledge Panel 2026: AI-powered verification layer + Ask button
+
+### SERP Feature
+- AI Overviews 覆蓋 ~40% 資訊型查詢、~25% 商業查詢
+- Knowledge Panel 整合 LLM（Gemini），新增 Ask 按鈕
+- CTR 在 AIO 出現時降 42%（全球）；新聞查詢 AIO 覆蓋僅 ~15%
+
+### SER 重點
+- SER 首頁 403（2026-04-05 存取失敗），連續兩次無法取得
+
+---
+
 ## 2026-03-29
 
 ### Google 官方

@@ -6,7 +6,11 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { writeFileSync, mkdirSync, rmSync, utimesSync } from "node:fs";
 import { join } from "node:path";
-import { FAKE_ITEMS, generateFakeEmbeddings, createNpyBuffer } from "../setup.js";
+import {
+  FAKE_ITEMS,
+  generateFakeEmbeddings,
+  createNpyBuffer,
+} from "../setup.js";
 
 // Mock config — file-based (no Supabase)
 vi.mock("../../src/config.js", () => ({
@@ -232,15 +236,30 @@ describe("QAStore (file-based)", () => {
 
     const freshJson = buildFakeJson();
     const staleEnrichedJson = {
-      qa_database: freshJson.qa_database.slice(0, freshJson.qa_database.length - 1),
+      qa_database: freshJson.qa_database.slice(
+        0,
+        freshJson.qa_database.length - 1,
+      ),
     };
 
     writeFileSync(staleJsonPath, JSON.stringify(freshJson), "utf-8");
-    writeFileSync(staleEnrichedPath, JSON.stringify(staleEnrichedJson), "utf-8");
+    writeFileSync(
+      staleEnrichedPath,
+      JSON.stringify(staleEnrichedJson),
+      "utf-8",
+    );
     writeFakeEmbeddings(staleNpyPath, freshJson.qa_database.length);
 
-    utimesSync(staleEnrichedPath, new Date("2026-01-01T00:00:00.000Z"), new Date("2026-01-01T00:00:00.000Z"));
-    utimesSync(staleJsonPath, new Date("2026-01-02T00:00:00.000Z"), new Date("2026-01-02T00:00:00.000Z"));
+    utimesSync(
+      staleEnrichedPath,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Date("2026-01-01T00:00:00.000Z"),
+    );
+    utimesSync(
+      staleJsonPath,
+      new Date("2026-01-02T00:00:00.000Z"),
+      new Date("2026-01-02T00:00:00.000Z"),
+    );
 
     try {
       const staleStore = new QAStore();
@@ -263,15 +282,26 @@ describe("QAStore (file-based)", () => {
 
     const finalJson = buildFakeJson();
     const enrichedJson = {
-      qa_database: finalJson.qa_database.slice(0, finalJson.qa_database.length - 1),
+      qa_database: finalJson.qa_database.slice(
+        0,
+        finalJson.qa_database.length - 1,
+      ),
     };
 
     writeFileSync(freshJsonPath, JSON.stringify(finalJson), "utf-8");
     writeFileSync(freshEnrichedPath, JSON.stringify(enrichedJson), "utf-8");
     writeFakeEmbeddings(freshNpyPath, enrichedJson.qa_database.length);
 
-    utimesSync(freshJsonPath, new Date("2026-01-01T00:00:00.000Z"), new Date("2026-01-01T00:00:00.000Z"));
-    utimesSync(freshEnrichedPath, new Date("2026-01-02T00:00:00.000Z"), new Date("2026-01-02T00:00:00.000Z"));
+    utimesSync(
+      freshJsonPath,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Date("2026-01-01T00:00:00.000Z"),
+    );
+    utimesSync(
+      freshEnrichedPath,
+      new Date("2026-01-02T00:00:00.000Z"),
+      new Date("2026-01-02T00:00:00.000Z"),
+    );
 
     try {
       const freshStore = new QAStore();
@@ -294,7 +324,9 @@ describe("QAStore (file-based)", () => {
 
     try {
       const brokenStore = new QAStore();
-      expect(() => brokenStore.load(missingJsonPath, missingNpyPath, brokenEnrichedPath)).toThrow(
+      expect(() =>
+        brokenStore.load(missingJsonPath, missingNpyPath, brokenEnrichedPath),
+      ).toThrow(
         "QAStore: both qa_enriched.json and qa_final.json are unavailable",
       );
     } finally {

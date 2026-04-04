@@ -246,7 +246,14 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **Context window 管理**：分三批生成，避免 context 溢出。
 
-#### 第一批：S0-S4
+> **三層語意模型**（源自 claude-reports 資訊架構）：
+> - **Tier 1 — Signal**（S0-S2）：回答「現在有問題嗎？業界發生什麼事？」
+> - **Tier 2 — Diagnosis**（S3-S8）：回答「根因是什麼？多框架交叉驗證」
+> - **Tier 3 — Action**（S9-S10）：回答「會議上問什麼？會後做什麼？」
+>
+> Tier 1 內容應最精煉（讀者 2 分鐘內掌握），Tier 2 為按需展開的深度分析。
+
+#### 第一批：S0-S4（Tier 1 Signal + Tier 2 前段）
 
 **Section 0：執行摘要（5 bullets）**
 從 S1-S10 蒸餾 5 個最重要的發現，每個 1 句話。最後生成（先跳過）。
@@ -306,7 +313,7 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **四欄必填規則**：每格 >5 字元實質內容。
 
-#### 第二批：S5-S8
+#### 第二批：S5-S8（Tier 2 Diagnosis 後段）
 
 **Section 5：五層審計缺口清單**
 
@@ -337,7 +344,7 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 **Section 8：SEO 成熟度自評** — Delta 指引同 S6。
 
-#### 第三批：S9-S10 + S0
+#### 第三批：S9-S10 + S0（Tier 3 Action + S0 回填）
 
 **Section 9：會議提問清單（核心輸出）**
 
@@ -357,6 +364,26 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 ---
 
+### Step E-prime：自我驗證（Self-Validation）
+
+存檔前逐項確認（不對使用者輸出，僅內部計數並修正）：
+
+| 項目 | 標準 | 不達標行動 |
+|------|------|-----------|
+| Section 完整性 | S0-S10 共 11 個 section 標題 | 補齊缺少的 section |
+| Citation 密度 | ≥15 筆 [N] 標記 | 補引用 qaMap 相關 QA |
+| S2 內容密度 | ≥15 行非標題實質內容、≥5 個來源名稱 | 擴展業界動態 |
+| S3 指標名稱一致性 | 子標題指標名稱 = S1 表格指標名稱 | 修正不一致 |
+| S4 四欄必填 | 每格 >5 字元實質內容 | 充實空格 |
+| S6/S7/S8 Toggle 一致性 | No Change 維度已用 `<details>` 折疊 | 補折疊標籤 |
+| S9 提問數量 | A 3-5、B 4-6、C 2-3、D 2-3 題 | 補充或精簡 |
+| S10 三要素 | 每項含工具名 + 動作動詞 + 成熟度標籤 | 補充缺失要素 |
+| Delta 標注完整性 | 所有新舊項正確標注 [NEW]/[CF]/[CARRY] | 補漏標 |
+
+驗證方式：逐項計數，任何不達標項在存檔前修正。此步驟源自 claude-reports 的 `report_validate` 模式——確保輸出品質不因資料變化而劣化。
+
+---
+
 ### Step F：存檔與文件留存
 
 #### F1：完整報告存檔
@@ -370,6 +397,17 @@ Append 新日期 section。超過 12 sections 時移除最舊。
 #### F3：評分與洞察累積（research/12-meeting-prep-insights.md）
 
 Append 評分追蹤行 + 交叉比對新發現。
+
+#### F4：結構化趨勢記錄（data/seo-trends.jsonl）
+
+在 F3 的 prose append 之外，另存一行 JSONL 供跨週自動比較（源自 claude-reports `report-trends.sh` 模式）：
+
+```bash
+# 在報告中計數後，用 bash 寫入 JSONL
+echo '{"date":"'$(date +%Y-%m-%d)'","report":"meeting-prep","eeat_avg":<S6平均>,"maturity_strategy":"<L>","maturity_process":"<L>","maturity_keywords":"<L>","maturity_metrics":"<L>","s9_questions":<S9總數>,"citations":<[N]計數>}' >> data/seo-trends.jsonl
+```
+
+若 `data/` 目錄不存在則先 `mkdir -p data`。此步驟讓 Step C-prime 的前週差異偵測可直接讀 JSONL，不需重新解析完整 Markdown。
 
 ---
 

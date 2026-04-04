@@ -17,6 +17,7 @@
 
 | 2026-03-22 | E:3 E:3 A:2 T:3 (avg 2.75) | 策略:L2 流程:L2 KW:L3 指標:L2 | Feb Discover Core Update 完成、域名池-8%；AI 流量全面正成長驗證顧問假說；外鏈連續4期降→升級必做；AIO 觸發 48% 查詢、有機 CTR -61% |
 | 2026-03-29 | E:3 E:3 A:2 T:3 (avg 2.75) | 策略:L2 流程:L2 KW:L3 指標:L2 | March Core Update 3/27 啟動（資料僅含 1 天）；Discover 月-26%週+57% 高波動；外鏈-28% 連續5期降；KW:影評-44% vs KW:攻略+63% 意圖分化；AI 流量全正（GPT+35%/Gemini+41%/Perplexity+24%）；AIO ~58% 搜尋觸發 |
+| 2026-04-05 | E:3 E:3 A:2 T:3 (avg 2.75) | 策略:L2 流程:L2 KW:L3 指標:L2 | Discover+News+News(new) 三路 ALERT_DOWN（上週反彈未持續）；ALERT_DOWN 從 19→3 但更集中；Health Score 50/100；Core Update 第 2 週（AI 內容-71%/原創+22%/Info Gain 核心信號）；AIO 點擊降 42%；突發新聞+103% 但本站未捕捉 |
 
 ### Autoresearch Meeting-Prep 實驗結果 (2026-03-22~23)
 

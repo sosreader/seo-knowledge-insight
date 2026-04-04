@@ -376,6 +376,21 @@ def extract_qa_from_text(
 # Embedding
 # ──────────────────────────────────────────────────────
 
+def get_local_embeddings(texts: list[str]) -> list[list[float]]:
+    """Compute cached local embeddings regardless of OpenAI availability."""
+    from utils.pipeline_cache import cache_get, cache_set
+
+    result: list[list[float]] = []
+    for text in texts:
+        cached = cache_get("embedding", text, model="local-embed-v1")
+        if cached is not None:
+            result.append(cached)
+            continue
+        embedding = _local_embed_text(text)
+        cache_set("embedding", text, embedding, model="local-embed-v1")
+        result.append(embedding)
+    return result
+
 @observe(name="get_embeddings")
 def get_embeddings(texts: list[str]) -> list[list[float]]:
     """
@@ -386,16 +401,7 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     from utils.pipeline_cache import cache_get, cache_set
 
     if not _has_openai_key():
-        result: list[list[float]] = []
-        for text in texts:
-            cached = cache_get("embedding", text, model="local-embed-v1")
-            if cached is not None:
-                result.append(cached)
-                continue
-            embedding = _local_embed_text(text)
-            cache_set("embedding", text, embedding, model="local-embed-v1")
-            result.append(embedding)
-        return result
+        return get_local_embeddings(texts)
 
     client = _client()
 
