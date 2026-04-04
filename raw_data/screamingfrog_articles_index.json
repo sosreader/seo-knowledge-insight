@@ -1,0 +1,112 @@
+[
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=335523",
+    "slug": "brightonseo-october-25",
+    "title": "The brightonSEO Crawling Clinic October ’25",
+    "url": "https://www.screamingfrog.co.uk/blog/brightonseo-october-25/",
+    "published": "2025-10-21",
+    "author": "Mark Porter",
+    "fetched_at": "2026-03-30T02:34:49.831117+00:00",
+    "md_file": "brightonseo-october-25.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=331178",
+    "slug": "crawling-clinic-sd-25",
+    "title": "Screaming Frog Crawling Clinic Returns to brightonSEO San Diego ’25!",
+    "url": "https://www.screamingfrog.co.uk/blog/crawling-clinic-sd-25/",
+    "published": "2025-09-18",
+    "author": "Mark Porter",
+    "fetched_at": "2026-03-30T02:34:54.405435+00:00",
+    "md_file": "crawling-clinic-sd-25.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=345074",
+    "slug": "data-driven-content-pruning",
+    "title": "Data-Driven Content Pruning at Scale Using APIs and the Screaming Frog SEO Spider",
+    "url": "https://www.screamingfrog.co.uk/blog/data-driven-content-pruning/",
+    "published": "2026-01-12",
+    "author": "Mark Porter",
+    "fetched_at": "2026-03-30T02:34:46.805436+00:00",
+    "md_file": "data-driven-content-pruning.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=349572",
+    "slug": "design-trends-shaping-2026",
+    "title": "Design Trends That Are Shaping 2026",
+    "url": "https://www.screamingfrog.co.uk/blog/design-trends-shaping-2026/",
+    "published": "2026-02-26",
+    "author": "Daniel Sturrock",
+    "fetched_at": "2026-03-30T02:34:43.747356+00:00",
+    "md_file": "design-trends-shaping-2026.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=324829",
+    "slug": "ethical-storytelling-in-pr",
+    "title": "Ethical Storytelling in PR: Relevance, Reputation, Results",
+    "url": "https://www.screamingfrog.co.uk/blog/ethical-storytelling-in-pr/",
+    "published": "2025-08-18",
+    "author": "Mark Porter",
+    "fetched_at": "2026-03-30T02:34:55.927979+00:00",
+    "md_file": "ethical-storytelling-in-pr.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=332870",
+    "slug": "flying-blind-measuring-without-first-party-tools",
+    "title": "Flying Blind: Measuring Keyword Coverage on a Cluster Without First-Party Tools",
+    "url": "https://www.screamingfrog.co.uk/blog/flying-blind-measuring-without-first-party-tools/",
+    "published": "2025-10-06",
+    "author": "Mark Porter",
+    "fetched_at": "2026-03-30T02:34:52.900880+00:00",
+    "md_file": "flying-blind-measuring-without-first-party-tools.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=321937",
+    "slug": "pr-wins-may-be-missing-from-ai",
+    "title": "Out of Cite: Why Your PR Wins May Be Missing From AI Search",
+    "url": "https://www.screamingfrog.co.uk/blog/pr-wins-may-be-missing-from-ai/",
+    "published": "2025-07-22",
+    "author": "Chris Jones",
+    "fetched_at": "2026-03-30T02:34:57.452643+00:00",
+    "md_file": "pr-wins-may-be-missing-from-ai.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=347876",
+    "slug": "reconstructing-site-architecture-using-breadcrumbs",
+    "title": "Analysing and Reconstructing Site Architecture Using Breadcrumbs: A Practical SEO Guide",
+    "url": "https://www.screamingfrog.co.uk/blog/reconstructing-site-architecture-using-breadcrumbs/",
+    "published": "2026-02-20",
+    "author": "Mark Porter",
+    "fetched_at": "2026-03-30T02:34:45.279385+00:00",
+    "md_file": "reconstructing-site-architecture-using-breadcrumbs.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=342144",
+    "slug": "screaming-frog-2025-search-awards-win",
+    "title": "Screaming Frog & Good Travel Management Take Flight With UK Search Awards Win",
+    "url": "https://www.screamingfrog.co.uk/blog/screaming-frog-2025-search-awards-win/",
+    "published": "2025-12-05",
+    "author": "Mark Porter",
+    "fetched_at": "2026-03-30T02:34:48.320983+00:00",
+    "md_file": "screaming-frog-2025-search-awards-win.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=334477",
+    "slug": "seo-spider-23",
+    "title": "Screaming Frog SEO Spider Update – Version 23.0",
+    "url": "https://www.screamingfrog.co.uk/blog/seo-spider-23/",
+    "published": "2025-10-20",
+    "author": "screamingfrog",
+    "fetched_at": "2026-03-30T02:34:51.364425+00:00",
+    "md_file": "seo-spider-23.md",
+    "source_collection": "screaming-frog"
+  }
+]

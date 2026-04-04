@@ -9,7 +9,7 @@
  *   - categories (sorted by count desc)
  */
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { paths } from "../config.js";
 import { parseNpy } from "../utils/npy-reader.js";
@@ -27,6 +27,31 @@ import {
 } from "./qa-fns.js";
 import { hasSupabase } from "./supabase-client.js";
 import { SupabaseQAStore } from "./supabase-qa-store.js";
+
+function shouldLoadEnrichedJson(jsonPath: string, enrichedPath: string): boolean {
+  if (!existsSync(enrichedPath)) {
+    return false;
+  }
+
+  if (!existsSync(jsonPath)) {
+    console.warn(`QAStore: qa_final.json not found at ${jsonPath}, trying qa_enriched.json`);
+    return true;
+  }
+
+  try {
+    const finalMtime = statSync(jsonPath).mtimeMs;
+    const enrichedMtime = statSync(enrichedPath).mtimeMs;
+    if (finalMtime > enrichedMtime) {
+      console.warn("QAStore: qa_enriched.json is stale, fallback to qa_final.json");
+      return false;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`QAStore: qa_enriched.json freshness check failed (${message}), trying enriched artifact`);
+  }
+
+  return true;
+}
 
 export interface QAItem {
   readonly id: string; // stable_id (16-char hex)
@@ -138,14 +163,20 @@ export class QAStore {
     npyPath: string = paths.qaEmbeddingsPath,
     enrichedPath: string = paths.qaEnrichedJsonPath,
   ): void {
-    // Prefer enriched JSON, fallback to final
+    // Prefer enriched JSON only when it is not older than qa_final.json.
     let rawText: string;
-    if (existsSync(enrichedPath)) {
+    if (shouldLoadEnrichedJson(jsonPath, enrichedPath)) {
       try {
         rawText = readFileSync(enrichedPath, "utf-8");
         console.log(`QAStore: loaded enriched data from ${enrichedPath}`);
-      } catch {
+      } catch (error) {
         console.warn("QAStore: qa_enriched.json load failed, fallback to qa_final.json");
+        if (!existsSync(jsonPath)) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `QAStore: both qa_enriched.json and qa_final.json are unavailable (${message})`,
+          );
+        }
         rawText = readFileSync(jsonPath, "utf-8");
       }
     } else {

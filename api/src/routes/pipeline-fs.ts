@@ -102,6 +102,9 @@ function buildPipelineStatusFromStore(): PipelineStatusResponse {
   const ahrefsCount = collectionCountMap.get("ahrefs-blog") ?? 0;
   const sejCount = collectionCountMap.get("sej") ?? 0;
   const growthmemoCount = collectionCountMap.get("growth-memo") ?? 0;
+  const googleBlogCount = collectionCountMap.get("google-search-central") ?? 0;
+  const webdevCount = collectionCountMap.get("web-dev") ?? 0;
+  const screamingfrogCount = collectionCountMap.get("screaming-frog") ?? 0;
 
   const steps: PipelineStepStatus[] = [
     {
@@ -147,6 +150,24 @@ function buildPipelineStatusFromStore(): PipelineStatusResponse {
       detail: `${growthmemoCount} 筆 Q&A（來自 Growth Memo）`,
     },
     {
+      name: "fetch-google-blog",
+      label: "Google Blog 擷取",
+      count: googleBlogCount,
+      detail: `${googleBlogCount} 筆 Q&A（來自 Google Search Central Blog）`,
+    },
+    {
+      name: "fetch-webdev",
+      label: "Web.dev 擷取",
+      count: webdevCount,
+      detail: `${webdevCount} 筆 Q&A（來自 web.dev）`,
+    },
+    {
+      name: "fetch-screaming-frog",
+      label: "Screaming Frog 擷取",
+      count: screamingfrogCount,
+      detail: `${screamingfrogCount} 筆 Q&A（來自 Screaming Frog Blog）`,
+    },
+    {
       name: "extract-qa",
       label: "Q&A 萃取",
       count: totalCount,
@@ -174,9 +195,12 @@ function buildPipelineStatusFromFiles(): PipelineStatusResponse {
   const ahrefsMdCount = countMdFiles(paths.rawAhrefsMdDir);
   const sejMdCount = countMdFiles(paths.rawSejMdDir);
   const growthmemoMdCount = countMdFiles(paths.rawGrowthmemoMdDir);
+  const googleBlogMdCount = countMdFiles(paths.rawGoogleBlogMdDir);
+  const webdevMdCount = countMdFiles(paths.rawWebdevMdDir);
+  const screamingfrogMdCount = countMdFiles(paths.rawScreamingfrogMdDir);
 
   const totalExtracted = countQAPerMeeting();
-  const totalMd = mdCount + mediumMdCount + ithelpMdCount + googleMdCount + ahrefsMdCount + sejMdCount + growthmemoMdCount;
+  const totalMd = mdCount + mediumMdCount + ithelpMdCount + googleMdCount + ahrefsMdCount + sejMdCount + growthmemoMdCount + googleBlogMdCount + webdevMdCount + screamingfrogMdCount;
   const finalCount = countQAFinal();
 
   const steps: PipelineStepStatus[] = [
@@ -221,6 +245,24 @@ function buildPipelineStatusFromFiles(): PipelineStatusResponse {
       label: "Growth Memo 擷取",
       count: growthmemoMdCount,
       detail: `${growthmemoMdCount} 篇文章`,
+    },
+    {
+      name: "fetch-google-blog",
+      label: "Google Blog 擷取",
+      count: googleBlogMdCount,
+      detail: `${googleBlogMdCount} 篇官方公告`,
+    },
+    {
+      name: "fetch-webdev",
+      label: "Web.dev 擷取",
+      count: webdevMdCount,
+      detail: `${webdevMdCount} 篇文章`,
+    },
+    {
+      name: "fetch-screaming-frog",
+      label: "Screaming Frog 擷取",
+      count: screamingfrogMdCount,
+      detail: `${screamingfrogMdCount} 篇文章`,
     },
     {
       name: "extract-qa",
