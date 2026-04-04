@@ -1,0 +1,2 @@
+{"date": "20260403", "report": "generate-report", "health_score": null, "alert_down": 24, "alert_up": 23, "core_alerts": 13, "citations": 10, "red_actions": 4, "yellow_actions": 1, "report_chars": 15507}
+{"date":"2026-04-05","report":"meeting-prep","eeat_avg":2.75,"maturity_strategy":"L2","maturity_process":"L2","maturity_keywords":"L3","maturity_metrics":"L2","s9_questions":16,"citations":18,"alert_down":3,"health_score":50}

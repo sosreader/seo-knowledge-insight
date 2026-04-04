@@ -1,0 +1,122 @@
+[
+  {
+    "guid": "https://web.dev/blog/baseline-digest-dec-2025?hl=en",
+    "slug": "baseline-digest-dec-2025",
+    "title": "December 2025 Baseline monthly digest",
+    "url": "https://web.dev/blog/baseline-digest-dec-2025?hl=en",
+    "published": "2026-01-26",
+    "author": "web.dev",
+    "tags": [],
+    "fetched_at": "2026-03-30T02:34:31.036857+00:00",
+    "md_file": "baseline-digest-dec-2025.md",
+    "source_collection": "web-dev"
+  },
+  {
+    "guid": "https://web.dev/blog/baseline-digest-jan-2026?hl=en",
+    "slug": "baseline-digest-jan-2026",
+    "title": "January 2026 Baseline monthly digest",
+    "url": "https://web.dev/blog/baseline-digest-jan-2026?hl=en",
+    "published": "2026-03-02",
+    "author": "web.dev",
+    "tags": [],
+    "fetched_at": "2026-03-30T02:34:09.543266+00:00",
+    "md_file": "baseline-digest-jan-2026.md",
+    "source_collection": "web-dev"
+  },
+  {
+    "guid": "https://web.dev/blog/baseline-navigation-api?hl=en",
+    "slug": "baseline-navigation-api",
+    "title": "Navigation API - a better way to navigate, is now Baseline Newly Available",
+    "url": "https://web.dev/blog/baseline-navigation-api?hl=en",
+    "published": "2026-02-17",
+    "author": "web.dev",
+    "tags": [],
+    "fetched_at": "2026-03-30T02:34:16.610790+00:00",
+    "md_file": "baseline-navigation-api.md",
+    "source_collection": "web-dev"
+  },
+  {
+    "guid": "https://web.dev/blog/interop-2026?hl=en",
+    "slug": "interop-2026",
+    "title": "Interop 2026: Continuing to improve the web for developers",
+    "url": "https://web.dev/blog/interop-2026?hl=en",
+    "published": "2026-02-12",
+    "author": "web.dev",
+    "tags": [],
+    "fetched_at": "2026-03-30T02:34:20.096815+00:00",
+    "md_file": "interop-2026.md",
+    "source_collection": "web-dev"
+  },
+  {
+    "guid": "https://web.dev/blog/lcp-and-inp-are-now-baseline-newly-available?hl=en",
+    "slug": "lcp-and-inp-are-now-baseline-newly-available",
+    "title": "LCP and INP are now Baseline Newly available",
+    "url": "https://web.dev/blog/lcp-and-inp-are-now-baseline-newly-available?hl=en",
+    "published": "2025-12-17",
+    "author": "web.dev",
+    "tags": [],
+    "fetched_at": "2026-03-30T02:34:35.639637+00:00",
+    "md_file": "lcp-and-inp-are-now-baseline-newly-available.md",
+    "source_collection": "web-dev"
+  },
+  {
+    "guid": "https://web.dev/blog/learn-ai-launch?hl=en",
+    "slug": "learn-ai-launch",
+    "title": "Start our latest course, Learn AI!",
+    "url": "https://web.dev/blog/learn-ai-launch?hl=en",
+    "published": "2026-02-05",
+    "author": "web.dev",
+    "tags": [],
+    "fetched_at": "2026-03-30T02:34:23.686293+00:00",
+    "md_file": "learn-ai-launch.md",
+    "source_collection": "web-dev"
+  },
+  {
+    "guid": "https://web.dev/blog/web-platform-01-2026?hl=en",
+    "slug": "web-platform-01-2026",
+    "title": "New to the web platform in January",
+    "url": "https://web.dev/blog/web-platform-01-2026?hl=en",
+    "published": "2026-01-30",
+    "author": "web.dev",
+    "tags": [],
+    "fetched_at": "2026-03-30T02:34:27.547186+00:00",
+    "md_file": "web-platform-01-2026.md",
+    "source_collection": "web-dev"
+  },
+  {
+    "guid": "https://web.dev/blog/web-platform-02-2026?hl=en",
+    "slug": "web-platform-02-2026",
+    "title": "New to the web platform in February",
+    "url": "https://web.dev/blog/web-platform-02-2026?hl=en",
+    "published": "2026-02-26",
+    "author": "web.dev",
+    "tags": [],
+    "fetched_at": "2026-03-30T02:34:13.123761+00:00",
+    "md_file": "web-platform-02-2026.md",
+    "source_collection": "web-dev"
+  },
+  {
+    "guid": "https://web.dev/blog/web-platform-03-2026?hl=en",
+    "slug": "web-platform-03-2026",
+    "title": "New to the web platform in March",
+    "url": "https://web.dev/blog/web-platform-03-2026?hl=en",
+    "published": "2026-03-27",
+    "author": "web.dev",
+    "tags": [],
+    "fetched_at": "2026-03-30T02:34:05.961927+00:00",
+    "md_file": "web-platform-03-2026.md",
+    "source_collection": "web-dev"
+  },
+  {
+    "guid": "https://web.dev/blog/web-platform-12-2025?hl=en",
+    "slug": "web-platform-12-2025",
+    "title": "New to the web platform in December",
+    "url": "https://web.dev/blog/web-platform-12-2025?hl=en",
+    "published": "2025-12-16",
+    "author": "web.dev",
+    "tags": [],
+    "fetched_at": "2026-03-30T02:34:39.839280+00:00",
+    "md_file": "web-platform-12-2025.md",
+    "source_collection": "web-dev"
+  }
+]

@@ -1,0 +1,2552 @@
+[
+  {
+    "slug": "2020-01-data-vocabulary",
+    "title": "Sunsetting support for data-vocabulary",
+    "url": "https://developers.google.com/search/blog/2020/01/data-vocabulary",
+    "published": "2020-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:43.271455+00:00",
+    "md_file": "2020-01-data-vocabulary.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-01-get-ready-for-new-samesitenone-secure",
+    "title": "Get Ready for New SameSite=None; Secure Cookie Settings",
+    "url": "https://developers.google.com/search/blog/2020/01/get-ready-for-new-samesitenone-secure",
+    "published": "2020-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:46.185495+00:00",
+    "md_file": "2020-01-get-ready-for-new-samesitenone-secure.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-01-google-search-news-for-january-2020",
+    "title": "Google Search News for January 2020",
+    "url": "https://developers.google.com/search/blog/2020/01/google-search-news-for-january-2020",
+    "published": "2020-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:37.569748+00:00",
+    "md_file": "2020-01-google-search-news-for-january-2020.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-01-new-removals-report-in-search-console",
+    "title": "New Removals report in Search Console",
+    "url": "https://developers.google.com/search/blog/2020/01/new-removals-report-in-search-console",
+    "published": "2020-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:40.533053+00:00",
+    "md_file": "2020-01-new-removals-report-in-search-console.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-01-search-console-training-videos",
+    "title": "The Search Console Training video series is rolling out",
+    "url": "https://developers.google.com/search/blog/2020/01/search-console-training-videos",
+    "published": "2020-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:49.303532+00:00",
+    "md_file": "2020-01-search-console-training-videos.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-02-best-practices-for-news-coverage-with",
+    "title": "Best Practices for News coverage with Search",
+    "url": "https://developers.google.com/search/blog/2020/02/best-practices-for-news-coverage-with",
+    "published": "2020-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:24.900887+00:00",
+    "md_file": "2020-02-best-practices-for-news-coverage-with.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-02-data-export",
+    "title": "More and better data export in Search Console",
+    "url": "https://developers.google.com/search/blog/2020/02/data-export",
+    "published": "2020-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:27.524983+00:00",
+    "md_file": "2020-02-data-export.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-02-events-on-search",
+    "title": "How to showcase your events on Google Search",
+    "url": "https://developers.google.com/search/blog/2020/02/events-on-search",
+    "published": "2020-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:30.895350+00:00",
+    "md_file": "2020-02-events-on-search.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-02-review-snippets",
+    "title": "New reports for review snippets in Search Console",
+    "url": "https://developers.google.com/search/blog/2020/02/review-snippets",
+    "published": "2020-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:33.876939+00:00",
+    "md_file": "2020-02-review-snippets.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-03-announcing-mobile-first-indexing-for",
+    "title": "Announcing mobile first indexing for the whole web",
+    "url": "https://developers.google.com/search/blog/2020/03/announcing-mobile-first-indexing-for",
+    "published": "2020-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:21.859569+00:00",
+    "md_file": "2020-03-announcing-mobile-first-indexing-for.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-03-coronavirus-covid-19-and-webmaster",
+    "title": "Coronavirus (COVID-19) and Webmaster Conference",
+    "url": "https://developers.google.com/search/blog/2020/03/coronavirus-covid-19-and-webmaster",
+    "published": "2020-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:18.763638+00:00",
+    "md_file": "2020-03-coronavirus-covid-19-and-webmaster.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-03-health-organizations-covid19",
+    "title": "Helping health organizations make COVID-19 information more accessible",
+    "url": "https://developers.google.com/search/blog/2020/03/health-organizations-covid19",
+    "published": "2020-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:09.388958+00:00",
+    "md_file": "2020-03-health-organizations-covid19.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-03-how-to-pause-your-business-online-in",
+    "title": "How to pause your business online in Google Search",
+    "url": "https://developers.google.com/search/blog/2020/03/how-to-pause-your-business-online-in",
+    "published": "2020-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:12.698426+00:00",
+    "md_file": "2020-03-how-to-pause-your-business-online-in.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-03-new-properties-virtual-or-canceled-events",
+    "title": "New properties for virtual, postponed, and canceled events",
+    "url": "https://developers.google.com/search/blog/2020/03/new-properties-virtual-or-canceled-events",
+    "published": "2020-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:15.762805+00:00",
+    "md_file": "2020-03-new-properties-virtual-or-canceled-events.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-04-highlight-covid-19-announcements-search",
+    "title": "Introducing a new way for sites to highlight COVID-19 announcements on Google Search",
+    "url": "https://developers.google.com/search/blog/2020/04/highlight-covid-19-announcements-search",
+    "published": "2020-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:05.949494+00:00",
+    "md_file": "2020-04-highlight-covid-19-announcements-search.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-04-looking-back-at-last-years-webmaster",
+    "title": "Looking back at last year's Webmaster Conference Product Summit",
+    "url": "https://developers.google.com/search/blog/2020/04/looking-back-at-last-years-webmaster",
+    "published": "2020-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:47:02.819355+00:00",
+    "md_file": "2020-04-looking-back-at-last-years-webmaster.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-04-showcasing-value-of-seo",
+    "title": "Showcasing the value of SEO",
+    "url": "https://developers.google.com/search/blog/2020/04/showcasing-value-of-seo",
+    "published": "2020-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:59.830846+00:00",
+    "md_file": "2020-04-showcasing-value-of-seo.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-05-evaluating-page-experience",
+    "title": "Evaluating page experience for a better web",
+    "url": "https://developers.google.com/search/blog/2020/05/evaluating-page-experience",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:38.732872+00:00",
+    "md_file": "2020-05-evaluating-page-experience.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-05-frequently-asked-questions-about",
+    "title": "Frequently asked questions about JavaScript and links",
+    "url": "https://developers.google.com/search/blog/2020/05/frequently-asked-questions-about",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:44.478765+00:00",
+    "md_file": "2020-05-frequently-asked-questions-about.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-05-google-translates-website-translator",
+    "title": "Google Translate's Website Translator - available for non-commercial use",
+    "url": "https://developers.google.com/search/blog/2020/05/google-translates-website-translator",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:47.835679+00:00",
+    "md_file": "2020-05-google-translates-website-translator.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-05-guided-recipes",
+    "title": "New reports for Guided Recipes on Assistant in Search Console",
+    "url": "https://developers.google.com/search/blog/2020/05/guided-recipes",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:50.761085+00:00",
+    "md_file": "2020-05-guided-recipes.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-05-pl-tr-forums",
+    "title": "Reintroducing a community for Polish and Turkish Site Owners",
+    "url": "https://developers.google.com/search/blog/2020/05/pl-tr-forums",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:53.819560+00:00",
+    "md_file": "2020-05-pl-tr-forums.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-05-search-console-webtoon-ep01",
+    "title": "Hello Search Console. Nice to meet you!",
+    "url": "https://developers.google.com/search/blog/2020/05/search-console-webtoon-ep01",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:41.645993+00:00",
+    "md_file": "2020-05-search-console-webtoon-ep01.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-05-special-announcements-search-console",
+    "title": "New reports for Special Announcements in Search Console",
+    "url": "https://developers.google.com/search/blog/2020/05/special-announcements-search-console",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:56.970721+00:00",
+    "md_file": "2020-05-special-announcements-search-console.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-06-how-we-fought-search-spam-on-google",
+    "title": "How we fought Search spam on Google - Webspam Report 2019",
+    "url": "https://developers.google.com/search/blog/2020/06/how-we-fought-search-spam-on-google",
+    "published": "2020-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:35.928019+00:00",
+    "md_file": "2020-06-how-we-fought-search-spam-on-google.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-06-search-console-webtoon-ep02",
+    "title": "Why are my pages not shown on the search result page?",
+    "url": "https://developers.google.com/search/blog/2020/06/search-console-webtoon-ep02",
+    "published": "2020-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:32.450637+00:00",
+    "md_file": "2020-06-search-console-webtoon-ep02.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-07-how-spam-reports-are-used-at-google",
+    "title": "How spam reports are used at Google",
+    "url": "https://developers.google.com/search/blog/2020/07/how-spam-reports-are-used-at-google",
+    "published": "2020-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:27.495089+00:00",
+    "md_file": "2020-07-how-spam-reports-are-used-at-google.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-07-prepare-for-mobile-first-indexing-with",
+    "title": "Prepare for mobile-first indexing (with a little extra time)",
+    "url": "https://developers.google.com/search/blog/2020/07/prepare-for-mobile-first-indexing-with",
+    "published": "2020-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:21.371301+00:00",
+    "md_file": "2020-07-prepare-for-mobile-first-indexing-with.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-07-rich-results-test-out-of-beta",
+    "title": "The Rich Results Test is out of beta",
+    "url": "https://developers.google.com/search/blog/2020/07/rich-results-test-out-of-beta",
+    "published": "2020-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:24.274388+00:00",
+    "md_file": "2020-07-rich-results-test-out-of-beta.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-08-identify-and-fix-amp-signed-exchange",
+    "title": "Identify and fix AMP Signed Exchange errors in Search Console",
+    "url": "https://developers.google.com/search/blog/2020/08/identify-and-fix-amp-signed-exchange",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:06.676746+00:00",
+    "md_file": "2020-08-identify-and-fix-amp-signed-exchange.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-08-join-our-first-virtual-webmaster",
+    "title": "Join our first Virtual Webmaster Unconference",
+    "url": "https://developers.google.com/search/blog/2020/08/join-our-first-virtual-webmaster",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:09.662135+00:00",
+    "md_file": "2020-08-join-our-first-virtual-webmaster.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-08-make-licensing-information-for-your",
+    "title": "Make the licensing information for your images visible on Google Images",
+    "url": "https://developers.google.com/search/blog/2020/08/make-licensing-information-for-your",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:00.110030+00:00",
+    "md_file": "2020-08-make-licensing-information-for-your.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-08-options-for-retailers-to-control-how",
+    "title": "Options for retailers to control how their crawled product information appears on Google",
+    "url": "https://developers.google.com/search/blog/2020/08/options-for-retailers-to-control-how",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:03.702898+00:00",
+    "md_file": "2020-08-options-for-retailers-to-control-how.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-08-rich-results-search-console",
+    "title": "Rich Results and Search Console Webmaster Conference Lightning Talk",
+    "url": "https://developers.google.com/search/blog/2020/08/rich-results-search-console",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:12.521468+00:00",
+    "md_file": "2020-08-rich-results-search-console.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-08-search-console-api-announcements",
+    "title": "Search Console API announcements",
+    "url": "https://developers.google.com/search/blog/2020/08/search-console-api-announcements",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:15.685803+00:00",
+    "md_file": "2020-08-search-console-api-announcements.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-08-search-off-record-podcast-behind-scenes",
+    "title": "Search Off The Record podcast - behind the scenes with Search Relations",
+    "url": "https://developers.google.com/search/blog/2020/08/search-off-record-podcast-behind-scenes",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:46:18.629842+00:00",
+    "md_file": "2020-08-search-off-record-podcast-behind-scenes.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-09-googlebot-will-soon-speak-http2",
+    "title": "Googlebot will soon speak HTTP/2",
+    "url": "https://developers.google.com/search/blog/2020/09/googlebot-will-soon-speak-http2",
+    "published": "2020-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:52.907105+00:00",
+    "md_file": "2020-09-googlebot-will-soon-speak-http2.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-09-new-open-source-robotstxt-projects",
+    "title": "New open source robots.txt projects",
+    "url": "https://developers.google.com/search/blog/2020/09/new-open-source-robotstxt-projects",
+    "published": "2020-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:49.918628+00:00",
+    "md_file": "2020-09-new-open-source-robotstxt-projects.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-09-new-schemaorg-support-for-retailer",
+    "title": "New Schema.org support for retailer shipping data",
+    "url": "https://developers.google.com/search/blog/2020/09/new-schemaorg-support-for-retailer",
+    "published": "2020-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:46.997197+00:00",
+    "md_file": "2020-09-new-schemaorg-support-for-retailer.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-09-sharing-what-we-learned-on-first",
+    "title": "Sharing what we learned on the first Virtual Webmaster Unconference",
+    "url": "https://developers.google.com/search/blog/2020/09/sharing-what-we-learned-on-first",
+    "published": "2020-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:56.585171+00:00",
+    "md_file": "2020-09-sharing-what-we-learned-on-first.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-10-best-practices-black-friday",
+    "title": "Best practices for Black Friday and Cyber Monday pages",
+    "url": "https://developers.google.com/search/blog/2020/10/best-practices-black-friday",
+    "published": "2020-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:38.526460+00:00",
+    "md_file": "2020-10-best-practices-black-friday.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-10-search-console-training",
+    "title": "The Search Console Training lives on",
+    "url": "https://developers.google.com/search/blog/2020/10/search-console-training",
+    "published": "2020-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:44.018838+00:00",
+    "md_file": "2020-10-search-console-training.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-10-search-console-webtoon-ep03",
+    "title": "How can my pages appear on the search result page?",
+    "url": "https://developers.google.com/search/blog/2020/10/search-console-webtoon-ep03",
+    "published": "2020-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:41.338348+00:00",
+    "md_file": "2020-10-search-console-webtoon-ep03.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-11-goodbye-google-webmasters",
+    "title": "Goodbye Google Webmasters, hello Google Search Central",
+    "url": "https://developers.google.com/search/blog/2020/11/goodbye-google-webmasters",
+    "published": "2020-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:28.974504+00:00",
+    "md_file": "2020-11-goodbye-google-webmasters.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-11-introducing-new-home-for-blog",
+    "title": "We moved! Introducing the new home for the Google Webmaster Blogs",
+    "url": "https://developers.google.com/search/blog/2020/11/introducing-new-home-for-blog",
+    "published": "2020-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:26.199272+00:00",
+    "md_file": "2020-11-introducing-new-home-for-blog.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-11-pes-at-home",
+    "title": "PES@Home 2020: Google's first virtual summit for Product Experts",
+    "url": "https://developers.google.com/search/blog/2020/11/pes-at-home",
+    "published": "2020-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:35.726712+00:00",
+    "md_file": "2020-11-pes-at-home.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-11-search-console-crawl-stats-report",
+    "title": "New and improved crawl stats for your site",
+    "url": "https://developers.google.com/search/blog/2020/11/search-console-crawl-stats-report",
+    "published": "2020-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:23.361042+00:00",
+    "md_file": "2020-11-search-console-crawl-stats-report.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-11-timing-for-page-experience",
+    "title": "Timing for bringing page experience to Google Search",
+    "url": "https://developers.google.com/search/blog/2020/11/timing-for-page-experience",
+    "published": "2020-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:32.371147+00:00",
+    "md_file": "2020-11-timing-for-page-experience.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-12-a-weird-year-in-a-review",
+    "title": "A weird year in review",
+    "url": "https://developers.google.com/search/blog/2020/12/a-weird-year-in-a-review",
+    "published": "2020-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:14.918370+00:00",
+    "md_file": "2020-12-a-weird-year-in-a-review.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-12-search-console-api-updates",
+    "title": "Updates to Search Console's API",
+    "url": "https://developers.google.com/search/blog/2020/12/search-console-api-updates",
+    "published": "2020-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:20.413302+00:00",
+    "md_file": "2020-12-search-console-api-updates.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2020-12-structured-data-testing-tool-update",
+    "title": "An update on the Structured Data Testing Tool",
+    "url": "https://developers.google.com/search/blog/2020/12/structured-data-testing-tool-update",
+    "published": "2020-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:17.754647+00:00",
+    "md_file": "2020-12-structured-data-testing-tool-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-01-google-news-performance-report",
+    "title": "Introducing Google News performance report",
+    "url": "https://developers.google.com/search/blog/2021/01/google-news-performance-report",
+    "published": "2021-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:09.017453+00:00",
+    "md_file": "2021-01-google-news-performance-report.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-01-index-coverage-data-improvements",
+    "title": "Index Coverage Data Improvements",
+    "url": "https://developers.google.com/search/blog/2021/01/index-coverage-data-improvements",
+    "published": "2021-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:11.775433+00:00",
+    "md_file": "2021-01-index-coverage-data-improvements.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-02-join-us-at-search-central-live",
+    "title": "Join us at Search Central Live 2021",
+    "url": "https://developers.google.com/search/blog/2021/02/join-us-at-search-central-live",
+    "published": "2021-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:03.346047+00:00",
+    "md_file": "2021-02-join-us-at-search-central-live.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-02-product-information",
+    "title": "Providing better product information for shoppers",
+    "url": "https://developers.google.com/search/blog/2021/02/product-information",
+    "published": "2021-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:57.509407+00:00",
+    "md_file": "2021-02-product-information.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-02-search-console-associations",
+    "title": "New Association functionality added to Search Console",
+    "url": "https://developers.google.com/search/blog/2021/02/search-console-associations",
+    "published": "2021-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:00.284814+00:00",
+    "md_file": "2021-02-search-console-associations.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-02-search-console-performance-discover-chrome",
+    "title": "Search Console Discover report now includes Chrome data",
+    "url": "https://developers.google.com/search/blog/2021/02/search-console-performance-discover-chrome",
+    "published": "2021-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:45:06.182711+00:00",
+    "md_file": "2021-02-search-console-performance-discover-chrome.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-03-education-sites-practice-problems-math-solver",
+    "title": "New for education sites: Practice problems and Math solvers structured data",
+    "url": "https://developers.google.com/search/blog/2021/03/education-sites-practice-problems-math-solver",
+    "published": "2021-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:48.516506+00:00",
+    "md_file": "2021-03-education-sites-practice-problems-math-solver.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-03-new-resources-for-video-seo",
+    "title": "New resources for video SEO",
+    "url": "https://developers.google.com/search/blog/2021/03/new-resources-for-video-seo",
+    "published": "2021-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:54.764250+00:00",
+    "md_file": "2021-03-new-resources-for-video-seo.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-03-sharedarraybuffer-notes",
+    "title": "Clarifications about the SharedArrayBuffer object message",
+    "url": "https://developers.google.com/search/blog/2021/03/sharedarraybuffer-notes",
+    "published": "2021-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:51.587207+00:00",
+    "md_file": "2021-03-sharedarraybuffer-notes.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-03-wix",
+    "title": "Korean Blog: How Wix improved website performance by evolving their infrastructure",
+    "url": "https://developers.google.com/search/blog/2021/03/wix",
+    "published": "2021-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:45.551582+00:00",
+    "md_file": "2021-03-wix.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-03-yahoo-japan-news",
+    "title": "Korean Blog: How CLS optimizations increased Yahoo! JAPAN News's page views per session by 15%",
+    "url": "https://developers.google.com/search/blog/2021/03/yahoo-japan-news",
+    "published": "2021-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:42.831901+00:00",
+    "md_file": "2021-03-yahoo-japan-news.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-04-agrofy-case-study",
+    "title": "Korean Blog: Agrofy: A 70% improvement in LCP correlated to a 76% reduction in load abandonment",
+    "url": "https://developers.google.com/search/blog/2021/04/agrofy-case-study",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:16.540492+00:00",
+    "md_file": "2021-04-agrofy-case-study.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-04-changes-to-feedburner",
+    "title": "Upcoming changes to FeedBurner",
+    "url": "https://developers.google.com/search/blog/2021/04/changes-to-feedburner",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:28.076433+00:00",
+    "md_file": "2021-04-changes-to-feedburner.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-04-expanding-support-for-apac-help",
+    "title": "Expanding support for APAC Search Central Help Communities",
+    "url": "https://developers.google.com/search/blog/2021/04/expanding-support-for-apac-help",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:33.730979+00:00",
+    "md_file": "2021-04-expanding-support-for-apac-help.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-04-how-we-fought-search-spam-2020",
+    "title": "How we fought Search spam on Google in 2020",
+    "url": "https://developers.google.com/search/blog/2021/04/how-we-fought-search-spam-2020",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:13.328678+00:00",
+    "md_file": "2021-04-how-we-fought-search-spam-2020.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-04-more-details-page-experience",
+    "title": "More time, tools, and details on the page experience update",
+    "url": "https://developers.google.com/search/blog/2021/04/more-details-page-experience",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:25.032557+00:00",
+    "md_file": "2021-04-more-details-page-experience.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-04-performance-report-data-filtering",
+    "title": "Improved data filtering and comparison on Performance reports",
+    "url": "https://developers.google.com/search/blog/2021/04/performance-report-data-filtering",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:39.798320+00:00",
+    "md_file": "2021-04-performance-report-data-filtering.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-04-product-reviews-update",
+    "title": "What creators should know about Google’s April 2021 product reviews update",
+    "url": "https://developers.google.com/search/blog/2021/04/product-reviews-update",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:36.747382+00:00",
+    "md_file": "2021-04-product-reviews-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-04-search-console-webtoon-ep04",
+    "title": "Korean Blog: Two helpful tips: meta tags and sitemaps",
+    "url": "https://developers.google.com/search/blog/2021/04/search-console-webtoon-ep04",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:21.992152+00:00",
+    "md_file": "2021-04-search-console-webtoon-ep04.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-04-sustainable-monetized-websites",
+    "title": "Announcing the Sustainable Monetized Websites video series",
+    "url": "https://developers.google.com/search/blog/2021/04/sustainable-monetized-websites",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:30.957095+00:00",
+    "md_file": "2021-04-sustainable-monetized-websites.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-04-vodafone-case-study",
+    "title": "Korean Blog: Vodafone: A 31% improvement in LCP increased sales by 8%",
+    "url": "https://developers.google.com/search/blog/2021/04/vodafone-case-study",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:19.163298+00:00",
+    "md_file": "2021-04-vodafone-case-study.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-05-prevent-portions-of-site-from-spam",
+    "title": "Prevent portions of your site from being abused by spam",
+    "url": "https://developers.google.com/search/blog/2021/05/prevent-portions-of-site-from-spam",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:58.491163+00:00",
+    "md_file": "2021-05-prevent-portions-of-site-from-spam.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-05-rich-results-search-appearance-sunsetting",
+    "title": "Sunsetting the generic rich results search appearance on Search Console",
+    "url": "https://developers.google.com/search/blog/2021/05/rich-results-search-appearance-sunsetting",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:04.018146+00:00",
+    "md_file": "2021-05-rich-results-search-appearance-sunsetting.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-05-search-console-webtoon-ep05",
+    "title": "Korean Blog: The lonely site owner learns about linking; and the power of Dalgona Coffee",
+    "url": "https://developers.google.com/search/blog/2021/05/search-console-webtoon-ep05",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:07.091966+00:00",
+    "md_file": "2021-05-search-console-webtoon-ep05.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-05-search-io-2021",
+    "title": "Search at Google I/O 2021",
+    "url": "https://developers.google.com/search/blog/2021/05/search-io-2021",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:55.688143+00:00",
+    "md_file": "2021-05-search-io-2021.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-05-video-for-ecommerce",
+    "title": "Video SEO best practices for ecommerce",
+    "url": "https://developers.google.com/search/blog/2021/05/video-for-ecommerce",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:09.990078+00:00",
+    "md_file": "2021-05-video-for-ecommerce.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-05-working-with-you-for-safe-and-spam-free-search-2020",
+    "title": "How we worked with you in 2020 towards a safe Search experience, without spam",
+    "url": "https://developers.google.com/search/blog/2021/05/working-with-you-for-safe-and-spam-free-search-2020",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:44:01.268404+00:00",
+    "md_file": "2021-05-working-with-you-for-safe-and-spam-free-search-2020.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-06-google-news-sources",
+    "title": "Understanding the sources behind Google News",
+    "url": "https://developers.google.com/search/blog/2021/06/google-news-sources",
+    "published": "2021-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:52.835512+00:00",
+    "md_file": "2021-06-google-news-sources.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-06-regex-negative-match",
+    "title": "Search Console regex filters update and quick tips",
+    "url": "https://developers.google.com/search/blog/2021/06/regex-negative-match",
+    "published": "2021-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:49.971138+00:00",
+    "md_file": "2021-06-regex-negative-match.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-06-search-central-unconference-emea",
+    "title": "The Search Central Unconference is back - 2021",
+    "url": "https://developers.google.com/search/blog/2021/06/search-central-unconference-emea",
+    "published": "2021-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:46.816796+00:00",
+    "md_file": "2021-06-search-central-unconference-emea.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-06-search-console-insights",
+    "title": "Learn how to improve your content with Search Console Insights",
+    "url": "https://developers.google.com/search/blog/2021/06/search-console-insights",
+    "published": "2021-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:43.908386+00:00",
+    "md_file": "2021-06-search-console-insights.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-07-customer-support",
+    "title": "Highlight your customer support methods in Google Search",
+    "url": "https://developers.google.com/search/blog/2021/07/customer-support",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:41.314380+00:00",
+    "md_file": "2021-07-customer-support.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-07-deals-best-practices",
+    "title": "Engage shoppers with deal pages in Google Search",
+    "url": "https://developers.google.com/search/blog/2021/07/deals-best-practices",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:26.080815+00:00",
+    "md_file": "2021-07-deals-best-practices.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-07-google-news-top-questions",
+    "title": "Answers to some common questions about appearing in Google News",
+    "url": "https://developers.google.com/search/blog/2021/07/google-news-top-questions",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:35.698076+00:00",
+    "md_file": "2021-07-google-news-top-questions.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-07-job-posting-updates",
+    "title": "Updating our job posting guidelines to improve quality of results for job seekers",
+    "url": "https://developers.google.com/search/blog/2021/07/job-posting-updates",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:38.624898+00:00",
+    "md_file": "2021-07-job-posting-updates.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-07-link-tagging-and-link-spam-update",
+    "title": "A reminder on qualifying links and our link spam update",
+    "url": "https://developers.google.com/search/blog/2021/07/link-tagging-and-link-spam-update",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:23.087740+00:00",
+    "md_file": "2021-07-link-tagging-and-link-spam-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-07-new-way-key-moments",
+    "title": "A new way to enable video key moments in Search",
+    "url": "https://developers.google.com/search/blog/2021/07/new-way-key-moments",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:32.131512+00:00",
+    "md_file": "2021-07-new-way-key-moments.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-07-search-traffic-drops",
+    "title": "Analyzing Google Search traffic drops",
+    "url": "https://developers.google.com/search/blog/2021/07/search-traffic-drops",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:28.942519+00:00",
+    "md_file": "2021-07-search-traffic-drops.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-08-search-console-insights-faq",
+    "title": "Google Search Console Insights behind the curtains",
+    "url": "https://developers.google.com/search/blog/2021/08/search-console-insights-faq",
+    "published": "2021-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:17.521682+00:00",
+    "md_file": "2021-08-search-console-insights-faq.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-08-simplifying-the-page-experience-report",
+    "title": "Simplifying the Page Experience report",
+    "url": "https://developers.google.com/search/blog/2021/08/simplifying-the-page-experience-report",
+    "published": "2021-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:20.414478+00:00",
+    "md_file": "2021-08-simplifying-the-page-experience-report.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-08-update-to-generating-page-titles",
+    "title": "An update to how we generate web page titles",
+    "url": "https://developers.google.com/search/blog/2021/08/update-to-generating-page-titles",
+    "published": "2021-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:14.419851+00:00",
+    "md_file": "2021-08-update-to-generating-page-titles.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-09-more-info-about-titles",
+    "title": "More information on how Google generates titles for web page results",
+    "url": "https://developers.google.com/search/blog/2021/09/more-info-about-titles",
+    "published": "2021-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:11.525345+00:00",
+    "md_file": "2021-09-more-info-about-titles.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-10-search-analytics-discover-gnews",
+    "title": "Search Analytics API now supports Discover, Google News, and Regex",
+    "url": "https://developers.google.com/search/blog/2021/10/search-analytics-discover-gnews",
+    "published": "2021-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:05.466249+00:00",
+    "md_file": "2021-10-search-analytics-discover-gnews.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-10-search-console-tools-alignment",
+    "title": "Aligning Search Console testing tools and the URL Inspection tool",
+    "url": "https://developers.google.com/search/blog/2021/10/search-console-tools-alignment",
+    "published": "2021-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:08.538646+00:00",
+    "md_file": "2021-10-search-console-tools-alignment.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-11-bringing-page-experience-to-desktop",
+    "title": "Timeline for bringing page experience ranking to desktop",
+    "url": "https://developers.google.com/search/blog/2021/11/bringing-page-experience-to-desktop",
+    "published": "2021-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:59.788905+00:00",
+    "md_file": "2021-11-bringing-page-experience-to-desktop.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-11-improve-job-posting-description",
+    "title": "Help job seekers understand your job postings by including a complete description",
+    "url": "https://developers.google.com/search/blog/2021/11/improve-job-posting-description",
+    "published": "2021-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:43:02.585193+00:00",
+    "md_file": "2021-11-improve-job-posting-description.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-11-one-year-of-search-central",
+    "title": "One year of Google Search Central",
+    "url": "https://developers.google.com/search/blog/2021/11/one-year-of-search-central",
+    "published": "2021-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:56.853928+00:00",
+    "md_file": "2021-11-one-year-of-search-central.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-11-update-on-mobile-indexing",
+    "title": "A 2021 update on mobile-indexing",
+    "url": "https://developers.google.com/search/blog/2021/11/update-on-mobile-indexing",
+    "published": "2021-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:53.520100+00:00",
+    "md_file": "2021-11-update-on-mobile-indexing.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-12-eoy-blogpost",
+    "title": "Our authors' take on 2021",
+    "url": "https://developers.google.com/search/blog/2021/12/eoy-blogpost",
+    "published": "2021-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:47.704402+00:00",
+    "md_file": "2021-12-eoy-blogpost.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2021-12-product-reviews-update-and-your-site",
+    "title": "December 2021 Product reviews update and your site",
+    "url": "https://developers.google.com/search/blog/2021/12/product-reviews-update-and-your-site",
+    "published": "2021-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:50.639944+00:00",
+    "md_file": "2021-12-product-reviews-update-and-your-site.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-01-robots-meta-tag-indexifembedded",
+    "title": "New robots tag: indexifembedded",
+    "url": "https://developers.google.com/search/blog/2022/01/robots-meta-tag-indexifembedded",
+    "published": "2022-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:44.795518+00:00",
+    "md_file": "2022-01-robots-meta-tag-indexifembedded.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-01-url-inspection-api",
+    "title": "Welcoming the new Search Console URL Inspection API",
+    "url": "https://developers.google.com/search/blog/2022/01/url-inspection-api",
+    "published": "2022-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:42.072253+00:00",
+    "md_file": "2022-01-url-inspection-api.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-03-connecting-data-studio",
+    "title": "Connecting Search Console to Data Studio",
+    "url": "https://developers.google.com/search/blog/2022/03/connecting-data-studio",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:39.015364+00:00",
+    "md_file": "2022-03-connecting-data-studio.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-03-japanese-search-for-beginner",
+    "title": "Google Search for Beginners YouTube Series now available in Japanese",
+    "url": "https://developers.google.com/search/blog/2022/03/japanese-search-for-beginner",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:35.976630+00:00",
+    "md_file": "2022-03-japanese-search-for-beginner.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-03-monitoring-dashboard",
+    "title": "Monitoring Search traffic (and more!) with Data Studio",
+    "url": "https://developers.google.com/search/blog/2022/03/monitoring-dashboard",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:21.095519+00:00",
+    "md_file": "2022-03-monitoring-dashboard.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-03-product-review-ranking-one-year-on",
+    "title": "Improving Product Review ranking, one year on",
+    "url": "https://developers.google.com/search/blog/2022/03/product-review-ranking-one-year-on",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:33.041392+00:00",
+    "md_file": "2022-03-product-review-ranking-one-year-on.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-03-search-central-unconference-japan-2022",
+    "title": "Japanese Blog: Register for the first Search Central Virtual Unconference Japan 2022!",
+    "url": "https://developers.google.com/search/blog/2022/03/search-central-unconference-japan-2022",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:30.147759+00:00",
+    "md_file": "2022-03-search-central-unconference-japan-2022.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-03-structured-data-issues-context",
+    "title": "Adding context to structured data issues in Search Console",
+    "url": "https://developers.google.com/search/blog/2022/03/structured-data-issues-context",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:24.145488+00:00",
+    "md_file": "2022-03-structured-data-issues-context.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-03-url-parameters-tool-deprecated",
+    "title": "Spring cleaning: the URL Parameters tool",
+    "url": "https://developers.google.com/search/blog/2022/03/url-parameters-tool-deprecated",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:26.978775+00:00",
+    "md_file": "2022-03-url-parameters-tool-deprecated.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-04-performance-optimization-bubble-chart",
+    "title": "Optimizing website performance with a Search Console bubble chart",
+    "url": "https://developers.google.com/search/blog/2022/04/performance-optimization-bubble-chart",
+    "published": "2022-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:18.256952+00:00",
+    "md_file": "2022-04-performance-optimization-bubble-chart.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-04-webspam-report-2021",
+    "title": "How we fought Search spam on Google in 2021",
+    "url": "https://developers.google.com/search/blog/2022/04/webspam-report-2021",
+    "published": "2022-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:15.480571+00:00",
+    "md_file": "2022-04-webspam-report-2021.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-05-global-search-central-unconference-2022-is-a-wrap",
+    "title": "The Global Search Central Virtual Unconference 2022 is a wrap!",
+    "url": "https://developers.google.com/search/blog/2022/05/global-search-central-unconference-2022-is-a-wrap",
+    "published": "2022-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:06.417544+00:00",
+    "md_file": "2022-05-global-search-central-unconference-2022-is-a-wrap.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-05-may-2022-core-update",
+    "title": "May 2022 core update releasing for Google Search",
+    "url": "https://developers.google.com/search/blog/2022/05/may-2022-core-update",
+    "published": "2022-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:03.491486+00:00",
+    "md_file": "2022-05-may-2022-core-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-05-recap-search-central-unconference-japan-2022",
+    "title": "Event recap: Search Central Virtual Unconference Japan 2022",
+    "url": "https://developers.google.com/search/blog/2022/05/recap-search-central-unconference-japan-2022",
+    "published": "2022-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:09.759734+00:00",
+    "md_file": "2022-05-recap-search-central-unconference-japan-2022.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-05-spring-cleaning-sitemap-extensions",
+    "title": "Spring cleaning: some sitemap extension tags are going away",
+    "url": "https://developers.google.com/search/blog/2022/05/spring-cleaning-sitemap-extensions",
+    "published": "2022-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:12.680774+00:00",
+    "md_file": "2022-05-spring-cleaning-sitemap-extensions.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-06-googlebot-15mb",
+    "title": "Googlebot and the 15 MB thing",
+    "url": "https://developers.google.com/search/blog/2022/06/googlebot-15mb",
+    "published": "2022-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:54.570238+00:00",
+    "md_file": "2022-06-googlebot-15mb.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-06-search-console-item-classification",
+    "title": "Simplifying Search Console reports with an updated item classification",
+    "url": "https://developers.google.com/search/blog/2022/06/search-console-item-classification",
+    "published": "2022-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:57.715839+00:00",
+    "md_file": "2022-06-search-console-item-classification.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-06-title-script-misalignment",
+    "title": "How Google generates titles for documents with language or script misalignment",
+    "url": "https://developers.google.com/search/blog/2022/06/title-script-misalignment",
+    "published": "2022-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:42:00.500894+00:00",
+    "md_file": "2022-06-title-script-misalignment.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-07-video-indexing-report",
+    "title": "Announcing the new Search Console Video index report",
+    "url": "https://developers.google.com/search/blog/2022/07/video-indexing-report",
+    "published": "2022-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:51.546881+00:00",
+    "md_file": "2022-07-video-indexing-report.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-08-helpful-content-update",
+    "title": "What creators should know about Google's August 2022 helpful content update",
+    "url": "https://developers.google.com/search/blog/2022/08/helpful-content-update",
+    "published": "2022-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:45.911574+00:00",
+    "md_file": "2022-08-helpful-content-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-08-pros-and-cons-structured-data",
+    "title": "New in structured data: Pros and cons",
+    "url": "https://developers.google.com/search/blog/2022/08/pros-and-cons-structured-data",
+    "published": "2022-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:48.740597+00:00",
+    "md_file": "2022-08-pros-and-cons-structured-data.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-09-https-search-console-report",
+    "title": "The new HTTPS report in Search Console",
+    "url": "https://developers.google.com/search/blog/2022/09/https-search-console-report",
+    "published": "2022-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:40.146463+00:00",
+    "md_file": "2022-09-https-search-console-report.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-09-merchant-listings",
+    "title": "New Search Console Merchant Listings report: expanding eligibility with Product structured data",
+    "url": "https://developers.google.com/search/blog/2022/09/merchant-listings",
+    "published": "2022-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:43.049801+00:00",
+    "md_file": "2022-09-merchant-listings.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-10-introducing-site-names-on-search",
+    "title": "Introducing site names on Google Search",
+    "url": "https://developers.google.com/search/blog/2022/10/introducing-site-names-on-search",
+    "published": "2022-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:31.014501+00:00",
+    "md_file": "2022-10-introducing-site-names-on-search.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-10-performance-data-deep-dive",
+    "title": "A deep dive into Search Console performance data filtering and limits",
+    "url": "https://developers.google.com/search/blog/2022/10/performance-data-deep-dive",
+    "published": "2022-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:28.098788+00:00",
+    "md_file": "2022-10-performance-data-deep-dive.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-10-search-central-live-is-here",
+    "title": "Back in business: Search Central Live events",
+    "url": "https://developers.google.com/search/blog/2022/10/search-central-live-is-here",
+    "published": "2022-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:36.946561+00:00",
+    "md_file": "2022-10-search-central-live-is-here.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-10-search-essentials",
+    "title": "Refreshed guidelines for site owners",
+    "url": "https://developers.google.com/search/blog/2022/10/search-essentials",
+    "published": "2022-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:33.898464+00:00",
+    "md_file": "2022-10-search-essentials.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-11-introducing-guide-to-ranking-systems",
+    "title": "Introducing our new guide to Google Search ranking systems",
+    "url": "https://developers.google.com/search/blog/2022/11/introducing-guide-to-ranking-systems",
+    "published": "2022-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:22.260193+00:00",
+    "md_file": "2022-11-introducing-guide-to-ranking-systems.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-11-november-office-hours",
+    "title": "November Google SEO Office Hours",
+    "url": "https://developers.google.com/search/blog/2022/11/november-office-hours",
+    "published": "2022-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:18.869040+00:00",
+    "md_file": "2022-11-november-office-hours.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-11-shopping-tab-with-search-console",
+    "title": "Start showing your products on the Shopping tab with Search Console",
+    "url": "https://developers.google.com/search/blog/2022/11/shopping-tab-with-search-console",
+    "published": "2022-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:25.370638+00:00",
+    "md_file": "2022-11-shopping-tab-with-search-console.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-12-december-22-link-spam-update",
+    "title": "December 2022 link spam update releasing for Google Search",
+    "url": "https://developers.google.com/search/blog/2022/12/december-22-link-spam-update",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:07.260697+00:00",
+    "md_file": "2022-12-december-22-link-spam-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-12-google-raters-guidelines-e-e-a-t",
+    "title": "Our latest update to the quality rater guidelines: E-A-T gets an extra E for Experience",
+    "url": "https://developers.google.com/search/blog/2022/12/google-raters-guidelines-e-e-a-t",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:04.240391+00:00",
+    "md_file": "2022-12-google-raters-guidelines-e-e-a-t.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-12-google-services-in-czechia",
+    "title": "Updates to Google's Services in Czechia in Light of the Czech Transposition of the European Copyright Directive",
+    "url": "https://developers.google.com/search/blog/2022/12/google-services-in-czechia",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:15.734969+00:00",
+    "md_file": "2022-12-google-services-in-czechia.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-12-search-central-live-2022",
+    "title": "Search Central Live 2022 Highlights",
+    "url": "https://developers.google.com/search/blog/2022/12/search-central-live-2022",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:01.107632+00:00",
+    "md_file": "2022-12-search-central-live-2022.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-12-status-dashboard",
+    "title": "Introducing the Google Search Status Dashboard",
+    "url": "https://developers.google.com/search/blog/2022/12/status-dashboard",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:10.012527+00:00",
+    "md_file": "2022-12-status-dashboard.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-12-thanks-2022",
+    "title": "Thanks, 2022",
+    "url": "https://developers.google.com/search/blog/2022/12/thanks-2022",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:58.279619+00:00",
+    "md_file": "2022-12-thanks-2022.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2022-12-visual-elements",
+    "title": "Visual Elements of Google Search",
+    "url": "https://developers.google.com/search/blog/2022/12/visual-elements",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:41:12.749483+00:00",
+    "md_file": "2022-12-visual-elements.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-01-registrate-para-search-central-unconference-espanol",
+    "title": "Spanish blog: Register for the Search Central Virtual Unconference en español 2023",
+    "url": "https://developers.google.com/search/blog/2023/01/registrate-para-search-central-unconference-espanol",
+    "published": "2023-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:55.449192+00:00",
+    "md_file": "2023-01-registrate-para-search-central-unconference-espanol.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-02-bulk-data-export",
+    "title": "Bulk data export: a new and powerful way to access your Search Console data",
+    "url": "https://developers.google.com/search/blog/2023/02/bulk-data-export",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:40.393255+00:00",
+    "md_file": "2023-02-bulk-data-export.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-02-dont-404-my-yum",
+    "title": "Don't use 403s or 404s for rate limiting",
+    "url": "https://developers.google.com/search/blog/2023/02/dont-404-my-yum",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:43.230653+00:00",
+    "md_file": "2023-02-dont-404-my-yum.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-02-google-search-and-ai-content",
+    "title": "Google Search's guidance about AI-generated content",
+    "url": "https://developers.google.com/search/blog/2023/02/google-search-and-ai-content",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:46.129086+00:00",
+    "md_file": "2023-02-google-search-and-ai-content.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-02-search-central-live-brazil",
+    "title": "Announcing the Search Central Live Brazil roadshow",
+    "url": "https://developers.google.com/search/blog/2023/02/search-central-live-brazil",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:49.107397+00:00",
+    "md_file": "2023-02-search-central-live-brazil.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-02-search-console-user-permissions-update",
+    "title": "Updating Search Console users and permissions management",
+    "url": "https://developers.google.com/search/blog/2023/02/search-console-user-permissions-update",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:37.601525+00:00",
+    "md_file": "2023-02-search-console-user-permissions-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-02-video-indexing-report-update",
+    "title": "New updates to the Search Console Video indexing report",
+    "url": "https://developers.google.com/search/blog/2023/02/video-indexing-report-update",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:52.397448+00:00",
+    "md_file": "2023-02-video-indexing-report-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-03-2022-recap-search-central-community",
+    "title": "Search Central Community in 2022",
+    "url": "https://developers.google.com/search/blog/2023/03/2022-recap-search-central-community",
+    "published": "2023-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:34.358106+00:00",
+    "md_file": "2023-03-2022-recap-search-central-community.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-03-gsc-data-blending-looker-studio",
+    "title": "Blending Search Console and internal data inside Looker Studio",
+    "url": "https://developers.google.com/search/blog/2023/03/gsc-data-blending-looker-studio",
+    "published": "2023-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:31.284281+00:00",
+    "md_file": "2023-03-gsc-data-blending-looker-studio.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-04-page-experience-in-search",
+    "title": "The role of page experience in creating helpful content",
+    "url": "https://developers.google.com/search/blog/2023/04/page-experience-in-search",
+    "published": "2023-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:17.159674+00:00",
+    "md_file": "2023-04-page-experience-in-search.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-04-search-central-unconference-espanol-2023-recap",
+    "title": "Event recap: Search Central Virtual Unconference en español 2023",
+    "url": "https://developers.google.com/search/blog/2023/04/search-central-unconference-espanol-2023-recap",
+    "published": "2023-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:28.284725+00:00",
+    "md_file": "2023-04-search-central-unconference-espanol-2023-recap.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-04-shipping-and-returns-information",
+    "title": "Shipping and Returns information on Google Search web results",
+    "url": "https://developers.google.com/search/blog/2023/04/shipping-and-returns-information",
+    "published": "2023-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:19.908380+00:00",
+    "md_file": "2023-04-shipping-and-returns-information.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-04-simplifying-video",
+    "title": "Simplifying video presentation on Google Search Results",
+    "url": "https://developers.google.com/search/blog/2023/04/simplifying-video",
+    "published": "2023-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:22.446495+00:00",
+    "md_file": "2023-04-simplifying-video.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-04-webspam-report-2022",
+    "title": "How we fought spam on Google Search in 2022",
+    "url": "https://developers.google.com/search/blog/2023/04/webspam-report-2022",
+    "published": "2023-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:25.286022+00:00",
+    "md_file": "2023-04-webspam-report-2022.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-05-introducing-inp",
+    "title": "Introducing INP to Core Web Vitals",
+    "url": "https://developers.google.com/search/blog/2023/05/introducing-inp",
+    "published": "2023-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:10.564444+00:00",
+    "md_file": "2023-05-introducing-inp.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-05-scl-apac-2023",
+    "title": "Search Central Live: Tokyo and future plans for APAC",
+    "url": "https://developers.google.com/search/blog/2023/05/scl-apac-2023",
+    "published": "2023-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:07.801537+00:00",
+    "md_file": "2023-05-scl-apac-2023.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-05-understanding-news-topic-authority",
+    "title": "Understanding news topic authority",
+    "url": "https://developers.google.com/search/blog/2023/05/understanding-news-topic-authority",
+    "published": "2023-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:04.781471+00:00",
+    "md_file": "2023-05-understanding-news-topic-authority.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-05-x-default",
+    "title": "How x-default can help you",
+    "url": "https://developers.google.com/search/blog/2023/05/x-default",
+    "published": "2023-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:13.436854+00:00",
+    "md_file": "2023-05-x-default.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-06-bigquery-efficiency-tips",
+    "title": "BigQuery efficiency tips for Search Console bulk data exports",
+    "url": "https://developers.google.com/search/blog/2023/06/bigquery-efficiency-tips",
+    "published": "2023-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:40:01.891823+00:00",
+    "md_file": "2023-06-bigquery-efficiency-tips.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-06-reporting-search-quality-issues",
+    "title": "Reporting search quality issues with a new user feedback form",
+    "url": "https://developers.google.com/search/blog/2023/06/reporting-search-quality-issues",
+    "published": "2023-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:52.873050+00:00",
+    "md_file": "2023-06-reporting-search-quality-issues.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-06-search-central-live-jakarta-2023",
+    "title": "Indonesian Blog: Search Central Live Jakarta 2023",
+    "url": "https://developers.google.com/search/blog/2023/06/search-central-live-jakarta-2023",
+    "published": "2023-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:58.981173+00:00",
+    "md_file": "2023-06-search-central-live-jakarta-2023.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-06-sitemaps-lastmod-ping",
+    "title": "Sitemaps ping endpoint is going away",
+    "url": "https://developers.google.com/search/blog/2023/06/sitemaps-lastmod-ping",
+    "published": "2023-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:50.035511+00:00",
+    "md_file": "2023-06-sitemaps-lastmod-ping.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-06-video-indexing-specific-issues",
+    "title": "Improving prominence reporting in the Search Console video indexing report",
+    "url": "https://developers.google.com/search/blog/2023/06/video-indexing-specific-issues",
+    "published": "2023-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:55.926743+00:00",
+    "md_file": "2023-06-video-indexing-specific-issues.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-07-search-central-live-tok-jkt-2023-recap",
+    "title": "Search Central Live Tokyo and Jakarta: it's a wrap",
+    "url": "https://developers.google.com/search/blog/2023/07/search-central-live-tok-jkt-2023-recap",
+    "published": "2023-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:47.247423+00:00",
+    "md_file": "2023-07-search-central-live-tok-jkt-2023-recap.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-07-sitenames",
+    "title": "An update on site names",
+    "url": "https://developers.google.com/search/blog/2023/07/sitenames",
+    "published": "2023-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:44.387409+00:00",
+    "md_file": "2023-07-sitenames.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-08-howto-faq-changes",
+    "title": "Changes to HowTo and FAQ rich results",
+    "url": "https://developers.google.com/search/blog/2023/08/howto-faq-changes",
+    "published": "2023-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:41.193537+00:00",
+    "md_file": "2023-08-howto-faq-changes.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-08-search-central-live-india-2023",
+    "title": "Search Central Live is coming to India",
+    "url": "https://developers.google.com/search/blog/2023/08/search-central-live-india-2023",
+    "published": "2023-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:38.280061+00:00",
+    "md_file": "2023-08-search-central-live-india-2023.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-08-where-art-thou-error",
+    "title": "The comedy of errors",
+    "url": "https://developers.google.com/search/blog/2023/08/where-art-thou-error",
+    "published": "2023-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:35.365715+00:00",
+    "md_file": "2023-08-where-art-thou-error.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-09-multilingual-searches",
+    "title": "How Google Search handles multilingual searches",
+    "url": "https://developers.google.com/search/blog/2023/09/multilingual-searches",
+    "published": "2023-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:29.455022+00:00",
+    "md_file": "2023-09-multilingual-searches.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-09-search-central-live-mexico",
+    "title": "Announcing the Search Central Live Mexico roadshow",
+    "url": "https://developers.google.com/search/blog/2023/09/search-central-live-mexico",
+    "published": "2023-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:23.629417+00:00",
+    "md_file": "2023-09-search-central-live-mexico.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-09-search-central-live-zurich",
+    "title": "Search Central Live Zurich is back!",
+    "url": "https://developers.google.com/search/blog/2023/09/search-central-live-zurich",
+    "published": "2023-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:20.729047+00:00",
+    "md_file": "2023-09-search-central-live-zurich.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-09-search-console-merchant-center-association",
+    "title": "Associate Search Console to Merchant Center to discover growth opportunities",
+    "url": "https://developers.google.com/search/blog/2023/09/search-console-merchant-center-association",
+    "published": "2023-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:26.607989+00:00",
+    "md_file": "2023-09-search-console-merchant-center-association.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-09-site-names-global-rollout",
+    "title": "Site names on Google Search now available for all languages",
+    "url": "https://developers.google.com/search/blog/2023/09/site-names-global-rollout",
+    "published": "2023-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:32.375094+00:00",
+    "md_file": "2023-09-site-names-global-rollout.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-10-mobile-first-is-here",
+    "title": "Mobile-first indexing has landed - thanks for all your support",
+    "url": "https://developers.google.com/search/blog/2023/10/mobile-first-is-here",
+    "published": "2023-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:08.777987+00:00",
+    "md_file": "2023-10-mobile-first-is-here.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-10-october-2023-spam-update",
+    "title": "October 2023 Spam Update",
+    "url": "https://developers.google.com/search/blog/2023/10/october-2023-spam-update",
+    "published": "2023-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:17.833507+00:00",
+    "md_file": "2023-10-october-2023-spam-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-10-search-central-live-singapore-2023",
+    "title": "Search Central Live Singapore 2023",
+    "url": "https://developers.google.com/search/blog/2023/10/search-central-live-singapore-2023",
+    "published": "2023-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:11.855202+00:00",
+    "md_file": "2023-10-search-central-live-singapore-2023.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-10-vehicle-listings-structured-data",
+    "title": "Vehicle listing structured data for car dealerships",
+    "url": "https://developers.google.com/search/blog/2023/10/vehicle-listings-structured-data",
+    "published": "2023-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:14.704336+00:00",
+    "md_file": "2023-10-vehicle-listings-structured-data.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-11-discussion-and-profile-markup",
+    "title": "New in structured data: discussion forum and profile page markup",
+    "url": "https://developers.google.com/search/blog/2023/11/discussion-and-profile-markup",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:43.199988+00:00",
+    "md_file": "2023-11-discussion-and-profile-markup.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-11-introducing-organization-markup",
+    "title": "Expanding markup support for Organization details, including Logo structured data",
+    "url": "https://developers.google.com/search/blog/2023/11/introducing-organization-markup",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:40.096095+00:00",
+    "md_file": "2023-11-introducing-organization-markup.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-11-new-course-info-markup",
+    "title": "List your courses with new course info structured data",
+    "url": "https://developers.google.com/search/blog/2023/11/new-course-info-markup",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:00.034611+00:00",
+    "md_file": "2023-11-new-course-info-markup.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-11-q-and-a-on-search-updates",
+    "title": "A Q&A on Google Search updates",
+    "url": "https://developers.google.com/search/blog/2023/11/q-and-a-on-search-updates",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:03.281562+00:00",
+    "md_file": "2023-11-q-and-a-on-search-updates.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-11-sc-crawl-limiter-byebye",
+    "title": "Upcoming deprecation of Crawl Rate Limiter Tool in Search Console",
+    "url": "https://developers.google.com/search/blog/2023/11/sc-crawl-limiter-byebye",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:46.208173+00:00",
+    "md_file": "2023-11-sc-crawl-limiter-byebye.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-11-search-central-live-taipei-2023",
+    "title": "Traditional Chinese Blog: Search Central Live Taipei 2023",
+    "url": "https://developers.google.com/search/blog/2023/11/search-central-live-taipei-2023",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:39:05.943801+00:00",
+    "md_file": "2023-11-search-central-live-taipei-2023.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-11-search-quality-rater-guidelines-update",
+    "title": "Search Quality Raters Guidelines update",
+    "url": "https://developers.google.com/search/blog/2023/11/search-quality-rater-guidelines-update",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:49.065576+00:00",
+    "md_file": "2023-11-search-quality-rater-guidelines-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-12-definitely-not-ai-generated-post",
+    "title": "This is over",
+    "url": "https://developers.google.com/search/blog/2023/12/definitely-not-ai-generated-post",
+    "published": "2023-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:31.234107+00:00",
+    "md_file": "2023-12-definitely-not-ai-generated-post.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-12-hello-vacation-rentals",
+    "title": "Adding markup support for vacation rentals",
+    "url": "https://developers.google.com/search/blog/2023/12/hello-vacation-rentals",
+    "published": "2023-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:37.024282+00:00",
+    "md_file": "2023-12-hello-vacation-rentals.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2023-12-video-is-the-main-content",
+    "title": "Video mode now only shows pages where video is the main content",
+    "url": "https://developers.google.com/search/blog/2023/12/video-is-the-main-content",
+    "published": "2023-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:34.062083+00:00",
+    "md_file": "2023-12-video-is-the-main-content.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-02-product-variants",
+    "title": "Adding structured data support for Product Variants",
+    "url": "https://developers.google.com/search/blog/2024/02/product-variants",
+    "published": "2024-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:16.397992+00:00",
+    "md_file": "2024-02-product-variants.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-02-search-central-live-argentina",
+    "title": "Announcing Search Central Live Argentina",
+    "url": "https://developers.google.com/search/blog/2024/02/search-central-live-argentina",
+    "published": "2024-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:25.094627+00:00",
+    "md_file": "2024-02-search-central-live-argentina.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-02-search-central-live-sao-paulo-2024",
+    "title": "Search Central Live is returning to Brazil",
+    "url": "https://developers.google.com/search/blog/2024/02/search-central-live-sao-paulo-2024",
+    "published": "2024-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:28.123508+00:00",
+    "md_file": "2024-02-search-central-live-sao-paulo-2024.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-02-search-experiences-in-eea",
+    "title": "New Search experiences in EEA: Rich results, aggregator units, and refinement chips",
+    "url": "https://developers.google.com/search/blog/2024/02/search-experiences-in-eea",
+    "published": "2024-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:19.397951+00:00",
+    "md_file": "2024-02-search-experiences-in-eea.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-02-ssg-gets-a-makeover",
+    "title": "The SEO Starter Guide got a makeover",
+    "url": "https://developers.google.com/search/blog/2024/02/ssg-gets-a-makeover",
+    "published": "2024-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:22.326496+00:00",
+    "md_file": "2024-02-ssg-gets-a-makeover.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-03-core-update-spam-policies",
+    "title": "What web creators should know about our March 2024 core update and new spam policies",
+    "url": "https://developers.google.com/search/blog/2024/03/core-update-spam-policies",
+    "published": "2024-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:10.365343+00:00",
+    "md_file": "2024-03-core-update-spam-policies.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-03-search-central-live-poland-2024",
+    "title": "Search Central Live 2024 in Warsaw, Poland",
+    "url": "https://developers.google.com/search/blog/2024/03/search-central-live-poland-2024",
+    "published": "2024-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:06.319366+00:00",
+    "md_file": "2024-03-search-central-live-poland-2024.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-03-search-central-live-romania-2024",
+    "title": "Search Central Live 2024 in Bucharest, Romania",
+    "url": "https://developers.google.com/search/blog/2024/03/search-central-live-romania-2024",
+    "published": "2024-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:13.303536+00:00",
+    "md_file": "2024-03-search-central-live-romania-2024.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-04-search-console-ownership-token-management",
+    "title": "Improving Search Console ownership token management",
+    "url": "https://developers.google.com/search/blog/2024/04/search-console-ownership-token-management",
+    "published": "2024-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:38:03.124459+00:00",
+    "md_file": "2024-04-search-console-ownership-token-management.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-05-search-central-live-jakarta-apac-2024",
+    "title": "Search Central Live 2024 is coming back to the APAC region",
+    "url": "https://developers.google.com/search/blog/2024/05/search-central-live-jakarta-apac-2024",
+    "published": "2024-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:59.726568+00:00",
+    "md_file": "2024-05-search-central-live-jakarta-apac-2024.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-06-linkedin-we-are-here",
+    "title": "We're on LinkedIn (finally)",
+    "url": "https://developers.google.com/search/blog/2024/06/linkedin-we-are-here",
+    "published": "2024-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:55.767286+00:00",
+    "md_file": "2024-06-linkedin-we-are-here.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-06-search-central-live-bangkok-2024",
+    "title": "Search Central Live Bangkok 2024",
+    "url": "https://developers.google.com/search/blog/2024/06/search-central-live-bangkok-2024",
+    "published": "2024-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:50.049864+00:00",
+    "md_file": "2024-06-search-central-live-bangkok-2024.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-06-structured-data-return-policies",
+    "title": "Adding markup support for organization-level return policies",
+    "url": "https://developers.google.com/search/blog/2024/06/structured-data-return-policies",
+    "published": "2024-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:52.876805+00:00",
+    "md_file": "2024-06-structured-data-return-policies.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-07-configure-shipping-and-returns-search-console",
+    "title": "Configure your shipping and returns directly in Search Console",
+    "url": "https://developers.google.com/search/blog/2024/07/configure-shipping-and-returns-search-console",
+    "published": "2024-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:47.380243+00:00",
+    "md_file": "2024-07-configure-shipping-and-returns-search-console.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-08-august-2024-core-update",
+    "title": "What to know about our August 2024 core update",
+    "url": "https://developers.google.com/search/blog/2024/08/august-2024-core-update",
+    "published": "2024-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:41.468169+00:00",
+    "md_file": "2024-08-august-2024-core-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-08-happy-avifriday",
+    "title": "Supporting AVIF in Google Search",
+    "url": "https://developers.google.com/search/blog/2024/08/happy-avifriday",
+    "published": "2024-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:34.848894+00:00",
+    "md_file": "2024-08-happy-avifriday.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-08-search-central-live-kl-tpe-2024",
+    "title": "Search Central Live 2024 is coming to Kuala Lumpur and Taipei",
+    "url": "https://developers.google.com/search/blog/2024/08/search-central-live-kl-tpe-2024",
+    "published": "2024-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:37.781053+00:00",
+    "md_file": "2024-08-search-central-live-kl-tpe-2024.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-08-search-console-recommendations",
+    "title": "Introducing recommendations in Google Search Console",
+    "url": "https://developers.google.com/search/blog/2024/08/search-console-recommendations",
+    "published": "2024-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:44.332190+00:00",
+    "md_file": "2024-08-search-console-recommendations.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-09-google-trends-tutorials",
+    "title": "Learn all about Google Trends with our new YouTube tutorials",
+    "url": "https://developers.google.com/search/blog/2024/09/google-trends-tutorials",
+    "published": "2024-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:31.529856+00:00",
+    "md_file": "2024-09-google-trends-tutorials.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-09-search-experiences-in-sa",
+    "title": "New Search experiences in South Africa: Badges and refinement chips",
+    "url": "https://developers.google.com/search/blog/2024/09/search-experiences-in-sa",
+    "published": "2024-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:28.580262+00:00",
+    "md_file": "2024-09-search-experiences-in-sa.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-10-scl-2024-jkt-bkk",
+    "title": "Search Central Live Jakarta and Bangkok 2024: it's a wrap",
+    "url": "https://developers.google.com/search/blog/2024/10/scl-2024-jkt-bkk",
+    "published": "2024-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:21.619592+00:00",
+    "md_file": "2024-10-scl-2024-jkt-bkk.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-10-sitelinks-search-box",
+    "title": "Farewell, Sitelinks Search Box",
+    "url": "https://developers.google.com/search/blog/2024/10/sitelinks-search-box",
+    "published": "2024-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:18.720123+00:00",
+    "md_file": "2024-10-sitelinks-search-box.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-10-store-ratings",
+    "title": "Bringing Store ratings on Search to more countries",
+    "url": "https://developers.google.com/search/blog/2024/10/store-ratings",
+    "published": "2024-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:25.831778+00:00",
+    "md_file": "2024-10-store-ratings.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-11-search-central-live-zurich",
+    "title": "Join us at Search Central Live in Zurich!",
+    "url": "https://developers.google.com/search/blog/2024/11/search-central-live-zurich",
+    "published": "2024-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:12.425421+00:00",
+    "md_file": "2024-11-search-central-live-zurich.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-11-site-reputation-abuse",
+    "title": "Updating our site reputation abuse policy",
+    "url": "https://developers.google.com/search/blog/2024/11/site-reputation-abuse",
+    "published": "2024-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:15.340903+00:00",
+    "md_file": "2024-11-site-reputation-abuse.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-12-crawling-december-caching",
+    "title": "Crawling December: HTTP caching",
+    "url": "https://developers.google.com/search/blog/2024/12/crawling-december-caching",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:05.905692+00:00",
+    "md_file": "2024-12-crawling-december-caching.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-12-crawling-december-cdns",
+    "title": "Crawling December: CDNs and crawling",
+    "url": "https://developers.google.com/search/blog/2024/12/crawling-december-cdns",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:53.290467+00:00",
+    "md_file": "2024-12-crawling-december-cdns.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-12-crawling-december-faceted-nav",
+    "title": "Crawling December: Faceted navigation",
+    "url": "https://developers.google.com/search/blog/2024/12/crawling-december-faceted-nav",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:56.226949+00:00",
+    "md_file": "2024-12-crawling-december-faceted-nav.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-12-crawling-december-resources",
+    "title": "Crawling December: The how and why of Googlebot crawling",
+    "url": "https://developers.google.com/search/blog/2024/12/crawling-december-resources",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:08.793835+00:00",
+    "md_file": "2024-12-crawling-december-resources.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-12-crawling-out-of-december",
+    "title": "Crawling out of December: the 2024 recap",
+    "url": "https://developers.google.com/search/blog/2024/12/crawling-out-of-december",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:50.613785+00:00",
+    "md_file": "2024-12-crawling-out-of-december.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-12-recent-data-search-console",
+    "title": "An improved way to view your recent performance data in Search Console",
+    "url": "https://developers.google.com/search/blog/2024/12/recent-data-search-console",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:37:02.089977+00:00",
+    "md_file": "2024-12-recent-data-search-console.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2024-12-scl-asia-h2-recap",
+    "title": "Search Central Live Kuala Lumpur and Taipei 2024: Recap",
+    "url": "https://developers.google.com/search/blog/2024/12/scl-asia-h2-recap",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:59.037529+00:00",
+    "md_file": "2024-12-scl-asia-h2-recap.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-01-search-central-live-brazil",
+    "title": "Search Central Live is returning to Brazil in 2025",
+    "url": "https://developers.google.com/search/blog/2025/01/search-central-live-brazil",
+    "published": "2025-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:47.568540+00:00",
+    "md_file": "2025-01-search-central-live-brazil.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-01-simplifying-breadcrumbs",
+    "title": "Simplifying the visible URL element on mobile search results",
+    "url": "https://developers.google.com/search/blog/2025/01/simplifying-breadcrumbs",
+    "published": "2025-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:45.001170+00:00",
+    "md_file": "2025-01-simplifying-breadcrumbs.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-02-intro-robots-refresher",
+    "title": "Robots Refresher: introducing a new series",
+    "url": "https://developers.google.com/search/blog/2025/02/intro-robots-refresher",
+    "published": "2025-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:39.112505+00:00",
+    "md_file": "2025-02-intro-robots-refresher.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-02-search-central-live-nyc",
+    "title": "Search Central Live is going to New York City",
+    "url": "https://developers.google.com/search/blog/2025/02/search-central-live-nyc",
+    "published": "2025-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:42.276442+00:00",
+    "md_file": "2025-02-search-central-live-nyc.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-03-first-search-central-live-in-south-africa",
+    "title": "First Search Central Live in South Africa",
+    "url": "https://developers.google.com/search/blog/2025/03/first-search-central-live-in-south-africa",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:35.889317+00:00",
+    "md_file": "2025-03-first-search-central-live-in-south-africa.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-03-robots-future",
+    "title": "Robots Refresher: Future-proof Robots Exclusion Protocol",
+    "url": "https://developers.google.com/search/blog/2025/03/robots-future",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:21.191591+00:00",
+    "md_file": "2025-03-robots-future.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-03-robots-refresher-page-level",
+    "title": "Robots Refresher: page-level granularity",
+    "url": "https://developers.google.com/search/blog/2025/03/robots-refresher-page-level",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:26.788506+00:00",
+    "md_file": "2025-03-robots-refresher-page-level.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-03-robotstxt-flexible-way-to-control",
+    "title": "Robots Refresher: robots.txt — a flexible way to control how machines explore your website",
+    "url": "https://developers.google.com/search/blog/2025/03/robotstxt-flexible-way-to-control",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:29.501304+00:00",
+    "md_file": "2025-03-robotstxt-flexible-way-to-control.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-03-search-central-live-deep-dive-apac-2025",
+    "title": "Get Ready for Search Central Live Asia Pacific 2025",
+    "url": "https://developers.google.com/search/blog/2025/03/search-central-live-deep-dive-apac-2025",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:24.110060+00:00",
+    "md_file": "2025-03-search-central-live-deep-dive-apac-2025.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-03-search-central-live-madrid",
+    "title": "Search Central Live is going to Madrid",
+    "url": "https://developers.google.com/search/blog/2025/03/search-central-live-madrid",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:32.445612+00:00",
+    "md_file": "2025-03-search-central-live-madrid.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-04-san-hourly-data",
+    "title": "The Search Analytics API now supports hourly data",
+    "url": "https://developers.google.com/search/blog/2025/04/san-hourly-data",
+    "published": "2025-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:18.608107+00:00",
+    "md_file": "2025-04-san-hourly-data.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-04-search-central-live-deep-dive-2025",
+    "title": "Register now for Search Central Live Deep Dive 2025",
+    "url": "https://developers.google.com/search/blog/2025/04/search-central-live-deep-dive-2025",
+    "published": "2025-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:15.818539+00:00",
+    "md_file": "2025-04-search-central-live-deep-dive-2025.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-05-app-deep-links",
+    "title": "App deep links: connecting your website and app",
+    "url": "https://developers.google.com/search/blog/2025/05/app-deep-links",
+    "published": "2025-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:12.915657+00:00",
+    "md_file": "2025-05-app-deep-links.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-05-succeeding-in-ai-search",
+    "title": "Top ways to ensure your content performs well in Google's AI experiences on Search",
+    "url": "https://developers.google.com/search/blog/2025/05/succeeding-in-ai-search",
+    "published": "2025-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:09.866790+00:00",
+    "md_file": "2025-05-succeeding-in-ai-search.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-06-loyalty-program",
+    "title": "Adding markup support for loyalty programs",
+    "url": "https://developers.google.com/search/blog/2025/06/loyalty-program",
+    "published": "2025-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:07.034460+00:00",
+    "md_file": "2025-06-loyalty-program.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-06-scl-dd-apac-2025-news",
+    "title": "SCL Deep Dive APAC 2025: Community Speakers and a New Format",
+    "url": "https://developers.google.com/search/blog/2025/06/scl-dd-apac-2025-news",
+    "published": "2025-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:01.226921+00:00",
+    "md_file": "2025-06-scl-dd-apac-2025-news.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-06-search-console-insights",
+    "title": "The new Search Console Insights report is here",
+    "url": "https://developers.google.com/search/blog/2025/06/search-console-insights",
+    "published": "2025-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:58.162764+00:00",
+    "md_file": "2025-06-search-console-insights.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-06-simplifying-search-results",
+    "title": "Simplifying the search results page",
+    "url": "https://developers.google.com/search/blog/2025/06/simplifying-search-results",
+    "published": "2025-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:36:04.170476+00:00",
+    "md_file": "2025-06-simplifying-search-results.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-07-trends-api",
+    "title": "Introducing the Google Trends API (alpha): a new way to access Search Trends data",
+    "url": "https://developers.google.com/search/blog/2025/07/trends-api",
+    "published": "2025-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:55.179465+00:00",
+    "md_file": "2025-07-trends-api.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-08-search-central-live-mexico-2025",
+    "title": "Search Central Live is back to Mexico City",
+    "url": "https://developers.google.com/search/blog/2025/08/search-central-live-mexico-2025",
+    "published": "2025-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:52.281409+00:00",
+    "md_file": "2025-08-search-central-live-mexico-2025.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-09-scl-dubai",
+    "title": "Search Central Live Dubai 2025",
+    "url": "https://developers.google.com/search/blog/2025/09/scl-dubai",
+    "published": "2025-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:40.610959+00:00",
+    "md_file": "2025-09-scl-dubai.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-09-scl-hkk",
+    "title": "Search Central Live Hong Kong 2025: Event in Chinese focusing on international ecommerce",
+    "url": "https://developers.google.com/search/blog/2025/09/scl-hkk",
+    "published": "2025-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:49.435127+00:00",
+    "md_file": "2025-09-scl-hkk.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-09-scl-tok",
+    "title": "Search Central Live Tokyo: The 2025 Return",
+    "url": "https://developers.google.com/search/blog/2025/09/scl-tok",
+    "published": "2025-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:46.317772+00:00",
+    "md_file": "2025-09-scl-tok.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-09-store-widget",
+    "title": "Announcing the store widget: build shopper confidence and drive sales",
+    "url": "https://developers.google.com/search/blog/2025/09/store-widget",
+    "published": "2025-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:43.428283+00:00",
+    "md_file": "2025-09-store-widget.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-10-search-console-query-groups",
+    "title": "Introducing Query groups in Search Console Insights",
+    "url": "https://developers.google.com/search/blog/2025/10/search-console-query-groups",
+    "published": "2025-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:37.623497+00:00",
+    "md_file": "2025-10-search-console-query-groups.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-11-custom-chart-annotations",
+    "title": "Adding context to your Search Console data with custom annotations",
+    "url": "https://developers.google.com/search/blog/2025/11/custom-chart-annotations",
+    "published": "2025-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:25.879815+00:00",
+    "md_file": "2025-11-custom-chart-annotations.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-11-more-ways-to-share-shipping",
+    "title": "More ways to share your shipping and returns policies with Google",
+    "url": "https://developers.google.com/search/blog/2025/11/more-ways-to-share-shipping",
+    "published": "2025-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:28.752225+00:00",
+    "md_file": "2025-11-more-ways-to-share-shipping.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-11-search-central-live-zurich-is-back",
+    "title": "Search Central Live is back in Zurich!",
+    "url": "https://developers.google.com/search/blog/2025/11/search-central-live-zurich-is-back",
+    "published": "2025-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:31.685361+00:00",
+    "md_file": "2025-11-search-central-live-zurich-is-back.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-11-search-console-branded-filter",
+    "title": "Introducing the branded queries filter in Search Console",
+    "url": "https://developers.google.com/search/blog/2025/11/search-console-branded-filter",
+    "published": "2025-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:22.968682+00:00",
+    "md_file": "2025-11-search-console-branded-filter.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-11-update-on-our-efforts",
+    "title": "Here's an update on our efforts to simplify the search results page",
+    "url": "https://developers.google.com/search/blog/2025/11/update-on-our-efforts",
+    "published": "2025-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:34.516471+00:00",
+    "md_file": "2025-11-update-on-our-efforts.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-12-ai-powered-configuration",
+    "title": "Streamline your Search Console analysis with the new AI-powered configuration",
+    "url": "https://developers.google.com/search/blog/2025/12/ai-powered-configuration",
+    "published": "2025-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:20.232354+00:00",
+    "md_file": "2025-12-ai-powered-configuration.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-12-scl-eoy",
+    "title": "Search Central Live APAC 2025 Recap: A Note of Gratitude",
+    "url": "https://developers.google.com/search/blog/2025/12/scl-eoy",
+    "published": "2025-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:11.262728+00:00",
+    "md_file": "2025-12-scl-eoy.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-12-social-channels-search-console",
+    "title": "Introducing social channels in Search Console",
+    "url": "https://developers.google.com/search/blog/2025/12/social-channels-search-console",
+    "published": "2025-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:17.074532+00:00",
+    "md_file": "2025-12-social-channels-search-console.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2025-12-weekly-monthly-views-search-console",
+    "title": "Introducing weekly and monthly views in Search Console",
+    "url": "https://developers.google.com/search/blog/2025/12/weekly-monthly-views-search-console",
+    "published": "2025-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:14.246962+00:00",
+    "md_file": "2025-12-weekly-monthly-views-search-console.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2026-01-search-central-live-brasil-argentina",
+    "title": "Search Central Live is coming back to South America",
+    "url": "https://developers.google.com/search/blog/2026/01/search-central-live-brasil-argentina",
+    "published": "2026-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:35:08.002755+00:00",
+    "md_file": "2026-01-search-central-live-brasil-argentina.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2026-02-discover-core-update",
+    "title": "Google's February 2026 Discover Core Update",
+    "url": "https://developers.google.com/search/blog/2026/02/discover-core-update",
+    "published": "2026-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:32:18.298543+00:00",
+    "md_file": "2026-02-discover-core-update.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2026-03-scl-apac-2026",
+    "title": "Search Central Live Asia Pacific 2026: Get Ready for Sydney and more!",
+    "url": "https://developers.google.com/search/blog/2026/03/scl-apac-2026",
+    "published": "2026-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:32:15.084256+00:00",
+    "md_file": "2026-03-scl-apac-2026.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2026-03-scl-canada-2026",
+    "title": "Search Central Live is coming to Canada!",
+    "url": "https://developers.google.com/search/blog/2026/03/scl-canada-2026",
+    "published": "2026-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-03-30T02:32:12.404838+00:00",
+    "md_file": "2026-03-scl-canada-2026.md",
+    "source_collection": "google-search-central"
+  }
+]

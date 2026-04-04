@@ -1,0 +1,31 @@
+# Search Central Live is coming to India
+- **發佈日期**: 2023-08-01
+- **作者**: Google Search Central
+- **來源 URL**: https://developers.google.com/search/blog/2023/08/search-central-live-india-2023
+- **來源類型**: article
+- **來源集合**: google-search-central
+---
+Thursday, August 17, 2023
+
+With three [Search Central Live](/search/events/search-central-live) events behind us this year, it's time to announce the one we get asked about the most: Search Central India!
+
+![Search Central Live India 2023](/static/search/blog/images/search-central-live-apac/search-central-live-india-2023-logo.png)
+
+We are coming to you to two locations:
+
+* **Bengaluru** on September 22, 2023, at Shangri-La Bengaluru
+* **New Delhi** on September 25, 2023, at Le Meridien New Delhi
+
+Interested? [Sign up for Search Central Live India 2023](https://rsvp.withgoogle.com/events/search-central-live-india-2023) before September 8, 2023. When registering, choose a preferred location and then indicate whether you'd like to be considered for the other location as well. We will consider each registration for only one location – you can't attend both events, so please limit your registration to one registration per person. The talks are going to be almost the same, so you're not missing out by coming to just one event! All talks will be held in English by our larger team; to name a few:
+
+* Aaseesh Marina – Product Support Manager
+* Cherry Prommawin – Search Advocate
+* Martin Splitt – Search Advocate
+
+If you are reading this blog, use the registration code "SearchCentral" to help us with the selection process, but **please note that we can’t guarantee a seat**.
+
+Since our capacity is limited, **you will get a confirmation by September 15 if you're selected**. We will include information about which event you're invited to in the confirmation email.
+
+As always the tickets are available without any cost. Looking forward to seeing you in person!
+
+Posted by [Aaseesh Marina](/search/blog/authors/aaseesh-marina), [Cherry Prommawin](/search/blog/authors/cherry-prommawin) and [Gary Illyes](/search/blog/authors/gary-illyes)

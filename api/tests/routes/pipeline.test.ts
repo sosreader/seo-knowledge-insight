@@ -255,10 +255,14 @@ describe("GET /api/v1/pipeline/status", () => {
     const res = await app.request("/api/v1/pipeline/status");
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.data.steps).toHaveLength(9);
+    expect(body.data.steps).toHaveLength(12);
 
-    const [fetchNotion, fetchMedium, fetchIthelp, fetchGoogle, fetchAhrefs, fetchSej, fetchGrowthmemo, extract, dedupe] =
-      body.data.steps;
+    const [
+      fetchNotion, fetchMedium, fetchIthelp, fetchGoogle,
+      fetchAhrefs, fetchSej, fetchGrowthmemo,
+      fetchGoogleBlog, fetchWebdev, fetchScreamingFrog,
+      extract, dedupe,
+    ] = body.data.steps;
     expect(fetchNotion.name).toBe("fetch-notion");
     expect(fetchNotion.count).toBe(2); // 2 meeting markdown files
     expect(fetchMedium.name).toBe("fetch-medium");
@@ -273,6 +277,12 @@ describe("GET /api/v1/pipeline/status", () => {
     expect(fetchSej.count).toBe(1); // 1 sej markdown file
     expect(fetchGrowthmemo.name).toBe("fetch-growthmemo");
     expect(fetchGrowthmemo.count).toBe(1); // 1 growthmemo markdown file
+    expect(fetchGoogleBlog.name).toBe("fetch-google-blog");
+    expect(fetchGoogleBlog.count).toBe(0); // no test fixtures
+    expect(fetchWebdev.name).toBe("fetch-webdev");
+    expect(fetchWebdev.count).toBe(0); // no test fixtures
+    expect(fetchScreamingFrog.name).toBe("fetch-screaming-frog");
+    expect(fetchScreamingFrog.count).toBe(0); // no test fixtures
     expect(extract.name).toBe("extract-qa");
     expect(extract.count).toBe(2); // 2 qa JSONs in qa_per_meeting/
     expect(extract.detail).toContain("2 / 10"); // 2 extracted out of 10 total

@@ -4,9 +4,13 @@
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { writeFileSync, mkdirSync, rmSync, utimesSync } from "node:fs";
 import { join } from "node:path";
-import { FAKE_ITEMS, generateFakeEmbeddings, createNpyBuffer } from "../setup.js";
+import {
+  FAKE_ITEMS,
+  generateFakeEmbeddings,
+  createNpyBuffer,
+} from "../setup.js";
 
 // Mock config — file-based (no Supabase)
 vi.mock("../../src/config.js", () => ({
@@ -84,6 +88,12 @@ function buildFakeJson() {
   };
 }
 
+function writeFakeEmbeddings(npyPath: string, itemCount: number): void {
+  const embeddings = generateFakeEmbeddings(itemCount, DIM);
+  const npyBuffer = createNpyBuffer(embeddings, itemCount, DIM);
+  writeFileSync(npyPath, npyBuffer);
+}
+
 describe("QAStore (file-based)", () => {
   let store: QAStore;
   const jsonPath = join(tmpDir, "qa_final.json");
@@ -97,9 +107,7 @@ describe("QAStore (file-based)", () => {
     writeFileSync(jsonPath, JSON.stringify(buildFakeJson()), "utf-8");
 
     // Write fake .npy embeddings
-    const embeddings = generateFakeEmbeddings(FAKE_ITEMS.length, DIM);
-    const npyBuffer = createNpyBuffer(embeddings, FAKE_ITEMS.length, DIM);
-    writeFileSync(npyPath, npyBuffer);
+    writeFakeEmbeddings(npyPath, FAKE_ITEMS.length);
 
     store = new QAStore();
     store.load(jsonPath, npyPath, enrichedPath);
@@ -216,6 +224,114 @@ describe("QAStore (file-based)", () => {
     const [first] = store.keywordSearch("AI SEO SGE", 3);
     expect(first).toBeDefined();
     expect(first!.item.serving_tier).toBe("booster");
+  });
+
+  it("falls back to qa_final.json when qa_enriched.json is older", () => {
+    const staleDir = `${tmpDir}-stale-enriched`;
+    const staleJsonPath = join(staleDir, "qa_final.json");
+    const staleNpyPath = join(staleDir, "qa_embeddings.npy");
+    const staleEnrichedPath = join(staleDir, "qa_enriched.json");
+
+    mkdirSync(staleDir, { recursive: true });
+
+    const freshJson = buildFakeJson();
+    const staleEnrichedJson = {
+      qa_database: freshJson.qa_database.slice(
+        0,
+        freshJson.qa_database.length - 1,
+      ),
+    };
+
+    writeFileSync(staleJsonPath, JSON.stringify(freshJson), "utf-8");
+    writeFileSync(
+      staleEnrichedPath,
+      JSON.stringify(staleEnrichedJson),
+      "utf-8",
+    );
+    writeFakeEmbeddings(staleNpyPath, freshJson.qa_database.length);
+
+    utimesSync(
+      staleEnrichedPath,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Date("2026-01-01T00:00:00.000Z"),
+    );
+    utimesSync(
+      staleJsonPath,
+      new Date("2026-01-02T00:00:00.000Z"),
+      new Date("2026-01-02T00:00:00.000Z"),
+    );
+
+    try {
+      const staleStore = new QAStore();
+      staleStore.load(staleJsonPath, staleNpyPath, staleEnrichedPath);
+
+      expect(staleStore.count).toBe(freshJson.qa_database.length);
+      expect(staleStore.getById(FAKE_ITEMS.at(-1)!.id)).toBeDefined();
+    } finally {
+      rmSync(staleDir, { recursive: true, force: true });
+    }
+  });
+
+  it("loads qa_enriched.json when it is newer than qa_final.json", () => {
+    const freshDir = `${tmpDir}-fresh-enriched`;
+    const freshJsonPath = join(freshDir, "qa_final.json");
+    const freshNpyPath = join(freshDir, "qa_embeddings.npy");
+    const freshEnrichedPath = join(freshDir, "qa_enriched.json");
+
+    mkdirSync(freshDir, { recursive: true });
+
+    const finalJson = buildFakeJson();
+    const enrichedJson = {
+      qa_database: finalJson.qa_database.slice(
+        0,
+        finalJson.qa_database.length - 1,
+      ),
+    };
+
+    writeFileSync(freshJsonPath, JSON.stringify(finalJson), "utf-8");
+    writeFileSync(freshEnrichedPath, JSON.stringify(enrichedJson), "utf-8");
+    writeFakeEmbeddings(freshNpyPath, enrichedJson.qa_database.length);
+
+    utimesSync(
+      freshJsonPath,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Date("2026-01-01T00:00:00.000Z"),
+    );
+    utimesSync(
+      freshEnrichedPath,
+      new Date("2026-01-02T00:00:00.000Z"),
+      new Date("2026-01-02T00:00:00.000Z"),
+    );
+
+    try {
+      const freshStore = new QAStore();
+      freshStore.load(freshJsonPath, freshNpyPath, freshEnrichedPath);
+
+      expect(freshStore.count).toBe(enrichedJson.qa_database.length);
+      expect(freshStore.getById(FAKE_ITEMS.at(-1)!.id)).toBeUndefined();
+    } finally {
+      rmSync(freshDir, { recursive: true, force: true });
+    }
+  });
+
+  it("throws a clear error when qa_final.json is missing and qa_enriched.json cannot be read", () => {
+    const brokenDir = `${tmpDir}-broken-enriched`;
+    const missingJsonPath = join(brokenDir, "qa_final.json");
+    const brokenEnrichedPath = join(brokenDir, "qa_enriched.json");
+    const missingNpyPath = join(brokenDir, "qa_embeddings.npy");
+
+    mkdirSync(brokenEnrichedPath, { recursive: true });
+
+    try {
+      const brokenStore = new QAStore();
+      expect(() =>
+        brokenStore.load(missingJsonPath, missingNpyPath, brokenEnrichedPath),
+      ).toThrow(
+        "QAStore: both qa_enriched.json and qa_final.json are unavailable",
+      );
+    } finally {
+      rmSync(brokenDir, { recursive: true, force: true });
+    }
   });
 });
 

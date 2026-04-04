@@ -9,12 +9,20 @@
  *   - categories (sorted by count desc)
  */
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { paths } from "../config.js";
 import { parseNpy } from "../utils/npy-reader.js";
-import { normalizeRows, normalizeL2, matrixDotVector } from "../utils/cosine-similarity.js";
-import { SearchEngine, type QADict, type SearchResult } from "./search-engine.js";
+import {
+  normalizeRows,
+  normalizeL2,
+  matrixDotVector,
+} from "../utils/cosine-similarity.js";
+import {
+  SearchEngine,
+  type QADict,
+  type SearchResult,
+} from "./search-engine.js";
 import { type ListQaParams } from "./qa-filter.js";
 import {
   createStoreData,
@@ -27,6 +35,40 @@ import {
 } from "./qa-fns.js";
 import { hasSupabase } from "./supabase-client.js";
 import { SupabaseQAStore } from "./supabase-qa-store.js";
+
+function shouldLoadEnrichedJson(
+  jsonPath: string,
+  enrichedPath: string,
+): boolean {
+  if (!existsSync(enrichedPath)) {
+    return false;
+  }
+
+  if (!existsSync(jsonPath)) {
+    console.warn(
+      `QAStore: qa_final.json not found at ${jsonPath}, trying qa_enriched.json`,
+    );
+    return true;
+  }
+
+  try {
+    const finalMtime = statSync(jsonPath).mtimeMs;
+    const enrichedMtime = statSync(enrichedPath).mtimeMs;
+    if (finalMtime > enrichedMtime) {
+      console.warn(
+        "QAStore: qa_enriched.json is stale, fallback to qa_final.json",
+      );
+      return false;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `QAStore: qa_enriched.json freshness check failed (${message}), trying enriched artifact`,
+    );
+  }
+
+  return true;
+}
 
 export interface QAItem {
   readonly id: string; // stable_id (16-char hex)
@@ -138,14 +180,23 @@ export class QAStore {
     npyPath: string = paths.qaEmbeddingsPath,
     enrichedPath: string = paths.qaEnrichedJsonPath,
   ): void {
-    // Prefer enriched JSON, fallback to final
+    // Prefer enriched JSON only when it is not older than qa_final.json.
     let rawText: string;
-    if (existsSync(enrichedPath)) {
+    if (shouldLoadEnrichedJson(jsonPath, enrichedPath)) {
       try {
         rawText = readFileSync(enrichedPath, "utf-8");
         console.log(`QAStore: loaded enriched data from ${enrichedPath}`);
-      } catch {
-        console.warn("QAStore: qa_enriched.json load failed, fallback to qa_final.json");
+      } catch (error) {
+        console.warn(
+          "QAStore: qa_enriched.json load failed, fallback to qa_final.json",
+        );
+        if (!existsSync(jsonPath)) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `QAStore: both qa_enriched.json and qa_final.json are unavailable (${message})`,
+          );
+        }
         rawText = readFileSync(jsonPath, "utf-8");
       }
     } else {
@@ -174,16 +225,28 @@ export class QAStore {
       notion_url: qa._enrichment?.notion_url ?? "",
       source_type: qa.source_type ?? "meeting",
       source_collection: qa.source_collection ?? "seo-meetings",
-      source_url: qa.source_url ?? qa._enrichment?.source_url ?? qa._enrichment?.notion_url ?? "",
+      source_url:
+        qa.source_url ??
+        qa._enrichment?.source_url ??
+        qa._enrichment?.notion_url ??
+        "",
       extraction_model: qa.extraction_model,
-      maturity_relevance: (qa.maturity_relevance ?? qa._enrichment?.maturity_relevance) as "L1" | "L2" | "L3" | "L4" | undefined,
+      maturity_relevance: (qa.maturity_relevance ??
+        qa._enrichment?.maturity_relevance) as
+        | "L1"
+        | "L2"
+        | "L3"
+        | "L4"
+        | undefined,
       primary_category: qa.primary_category ?? qa.category ?? "",
       categories: qa.categories ?? (qa.category ? [qa.category] : []),
       intent_labels: qa.intent_labels ?? [],
       scenario_tags: qa.scenario_tags ?? [],
       serving_tier: qa.serving_tier ?? "canonical",
       retrieval_phrases: qa.retrieval_phrases ?? [],
-      retrieval_surface_text: qa.retrieval_surface_text ?? [qa.question, qa.answer, ...(qa.keywords ?? [])].join("\n"),
+      retrieval_surface_text:
+        qa.retrieval_surface_text ??
+        [qa.question, qa.answer, ...(qa.keywords ?? [])].join("\n"),
       content_granularity: qa.content_granularity,
       evidence_scope: qa.evidence_scope ?? [],
       booster_target_queries: qa.booster_target_queries ?? [],
@@ -206,7 +269,9 @@ export class QAStore {
       scenario_tags: qa.scenario_tags ?? [],
       serving_tier: qa.serving_tier ?? "canonical",
       retrieval_phrases: qa.retrieval_phrases ?? [],
-      retrieval_surface_text: qa.retrieval_surface_text ?? [qa.question, qa.answer, ...(qa.keywords ?? [])].join("\n"),
+      retrieval_surface_text:
+        qa.retrieval_surface_text ??
+        [qa.question, qa.answer, ...(qa.keywords ?? [])].join("\n"),
       booster_target_queries: qa.booster_target_queries ?? [],
       hard_negative_terms: qa.hard_negative_terms ?? [],
       _enrichment: qa._enrichment
@@ -268,7 +333,12 @@ export class QAStore {
         : new Float32Array(queryEmbedding);
 
     const qNorm = normalizeL2(qVec);
-    const scores = matrixDotVector(this.embNorm, qNorm, this.data.items.length, this.embDim);
+    const scores = matrixDotVector(
+      this.embNorm,
+      qNorm,
+      this.data.items.length,
+      this.embDim,
+    );
 
     // Apply category mask
     if (category) {
@@ -306,7 +376,9 @@ export class QAStore {
     minScore: number = 0.2,
   ): Promise<ReadonlyArray<{ item: QAItem; score: number }>> {
     if (!this.engine) {
-      console.warn("hybridSearch: SearchEngine not initialized, fallback to search()");
+      console.warn(
+        "hybridSearch: SearchEngine not initialized, fallback to search()",
+      );
       return this.search(queryEmbedding, topK, category);
     }
 
@@ -369,7 +441,11 @@ export class QAStore {
     return categoriesFn(this.data);
   }
 
-  collections(): ReadonlyArray<{ source_collection: string; source_type: string; count: number }> {
+  collections(): ReadonlyArray<{
+    source_collection: string;
+    source_type: string;
+    count: number;
+  }> {
     return collectionsFn(this.data);
   }
 }

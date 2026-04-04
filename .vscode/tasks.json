@@ -1,116 +1,185 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Pipeline: Full (fetch-notion→extract-qa→dedupe-classify)",
-      "type": "shell",
-      "command": ".venv/bin/python scripts/run_pipeline.py",
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Pipeline: Dry Run (驗證設定)",
-      "type": "shell",
-      "command": ".venv/bin/python scripts/run_pipeline.py --dry-run",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Pipeline: fetch-notion — Notion 擷取",
-      "type": "shell",
-      "command": ".venv/bin/python scripts/run_pipeline.py --step fetch-notion",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Pipeline: fetch-notion-force — 全量重抓",
-      "type": "shell",
-      "command": ".venv/bin/python scripts/run_pipeline.py --step fetch-notion --force",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Pipeline: extract-qa — Q&A 萃取",
-      "type": "shell",
-      "command": ".venv/bin/python scripts/run_pipeline.py --step extract-qa",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Pipeline: extract-qa-test — Q&A 萃取 (limit 3, 測試)",
-      "type": "shell",
-      "command": ".venv/bin/python scripts/run_pipeline.py --step extract-qa --limit 3",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Pipeline: dedupe-classify — 去重 + 分類",
-      "type": "shell",
-      "command": ".venv/bin/python scripts/run_pipeline.py --step dedupe-classify",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Pipeline: generate-report — 週報生成",
-      "type": "shell",
-      "command": ".venv/bin/python scripts/run_pipeline.py --step generate-report",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Pipeline: evaluate-qa — 品質評估",
-      "type": "shell",
-      "command": ".venv/bin/python scripts/run_pipeline.py --step evaluate-qa",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Pipeline: evaluate-qa-full — 完整評估 (100 筆 + Retrieval)",
-      "type": "shell",
-      "command": ".venv/bin/python scripts/run_pipeline.py --step evaluate-qa --sample 100 --with-source --eval-retrieval",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Test: All",
-      "type": "shell",
-      "command": ".venv/bin/python -m pytest tests/ -v",
-      "group": {
-        "kind": "test",
-        "isDefault": true
-      },
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "Test: Core only",
-      "type": "shell",
-      "command": ".venv/bin/python -m pytest tests/test_core.py -v",
-      "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "API: Start Dev Server (port 8000)",
-      "type": "shell",
-      "command": ".venv/bin/python -m uvicorn app.main:app --reload --port 8000",
-      "isBackground": true,
-      "presentation": { "reveal": "always", "panel": "dedicated" },
-      "problemMatcher": {
-        "pattern": { "regexp": "." },
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": "Started reloader process",
-          "endsPattern": "Application startup complete"
-        }
-      }
-    }
-  ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Pipeline: Full (fetch-notion→extract-qa→dedupe-classify)",
+			"type": "shell",
+			"command": ".venv/bin/python scripts/run_pipeline.py",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Pipeline: Dry Run (驗證設定)",
+			"type": "shell",
+			"command": ".venv/bin/python scripts/run_pipeline.py --dry-run",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Pipeline: fetch-notion — Notion 擷取",
+			"type": "shell",
+			"command": ".venv/bin/python scripts/run_pipeline.py --step fetch-notion",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Pipeline: fetch-notion-force — 全量重抓",
+			"type": "shell",
+			"command": ".venv/bin/python scripts/run_pipeline.py --step fetch-notion --force",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Pipeline: extract-qa — Q&A 萃取",
+			"type": "shell",
+			"command": ".venv/bin/python scripts/run_pipeline.py --step extract-qa",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Pipeline: extract-qa-test — Q&A 萃取 (limit 3, 測試)",
+			"type": "shell",
+			"command": ".venv/bin/python scripts/run_pipeline.py --step extract-qa --limit 3",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Pipeline: dedupe-classify — 去重 + 分類",
+			"type": "shell",
+			"command": ".venv/bin/python scripts/run_pipeline.py --step dedupe-classify",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Pipeline: generate-report — 週報生成",
+			"type": "shell",
+			"command": ".venv/bin/python scripts/run_pipeline.py --step generate-report",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Pipeline: evaluate-qa — 品質評估",
+			"type": "shell",
+			"command": ".venv/bin/python scripts/run_pipeline.py --step evaluate-qa",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Pipeline: evaluate-qa-full — 完整評估 (100 筆 + Retrieval)",
+			"type": "shell",
+			"command": ".venv/bin/python scripts/run_pipeline.py --step evaluate-qa --sample 100 --with-source --eval-retrieval",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Test: All",
+			"type": "shell",
+			"command": ".venv/bin/python -m pytest tests/ -v",
+			"group": {
+				"kind": "test",
+				"isDefault": true
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Test: Core only",
+			"type": "shell",
+			"command": ".venv/bin/python -m pytest tests/test_core.py -v",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "API: Start Dev Server (port 8000)",
+			"type": "shell",
+			"command": ".venv/bin/python -m uvicorn app.main:app --reload --port 8000",
+			"isBackground": true,
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			},
+			"problemMatcher": {
+				"pattern": {
+					"regexp": "."
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "Started reloader process",
+					"endsPattern": "Application startup complete"
+				}
+			}
+		},
+		{
+			"label": "API: Start TS Dev Server (port 8002)",
+			"type": "shell",
+			"command": "pnpm",
+			"args": [
+				"dev"
+			],
+			"isBackground": true,
+			"group": "build"
+		},
+		{
+			"label": "API: Start TS Dev Server (port 8002, api dir)",
+			"type": "shell",
+			"command": "cd api && pnpm dev",
+			"isBackground": true,
+			"group": "build"
+		},
+		{
+			"label": "API: Start TS Dev Server (port 8003, api dir)",
+			"type": "shell",
+			"command": "cd api && PORT=8003 pnpm dev",
+			"isBackground": true,
+			"group": "build"
+		},
+		{
+			"label": "API: Restart TS Dev Server (port 8002, api dir)",
+			"type": "shell",
+			"command": "cd api && PORT=8002 pnpm dev",
+			"isBackground": true,
+			"group": "build"
+		}
+	]
 }
