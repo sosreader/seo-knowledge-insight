@@ -417,6 +417,21 @@ Perplexity 風格 `[N]` 標記。密度目標 15-18 筆。
 
 **Section-Citation 對應**：S3 優先引用技術SEO/索引與檢索/連結策略/演算法與趨勢/Discover與AMP/搜尋表現分析。S6 同理。
 
+### Citations JSON 格式（eval-critical）
+
+報告結尾必須附加 `<!-- citations [...] -->` HTML comment，每筆欄位：
+
+- `n`：引用序號（int，依首次出現遞增）
+- `id`：**qa.id**（stable_id hex string，從 KB 搜尋結果複製）
+- `category`：**必須從 KB 搜尋結果的 category 欄位原封不動複製**，禁止自行推測或改寫
+- `title`：source_title + source_date 組合
+- `date`：qa.source_date
+- `snippet`：answer 去標籤後前 120 字
+- `chunk_url`：`/admin/seoInsight/{id}`
+- `source_url`：qa.source_url 或 null
+
+> **eval `citation_category_consistency`** 會逐筆比對 citations JSON 的 `category` 與 KB 實際 `category`，不一致會拉低分數。閾值 ≥ 0.8。
+
 ---
 
 ## 輸出摘要
