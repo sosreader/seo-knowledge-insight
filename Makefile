@@ -328,6 +328,10 @@ sync-db-force: ## 強制上傳（覆蓋已存在項目）
 sync-db-dry: ## 同步試跑（不寫入）
 	cd api && npx tsx scripts/sync-db.ts upload --dry-run
 
+.PHONY: sync-meeting-prep
+sync-meeting-prep: ## 上傳 meeting-prep 到 Supabase（跳過已存在）
+	cd api && npx tsx scripts/sync-meeting-prep.ts
+
 # ── Eval 品質門禁 ────────────────────────────────────
 
 .PHONY: golden-from-feedback
