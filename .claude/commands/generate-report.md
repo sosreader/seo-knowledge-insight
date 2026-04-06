@@ -5,6 +5,25 @@
 
 ---
 
+## 硬性 Checklist（autoresearch 驗證，存檔前必達）
+
+報告寫完、存檔前**逐項計數**，未達標的必須回頭修正再存檔。
+這些規則的權重佔 composite_v3 的 44%，漏掉任一項都會顯著拉低分數。
+
+| # | 規則 | eval 如何判定 | 目標 |
+|---|------|--------------|------|
+| 1 | Section 一：≥**5 個**結構化區塊，每塊含 `**現象**` + `**原因**` + `**行動**`（粗體關鍵字必須精確） | `causal_chain` = regex 匹配 `**現象**....**原因**....**行動**` 區塊數 ÷ 5 | ≥ 1.0 |
+| 2 | Section 六：含一行 `💡 **最值得投入**：{具體動作}，因為{理由}` | `top_recommendation` = grep「最值得投入」或「💡」，300 字內需含因果詞（因為/由於/導致/所以/因此） | ≥ 1.0 |
+| 3 | **每條** `- ` 行動項含具體工具名 + 動詞 | `action_specificity` = 含 pattern 的行動行數 ÷ 總行動行數 | ≥ 0.8 |
+|   | 工具名：`GSC` `Search Console` `Screaming Frog` `Ahrefs` `Semrush` `PageSpeed` `GA4` `Chrome` | | |
+|   | 動詞：`檢查` `驗證` `篩選` `設定` `修復` `排查` `測試` `重寫` `補上` `移除` `加入` `優化 title` `優化 description` | | |
+| 4 | 含數據段落 ≥ **70**（每段含 `%` 或絕對數值） | `data_evidence_ratio` = 含數據段落 ÷ 70 | ≥ 1.0 |
+| 5 | Section 三、四、五 **各 ≥4 分析段落**（與 Section 一、六 字數差距 < 3x） | `section_depth_variance` = 1 − (max_len − min_len) ÷ max_len | ≥ 0.6 |
+
+> **失敗教訓**（autoresearch Round 6/10/11）：壓縮 Section 一來平衡深度會犧牲 causal_chain。正確做法是只擴展短 section，不壓縮長的。
+
+---
+
 ## 用法
 
 ```
