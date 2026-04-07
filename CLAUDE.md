@@ -71,7 +71,7 @@ AI 工具（GitHub Copilot / Claude Code）可透過以下方式直接執行 pip
 ### 快速入口
 
 ```bash
-make pipeline          # 完整流程 step 1→2→3
+make pipeline          # Notion-core 流程 step 1→2→3
 make fetch-notion      # 只執行 Notion 擷取
 make extract-qa        # 只執行 Q&A 萃取
 make dedupe-classify   # 只執行去重 + 分類
@@ -114,7 +114,7 @@ make help              # 顯示所有可用 targets
 ### 直接呼叫 Python
 
 ```bash
-.venv/bin/python scripts/run_pipeline.py                        # 完整流程
+.venv/bin/python scripts/run_pipeline.py                        # Notion-core 流程
 .venv/bin/python scripts/run_pipeline.py --step extract-qa --limit 3    # 測試用
 .venv/bin/python scripts/run_pipeline.py --dry-run             # 只驗證設定
 ```
@@ -127,7 +127,7 @@ make help              # 顯示所有可用 targets
 
 ```
 /run-pipeline          # 查看完整用法說明（需要 OpenAI API key）
-/pipeline-local        # 完整流程（不需要 OpenAI，AI 工具本身是 LLM）
+/pipeline-local        # Notion-core 流程（外部文章請先 `make fetch-articles`）
 /extract-qa            # 只執行 Step 2 Q&A 萃取（不需要 OpenAI）
 /dedupe-classify       # 只執行 Step 3 去重+分類（不需要 OpenAI）
 ```
@@ -162,11 +162,11 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 
 ### Pipeline 命令（需要 OpenAI API key）
 
-- `/run-pipeline` — 執行完整 pipeline（Steps 1–5，使用 OpenAI）
+- `/run-pipeline` — 執行 Notion-core pipeline（Steps 1–5，使用 OpenAI）
 
 ### Claude Code 模式命令（不需要 OpenAI API key）
 
-- `/pipeline-local` — 完整 pipeline Steps 1–4（你是 LLM 引擎）
+- `/pipeline-local` — Notion-core pipeline Steps 1–4（外部文章需先 `make fetch-articles`，你是 LLM 引擎）
 - `/extract-qa` — 只執行 Step 2 Q&A 萃取（parallel sub-agents）
 - `/dedupe-classify` — 只執行 Step 3 去重 + 分類
 - `/generate-report <URL 或路徑>` — 生成 SEO 週報（7 維度：情勢/流量/技術/意圖/行動/AI 可見度/來源，支援 `--snapshot <snapshot_id>` 參數）
@@ -276,7 +276,7 @@ Reports API 端點：
 
 Pipeline API 端點：
 
-- `GET /api/v1/pipeline/status` — 各步驟完成狀態（6 步驟：fetch-notion/fetch-medium/fetch-ithelp/fetch-google/extract-qa/dedupe-classify）
+- `GET /api/v1/pipeline/status` — 各步驟完成狀態（13 步驟：fetch-notion + 10 個外部來源 + extract-qa + dedupe-classify）
 - `GET /api/v1/pipeline/meetings` — 會議列表（含 metadata）
 - `GET /api/v1/pipeline/meetings/:id/preview` — Markdown 預覽
 - `GET /api/v1/pipeline/source-docs` — 列出所有來源文件（支援 source_type、source_collection、keyword、is_processed 等 filter + pagination）
