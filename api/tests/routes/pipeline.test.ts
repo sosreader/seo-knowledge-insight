@@ -21,6 +21,10 @@ const googleCasesMdDir = join(rawDataDir, "google_cases_markdown");
 const ahrefsMdDir = join(rawDataDir, "ahrefs_markdown");
 const sejMdDir = join(rawDataDir, "sej_markdown");
 const growthmemoMdDir = join(rawDataDir, "growthmemo_markdown");
+const googleBlogMdDir = join(rawDataDir, "google_blog_markdown");
+const googleBlogZhtwMdDir = join(rawDataDir, "google_blog_zhtw_markdown");
+const webdevMdDir = join(rawDataDir, "webdev_markdown");
+const screamingfrogMdDir = join(rawDataDir, "screamingfrog_markdown");
 const qaPerMeetingDir = join(outputDir, "qa_per_meeting");
 const qaPerArticleDir = join(outputDir, "qa_per_article");
 const metricsSnapshotsDir = join(outputDir, "metrics_snapshots");
@@ -48,6 +52,10 @@ vi.mock("../../src/config.js", () => ({
     rawAhrefsMdDir: ahrefsMdDir,
     rawSejMdDir: sejMdDir,
     rawGrowthmemoMdDir: growthmemoMdDir,
+    rawGoogleBlogMdDir: googleBlogMdDir,
+    rawGoogleBlogZhtwMdDir: googleBlogZhtwMdDir,
+    rawWebdevMdDir: webdevMdDir,
+    rawScreamingfrogMdDir: screamingfrogMdDir,
     fetchLogsDir,
     qaJsonPath: join(outputDir, "qa_final.json"),
     qaEnrichedJsonPath: join(outputDir, "qa_enriched.json"),
@@ -105,6 +113,10 @@ function setupTestData() {
   mkdirSync(ahrefsMdDir, { recursive: true });
   mkdirSync(sejMdDir, { recursive: true });
   mkdirSync(growthmemoMdDir, { recursive: true });
+  mkdirSync(googleBlogMdDir, { recursive: true });
+  mkdirSync(googleBlogZhtwMdDir, { recursive: true });
+  mkdirSync(webdevMdDir, { recursive: true });
+  mkdirSync(screamingfrogMdDir, { recursive: true });
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(fetchLogsDir, { recursive: true });
   mkdirSync(qaPerMeetingDir, { recursive: true });
@@ -255,12 +267,12 @@ describe("GET /api/v1/pipeline/status", () => {
     const res = await app.request("/api/v1/pipeline/status");
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.data.steps).toHaveLength(12);
+    expect(body.data.steps).toHaveLength(13);
 
     const [
       fetchNotion, fetchMedium, fetchIthelp, fetchGoogle,
       fetchAhrefs, fetchSej, fetchGrowthmemo,
-      fetchGoogleBlog, fetchWebdev, fetchScreamingFrog,
+      fetchGoogleBlog, fetchGoogleBlogZhTw, fetchWebdev, fetchScreamingFrog,
       extract, dedupe,
     ] = body.data.steps;
     expect(fetchNotion.name).toBe("fetch-notion");
@@ -279,6 +291,8 @@ describe("GET /api/v1/pipeline/status", () => {
     expect(fetchGrowthmemo.count).toBe(1); // 1 growthmemo markdown file
     expect(fetchGoogleBlog.name).toBe("fetch-google-blog");
     expect(fetchGoogleBlog.count).toBe(0); // no test fixtures
+    expect(fetchGoogleBlogZhTw.name).toBe("fetch-google-blog-zhtw");
+    expect(fetchGoogleBlogZhTw.count).toBe(0); // no test fixtures
     expect(fetchWebdev.name).toBe("fetch-webdev");
     expect(fetchWebdev.count).toBe(0); // no test fixtures
     expect(fetchScreamingFrog.name).toBe("fetch-screaming-frog");
@@ -471,9 +485,10 @@ describe("GET /api/v1/pipeline/unprocessed", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     // Unprocessed: test_meeting_2.md (meeting), gsc_update.md (medium), day01_intro.md (ithelp),
-    //   saramin-case-study.md (google), vidio-case-study.md (google)
+    //   saramin-case-study.md (google), vidio-case-study.md (google),
+    //   seo-basics.md (ahrefs), google-update.md (sej), growth-trends.md (growthmemo)
     // Processed: test_meeting.md (meeting), ai_seo_strategy.md (medium)
-    expect(body.data.total).toBe(5);
+    expect(body.data.total).toBe(8);
 
     const files = body.data.items.map(
       (i: { file: string }) => i.file
@@ -483,6 +498,9 @@ describe("GET /api/v1/pipeline/unprocessed", () => {
     expect(files).toContain("day01_intro.md");
     expect(files).toContain("saramin-case-study.md");
     expect(files).toContain("vidio-case-study.md");
+    expect(files).toContain("seo-basics.md");
+    expect(files).toContain("google-update.md");
+    expect(files).toContain("growth-trends.md");
   });
 
   it("includes source_collection for each unprocessed item", async () => {
@@ -508,6 +526,11 @@ describe("GET /api/v1/pipeline/unprocessed", () => {
       (i: { file: string }) => i.file === "saramin-case-study.md"
     );
     expect(google.source_collection).toBe("google-case-studies");
+
+    const ahrefs = body.data.items.find(
+      (i: { file: string }) => i.file === "seo-basics.md"
+    );
+    expect(ahrefs.source_collection).toBe("ahrefs-blog");
   });
 });
 
@@ -620,7 +643,7 @@ describe("POST /api/v1/pipeline/fetch-articles", () => {
     vi.clearAllMocks();
   });
 
-  it("triggers Medium, iThome, and Google Cases fetchers", async () => {
+  it("triggers all 10 external fetchers", async () => {
     const { execPython } = await import(
       "../../src/services/pipeline-runner.js"
     );
@@ -632,13 +655,27 @@ describe("POST /api/v1/pipeline/fetch-articles", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.success).toBe(true);
-    expect(body.data.results).toHaveLength(3);
+    expect(body.data.results).toHaveLength(10);
     expect(body.data.results[0].source).toBe("medium");
     expect(body.data.results[1].source).toBe("ithelp");
     expect(body.data.results[2].source).toBe("google-cases");
+    expect(body.data.results[3].source).toBe("ahrefs");
+    expect(body.data.results[4].source).toBe("sej");
+    expect(body.data.results[5].source).toBe("growthmemo");
+    expect(body.data.results[6].source).toBe("google-blog");
+    expect(body.data.results[7].source).toBe("google-blog-zhtw");
+    expect(body.data.results[8].source).toBe("webdev");
+    expect(body.data.results[9].source).toBe("screaming-frog");
     expect(execPython).toHaveBeenCalledWith("01b_fetch_medium.py", []);
     expect(execPython).toHaveBeenCalledWith("01c_fetch_ithelp.py", []);
     expect(execPython).toHaveBeenCalledWith("01d_fetch_google_cases.py", []);
+    expect(execPython).toHaveBeenCalledWith("01e_fetch_ahrefs.py", []);
+    expect(execPython).toHaveBeenCalledWith("01f_fetch_sej.py", []);
+    expect(execPython).toHaveBeenCalledWith("01g_fetch_growthmemo.py", []);
+    expect(execPython).toHaveBeenCalledWith("01h_fetch_google_blog.py", []);
+    expect(execPython).toHaveBeenCalledWith("01h_fetch_google_blog.py", ["--lang", "zh-tw"]);
+    expect(execPython).toHaveBeenCalledWith("01i_fetch_webdev.py", []);
+    expect(execPython).toHaveBeenCalledWith("01j_fetch_screaming_frog.py", []);
   });
 
   it("reports partial failure when one script fails", async () => {
@@ -660,6 +697,41 @@ describe("POST /api/v1/pipeline/fetch-articles", () => {
         success: true,
         output: "Google OK",
         duration_ms: 800,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Google Blog zh-TW OK",
+        duration_ms: 900,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Ahrefs OK",
+        duration_ms: 700,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "SEJ OK",
+        duration_ms: 600,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Growth Memo OK",
+        duration_ms: 650,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Google Blog OK",
+        duration_ms: 750,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Web.dev OK",
+        duration_ms: 720,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Screaming Frog OK",
+        duration_ms: 810,
       });
     const res = await app.request("/api/v1/pipeline/fetch-articles", {
       method: "POST",
@@ -672,6 +744,8 @@ describe("POST /api/v1/pipeline/fetch-articles", () => {
     expect(body.data.results[0].success).toBe(true);
     expect(body.data.results[1].success).toBe(false);
     expect(body.data.results[2].success).toBe(true);
+    expect(body.data.results[3].success).toBe(true);
+    expect(body.data.results).toHaveLength(10);
   });
 });
 

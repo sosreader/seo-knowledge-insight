@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,6 +36,10 @@ def test_extract_qa_includes_all_source_directories(tmp_path: Path):
     raw_ahrefs_dir = tmp_path / "ahrefs_markdown"
     raw_sej_dir = tmp_path / "sej_markdown"
     raw_growthmemo_dir = tmp_path / "growthmemo_markdown"
+    raw_google_blog_dir = tmp_path / "google_blog_markdown"
+    raw_google_blog_zhtw_dir = tmp_path / "google_blog_zhtw_markdown"
+    raw_webdev_dir = tmp_path / "webdev_markdown"
+    raw_screamingfrog_dir = tmp_path / "screamingfrog_markdown"
     qa_per_meeting_dir = tmp_path / "qa_per_meeting"
     qa_per_article_dir = tmp_path / "qa_per_article"
     output_dir = tmp_path / "output"
@@ -50,6 +55,10 @@ def test_extract_qa_includes_all_source_directories(tmp_path: Path):
     _write_markdown(raw_ahrefs_dir, "ahrefs.md")
     _write_markdown(raw_sej_dir, "sej.md")
     _write_markdown(raw_growthmemo_dir, "growthmemo.md")
+    _write_markdown(raw_google_blog_dir, "google_blog.md")
+    _write_markdown(raw_google_blog_zhtw_dir, "google_blog_zhtw.md")
+    _write_markdown(raw_webdev_dir, "webdev.md")
+    _write_markdown(raw_screamingfrog_dir, "screamingfrog.md")
 
     processed_dirs: list[str] = []
 
@@ -68,6 +77,10 @@ def test_extract_qa_includes_all_source_directories(tmp_path: Path):
         patch.object(cfg, "RAW_AHREFS_MD_DIR", raw_ahrefs_dir),
         patch.object(cfg, "RAW_SEJ_MD_DIR", raw_sej_dir),
         patch.object(cfg, "RAW_GROWTHMEMO_MD_DIR", raw_growthmemo_dir),
+        patch.object(cfg, "RAW_GOOGLE_BLOG_MD_DIR", raw_google_blog_dir),
+        patch.object(cfg, "RAW_GOOGLE_BLOG_ZHTW_MD_DIR", raw_google_blog_zhtw_dir),
+        patch.object(cfg, "RAW_WEBDEV_MD_DIR", raw_webdev_dir),
+        patch.object(cfg, "RAW_SCREAMINGFROG_MD_DIR", raw_screamingfrog_dir),
         patch.object(cfg, "QA_PER_MEETING_DIR", qa_per_meeting_dir),
         patch.object(cfg, "QA_PER_ARTICLE_DIR", qa_per_article_dir),
         patch.object(cfg, "OUTPUT_DIR", output_dir),
@@ -89,7 +102,75 @@ def test_extract_qa_includes_all_source_directories(tmp_path: Path):
         "ahrefs_markdown",
         "sej_markdown",
         "growthmemo_markdown",
+        "google_blog_markdown",
+        "google_blog_zhtw_markdown",
+        "webdev_markdown",
+        "screamingfrog_markdown",
     }
+
+
+def test_extract_qa_check_allows_external_only_sources(
+    tmp_path: Path,
+    caplog,
+    monkeypatch,
+):
+    mod = _import_extract_qa()
+    import config as cfg
+
+    raw_data_dir = tmp_path / "raw_data"
+    external_dir = raw_data_dir / "google_blog_zhtw_markdown"
+    _write_markdown(external_dir, "google_blog_zhtw.md")
+
+    caplog.set_level(logging.INFO)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    with patch.object(cfg, "ROOT_DIR", tmp_path):
+        mod.main(SimpleNamespace(limit=0, file="", force=False, check=True))
+
+    assert "[Step 2: Q&A 萃取] 依賴檢查失敗" not in caplog.text
+    assert "[Step 2: Q&A 萃取] 依賴檢查通過" in caplog.text
+
+
+def test_extract_qa_check_fails_when_all_source_markdown_missing(
+    tmp_path: Path,
+    caplog,
+    monkeypatch,
+):
+    mod = _import_extract_qa()
+    import config as cfg
+
+    (tmp_path / "raw_data").mkdir(parents=True, exist_ok=True)
+
+    caplog.set_level(logging.INFO)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    with patch.object(cfg, "ROOT_DIR", tmp_path):
+        mod.main(SimpleNamespace(limit=0, file="", force=False, check=True))
+
+    assert "raw_data/*markdown/*.md 找到 0 個檔案" in caplog.text
+    assert "請先執行 python scripts/01_fetch_notion.py 或相關 fetch-* 步驟" in caplog.text
+    assert "[Step 2: Q&A 萃取] 依賴檢查失敗" in caplog.text
+
+
+def test_extract_qa_check_ignores_non_source_markdown_dirs(
+    tmp_path: Path,
+    caplog,
+    monkeypatch,
+):
+    mod = _import_extract_qa()
+    import config as cfg
+
+    backup_dir = tmp_path / "raw_data" / "backup"
+    _write_markdown(backup_dir, "old.md")
+
+    caplog.set_level(logging.INFO)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    with patch.object(cfg, "ROOT_DIR", tmp_path):
+        mod.main(SimpleNamespace(limit=0, file="", force=False, check=True))
+
+    assert "raw_data/*markdown/*.md 找到 0 個檔案" in caplog.text
+    assert "[Step 2: Q&A 萃取] 依賴檢查失敗" in caplog.text
 
 
 def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
@@ -103,6 +184,10 @@ def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
     raw_ahrefs_dir = tmp_path / "ahrefs_markdown"
     raw_sej_dir = tmp_path / "sej_markdown"
     raw_growthmemo_dir = tmp_path / "growthmemo_markdown"
+    raw_google_blog_dir = tmp_path / "google_blog_markdown"
+    raw_google_blog_zhtw_dir = tmp_path / "google_blog_zhtw_markdown"
+    raw_webdev_dir = tmp_path / "webdev_markdown"
+    raw_screamingfrog_dir = tmp_path / "screamingfrog_markdown"
     qa_per_meeting_dir = tmp_path / "qa_per_meeting"
     qa_per_article_dir = tmp_path / "qa_per_article"
 
@@ -111,12 +196,32 @@ def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
 
     _write_markdown(raw_ahrefs_dir, "ahrefs.md")
     _write_markdown(raw_sej_dir, "sej.md")
+    _write_markdown(raw_google_blog_dir, "google_blog.md")
+    _write_markdown(raw_google_blog_zhtw_dir, "google_blog_zhtw.md")
+    _write_markdown(raw_webdev_dir, "webdev.md")
+    _write_markdown(raw_screamingfrog_dir, "screamingfrog.md")
 
     (qa_per_article_dir / "ahrefs_qa.json").write_text(
         json.dumps({"qa_pairs": [], "meeting_summary": "non-seo article"}, ensure_ascii=False),
         encoding="utf-8",
     )
     (qa_per_meeting_dir / "sej_qa.json").write_text(
+        json.dumps({"qa_pairs": [{"question": "Q", "answer": "A"}], "meeting_summary": "ok"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (qa_per_article_dir / "google_blog_qa.json").write_text(
+        json.dumps({"qa_pairs": [{"question": "Q", "answer": "A"}], "meeting_summary": "ok"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (qa_per_article_dir / "google_blog_zhtw_qa.json").write_text(
+        json.dumps({"qa_pairs": [{"question": "Q", "answer": "A"}], "meeting_summary": "ok"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (qa_per_article_dir / "webdev_qa.json").write_text(
+        json.dumps({"qa_pairs": [{"question": "Q", "answer": "A"}], "meeting_summary": "ok"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (qa_per_article_dir / "screamingfrog_qa.json").write_text(
         json.dumps({"qa_pairs": [{"question": "Q", "answer": "A"}], "meeting_summary": "ok"}, ensure_ascii=False),
         encoding="utf-8",
     )
@@ -129,12 +234,23 @@ def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
         patch.object(cfg, "RAW_AHREFS_MD_DIR", raw_ahrefs_dir),
         patch.object(cfg, "RAW_SEJ_MD_DIR", raw_sej_dir),
         patch.object(cfg, "RAW_GROWTHMEMO_MD_DIR", raw_growthmemo_dir),
+        patch.object(cfg, "RAW_GOOGLE_BLOG_MD_DIR", raw_google_blog_dir),
+        patch.object(cfg, "RAW_GOOGLE_BLOG_ZHTW_MD_DIR", raw_google_blog_zhtw_dir),
+        patch.object(cfg, "RAW_WEBDEV_MD_DIR", raw_webdev_dir),
+        patch.object(cfg, "RAW_SCREAMINGFROG_MD_DIR", raw_screamingfrog_dir),
         patch.object(cfg, "QA_PER_MEETING_DIR", qa_per_meeting_dir),
         patch.object(cfg, "QA_PER_ARTICLE_DIR", qa_per_article_dir),
     ):
         already_done, unprocessed = mod._classify_extract_qa()
 
-    assert {path.name for path in already_done} == {"ahrefs.md", "sej.md"}
+    assert {path.name for path in already_done} == {
+        "ahrefs.md",
+        "sej.md",
+        "google_blog.md",
+        "google_blog_zhtw.md",
+        "webdev.md",
+        "screamingfrog.md",
+    }
     assert not unprocessed
 
 

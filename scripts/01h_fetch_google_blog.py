@@ -43,14 +43,22 @@ except ModuleNotFoundError:
 from utils.html_to_markdown import html_to_markdown, add_metadata_header
 
 
-SOURCE_COLLECTION = "google-search-central"
+LANG_EN = "en"
+LANG_ZH_TW = "zh-tw"
+SOURCE_COLLECTION_EN = "google-search-central"
+SOURCE_COLLECTION_ZH = "google-search-central-zh"
+SOURCE_COLLECTION = SOURCE_COLLECTION_EN
 AUTHOR = "Google Search Central"
 INDEX_PATH = config.ROOT_DIR / "raw_data" / "google_blog_articles_index.json"
+INDEX_PATH_ZH = config.ROOT_DIR / "raw_data" / "google_blog_zhtw_articles_index.json"
 OUTPUT_DIR = config.ROOT_DIR / "raw_data" / "google_blog_markdown"
+OUTPUT_DIR_ZH = config.RAW_GOOGLE_BLOG_ZHTW_MD_DIR
 
 # Blog index page (Google Search Central has no RSS feed)
 BLOG_INDEX_URL = "https://developers.google.com/search/blog"
-_BLOG_POST_PATTERN = re.compile(r'href="(/search/blog/(\d{4})/(\d{2})/([^"]+))"')
+_BLOG_POST_PATTERN = re.compile(
+    r'href="(/search/blog/(\d{4})/(\d{2})/([^"?]+))(?:\?[^\"]*)?"'
+)
 
 # SSRF protection
 _ALLOWED_HOSTS = frozenset({
@@ -58,6 +66,31 @@ _ALLOWED_HOSTS = frozenset({
 })
 
 _HTTP_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; SEOInsightBot/1.0)"}
+
+
+def _get_lang_resources(lang: str) -> tuple[Path, Path, str]:
+    if lang == LANG_ZH_TW:
+        return OUTPUT_DIR_ZH, INDEX_PATH_ZH, SOURCE_COLLECTION_ZH
+    return OUTPUT_DIR, INDEX_PATH, SOURCE_COLLECTION_EN
+
+
+def _build_listing_url(lang: str) -> str:
+    if lang == LANG_ZH_TW:
+        return f"{BLOG_INDEX_URL}?hl=zh-tw"
+    return BLOG_INDEX_URL
+
+
+def _build_post_url(path: str, lang: str) -> str:
+    url = f"https://developers.google.com{path}"
+    if lang == LANG_ZH_TW:
+        return f"{url}?hl=zh-tw"
+    return url
+
+
+def _slug_with_lang_prefix(slug: str, lang: str) -> str:
+    if lang == LANG_ZH_TW:
+        return f"zhtw-{slug}"
+    return slug
 
 
 def _validate_url(url: str) -> None:
@@ -70,15 +103,15 @@ def _validate_url(url: str) -> None:
         raise ValueError(f"URL domain not in allowlist: {host!r}")
 
 
-def _load_index() -> list[dict]:
-    if INDEX_PATH.exists():
-        return json.loads(INDEX_PATH.read_text(encoding="utf-8"))
+def _load_index(index_path: Path = INDEX_PATH) -> list[dict]:
+    if index_path.exists():
+        return json.loads(index_path.read_text(encoding="utf-8"))
     return []
 
 
-def _save_index(index: list[dict]) -> None:
-    INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
-    INDEX_PATH.write_text(
+def _save_index(index: list[dict], index_path: Path = INDEX_PATH) -> None:
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text(
         json.dumps(index, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -89,16 +122,17 @@ def _sanitize_slug(slug: str) -> str:
     return slug[:200]
 
 
-def _discover_blog_posts(since_year: int = 2020) -> list[dict]:
+def _discover_blog_posts(since_year: int = 2020, lang: str = LANG_EN) -> list[dict]:
     """Scrape blog index page to discover all post URLs.
 
     Google Search Central Blog renders all post links server-side.
 
     Returns list of dicts with: url, slug, year, month
     """
-    logger.info("Fetching blog index: %s", BLOG_INDEX_URL)
+    listing_url = _build_listing_url(lang)
+    logger.info("Fetching blog index: %s", listing_url)
     resp = httpx.get(
-        BLOG_INDEX_URL, follow_redirects=True, timeout=30, headers=_HTTP_HEADERS,
+        listing_url, follow_redirects=True, timeout=30, headers=_HTTP_HEADERS,
     )
     resp.raise_for_status()
 
@@ -112,14 +146,16 @@ def _discover_blog_posts(since_year: int = 2020) -> list[dict]:
         if year_int < since_year:
             continue
 
-        url = f"https://developers.google.com{path}"
+        url = _build_post_url(path, lang)
         if url in seen:
             continue
         seen.add(url)
 
+        slug = _slug_with_lang_prefix(f"{year}-{month}-{raw_slug}", lang)
+
         posts.append({
             "url": url,
-            "slug": f"{year}-{month}-{raw_slug}",
+            "slug": slug,
             "year": year_int,
             "month": int(month),
             "published_approx": f"{year}-{month}-01",
@@ -208,6 +244,7 @@ def fetch_google_blog_articles(
     force: bool = False,
     limit: int = 0,
     since_year: int = 2020,
+    lang: str = LANG_EN,
 ) -> dict:
     """Fetch Google Search Central Blog articles and save as Markdown.
 
@@ -219,12 +256,13 @@ def fetch_google_blog_articles(
     Returns:
         {"fetched": int, "skipped": int, "insufficient": int, "total": int}
     """
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir, index_path, source_collection = _get_lang_resources(lang)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    index = _load_index()
+    index = _load_index(index_path=index_path)
     existing_slugs = {entry["slug"] for entry in index}
 
-    discovered = _discover_blog_posts(since_year=since_year)
+    discovered = _discover_blog_posts(since_year=since_year, lang=lang)
 
     fetched = 0
     skipped = 0
@@ -265,15 +303,15 @@ def fetch_google_blog_articles(
             author=page_data["author"],
             source_url=post_meta["url"],
             source_type="article",
-            source_collection=SOURCE_COLLECTION,
+            source_collection=source_collection,
         )
 
         safe_slug = _sanitize_slug(slug)
         if not safe_slug:
             logger.warning("Slug sanitized to empty for %s, skipping", slug)
             continue
-        md_path = OUTPUT_DIR / f"{safe_slug}.md"
-        if not md_path.resolve().is_relative_to(OUTPUT_DIR.resolve()):
+        md_path = output_dir / f"{safe_slug}.md"
+        if not md_path.resolve().is_relative_to(output_dir.resolve()):
             logger.error("Path traversal detected for slug %r, skipping", slug)
             continue
         md_path.write_text(full_md, encoding="utf-8")
@@ -286,7 +324,7 @@ def fetch_google_blog_articles(
             "author": page_data["author"],
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "md_file": md_path.name,
-            "source_collection": SOURCE_COLLECTION,
+            "source_collection": source_collection,
         }
 
         if force:
@@ -300,7 +338,7 @@ def fetch_google_blog_articles(
         time.sleep(2)
 
     index.sort(key=lambda e: e.get("slug", ""))
-    _save_index(index)
+    _save_index(index, index_path=index_path)
 
     return {
         "fetched": fetched,
@@ -324,6 +362,12 @@ def main() -> None:
         "--since", type=int, default=2020,
         help="Only fetch articles from this year onward (default: 2020)",
     )
+    parser.add_argument(
+        "--lang",
+        choices=[LANG_EN, LANG_ZH_TW],
+        default=LANG_EN,
+        help="Fetch English or zh-TW localized articles (default: en)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -332,7 +376,7 @@ def main() -> None:
     logger.info("Step 1h: Fetch Google Search Central Blog")
 
     result = fetch_google_blog_articles(
-        force=args.force, limit=args.limit, since_year=args.since,
+        force=args.force, limit=args.limit, since_year=args.since, lang=args.lang,
     )
 
     logger.info(

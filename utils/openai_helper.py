@@ -489,7 +489,11 @@ MERGE_SYSTEM_PROMPT = """\
 
 
 @observe(name="merge_similar_qas")
-def merge_similar_qas(qa_group: list[dict]) -> dict:
+def merge_similar_qas(
+    qa_group: list[dict],
+    *,
+    return_used_remote: bool = False,
+) -> dict | tuple[dict, bool]:
     """
     合併一組相似的 Q&A 成一個。
     qa_group: [{question, answer, source_title, source_date, ...}, ...]
@@ -499,7 +503,7 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
     if not _has_openai_key():
         source_dates = sorted({qa.get("source_date", "") for qa in qa_group if qa.get("source_date", "")})
         best_question = max(qa_group, key=lambda qa: (len(qa.get("question", "")), len(qa.get("answer", ""))))
-        return {
+        result = {
             "question": best_question.get("question", ""),
             "answer": _merge_answers_locally(qa_group),
             "keywords": _merge_keywords(qa_group),
@@ -514,6 +518,7 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
                 for qa in qa_group
             ],
         }
+        return (result, False) if return_used_remote else result
 
     client = _client()
 
@@ -539,7 +544,7 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
             }
             for qa in qa_group
         ]
-        return cached
+        return (cached, False) if return_used_remote else cached
 
     group_text = "\n\n".join(
         f"--- Q&A #{i+1} (來源: {qa.get('source_title', 'N/A')}, "
@@ -614,7 +619,7 @@ def merge_similar_qas(qa_group: list[dict]) -> dict:
     }
     cache_set("merge", group_key, cache_payload, model=config.OPENAI_MODEL)
 
-    return result
+    return (result, True) if return_used_remote else result
 
 
 CLASSIFY_SYSTEM_PROMPT = """\
@@ -726,21 +731,29 @@ A: SGE 可能讓使用者在 SERP 即得到答案而不點擊，資訊型關鍵�
 
 
 @observe(name="classify_qa")
-def classify_qa(question: str, answer: str) -> dict:
+def classify_qa(
+    question: str,
+    answer: str,
+    *,
+    return_used_remote: bool = False,
+) -> dict | tuple[dict, bool]:
     """對單個 Q&A 進行分類（列入 content-addressed cache）"""
     _logger.info(format_capability_tag(get_capabilities()))
     from utils.pipeline_cache import cache_get, cache_set
 
+    use_remote_model = _has_openai_key()
+    cache_model = config.CLASSIFY_MODEL if use_remote_model else "local-heuristic"
+
     # ── cache check ───────────────────────────────────────
     cache_key = f"{question}\n\n{answer}"
-    cached = cache_get("classify", cache_key, model=config.CLASSIFY_MODEL)
+    cached = cache_get("classify", cache_key, model=cache_model)
     if cached is not None:
-        return cached
+        return (cached, False) if return_used_remote else cached
 
-    if not _has_openai_key():
+    if not use_remote_model:
         result = _classify_qa_locally(question, answer)
-        cache_set("classify", cache_key, result, model="local-heuristic")
-        return result
+        cache_set("classify", cache_key, result, model=cache_model)
+        return (result, False) if return_used_remote else result
 
     client = _client()
 
@@ -787,5 +800,5 @@ def classify_qa(question: str, answer: str) -> dict:
         result = {"category": "其他", "difficulty": "基礎", "evergreen": True}
 
     # ── 寫入 cache ───────────────────────────────────────
-    cache_set("classify", cache_key, result, model=config.CLASSIFY_MODEL)
-    return result
+    cache_set("classify", cache_key, result, model=cache_model)
+    return (result, True) if return_used_remote else result

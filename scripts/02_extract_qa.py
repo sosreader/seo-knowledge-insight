@@ -204,12 +204,12 @@ def main(args: argparse.Namespace) -> None:
     preflight_check(
         deps=[
             StepDependency(
-                path=config.RAW_MD_DIR,
+                path=config.ROOT_DIR / "raw_data",
                 required=True,
                 min_count=1,
-                glob_pattern="*.md",
+                glob_pattern="*markdown/*.md",
                 max_age_days=14,
-                hint="請先執行 python scripts/01_fetch_notion.py",
+                hint="請先執行 python scripts/01_fetch_notion.py 或相關 fetch-* 步驟",
             ),
         ],
         env_keys=["OPENAI_API_KEY"],
@@ -237,6 +237,10 @@ def main(args: argparse.Namespace) -> None:
         config.RAW_AHREFS_MD_DIR,
         config.RAW_SEJ_MD_DIR,
         config.RAW_GROWTHMEMO_MD_DIR,
+        config.RAW_GOOGLE_BLOG_MD_DIR,
+        config.RAW_GOOGLE_BLOG_ZHTW_MD_DIR,
+        config.RAW_WEBDEV_MD_DIR,
+        config.RAW_SCREAMINGFROG_MD_DIR,
     ]
 
     if args.file:
