@@ -92,6 +92,7 @@ export const paths = {
   rawSejMdDir: resolve(ROOT_DIR, "raw_data/sej_markdown"),
   rawGrowthmemoMdDir: resolve(ROOT_DIR, "raw_data/growthmemo_markdown"),
   rawGoogleBlogMdDir: resolve(ROOT_DIR, "raw_data/google_blog_markdown"),
+  rawGoogleBlogZhtwMdDir: resolve(ROOT_DIR, "raw_data/google_blog_zhtw_markdown"),
   rawWebdevMdDir: resolve(ROOT_DIR, "raw_data/webdev_markdown"),
   rawScreamingfrogMdDir: resolve(ROOT_DIR, "raw_data/screamingfrog_markdown"),
   fetchLogsDir: resolve(ROOT_DIR, "output/fetch_logs"),

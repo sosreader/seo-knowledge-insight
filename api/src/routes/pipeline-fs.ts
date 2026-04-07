@@ -103,6 +103,7 @@ function buildPipelineStatusFromStore(): PipelineStatusResponse {
   const sejCount = collectionCountMap.get("sej") ?? 0;
   const growthmemoCount = collectionCountMap.get("growth-memo") ?? 0;
   const googleBlogCount = collectionCountMap.get("google-search-central") ?? 0;
+  const googleBlogZhTwCount = collectionCountMap.get("google-search-central-zh") ?? 0;
   const webdevCount = collectionCountMap.get("web-dev") ?? 0;
   const screamingfrogCount = collectionCountMap.get("screaming-frog") ?? 0;
 
@@ -156,6 +157,12 @@ function buildPipelineStatusFromStore(): PipelineStatusResponse {
       detail: `${googleBlogCount} 筆 Q&A（來自 Google Search Central Blog）`,
     },
     {
+      name: "fetch-google-blog-zhtw",
+      label: "Google Blog 繁中擷取",
+      count: googleBlogZhTwCount,
+      detail: `${googleBlogZhTwCount} 筆 Q&A（來自 Google Search Central Blog 繁體中文版）`,
+    },
+    {
       name: "fetch-webdev",
       label: "Web.dev 擷取",
       count: webdevCount,
@@ -196,11 +203,12 @@ function buildPipelineStatusFromFiles(): PipelineStatusResponse {
   const sejMdCount = countMdFiles(paths.rawSejMdDir);
   const growthmemoMdCount = countMdFiles(paths.rawGrowthmemoMdDir);
   const googleBlogMdCount = countMdFiles(paths.rawGoogleBlogMdDir);
+  const googleBlogZhtwMdCount = countMdFiles(paths.rawGoogleBlogZhtwMdDir);
   const webdevMdCount = countMdFiles(paths.rawWebdevMdDir);
   const screamingfrogMdCount = countMdFiles(paths.rawScreamingfrogMdDir);
 
   const totalExtracted = countQAPerMeeting();
-  const totalMd = mdCount + mediumMdCount + ithelpMdCount + googleMdCount + ahrefsMdCount + sejMdCount + growthmemoMdCount + googleBlogMdCount + webdevMdCount + screamingfrogMdCount;
+  const totalMd = mdCount + mediumMdCount + ithelpMdCount + googleMdCount + ahrefsMdCount + sejMdCount + growthmemoMdCount + googleBlogMdCount + googleBlogZhtwMdCount + webdevMdCount + screamingfrogMdCount;
   const finalCount = countQAFinal();
 
   const steps: PipelineStepStatus[] = [
@@ -251,6 +259,12 @@ function buildPipelineStatusFromFiles(): PipelineStatusResponse {
       label: "Google Blog 擷取",
       count: googleBlogMdCount,
       detail: `${googleBlogMdCount} 篇官方公告`,
+    },
+    {
+      name: "fetch-google-blog-zhtw",
+      label: "Google Blog 繁中擷取",
+      count: googleBlogZhtwMdCount,
+      detail: `${googleBlogZhtwMdCount} 篇繁體中文版官方公告`,
     },
     {
       name: "fetch-webdev",
@@ -316,6 +330,41 @@ export function findUnprocessed(): readonly UnprocessedItem[] {
       mdDir: paths.rawGoogleCasesMdDir,
       qaDir,
       sourceCollection: "google-case-studies",
+    },
+    {
+      mdDir: paths.rawAhrefsMdDir,
+      qaDir,
+      sourceCollection: "ahrefs-blog",
+    },
+    {
+      mdDir: paths.rawSejMdDir,
+      qaDir,
+      sourceCollection: "sej",
+    },
+    {
+      mdDir: paths.rawGrowthmemoMdDir,
+      qaDir,
+      sourceCollection: "growth-memo",
+    },
+    {
+      mdDir: paths.rawGoogleBlogMdDir,
+      qaDir,
+      sourceCollection: "google-search-central",
+    },
+    {
+      mdDir: paths.rawGoogleBlogZhtwMdDir,
+      qaDir,
+      sourceCollection: "google-search-central-zh",
+    },
+    {
+      mdDir: paths.rawWebdevMdDir,
+      qaDir,
+      sourceCollection: "web-dev",
+    },
+    {
+      mdDir: paths.rawScreamingfrogMdDir,
+      qaDir,
+      sourceCollection: "screaming-frog",
     },
   ];
 
@@ -414,6 +463,10 @@ export function getCollectionDirMap(): Readonly<Record<string, { dir: string; so
     "ahrefs-blog": { dir: paths.rawAhrefsMdDir, sourceType: "article" },
     "sej": { dir: paths.rawSejMdDir, sourceType: "article" },
     "growth-memo": { dir: paths.rawGrowthmemoMdDir, sourceType: "article" },
+    "google-search-central": { dir: paths.rawGoogleBlogMdDir, sourceType: "article" },
+    "google-search-central-zh": { dir: paths.rawGoogleBlogZhtwMdDir, sourceType: "article" },
+    "web-dev": { dir: paths.rawWebdevMdDir, sourceType: "article" },
+    "screaming-frog": { dir: paths.rawScreamingfrogMdDir, sourceType: "article" },
   };
 }
 

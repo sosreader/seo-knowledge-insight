@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import os
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from utils import openai_helper
 
@@ -41,25 +41,33 @@ def test_merge_similar_qas_falls_back_without_openai_key() -> None:
     ]
 
     with patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False):
-        merged = openai_helper.merge_similar_qas(qa_group)
+        merged, used_remote = openai_helper.merge_similar_qas(
+            qa_group,
+            return_used_remote=True,
+        )
 
     assert "canonical" in [keyword.lower() for keyword in merged["keywords"]]
     assert merged["source_dates"] == ["2026-03-01", "2026-03-08"]
     assert len(merged["merged_from"]) == 2
     assert "補充" in merged["answer"] or "GSC" in merged["answer"]
+    assert used_remote is False
 
 
 def test_classify_qa_falls_back_without_openai_key() -> None:
     with (
         patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False),
-        patch("utils.pipeline_cache.cache_get", return_value=None),
-        patch("utils.pipeline_cache.cache_set"),
+        patch("utils.pipeline_cache.cache_get", return_value=None) as cache_get,
+        patch("utils.pipeline_cache.cache_set") as cache_set,
     ):
-        result = openai_helper.classify_qa(
+        result, used_remote = openai_helper.classify_qa(
             "canonical 設錯會帶來哪些索引風險？",
             "若 canonical 指向錯誤頁面，Google 可能選錯標準 URL，導致重複內容與索引訊號分散。",
+            return_used_remote=True,
         )
 
     assert result["category"] == "索引與檢索"
     assert result["difficulty"] == "進階"
     assert result["evergreen"] is True
+    assert used_remote is False
+    cache_get.assert_called_once_with("classify", ANY, model="local-heuristic")
+    cache_set.assert_called_once_with("classify", ANY, result, model="local-heuristic")

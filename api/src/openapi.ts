@@ -1142,7 +1142,7 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/fetch-articles": {
     post: {
       tags: ["Pipeline"],
-      summary: "觸發外部文章擷取 / Trigger external article fetch",
+      summary: "觸發 10 個外部文章來源擷取 / Trigger all 10 external article fetchers",
       operationId: "triggerFetchArticles",
       responses: {
         "200": jsonContent(

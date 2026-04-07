@@ -2530,6 +2530,26 @@
     "source_collection": "google-search-central"
   },
   {
+    "slug": "2026-03-crawler-blog-post",
+    "title": "Inside Googlebot: demystifying crawling, fetching, and the bytes we process",
+    "url": "https://developers.google.com/search/blog/2026/03/crawler-blog-post",
+    "published": "2026-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:17.205637+00:00",
+    "md_file": "2026-03-crawler-blog-post.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2026-03-crawler-ip-ranges",
+    "title": "New Location for the Google Crawlers' IP Range Files",
+    "url": "https://developers.google.com/search/blog/2026/03/crawler-ip-ranges",
+    "published": "2026-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:19.989619+00:00",
+    "md_file": "2026-03-crawler-ip-ranges.md",
+    "source_collection": "google-search-central"
+  },
+  {
     "slug": "2026-03-scl-apac-2026",
     "title": "Search Central Live Asia Pacific 2026: Get Ready for Sydney and more!",
     "url": "https://developers.google.com/search/blog/2026/03/scl-apac-2026",
@@ -2547,6 +2567,16 @@
     "author": "Google Search Central",
     "fetched_at": "2026-03-30T02:32:12.404838+00:00",
     "md_file": "2026-03-scl-canada-2026.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2026-04-scl-shanghai-2026",
+    "title": "Search Central Live is Coming to Shanghai in 2026!",
+    "url": "https://developers.google.com/search/blog/2026/04/scl-shanghai-2026",
+    "published": "2026-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:14.624831+00:00",
+    "md_file": "2026-04-scl-shanghai-2026.md",
     "source_collection": "google-search-central"
   }
 ]

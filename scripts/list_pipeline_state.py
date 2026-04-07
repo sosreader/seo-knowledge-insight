@@ -43,6 +43,10 @@ def _find_source_markdown(source_file: str) -> Path | None:
         config.RAW_AHREFS_MD_DIR,
         config.RAW_SEJ_MD_DIR,
         config.RAW_GROWTHMEMO_MD_DIR,
+        config.RAW_GOOGLE_BLOG_MD_DIR,
+        config.RAW_GOOGLE_BLOG_ZHTW_MD_DIR,
+        config.RAW_WEBDEV_MD_DIR,
+        config.RAW_SCREAMINGFROG_MD_DIR,
     ]:
         candidate = d / basename
         if candidate.exists():
@@ -125,6 +129,10 @@ def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
         config.RAW_AHREFS_MD_DIR,
         config.RAW_SEJ_MD_DIR,
         config.RAW_GROWTHMEMO_MD_DIR,
+        config.RAW_GOOGLE_BLOG_MD_DIR,
+        config.RAW_GOOGLE_BLOG_ZHTW_MD_DIR,
+        config.RAW_WEBDEV_MD_DIR,
+        config.RAW_SCREAMINGFROG_MD_DIR,
     ]
     md_files: list[Path] = []
     for d in source_dirs:
