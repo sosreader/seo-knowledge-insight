@@ -71,7 +71,7 @@ AI 工具（GitHub Copilot / Claude Code）可透過以下方式直接執行 pip
 ### 快速入口
 
 ```bash
-make pipeline          # 完整流程 step 1→2→3
+make pipeline          # Notion-core 流程 step 1→2→3
 make fetch-notion      # 只執行 Notion 擷取
 make extract-qa        # 只執行 Q&A 萃取
 make dedupe-classify   # 只執行去重 + 分類
@@ -113,7 +113,7 @@ make help              # 顯示所有可用 targets
 ### 直接呼叫 Python
 
 ```bash
-.venv/bin/python scripts/run_pipeline.py                        # 完整流程
+.venv/bin/python scripts/run_pipeline.py                        # Notion-core 流程
 .venv/bin/python scripts/run_pipeline.py --step extract-qa --limit 3    # 測試用
 .venv/bin/python scripts/run_pipeline.py --dry-run             # 只驗證設定
 ```
@@ -126,7 +126,7 @@ make help              # 顯示所有可用 targets
 
 ```
 /run-pipeline          # 查看完整用法說明（需要 OpenAI API key）
-/pipeline-local        # 完整流程（不需要 OpenAI，AI 工具本身是 LLM）
+/pipeline-local        # Notion-core pipeline（外部文章需先 make fetch-articles）
 /extract-qa            # 只執行 Step 2 Q&A 萃取（不需要 OpenAI）
 /dedupe-classify       # 只執行 Step 3 去重+分類（不需要 OpenAI）
 ```
@@ -163,12 +163,12 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 
 - `/run-pipeline` — 執行完整 pipeline（Steps 1–5，使用 OpenAI）
 
-### Claude Code 模式命令（不需要 OpenAI API key）
+### Claude Code 模式命令（多數流程不需要 OpenAI API key）
 
-- `/pipeline-local` — 完整 pipeline Steps 1–4（你是 LLM 引擎）
+- `/pipeline-local` — Notion-core pipeline Steps 1–3（外部文章需先 `make fetch-articles`，你是 LLM 引擎）
 - `/extract-qa` — 只執行 Step 2 Q&A 萃取（parallel sub-agents）
 - `/dedupe-classify` — 只執行 Step 3 去重 + 分類
-- `/generate-report <URL 或路徑>` — 生成 SEO 週報（7 維度：情勢/流量/技術/意圖/行動/AI 可見度/來源，支援 `--snapshot <snapshot_id>` 參數）
+- `/generate-report <URL 或路徑>` — 生成 SEO 週報（對齊 `scripts/04_generate_report.py`，需要 `OPENAI_API_KEY`；支援 `--snapshot <snapshot_id>`）
 - `/meeting-prep <snapshot 路徑 或 --report 週報路徑>` — 顧問會議準備深度研究報告（11 sections：異常地圖/業界動態/根因假設/交叉比對/審計缺口/E-E-A-T/人本要素/成熟度/提問清單/行動核查）
 - `/search <問題>` — 搜尋知識庫（關鍵字加權，回傳 top-K Q&A）
 - `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
@@ -180,7 +180,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/evaluate-crawled-not-indexed-local` — 檢索未索引分析品質評估（12 golden cases，rule-based）
 - `/evaluate-meeting-prep-quality` — Meeting-Prep 內容品質評估（6 維度，Claude Code 作為 Judge，不需要 OpenAI）
 - `/evaluate-report-quality` — SEO 週報內容品質 L3 評估（3 維度：推理深度/可操作性/洞察原創性，Claude Code 作為 Judge，不需要 OpenAI）
-- `/sync-db` — 本地 Reports + Sessions 上傳至 Supabase（`make sync-db` / `make sync-db-status` / `make sync-db-force`）
+- `/sync-db` — 本地 Reports + Sessions + Meeting-Prep 上傳至 Supabase（`make sync-db` / `make sync-db-status` / `make sync-db-force`；支援 `--type reports|sessions|meeting-prep|all`）
 - `/backfill-extraction-model` — 追溯回填 Supabase qa_items 的 extraction_model（`--dry-run` / `--execute`）
 - `/update-freshness` — 批次更新 freshness_score 指數衰減（`--dry-run` / `--execute`）
 - `/evaluate-retrieval-by-model` — 按 extraction_model 分群評估檢索品質
@@ -210,11 +210,11 @@ pnpm install
 pnpm dev               # 啟動前端伺服器（http://localhost:3000）
 ```
 
-測試（835 個測試，80% 覆蓋率）：
+測試（838 個測試，80% 覆蓋率）：
 
 ```bash
 cd api
-pnpm test              # 執行所有 vitest 測試（835 tests, 67 files）
+pnpm test              # 執行所有 vitest 測試（838 tests, 67 files）
 pnpm test:watch       # 監視模式下執行測試
 pnpm test:coverage    # 生成測試覆蓋率報告
 ```
@@ -275,7 +275,7 @@ Reports API 端點：
 
 Pipeline API 端點：
 
-- `GET /api/v1/pipeline/status` — 各步驟完成狀態（6 步驟：fetch-notion/fetch-medium/fetch-ithelp/fetch-google/extract-qa/dedupe-classify）
+- `GET /api/v1/pipeline/status` — 各步驟完成狀態（12 步驟：fetch-notion + 9 個外部來源 + extract-qa + dedupe-classify）
 - `GET /api/v1/pipeline/meetings` — 會議列表（含 metadata）
 - `GET /api/v1/pipeline/meetings/:id/preview` — Markdown 預覽
 - `GET /api/v1/pipeline/source-docs` — 列出所有來源文件（支援 source_type、source_collection、keyword、is_processed 等 filter + pagination）
@@ -382,7 +382,7 @@ make autoresearch-baseline
 | 去重 + 分類       | `text-embedding-3-small` + `gpt-5.4-nano`                    | 語意理解取代向量                                                      |
 | 指標解析          | `metrics-parser.ts`（純 TS，v2.26）                          | `qa_tools.py load-metrics`                                            |
 | 知識庫搜尋        | `text-embedding-3-small` + cosine                            | `qa_tools.py search`（關鍵字加權）                                    |
-| 週報生成          | `report-llm.ts` + `gpt-5.4`（純 TS，v2.26）                  | `/generate-report` 指令（Claude Code 直接推理，支援 snapshot）        |
+| 週報生成          | `report-llm.ts` + `gpt-5.4`（純 TS，v2.26）                  | `/generate-report` 指令（對齊 `scripts/04_generate_report.py`，需要 `OPENAI_API_KEY`） |
 | Q&A 品質評估      | `gpt-5.4-nano`                                               | `/evaluate-qa-local`（Claude Code 作為 Judge）                        |
 | Provider 品質評估 | 無對應                                                       | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
 | API 伺服器        | `cd api && pnpm dev`（Hono, port 8002，需要 OPENAI_API_KEY） | `cd api && pnpm dev`（Hono, port 8002）                               |

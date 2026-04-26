@@ -99,7 +99,15 @@ export async function supabaseInsert<T>(
   rows: readonly Record<string, unknown>[],
   options: { upsert?: boolean; onConflict?: string } = {},
 ): Promise<T[]> {
-  const url = `${config.SUPABASE_URL}/rest/v1/${table}`;
+  // PostgREST takes on_conflict as a URL query parameter, NOT in the Prefer header.
+  // The Prefer header only signals merge-duplicates; the conflict target column(s)
+  // must be appended to the URL or PostgREST falls back to PRIMARY KEY (which fails
+  // for tables that conflict on a non-PK UNIQUE constraint, e.g. reports.date_key).
+  const onConflictParam =
+    options.upsert && options.onConflict
+      ? `?on_conflict=${encodeURIComponent(options.onConflict)}`
+      : "";
+  const url = `${config.SUPABASE_URL}/rest/v1/${table}${onConflictParam}`;
   const prefer = options.upsert
     ? "return=representation,resolution=merge-duplicates"
     : "return=representation";
@@ -107,9 +115,6 @@ export async function supabaseInsert<T>(
     ...supabaseHeaders(config.SUPABASE_SERVICE_KEY || config.SUPABASE_ANON_KEY),
     Prefer: prefer,
   };
-  if (options.upsert && options.onConflict) {
-    headers["Prefer"] += `,on_conflict=${options.onConflict}`;
-  }
   const resp = await fetch(url, {
     method: "POST",
     headers,
