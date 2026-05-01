@@ -140,6 +140,7 @@ searchRoute.post("/", async (c) => {
         source_collection: item.source_collection,
         source_url: item.source_url,
         extraction_model: item.extraction_model ?? null,
+        extraction_provenance: item.extraction_provenance ?? null,
         maturity_relevance: item.maturity_relevance ?? null,
         score: Math.round(score * 10000) / 10000,
       };

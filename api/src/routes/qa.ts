@@ -24,6 +24,7 @@ function toSchema(item: QAItem) {
     source_collection: item.source_collection,
     source_url: item.source_url,
     extraction_model: item.extraction_model ?? null,
+    extraction_provenance: item.extraction_provenance ?? null,
     maturity_relevance: item.maturity_relevance ?? null,
     primary_category: item.primary_category ?? item.category,
     categories: item.categories ?? [item.category],

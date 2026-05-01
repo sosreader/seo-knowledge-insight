@@ -91,6 +91,7 @@ export interface QAItem {
   readonly source_collection: string; // "seo-meetings" | "genehong-medium" | "ithelp-sc-kpi"
   readonly source_url: string; // canonical URL to original content
   readonly extraction_model?: string; // model used to extract this QA
+  readonly extraction_provenance?: ExtractionProvenance;
   readonly maturity_relevance?: "L1" | "L2" | "L3" | "L4"; // SEO maturity level
   readonly primary_category?: string;
   readonly categories?: readonly string[];
@@ -103,6 +104,15 @@ export interface QAItem {
   readonly evidence_scope?: readonly string[];
   readonly booster_target_queries?: readonly string[];
   readonly hard_negative_terms?: readonly string[];
+}
+
+export interface ExtractionProvenance {
+  readonly source_models: readonly string[];
+  readonly source_stable_ids: readonly string[];
+  readonly source_count: number;
+  readonly merge_model?: string | null;
+  readonly merge_strategy?: string | null;
+  readonly provenance_status?: string | null;
 }
 
 interface RawQAData {
@@ -123,6 +133,7 @@ interface RawQAData {
     source_collection?: string;
     source_url?: string;
     extraction_model?: string;
+    extraction_provenance?: ExtractionProvenance;
     maturity_relevance?: string;
     primary_category?: string;
     categories?: string[];
@@ -231,6 +242,7 @@ export class QAStore {
         qa._enrichment?.notion_url ??
         "",
       extraction_model: qa.extraction_model,
+      extraction_provenance: qa.extraction_provenance,
       maturity_relevance: (qa.maturity_relevance ??
         qa._enrichment?.maturity_relevance) as
         | "L1"

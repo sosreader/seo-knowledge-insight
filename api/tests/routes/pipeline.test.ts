@@ -21,6 +21,9 @@ const googleCasesMdDir = join(rawDataDir, "google_cases_markdown");
 const ahrefsMdDir = join(rawDataDir, "ahrefs_markdown");
 const sejMdDir = join(rawDataDir, "sej_markdown");
 const growthmemoMdDir = join(rawDataDir, "growthmemo_markdown");
+const googleBlogMdDir = join(rawDataDir, "google_blog_markdown");
+const webdevMdDir = join(rawDataDir, "webdev_markdown");
+const screamingfrogMdDir = join(rawDataDir, "screamingfrog_markdown");
 const qaPerMeetingDir = join(outputDir, "qa_per_meeting");
 const qaPerArticleDir = join(outputDir, "qa_per_article");
 const metricsSnapshotsDir = join(outputDir, "metrics_snapshots");
@@ -48,6 +51,9 @@ vi.mock("../../src/config.js", () => ({
     rawAhrefsMdDir: ahrefsMdDir,
     rawSejMdDir: sejMdDir,
     rawGrowthmemoMdDir: growthmemoMdDir,
+    rawGoogleBlogMdDir: googleBlogMdDir,
+    rawWebdevMdDir: webdevMdDir,
+    rawScreamingfrogMdDir: screamingfrogMdDir,
     fetchLogsDir,
     qaJsonPath: join(outputDir, "qa_final.json"),
     qaEnrichedJsonPath: join(outputDir, "qa_enriched.json"),
@@ -105,6 +111,9 @@ function setupTestData() {
   mkdirSync(ahrefsMdDir, { recursive: true });
   mkdirSync(sejMdDir, { recursive: true });
   mkdirSync(growthmemoMdDir, { recursive: true });
+  mkdirSync(googleBlogMdDir, { recursive: true });
+  mkdirSync(webdevMdDir, { recursive: true });
+  mkdirSync(screamingfrogMdDir, { recursive: true });
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(fetchLogsDir, { recursive: true });
   mkdirSync(qaPerMeetingDir, { recursive: true });
@@ -620,7 +629,7 @@ describe("POST /api/v1/pipeline/fetch-articles", () => {
     vi.clearAllMocks();
   });
 
-  it("triggers Medium, iThome, and Google Cases fetchers", async () => {
+  it("triggers all external article fetchers", async () => {
     const { execPython } = await import(
       "../../src/services/pipeline-runner.js"
     );
@@ -632,13 +641,25 @@ describe("POST /api/v1/pipeline/fetch-articles", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.success).toBe(true);
-    expect(body.data.results).toHaveLength(3);
+    expect(body.data.results).toHaveLength(9);
     expect(body.data.results[0].source).toBe("medium");
     expect(body.data.results[1].source).toBe("ithelp");
     expect(body.data.results[2].source).toBe("google-cases");
+    expect(body.data.results[3].source).toBe("ahrefs");
+    expect(body.data.results[4].source).toBe("sej");
+    expect(body.data.results[5].source).toBe("growthmemo");
+    expect(body.data.results[6].source).toBe("google-blog");
+    expect(body.data.results[7].source).toBe("webdev");
+    expect(body.data.results[8].source).toBe("screaming-frog");
     expect(execPython).toHaveBeenCalledWith("01b_fetch_medium.py", []);
     expect(execPython).toHaveBeenCalledWith("01c_fetch_ithelp.py", []);
     expect(execPython).toHaveBeenCalledWith("01d_fetch_google_cases.py", []);
+    expect(execPython).toHaveBeenCalledWith("01e_fetch_ahrefs.py", []);
+    expect(execPython).toHaveBeenCalledWith("01f_fetch_sej.py", []);
+    expect(execPython).toHaveBeenCalledWith("01g_fetch_growthmemo.py", []);
+    expect(execPython).toHaveBeenCalledWith("01h_fetch_google_blog.py", []);
+    expect(execPython).toHaveBeenCalledWith("01i_fetch_webdev.py", []);
+    expect(execPython).toHaveBeenCalledWith("01j_fetch_screaming_frog.py", []);
   });
 
   it("reports partial failure when one script fails", async () => {
@@ -660,6 +681,36 @@ describe("POST /api/v1/pipeline/fetch-articles", () => {
         success: true,
         output: "Google OK",
         duration_ms: 800,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Ahrefs OK",
+        duration_ms: 700,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "SEJ OK",
+        duration_ms: 600,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Growth Memo OK",
+        duration_ms: 650,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Google Blog OK",
+        duration_ms: 750,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Web.dev OK",
+        duration_ms: 550,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        output: "Screaming Frog OK",
+        duration_ms: 580,
       });
     const res = await app.request("/api/v1/pipeline/fetch-articles", {
       method: "POST",
@@ -672,6 +723,7 @@ describe("POST /api/v1/pipeline/fetch-articles", () => {
     expect(body.data.results[0].success).toBe(true);
     expect(body.data.results[1].success).toBe(false);
     expect(body.data.results[2].success).toBe(true);
+    expect(body.data.results).toHaveLength(9);
   });
 });
 

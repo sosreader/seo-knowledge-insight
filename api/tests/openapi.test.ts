@@ -10,7 +10,7 @@ vi.mock("../src/config.js", () => ({
     RATE_LIMIT_GENERATE: 1000,
     PORT: 8002,
     CHAT_CONTEXT_K: 5,
-    OPENAI_MODEL: "gpt-5.2",
+    OPENAI_MODEL: "gpt-5.4-nano",
     OPENAI_EMBEDDING_MODEL: "text-embedding-3-small",
     AGENT_ENABLED: false,
     AGENT_MAX_TURNS: 5,
