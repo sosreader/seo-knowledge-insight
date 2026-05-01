@@ -2,9 +2,10 @@
 backfill_extraction_model.py — 追溯回填 Supabase qa_items 的 extraction_model
 
 策略：
-  1. 掃描 output/qa_per_meeting/*.json 反查 stable_id → extraction_model
-  2. 查無對應 extraction_model 的一律標記 "claude-code"（歷史資料主要由 /extract-qa 生成）
-  3. 批次 PATCH 至 Supabase（100 rows/batch）
+    1. 掃描 output/qa_per_meeting/*.json 與 output/qa_per_article/*.json 反查 stable_id → extraction_model
+    2. 若 local artifact 存在但未標 extraction_model，視為 legacy pipeline 產物，回填 "claude-code"
+    3. 若 local artifact 完全查無對應，標記為 "legacy-unknown"，避免捏造最新模型
+    4. 批次 PATCH 至 Supabase（100 rows/batch）
 
 用法：
   python scripts/backfill_extraction_model.py --dry-run     # 預覽（不寫入）
@@ -35,7 +36,8 @@ load_dotenv(ROOT_DIR / ".env")
 
 BATCH_SIZE = 100
 FETCH_PAGE_SIZE = 1000
-DEFAULT_MODEL = "claude-code"
+LEGACY_PIPELINE_MODEL = "claude-code"
+LEGACY_UNKNOWN_MODEL = "legacy-unknown"
 
 
 def _compute_stable_id(source_file: str, question: str) -> str:
@@ -45,39 +47,46 @@ def _compute_stable_id(source_file: str, question: str) -> str:
 
 
 def _scan_per_meeting_files() -> dict[str, str]:
-    """Scan qa_per_meeting JSONs to build stable_id → extraction_model map.
+    """Scan local per-file QA JSONs to build stable_id → extraction_model map.
 
-    Since current per-meeting files don't contain extraction_model,
-    all will map to DEFAULT_MODEL. This function is designed to support
-    future per-file model tags.
+    Evidence rules:
+    - explicit qa/file extraction_model → use it directly
+    - artifact exists but model is absent → treat as legacy Claude pipeline output
     """
-    qa_dir = ROOT_DIR / "output" / "qa_per_meeting"
     model_map: dict[str, str] = {}
 
-    if not qa_dir.exists():
-        logger.warning("qa_per_meeting dir not found: %s", qa_dir)
-        return model_map
+    qa_dirs = [
+        ROOT_DIR / "output" / "qa_per_meeting",
+        ROOT_DIR / "output" / "qa_per_article",
+    ]
 
-    for json_file in sorted(qa_dir.glob("*_qa.json")):
-        try:
-            data = json.loads(json_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Skip %s: %s", json_file.name, e)
+    for qa_dir in qa_dirs:
+        if not qa_dir.exists():
+            logger.warning("QA dir not found: %s", qa_dir)
             continue
 
-        pairs = data.get("qa_pairs", [])
-        file_model = data.get("extraction_model", None)
-
-        for qa in pairs:
-            qa_model = qa.get("extraction_model") or file_model
-            source_file = qa.get("source_file", "")
-            question = qa.get("question", "")
-            if not question:
+        for json_file in sorted(qa_dir.glob("*_qa.json")):
+            try:
+                data = json.loads(json_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning("Skip %s: %s", json_file.name, e)
                 continue
 
-            sid = _compute_stable_id(source_file, question)
-            if qa_model:
-                model_map[sid] = qa_model
+            pairs = data.get("qa_pairs", [])
+            file_model = data.get("extraction_model", None)
+
+            for qa in pairs:
+                qa_model = qa.get("extraction_model") or file_model
+                source_file = qa.get("source_file", "")
+                question = qa.get("question", "")
+                if not question:
+                    continue
+
+                sid = qa.get("stable_id") or _compute_stable_id(source_file, question)
+                if qa_model:
+                    model_map[sid] = qa_model
+                    continue
+                model_map.setdefault(sid, LEGACY_PIPELINE_MODEL)
     return model_map
 
 
@@ -213,7 +222,7 @@ def backfill(
     updates = []
     model_stats: dict[str, int] = {}
     for item in null_items:
-        model = model_map.get(item["id"], DEFAULT_MODEL)
+        model = model_map.get(item["id"], LEGACY_UNKNOWN_MODEL)
         updates.append({"id": item["id"], "model": model})
         model_stats[model] = model_stats.get(model, 0) + 1
 
@@ -222,7 +231,13 @@ def backfill(
     if dry_run:
         logger.info("[DRY RUN] Would update %d rows", len(updates))
         logger.info("Sample (first 3): %s", updates[:3])
-        return {"total": len(updates), "updated": 0, "skipped": 0, "dry_run": True}
+        return {
+            "total": len(updates),
+            "updated": 0,
+            "skipped": 0,
+            "dry_run": True,
+            "model_stats": model_stats,
+        }
 
     # Step 4: batch PATCH
     total_success = 0
@@ -239,7 +254,12 @@ def backfill(
             time.sleep(0.3)
 
     logger.info("Backfill complete: %d succeeded, %d failed", total_success, total_fail)
-    return {"total": len(updates), "updated": total_success, "failed": total_fail}
+    return {
+        "total": len(updates),
+        "updated": total_success,
+        "failed": total_fail,
+        "model_stats": model_stats,
+    }
 
 
 def main() -> None:

@@ -1,9 +1,22 @@
 """
 步驟 4：依據每週 SEO 指標 + Q&A 知識庫，產生分析報告
 
+實際執行模式：
+- 使用 OpenAI 進行候選 Q&A rerank 與最終報告生成
+- 預設會載入 output/qa_final.json 與 output/qa_embeddings.npy 做知識庫檢索
+- 若 qa_embeddings.npy 來自舊的 256 維 local embedding，而當前環境使用 1536 維 OpenAI embedding，
+    會記錄 warning 並嘗試以 local query embedding 相容；正式修復方式仍是重建 embeddings
+
+必要條件：
+- OPENAI_API_KEY
+- Google Sheets URL、snapshot JSON 或本機 TSV 其一
+
 使用方式：
     # 直接串 Google Sheets URL（最簡）：
     python scripts/04_generate_report.py --input "https://docs.google.com/spreadsheets/d/..."
+
+        # 從 metrics snapshot 直接生成：
+        python scripts/04_generate_report.py --snapshot output/metrics_snapshots/20260306-184745.json
 
     # 指定分頁（預設取 vocus）：
     python scripts/04_generate_report.py --input "https://..." --tab vocus
@@ -13,6 +26,12 @@
 
     # 輸出到指定路徑：
     python scripts/04_generate_report.py --input "https://..." --output report.md
+
+    # 只檢查依賴：
+    python scripts/04_generate_report.py --check
+
+    # 若 embeddings 與當前 provider 維度不一致，先重建：
+    python scripts/03_dedupe_classify.py --rebuild-embeddings
 """
 
 from __future__ import annotations
@@ -479,7 +498,7 @@ def _rerank_qas(
     top_k: int,
 ) -> list[dict]:
     """
-    LLM Reranker：用 gpt-5-mini 從候選 Q&A 中選出對當週指標摘要最有幫助的 top_k 筆。
+    LLM Reranker：用 EVAL_JUDGE_MODEL 從候選 Q&A 中選出對當週指標摘要最有幫助的 top_k 筆。
     以結構化輸出回傳排序後的 index 陣列，失敗時 fallback 回原有排序。
     """
     if len(candidates) <= top_k:
@@ -949,7 +968,7 @@ def main() -> None:
         "--output", "-o",
         type=str,
         default=None,
-        help="輸出 Markdown 報告路徑。預設：output/report_YYYYMMDD.md",
+        help="輸出 Markdown 報告路徑。預設：output/report_YYYYMMDD_<hash8>.md",
     )
     parser.add_argument(
         "--top-k",

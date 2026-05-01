@@ -32,6 +32,26 @@ OUTPUT_DIR = ROOT_DIR / "output"
 QA_PER_MEETING_DIR = OUTPUT_DIR / "qa_per_meeting"
 QA_PER_ARTICLE_DIR = OUTPUT_DIR / "qa_per_article"
 
+
+def get_external_markdown_source_dirs() -> tuple[Path, ...]:
+    """Return all non-Notion markdown source directories."""
+    return (
+        RAW_MEDIUM_MD_DIR,
+        RAW_ITHELP_MD_DIR,
+        RAW_GOOGLE_CASES_MD_DIR,
+        RAW_AHREFS_MD_DIR,
+        RAW_SEJ_MD_DIR,
+        RAW_GROWTHMEMO_MD_DIR,
+        RAW_GOOGLE_BLOG_MD_DIR,
+        RAW_WEBDEV_MD_DIR,
+        RAW_SCREAMINGFROG_MD_DIR,
+    )
+
+
+def get_all_markdown_source_dirs() -> tuple[Path, ...]:
+    """Return all markdown source directories, including Notion meetings."""
+    return (RAW_MD_DIR, *get_external_markdown_source_dirs())
+
 # ── 多來源目錄 → (source_type, source_collection) 映射 ──
 DIR_COLLECTION_MAP: Dict[str, tuple] = {
     "markdown": ("meeting", "seo-meetings"),
@@ -147,7 +167,6 @@ _LAZY_ATTRS: Dict[str, _LazyEnv] = {
     ),
     "CLASSIFY_MODEL": _LazyEnv("CLASSIFY_MODEL", default="gpt-5.4-nano"),
     "EVAL_JUDGE_MODEL": _LazyEnv("EVAL_JUDGE_MODEL", default="gpt-5.4-nano"),
-    "EVAL_RERANK_MODEL": _LazyEnv("EVAL_RERANK_MODEL", default="gpt-5.4-nano"),
     "SHEETS_URL": _LazyEnv("SHEETS_URL", default=""),
 }
 

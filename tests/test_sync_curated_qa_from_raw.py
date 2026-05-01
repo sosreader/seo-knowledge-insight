@@ -35,6 +35,12 @@ def test_sync_curated_payload_updates_answer_from_raw() -> None:
                 'source_type': 'article',
                 'maturity_relevance': 'L2',
                 'extraction_model': 'claude-code',
+                'extraction_provenance': {
+                    'source_models': ['claude-code'],
+                    'merge_model': None,
+                    'merge_strategy': 'none',
+                    'provenance_status': 'single-source',
+                },
             }
         ],
     }
@@ -49,6 +55,7 @@ def test_sync_curated_payload_updates_answer_from_raw() -> None:
     assert synced['keywords'] == ['crawl budget', 'log analysis']
     assert synced['raw_sync_status'] == 'matched'
     assert synced['stable_id']
+    assert synced['extraction_provenance']['source_models'] == ['claude-code']
 
 
 def test_sync_curated_payload_preserves_rewritten_entry() -> None:

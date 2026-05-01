@@ -57,6 +57,7 @@ def _sync_from_raw(current_qa: dict[str, Any], raw_qa: dict[str, Any]) -> dict[s
         'source_collection': raw_qa.get('source_collection', current_qa.get('source_collection', '')),
         'maturity_relevance': raw_qa.get('maturity_relevance', current_qa.get('maturity_relevance')),
         'extraction_model': raw_qa.get('extraction_model', current_qa.get('extraction_model')),
+        'extraction_provenance': raw_qa.get('extraction_provenance', current_qa.get('extraction_provenance')),
         'stable_id': stable_id,
         'raw_sync_status': 'matched',
     }
