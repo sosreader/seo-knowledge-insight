@@ -37,6 +37,33 @@ python scripts/run_pipeline.py --step generate-report
 | **本週行動建議**      | 2-3 條具體 Todo（附 Notion 連結指向原始會議紀錄）                     |
 | **相關 SEO 知識補充** | 從 Q&A 知識庫節錄最相關的 1-2 個問答（含原始會議紀錄連結）            |
 
+### Claude Code 模式報告生成（v3.7+）
+
+**流程說明**：無需 OpenAI API，Claude Code 直接作為 LLM 引擎，呼叫 Python 工具函數取得指標與知識庫資料，生成 7 維度分析型週報。
+
+**技術堆疊**：
+- `fetch_from_sheets()` — Google Sheets CSV 下載（無手動複製）
+- `parse_metrics_tsv()` — TSV 指標解析（月/週環比計算、異常值偵測）
+- `detect_anomalies()` — 臨界值篩選（月 ±15%、週 ±20%）
+- `compute_keyword_boost()` — 關鍵字加權搜尋（取代嵌入式搜尋，速度快）
+- 知識庫版本：3,341+ Q&A，7 個來源集合
+
+**報告結構**（7 維度）：
+
+| 區段 | 內容 | 特點 |
+|------|------|------|
+| 一 | 本週情勢快照 | Health Score（0-100）+ 5 大現象 + 異常指標結構化分析 |
+| 二 | 流量信號解讀 | 象限判定 + Discover 單獨分析 + 工作階段趨勢 |
+| 三 | 技術 SEO 健康度 | Coverage 有效率 + AMP 生態 + 結構化資料 |
+| 四 | 意圖與搜尋行為 | 關鍵字主題羣聚 + KW 類別趨勢 + 使用者信號 |
+| 五 | 跨週對比與模式 | 連續週環比 + 月度基數 + 季度變化 |
+| 六 | 行動清單 | 🔴 高優先 / 🟡 中優先 / 🟢 低優先（Notion 連結） |
+| 七 | 來源 | 知識庫引用 `[N]` 標記 + `<!-- citations JSON -->` |
+
+**驗證機制**：section 六（行動清單）的 ALERT_DOWN 覆蓋率必須與 section 一（異常指標）相符，否則報告驗證失敗。
+
+**2026-04-10 範例**：AMP 生態系崩塌（索引警告 +364.8%、有效 -42.0%、流量 -46.3%）連鎖觸發 Google News、Mobile CWV 下滑；但 Organic Search +16.3%、Discover 週環比首度轉正 +23.2%，反映基本盤逆勢強化。
+
 ### 知識庫來源
 
 - 優先使用 `output/qa_enriched.json`（含 Notion 連結；需執行 `make enrich`）
@@ -195,6 +222,12 @@ $$
 - **圖片有效期**：Notion 內建圖片的 URL 是暫時的（1 小時過期），腳本會自動下載到本地 `raw_data/images/`。
 - **重跑安全**：每個步驟都可以單獨重跑，不會影響其他步驟的資料。
 - **SEO 時效性**：部分 Q&A 的建議可能隨演算法更新而過時，建議定期 review `evergreen: false` 的項目。
+
+### 2026-04-08 對齊守則
+
+- **區分 Notion-core 與 full-data refresh**：`make pipeline` 與 `/pipeline-local` 僅代表 Notion-core Steps 1–3；若要把 9 個外部來源一起納入，應明確執行 `make fetch-all` 後再跑 `extract-qa` / `dedupe-classify`。
+- **保留歷史模型 lineage**：合併或回填 QA metadata 時，不要把既有 `extraction_model` 粗暴改寫成當前預設模型；應優先保留原值，並用 `extraction_provenance` / `legacy-unknown` 表達來源與不確定性。
+- **slash command 要對齊真實 runtime contract**：`/generate-report` 現在是 `scripts/04_generate_report.py` 的操作入口，依賴 `OPENAI_API_KEY`；`/pipeline-local` 則只涵蓋不需 OpenAI 的本地 Steps 1–3。當 Step 4、backfill 或 fetch contract 變動時，應一起檢查 `Makefile`、`README.md`、`CLAUDE.md`、`api/README.md` 與 `.claude/commands/`。
 
 ### 已知限制
 

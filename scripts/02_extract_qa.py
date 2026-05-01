@@ -44,6 +44,43 @@ from scripts.extract_qa_helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _is_completed_qa_artifact(data: dict) -> bool:
+    """Treat empty-but-successful artifacts as completed; retry only explicit failures."""
+    return isinstance(data.get("qa_pairs"), list) and "處理失敗" not in str(
+        data.get("meeting_summary", "")
+    )
+
+
+def _canonical_qa_artifact_path(md_path: Path) -> Path:
+    """Return the canonical artifact path for a source markdown file."""
+    if md_path.parent.name == "markdown":
+        return config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json"
+    return config.QA_PER_ARTICLE_DIR / f"{md_path.stem}_qa.json"
+
+
+def _qa_artifact_candidates(md_path: Path) -> tuple[Path, ...]:
+    """Check both canonical and legacy artifact locations for incremental compatibility."""
+    canonical = _canonical_qa_artifact_path(md_path)
+    if md_path.parent.name == "markdown":
+        return (canonical,)
+    legacy = config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json"
+    return (canonical, legacy)
+
+
+def _has_completed_qa_artifact(md_path: Path) -> bool:
+    """Return True when any canonical or legacy artifact already represents a completed run."""
+    for qa_path in _qa_artifact_candidates(md_path):
+        if not qa_path.exists():
+            continue
+        try:
+            existing = json.loads(qa_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if _is_completed_qa_artifact(existing):
+            return True
+    return False
+
+
 def _detect_source_metadata(md_path: Path) -> dict:
     """從 Markdown 目錄名稱推斷 source_type 和 source_collection。"""
     dir_name = md_path.parent.name
@@ -176,10 +213,9 @@ def _rebuild_merged_from_per_meeting() -> dict:
         for f in sorted(qa_dir.glob("*_qa.json")):
             try:
                 data = json.loads(f.read_text(encoding="utf-8"))
-                pairs = data.get("qa_pairs", [])
-                # 跳過處理失敗的空結果
-                if not pairs and "處理失敗" in data.get("meeting_summary", ""):
+                if not _is_completed_qa_artifact(data):
                     continue
+                pairs = data["qa_pairs"]
                 all_qa.extend(pairs)
                 summary.append({
                     "file": f.stem.replace("_qa", "") + ".md",
@@ -229,15 +265,7 @@ def main(args: argparse.Namespace) -> None:
         logger.info("增量模式：跳過已完成的檔案")
 
     # 收集要處理的檔案（多來源目錄）
-    source_dirs = [
-        config.RAW_MD_DIR,
-        config.RAW_MEDIUM_MD_DIR,
-        config.RAW_ITHELP_MD_DIR,
-        config.RAW_GOOGLE_CASES_MD_DIR,
-        config.RAW_AHREFS_MD_DIR,
-        config.RAW_SEJ_MD_DIR,
-        config.RAW_GROWTHMEMO_MD_DIR,
-    ]
+    source_dirs = list(config.get_all_markdown_source_dirs())
 
     if args.file:
         # 在所有來源目錄中搜尋指定檔案
@@ -269,21 +297,9 @@ def main(args: argparse.Namespace) -> None:
         filtered = []
         skipped = 0
         for md_path in md_files:
-            # 依來源目錄決定檢查位置
-            dir_name = md_path.parent.name
-            if dir_name == "markdown":
-                qa_path = config.QA_PER_MEETING_DIR / f"{md_path.stem}_qa.json"
-            else:
-                qa_path = config.QA_PER_ARTICLE_DIR / f"{md_path.stem}_qa.json"
-            if qa_path.exists():
-                try:
-                    existing = json.loads(qa_path.read_text(encoding="utf-8"))
-                    # 只跳過有實際 Q&A 結果的（處理失敗的要重跑）
-                    if existing.get("qa_pairs") and "處理失敗" not in existing.get("meeting_summary", ""):
-                        skipped += 1
-                        continue
-                except (json.JSONDecodeError, KeyError):
-                    pass
+            if _has_completed_qa_artifact(md_path):
+                skipped += 1
+                continue
             filtered.append(md_path)
 
         if skipped:
@@ -327,12 +343,7 @@ def main(args: argparse.Namespace) -> None:
             result = {"qa_pairs": [], "meeting_summary": f"處理失敗: {e}"}
 
         # 存單份結果（依來源目錄決定輸出位置）
-        dir_name = md_path.parent.name
-        if dir_name == "markdown":
-            out_dir = config.QA_PER_MEETING_DIR
-        else:
-            out_dir = config.QA_PER_ARTICLE_DIR
-        out_path = out_dir / f"{md_path.stem}_qa.json"
+        out_path = _canonical_qa_artifact_path(md_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(
             json.dumps(result, ensure_ascii=False, indent=2),

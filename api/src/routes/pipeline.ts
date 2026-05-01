@@ -82,6 +82,18 @@ function buildSourceDocsFromStore(): readonly SourceDocEntry[] {
 
 export const pipelineRoute = new Hono();
 
+const EXTERNAL_FETCH_JOBS = [
+  { source: "medium", script: "01b_fetch_medium.py", args: [] },
+  { source: "ithelp", script: "01c_fetch_ithelp.py", args: [] },
+  { source: "google-cases", script: "01d_fetch_google_cases.py", args: [] },
+  { source: "ahrefs", script: "01e_fetch_ahrefs.py", args: [] },
+  { source: "sej", script: "01f_fetch_sej.py", args: [] },
+  { source: "growthmemo", script: "01g_fetch_growthmemo.py", args: [] },
+  { source: "google-blog", script: "01h_fetch_google_blog.py", args: [] },
+  { source: "webdev", script: "01i_fetch_webdev.py", args: [] },
+  { source: "screaming-frog", script: "01j_fetch_screaming_frog.py", args: [] },
+] as const;
+
 // GET /status
 pipelineRoute.get("/status", (c) => {
   const status = buildPipelineStatus();
@@ -307,48 +319,31 @@ pipelineRoute.post("/dedupe-classify", async (c) => {
 
 // POST /fetch-articles
 pipelineRoute.post("/fetch-articles", async (c) => {
-  const [mediumResult, ithelpResult, googleResult] = await Promise.all([
-    execPython("01b_fetch_medium.py", []),
-    execPython("01c_fetch_ithelp.py", []),
-    execPython("01d_fetch_google_cases.py", []),
-  ]);
-
-  const allSuccess =
-    mediumResult.success && ithelpResult.success && googleResult.success;
+  const rawResults = await Promise.all(
+    EXTERNAL_FETCH_JOBS.map((job) => execPython(job.script, job.args)),
+  );
+  const results = EXTERNAL_FETCH_JOBS.map((job, index) => ({
+    source: job.source,
+    success: rawResults[index]!.success,
+    output: rawResults[index]!.output,
+    duration_ms: rawResults[index]!.duration_ms,
+  }));
+  const allSuccess = rawResults.every((result) => result.success);
 
   if (!allSuccess) {
-    const failures = [mediumResult, ithelpResult, googleResult].filter(
-      (r) => !r.success
+    const failures = results.filter(
+      (result) => !result.success,
     );
     console.error(
       "Pipeline fetch-articles partial failure:",
-      failures.map((f) => f.output).join("\n")
+      failures.map((result) => `${result.source}: ${result.output}`).join("\n")
     );
   }
 
   return c.json(
     ok({
       success: allSuccess,
-      results: [
-        {
-          source: "medium",
-          success: mediumResult.success,
-          output: mediumResult.output,
-          duration_ms: mediumResult.duration_ms,
-        },
-        {
-          source: "ithelp",
-          success: ithelpResult.success,
-          output: ithelpResult.output,
-          duration_ms: ithelpResult.duration_ms,
-        },
-        {
-          source: "google-cases",
-          success: googleResult.success,
-          output: googleResult.output,
-          duration_ms: googleResult.duration_ms,
-        },
-      ],
+      results,
     })
   );
 });

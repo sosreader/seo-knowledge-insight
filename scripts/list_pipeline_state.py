@@ -35,15 +35,7 @@ def _find_source_markdown(source_file: str) -> Path | None:
         return full_path
 
     basename = Path(source_file).name
-    for d in [
-        config.RAW_MD_DIR,
-        config.RAW_MEDIUM_MD_DIR,
-        config.RAW_ITHELP_MD_DIR,
-        config.RAW_GOOGLE_CASES_MD_DIR,
-        config.RAW_AHREFS_MD_DIR,
-        config.RAW_SEJ_MD_DIR,
-        config.RAW_GROWTHMEMO_MD_DIR,
-    ]:
+    for d in config.get_all_markdown_source_dirs():
         candidate = d / basename
         if candidate.exists():
             return candidate
@@ -117,15 +109,7 @@ def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
     掃描所有來源目錄（DIR_COLLECTION_MAP + Notion）。
     不輸出任何內容，供 show_full_status 與 list_unprocessed_extract_qa 共用。
     """
-    source_dirs = [
-        config.RAW_MD_DIR,
-        config.RAW_MEDIUM_MD_DIR,
-        config.RAW_ITHELP_MD_DIR,
-        config.RAW_GOOGLE_CASES_MD_DIR,
-        config.RAW_AHREFS_MD_DIR,
-        config.RAW_SEJ_MD_DIR,
-        config.RAW_GROWTHMEMO_MD_DIR,
-    ]
+    source_dirs = list(config.get_all_markdown_source_dirs())
     md_files: list[Path] = []
     for d in source_dirs:
         if d.exists():
@@ -331,7 +315,7 @@ def show_full_status() -> None:
     print("  make fetch-notion      # Notion 擷取（需要 NOTION_TOKEN）")
     print("  /extract-qa            # Q&A 萃取（Claude Code，不需要 OpenAI）")
     print("  /dedupe-classify       # 去重+分類（Claude Code，不需要 OpenAI）")
-    print("  /pipeline-local        # 完整流程（Claude Code）")
+    print("  /pipeline-local        # Notion-core 流程（Claude Code）")
     print("=" * 60)
 
 

@@ -127,7 +127,7 @@ async function ragChat(
 
   // 4. GPT 生成回答
   const resp = await openai.chat.completions.create({
-    model: config.OPENAI_MODEL,
+    model: config.CHAT_MODEL,
     messages,
     temperature: 0.3,
   });
@@ -142,7 +142,7 @@ api/src/
 ├── index.ts              # 入口：全域 middleware + route mounting + initStores()
 ├── lambda.ts             # Lambda 入口：cold start + hono/aws-lambda handler
 ├── config.ts             # Zod 驗證環境變數 + 資料路徑
-├── routes/               # 9 個路由（v2.24）
+├── routes/               # 10 個路由（含 meeting-prep）
 │   ├── health.ts         # GET /health（不需認證）
 │   ├── qa.ts             # GET /qa, /qa/categories, /qa/collections, /qa/{id}
 │   ├── search.ts         # POST /search（hybrid + keyword fallback）
@@ -150,7 +150,7 @@ api/src/
 │   ├── reports.ts        # GET /reports, /reports/{date}, POST /reports/generate
 │   ├── sessions.ts       # CRUD /sessions
 │   ├── feedback.ts       # POST /feedback
-│   ├── pipeline.ts       # 16 個 pipeline 管理端點
+│   ├── pipeline.ts       # 18 個 pipeline 管理端點
 │   └── synonyms.ts       # CRUD /synonyms（v2.10 新增）
 ├── middleware/            # 4 個中間件
 │   ├── auth.ts           # X-API-Key + timingSafeEqual
@@ -809,11 +809,12 @@ export function fail(message: string): ApiResponse<null> { ... }
 | `PORT`                     | `8002`                   | HTTP 監聽 port                                        |
 | `HOST`                     | `0.0.0.0`                | 監聽位址                                              |
 | `OPENAI_API_KEY`           | （空字串）               | OpenAI API（search + chat 需要）                      |
-| `OPENAI_MODEL`             | `gpt-5.2`                | Chat completion 模型                                  |
+| `OPENAI_MODEL`             | `gpt-5.4-nano`           | 共享 runtime default；與 Python extraction / merge 對齊 |
+| `REPORT_MODEL`             | `gpt-5.4`                | 週報生成模型                                          |
 | `OPENAI_EMBEDDING_MODEL`   | `text-embedding-3-small` | Embedding 模型                                        |
 | `SEO_API_KEY`              | （空字串）               | API Key 認證（空 = 開發模式，跳過驗證）               |
 | `ANTHROPIC_API_KEY`        | （空字串）               | Reranker + Context Relevance（v2.11+，auto 模式偵測） |
-| `CHAT_MODEL`               | `gpt-5.2`                | RAG Chat 問答模型（v2.22+，獨立於 OPENAI_MODEL）      |
+| `CHAT_MODEL`               | `gpt-5.4-nano`           | RAG Chat 問答模型（v2.22+，獨立於 OPENAI_MODEL）      |
 | `CONTEXT_EMBEDDING_WEIGHT` | `0.6`                    | Contextual embedding 加權（v2.11+）                   |
 | `RERANKER_ENABLED`         | `auto`                   | Reranker 開關（auto/true/false，v2.11+）              |
 | `CORS_ORIGINS`             | `http://localhost:3000`  | CORS 白名單（逗號分隔）                               |

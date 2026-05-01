@@ -118,7 +118,9 @@ done
 
 ### 1. `OPENAI_API_KEY` 未設定
 
-Step 4 目前不支援「完全不靠外部 LLM」的本地報告生成路徑；請先設定 API key。
+Step 4 腳本路徑（`scripts/04_generate_report.py`）強制要求 OPENAI_API_KEY。
+
+但本 skill 也支援「**Claude Code as LLM 模式**」——當 OPENAI_API_KEY 未設定時，由 Claude Code 直接做語意推理組稿（不呼叫任何外部 LLM API），詳見下方「Claude Code as LLM 模式」章節。
 
 ### 2. `size 256 is different from 1536`
 
@@ -135,3 +137,46 @@ Step 4 目前不支援「完全不靠外部 LLM」的本地報告生成路徑；
 ```
 
 會檢查 `OPENAI_API_KEY` 與 Step 4 需要的 artifacts，不實際生成報告。
+
+---
+
+## Claude Code as LLM 模式
+
+當 `.env` 沒有 OPENAI_API_KEY、但仍要產出週報時，由 Claude Code 直接當語意判斷引擎，不呼叫任何外部 LLM API。WebFetch / WebSearch 是 built-in tools，不算外部 LLM 呼叫。
+
+跨 session 一致狀態：4/20、4/27、5/1 三次週報均走此模式（`.env` 第 7 / 9 行 OPENAI_API_KEY 持續被註解）。
+
+### 流程
+
+1. **抓 metrics**：
+   ```bash
+   .venv/bin/python scripts/qa_tools.py load-metrics --source "<URL>" --tab vocus --json
+   ```
+   解析輸出時注意：含 stderr-like header 兩行（`Mode: ...` 與 `從 Google Sheets 下載：...`），用 `re.search(r'^\{', text, re.MULTILINE)` 找 JSON 起點。
+
+2. **異常分群**：純 Python 排序 weekly delta，按 CORE / ALERT_DOWN / ALERT_UP 分組，top-30 整理為「現象→原因→行動→依據」。
+
+3. **KB 搜尋**：
+   ```bash
+   .venv/bin/python scripts/qa_tools.py search --query "<主題>" --top-k 3
+   ```
+   多輪查詢萃取 30+ citations，無 OpenAI 限制。
+
+4. **直接組稿**：對齊既有報告 7 段結構（情勢 / 流量 / 技術 / 意圖 / 跨週 / 行動 / 來源）。
+
+5. **必補 report_meta**：
+   ```
+   <!-- report_meta {"weeks":1,"generated_at":"<ISO8601>","generation_mode":"claude-code","generation_label":"Claude Code 語意推理","model":null} -->
+   ```
+   遺漏會導致前端列表 subtitle 顯示異常。
+
+### 與 OpenAI 模式的範圍差異
+
+| 項目 | OpenAI 模式 | Claude Code as LLM 模式 |
+|------|------------|----------------------|
+| Off-page Authority 指標（DA/DR/AS/TF/CF/MT/AI Visibility） | 不含 | **不含**（屬 `/meeting-prep` S6/S7 範疇，月度追蹤，避免稀釋週訊號） |
+| Health Score 計算 | LLM 自評 | 透明化算式（accumulating 累進式） |
+| Citation 編號 | 自動分配 | 跨週 trace 保留跳號（避免重編） |
+| 因果歸因 | 單一假設 | 多假設並列（給人工核查空間） |
+
+> **設計原則**：authority metrics（DA/DR/AS）變化緩慢（月度級別），加進週報會稀釋訊號。週報專注 GSC + GA4 內部數據；外部權威指標由 `/meeting-prep` 在 S6/S7 評分依據中引用，並寫入 `data/off-page-authority.jsonl` 跨週追蹤。

@@ -135,6 +135,9 @@ describe("GET /api/v1/qa/:id", () => {
     const body = await res.json();
     expect(body.data.id).toBe("a1b2c3d4e5f67890");
     expect(body.data.question).toContain("LCP");
+    expect(body.data.extraction_provenance?.source_models).toEqual([
+      "claude-code",
+    ]);
   });
 
   it("returns QA item for integer seq", async () => {
@@ -248,12 +251,13 @@ describe("GET /api/v1/qa", () => {
     }
   });
 
-  it("returns extraction_model and freshness_score in response", async () => {
+  it("returns extraction metadata in response", async () => {
     const res = await app.request("/api/v1/qa?limit=10");
     expect(res.status).toBe(200);
     const body = await res.json();
     for (const item of body.data.items) {
       expect(item).toHaveProperty("extraction_model");
+      expect(item).toHaveProperty("extraction_provenance");
       expect(item).toHaveProperty("freshness_score");
       expect(typeof item.freshness_score).toBe("number");
     }

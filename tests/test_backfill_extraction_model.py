@@ -69,6 +69,27 @@ class TestScanPerMeetingFiles:
             model = list(result.values())[0]
             assert model == "gpt-4o"
 
+    def test_scans_article_dir_without_model_as_legacy_claude(self, tmp_path):
+        qa_dir = tmp_path / "output" / "qa_per_article"
+        qa_dir.mkdir(parents=True)
+
+        qa_data = {
+            "qa_pairs": [
+                {
+                    "question": "What changed in Discover?",
+                    "source_file": "article.md",
+                }
+            ],
+        }
+        (qa_dir / "article_qa.json").write_text(json.dumps(qa_data))
+
+        with patch(
+            "scripts.backfill_extraction_model.ROOT_DIR",
+            tmp_path,
+        ):
+            result = _scan_per_meeting_files()
+            assert list(result.values()) == ["claude-code"]
+
     def test_skips_invalid_json(self, tmp_path):
         qa_dir = tmp_path / "output" / "qa_per_meeting"
         qa_dir.mkdir(parents=True)
@@ -95,6 +116,17 @@ class TestBackfillDryRun:
         assert result["dry_run"] is True
         assert result["total"] == 1
         assert result["updated"] == 0
+        assert result["model_stats"] == {"legacy-unknown": 1}
+
+    @patch("scripts.backfill_extraction_model._fetch_null_model_ids")
+    @patch("scripts.backfill_extraction_model._scan_per_meeting_files")
+    def test_dry_run_prefers_scanned_model(self, mock_scan, mock_fetch):
+        mock_scan.return_value = {"abc123": "claude-code-heuristic"}
+        mock_fetch.return_value = [{"id": "abc123"}]
+
+        result = backfill("http://fake", "key", dry_run=True)
+
+        assert result["model_stats"] == {"claude-code-heuristic": 1}
 
     @patch("scripts.backfill_extraction_model._fetch_null_model_ids")
     @patch("scripts.backfill_extraction_model._scan_per_meeting_files")

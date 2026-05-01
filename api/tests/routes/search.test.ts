@@ -49,6 +49,14 @@ const mockKeywordSearch = vi.fn().mockReturnValue([
       source_collection: "seo-meetings",
       source_url: "",
       extraction_model: "claude-code",
+      extraction_provenance: {
+        source_models: ["claude-code"],
+        source_stable_ids: ["abc123def456"],
+        source_count: 1,
+        merge_model: null,
+        merge_strategy: "passthrough",
+        provenance_status: "single-source",
+      },
     },
     score: 0.3,
   },
@@ -76,6 +84,14 @@ const mockHybridSearch = vi.fn().mockResolvedValue([
       source_collection: "seo-meetings",
       source_url: "",
       extraction_model: "claude-code",
+      extraction_provenance: {
+        source_models: ["claude-code"],
+        source_stable_ids: ["abc123def456"],
+        source_count: 1,
+        merge_model: null,
+        merge_strategy: "passthrough",
+        provenance_status: "single-source",
+      },
     },
     score: 0.85,
   },
@@ -246,6 +262,9 @@ describe("POST /api/v1/search", () => {
     expect(result.source_collection).toBe("seo-meetings");
     expect(result).toHaveProperty("source_url");
     expect(result.extraction_model).toBe("claude-code");
+    expect(result.extraction_provenance.source_models).toEqual([
+      "claude-code",
+    ]);
   });
 
   it("filters keyword results by primary_category and intent_label", async () => {
