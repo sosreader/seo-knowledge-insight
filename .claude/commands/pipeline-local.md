@@ -1,24 +1,26 @@
-# /pipeline-local — 完整 Pipeline（不需要 OpenAI API Key）
+# /pipeline-local — Notion-core Pipeline（不需要 OpenAI API Key）
 
-**你（Claude Code）就是 LLM 引擎**，可以執行完整的 SEO 知識庫建構 pipeline，
+**你（Claude Code）就是 LLM 引擎**，可以執行 Notion-core 的 SEO 知識庫建構 pipeline，
 包含 Q&A 萃取、去重、分類，**完全不呼叫 OpenAI API**。
+
+若要把 **9 個外部文章來源** 一起納入，先執行 `make fetch-articles`，再從 Step 2 開始處理 `raw_data/*_markdown/`。
 
 ## 架構說明
 
 ```
-Notion API → [Step 1] 擷取 → raw_data/markdown/
+Notion API → [Step 1a] 擷取 → raw_data/markdown/
+外部來源 → [Step 1b] 擷取 → raw_data/*_markdown/
                                     ↓
-               [Step 2] 你來萃取 Q&A → output/qa_per_meeting/ → qa_all_raw.json
+               [Step 2] 你來萃取 Q&A → output/qa_per_meeting/ + output/qa_per_article/ → qa_all_raw.json
                                     ↓
                [Step 3] 你來去重+分類 → output/qa_final.json
-                                    ↓
-  Google Sheets / TSV → [Step 4] 你來生成週報 → output/report_YYYYMMDD.md
 ```
+
+若要生成週報，改用 `scripts/04_generate_report.py` 或 `/generate-report`；這條路徑會呼叫 OpenAI，不屬於本命令範圍。
 
 - **Step 1**：由 Python 腳本呼叫 Notion API（只需要 NOTION_TOKEN）
 - **Step 2**：你讀取 Markdown，直接用語言能力萃取 Q&A（不需要 OpenAI）
 - **Step 3**：你對 Q&A 做語意去重、合併、分類（不需要 OpenAI Embedding）
-- **Step 4**：你解析指標、搜尋知識庫、生成週報（不需要 OpenAI）
 
 ---
 
@@ -35,7 +37,7 @@ make dry-run
 
 ---
 
-### 1. 執行 Step 1（Notion 擷取）
+### 1. 執行 Step 1a（Notion 擷取）
 
 ```bash
 make fetch-notion
@@ -45,6 +47,14 @@ make fetch-notion
 執行完後，`raw_data/markdown/` 目錄下會有 `.md` 會議紀錄檔案。
 
 若 NOTION_TOKEN 未設定，跳過此步驟（前提是 `raw_data/markdown/` 已有檔案）。
+
+### 1b. 可選：先擷取 9 個外部文章來源
+
+```bash
+make fetch-articles
+```
+
+這會抓取 Medium、iThome、Google Cases、Ahrefs、SEJ、Growth Memo、Google Search Central Blog、web.dev、Screaming Frog，並把 Markdown 寫到各自的 `raw_data/*_markdown/` 目錄。
 
 ---
 
@@ -82,23 +92,7 @@ make fetch-notion
 
 ---
 
-### 4. 執行 Step 4（週報生成 — 由你負責）
-
-若有 Google Sheets URL 或本機 TSV 指標檔，**按照 `/generate-report` 命令的規則**：
-
-```bash
-/generate-report <Google Sheets URL 或 metrics.tsv 路徑>
-```
-
-1. 解析指標（CORE + ALERT 偵測）
-2. 對每個關注指標搜尋知識庫（`qa_tools.py search`）
-3. 生成 Markdown 週報，儲存至 `output/report_YYYYMMDD.md`
-
-若無指標來源，跳過此步驟。
-
----
-
-### 5. 完成
+### 4. 完成
 
 輸出摘要：
 
@@ -106,13 +100,14 @@ make fetch-notion
 - 最終 Q&A 數量
 - 各 category 分布
 - 輸出檔案位置：`output/qa_final.json`
-- 若有週報：`output/report_YYYYMMDD.md`
 
 ---
 
 ## 快速執行
 
-如果使用者只想完整跑一遍，直接依序執行上面的 Step 1、2、3。
+如果使用者只想完整跑 Notion-core 流程，直接依序執行 Step 1a、2、3。
+
+如果要完整刷新所有來源，依序執行 Step 1a、1b、2、3。
 
 如果只想跑特定步驟：
 
@@ -125,11 +120,11 @@ make fetch-notion
 
 | 項目             | OpenAI 版本            | 本地 AI 版本          |
 | ---------------- | ---------------------- | --------------------- |
-| Step 2 萃取      | GPT-5.2 API            | Claude Code / Copilot |
+| Step 2 萃取      | GPT-5.4-nano API       | Claude Code / Copilot |
 | Step 3 embedding | text-embedding-3-small | 語意理解取代向量      |
-| Step 3 合併      | GPT-5.2 API            | Claude Code / Copilot |
-| Step 3 分類      | GPT-5-mini API         | Claude Code / Copilot |
+| Step 3 合併      | GPT-5.4-nano API       | Claude Code / Copilot |
+| Step 3 分類      | GPT-5.4-nano API       | Claude Code / Copilot |
 | Step 4 指標解析  | fetch_from_sheets()    | qa_tools.py load-metrics |
-| Step 4 週報生成  | GPT-5.2 API            | Claude Code 直接推理  |
+| Step 4 週報生成  | GPT-5.4 API            | Claude Code 直接推理  |
 | 費用             | $$                     | $0 額外費用           |
 | 速度             | 依 API 限速            | 依 AI 工具速度        |

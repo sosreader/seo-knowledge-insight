@@ -184,6 +184,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/backfill-extraction-model` — 追溯回填 Supabase qa_items 的 extraction_model（`--dry-run` / `--execute`）
 - `/update-freshness` — 批次更新 freshness_score 指數衰減（`--dry-run` / `--execute`）
 - `/evaluate-retrieval-by-model` — 按 extraction_model 分群評估檢索品質
+- `/seo-frontend-hotfix` — 從 meeting-prep / weekly report 萃取「前端工程可實作」建議，先驗證 2026 最佳實踐再去 `~/Documents/vocus-web-ui` 修一版 hotfix + 發 PR（含駁回項回頭修正 source 報告，避免誤導累積）
 
 ### 評估命令（需要 OpenAI API key）
 

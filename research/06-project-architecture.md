@@ -108,7 +108,7 @@ eval.tsx、useEvalDashboard.ts 及四個 Eval 組件（EvalMetricsCards/EvalProv
 
 | ETL 階段      | Pipeline 步驟                      | 說明                                                                                 |
 | ------------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
-| **Extract**   | Step 1：fetch                      | 從 Notion / Medium / iThome / Google Cases 擷取原始 Markdown                         |
+| **Extract**   | Step 1：fetch                      | 從 Notion + 9 個外部來源（Medium / iThome / Google Cases / Ahrefs / SEJ / Growth Memo / Google Blog / web.dev / Screaming Frog）擷取原始 Markdown |
 | **Transform** | Step 2：extract-qa                 | LLM 萃取 Q&A pairs                                                                   |
 |               | Step 3：dedupe-classify            | 去重 + 分類 + embedding 向量化                                                       |
 |               | Step 3.5：curated-postprocess      | deterministic quality filter + question-only salvage + raw sync + retrieval boosters |
@@ -125,11 +125,16 @@ Notion 會議紀錄（89 份，2023–2026）
   增量機制：比對 last_edited_time，只抓更新的頁面
             ↓ raw_data/markdown/*.md
 
+外部文章（Medium / iThome / Google Cases / Ahrefs / SEJ / Growth Memo / Google Blog / web.dev / Screaming Frog）
+            ↓
+[Step 1b-j] 各來源 fetcher — RSS / HTML / Atom / API 轉 Markdown
+            ↓ raw_data/*_markdown/*.md
+
 [Step 2] extract_qa.py — LLM 萃取 Q&A
   模型：gpt-5.4-nano（需要高品質理解）
   長文處理：超過 6000 tokens 自動切段
   產出：670 筆原始 Q&A
-            ↓ output/qa_per_meeting/*.json
+            ↓ output/qa_per_meeting/*.json + output/qa_per_article/*.json
 
 [Step 3] dedupe_classify.py — 去重 + 分類
   去重：text-embedding-3-small 計算向量
@@ -137,6 +142,7 @@ Notion 會議紀錄（89 份，2023–2026）
         或 Claude Code 本地語意去重（不需要 OpenAI）
   分類：gpt-5.4-nano 貼 10 種標籤 + difficulty + evergreen
         或 Claude Code 本地評分式關鍵字分類（不需要 OpenAI）
+  provenance：保留原始 `extraction_model`；多來源合併另寫 `extraction_provenance`
   產出：歷史上曾生成 1,317 筆去重後 Q&A（v2.12 基線）+ 1536 維 embedding 向量
     ↓ Step 3 基線快照 / qa_embeddings.npy
 
@@ -196,14 +202,14 @@ Notion 會議紀錄（89 份，2023–2026）
   速率限制：Hono 內置 middleware（chat 20/min・search/qa 60/min・reports/generate 5/min）
   QA ID：stable_id（SHA256[:16] hex），與 Python 相同驗證規則
   Local Mode：無 OpenAI API key 時自動降級（search→keyword-only，chat→context-only）
-  endpoint（10 個 router，42 端點，v2.12～v3.6）：
+  endpoint（10 個 router，42+ operations，v2.12～v3.6）：
     - routes/qa.ts           — GET /qa, /qa/categories, /qa/{id}（hex+int）
     - routes/search.ts       — POST /search（mode: hybrid|keyword，hasOpenAI() 自動切換；若帶 `extraction_model`，先 `top_k × 3` over-retrieve 再 filter）
     - routes/chat.ts         — POST /chat（mode: agent|rag|context-only；v2.29 request-level mode 參數，三層優先：Request > Server AGENT_ENABLED > auto；v2.11 rerank 可啟用）
     - routes/reports.ts      — GET /reports, /reports/{id}, POST /reports/generate
     - routes/sessions.ts     — GET /sessions, POST /sessions, GET /sessions/{id}, POST /sessions/{id}/messages（context-only fallback）, DELETE /sessions/{id}
     - routes/feedback.ts     — POST /feedback
-    - routes/pipeline.ts     — GET /status, /source-docs, /source-docs/:collection/:file/preview, /unprocessed, /logs, POST /fetch, /fetch-articles, /extract-qa, /dedupe-classify, /metrics
+    - routes/pipeline.ts     — GET /status, /source-docs, /source-docs/:collection/:file/preview, /unprocessed, /logs, POST /fetch, /fetch-articles, /extract-qa, /dedupe-classify, /metrics（18 個 pipeline 管理 endpoints）
     - routes/synonyms.ts     — GET /synonyms, POST /synonyms, PUT /synonyms/{term}, DELETE /synonyms/{term}（雙層設計：28 靜態術語 + 32 新增（v2.11）+ custom JSON）
     - routes/meeting-prep.ts — GET /meeting-prep（列表）, GET /meeting-prep/maturity-trend（趨勢時間序列）, GET /meeting-prep/:date（單篇，fuzzy match）
   核心模組：
@@ -242,7 +248,7 @@ Notion 會議紀錄（89 份，2023–2026）
     - scripts/_eval_report.py：週報品質評估（v2.18 新增，Python port；8 維度推送 Laminar `report-quality` group；含 report_action_maturity_labeled）
   schemas：
     - qa / search / chat / feedback / report / session / pipeline / synonyms / meeting-prep / api-response
-  測試：Vitest（65 個 test files，745 tests passing）
+  測試：Vitest（67 個 test files，838 tests passing）
   部署：Lambda + Function URL（arm64，~$0/月）/ docker-compose（本地開發）
             ↓ http://localhost:8002 (開發) 或 https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/ (生產)
 
@@ -724,10 +730,32 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 
    | 模式          | 驅動引擎                                                        | 使用場景               | 參數                               | 需要 API Key |
    | ------------- | --------------------------------------------------------------- | ---------------------- | ---------------------------------- | ------------ |
-   | `template`    | 本地模板（Markdown render）                                     | 靜態內容展示           | 無                                 | 否           |
-   | `hybrid`      | 本地模板 + LLM 5 維度分析                                       | 結合固定內容與 AI 洞見 | 無                                 | 否           |
-   | `openai`      | TypeScript `report-llm.ts` + OpenAI API（v2.26 從 Python 移植） | 高品質 6 維度 ECC 分析 | `snapshot_id` + `use_openai: true` | 是           |
-   | `claude-code` | Claude Code 語意推理（Interactive 模式）                        | 開發/本地驗證          | `/generate-report` 指令            | 否           |
+  | `template`           | 本地模板（Markdown render）                                     | 靜態內容展示           | 無                                 | 否           |
+  | `hybrid`             | 本地模板 + LLM 5 維度分析                                       | 結合固定內容與 AI 洞見 | 無                                 | 否           |
+  | `claude-code`        | Claude Code as LLM，Python 工具集（v3.7 新增，推薦）           | 7 維度分析型週報       | Google Sheets URL / 本地指標快照   | 否           |
+  | `openai`             | TypeScript `report-llm.ts` + OpenAI API（v2.26 從 Python 移植） | 高品質 6 維度 ECC 分析 | `snapshot_id` + `use_openai: true` | 是           |
+
+   **Claude Code as LLM 模式詳解**（v3.7+，Python 工具集 + Claude Code 推理）：
+
+   概念：Claude Code 本身作為 LLM 推理引擎，呼叫 Python 工具函數（`qa_tools.py`）取得指標與知識庫資料，無需 OpenAI API。
+
+   工具堆疊：
+   - `fetch_from_sheets(sheets_url)` → CSV 原始資料
+   - `parse_metrics_tsv(csv_data)` → 月/週環比計算、異常值偵測
+   - `detect_anomalies(metrics)` → 臨界值篩選（月 ±15%、週 ±20%）
+   - `compute_keyword_boost(keyword, ...)` → 知識庫搜尋（關鍵字加權，無嵌入）
+   - 知識庫版本：3,341+ Q&A，7 個來源集合
+
+   7 維度報告結構：
+   1. **一 情勢快照**：Health Score（0-100）+ 5 大現象分析 + 異常指標結構化分析
+   2. **二 流量信號**：象限判定（高曝光高點擊）+ Discover 獨立動態 + 工作階段成長引擎
+   3. **三 技術健康**：Coverage 有效率 + AMP/結構化資料 + 索引品質
+   4. **四 意圖行為**：關鍵字主題羣聚 + KW 類別趨勢 + 使用者信號
+   5. **五 跨週模式**：連續週環比 + 月度基數 + 季度變化
+   6. **六 行動清單**：🔴 高優先 / 🟡 中優先 / 🟢 低優先（含 Notion 連結）
+   7. **七 知識庫引用**：`[N]` 標記 + `<!-- citations JSON -->` 結構化引用
+
+   驗證機制：section 六（行動清單）的 ALERT_DOWN 覆蓋率必須與 section 一（異常指標）相符，否則報告驗證失敗。
 
    **OpenAI 模式詳解**（v2.26+，純 TypeScript）：
    - 前端提交 `snapshot_id` + `use_openai: true`
@@ -753,14 +781,20 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 
 - 週報儲存位置：`config.OUTPUT_DIR`（預設 `./output/`）
 - 檔案格式：`report_YYYYMMDD.md`（immutable）
-- API 層路由邏輯：區分 OpenAI / 本地 / Legacy URL 三路，3 路均落地同一檔案（檔名基於生成日期）
-- `generation_mode` metadata：記錄於 HTML comment，便於前端顯示和快取策略
+- API 層路由邏輯：區分 Claude Code / OpenAI / 本地 / Legacy URL 四路，均落地同一檔案（檔名基於生成日期）
+- `generation_mode` metadata：記錄於 HTML comment，便於前端顯示和快取策略；Claude Code 模式記為 `"claude-code"`
 - Frontmatter strip：hash 計算前清除 `---...\n`，避免時間戳造成快取失效
 
 **測試覆蓋**：
 
 - 目錄掃描、日期驗證、超時處理、錯誤回應
 - 已整合 conftest.py fixture `mock_output_dir`
+
+**2026-04-10 Claude Code 報告範例**：
+- 檔名：`report_20260410_1e82fc7c.md`（22.8 KB，7 維度）
+- 核心發現：AMP 生態系批次性驗證失敗（索引警告 +364.8%、有效 -42.0%）連鎖觸發 Google News (-105.8%) 與 Mobile CWV (-42.4%) 下滑
+- 積極信號：Organic Search +16.3% 週環比、Discover 首度週環比轉正 +23.2%，反映搜尋基本盤逆勢強化
+- 行動覆蓋：6 項 ALERT_DOWN 對應 section 六 高優先項目，行動清單驗證通過
 
 ---
 
@@ -904,9 +938,9 @@ Phase 3（4 週後）：下線 Python API (port 8001)
 
 ---
 
-### D. LLM-as-Judge 評估體系（05_evaluate.py）
+### D. LLM-as-Judge 評估體系（現行：`_eval_laminar.py` / `evals/*`）
 
-**決策**：4 維度評分（Relevance / Accuracy / Completeness / Granularity），1-5 分，gpt-5.2 Judge，structured output strict mode。
+**決策**：4 維度評分（Relevance / Accuracy / Completeness / Granularity），1-5 分，現行預設 Judge 為 `gpt-5.4-nano`，並以 Laminar / `evals/*` 維持批次評估流程。
 
 **學術 / 業界支撐**：
 
@@ -1856,7 +1890,7 @@ seo-knowledge-insight/
 │   ├── 02_extract_qa.py         # 步驟 2：Q&A 萃取（多來源目錄掃描）
 │   ├── 03_dedupe_classify.py    # 步驟 3：Collection-Scoped 去重 + 分類
 │   ├── 04_generate_report.py    # 步驟 4：產生每週 SEO 週報
-│   ├── 05_evaluate.py           # 步驟 5：Q&A 品質評估（LLM-as-Judge）
+│   ├── _eval_laminar.py         # 步驟 5：Q&A / retrieval / report 品質評估
 │   ├── run_pipeline.py          # 一鍵執行全部
 │   ├── extract_qa_helpers.py    # 純邏輯函式（日期擷取、文字切分）
 │   └── dedupe_helpers.py        # 純邏輯函式（cosine similarity 矩陣）
