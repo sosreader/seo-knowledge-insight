@@ -7,6 +7,90 @@
 
 <!-- 以下為自動累積區域，請勿手動編輯格式 -->
 
+## 2026-05-01
+
+### Google 官方
+- [2026-04-23 ONGOING] **April 23 起新一輪 Search Ranking Volatility 確認 + 5/8 預期續波**：「Just weeks after the March 2026 Core Update officially wrapped up on April 8, tracking tools began flagging elevated ranking movement simultaneously around April 23」（[almcorp.com](https://almcorp.com/blog/google-search-ranking-volatility-april-2026/)）；24% top-10 pages dropped out of top 100、55%+ 監控網站週內排名顯著變動；5/8 volatility spike 預期（[aeoengine.ai](https://aeoengine.ai/blog/search-volatility-guide-stabilize-rankings)）。
+- [2026-02 ONGOING-W4] **Feb 2026 Discover Core Update niche reclassification 顯化**：「Niche authorities operating with depth rather than breadth have overtaken brand generalists」、「broad coverage UGC 平台」普遍下跌 30-60%（[coremountainmedia.com](https://www.coremountainmedia.com/insights/google-discover-core-update-2026)、[xeryo.com](https://xeryo.com/en/computing-cloud/google-executes-a-brutal-algorithm-shift-destroying-massive-publisher-traffic-during-the-google-discover-february-2026-core-update/)）。本站 Discover -40% 週崩盤完全吻合此 profile，前週 V 型修正期假設證偽。
+- [2026-04] Google Search Central Blog：「Introducing a new spam policy for 'back button hijacking'」、Search Central Live Shanghai 2026 公告。
+
+### 業界研究
+- [2026-04-23 NEW] **2026 SEO indexing 框架**：「In 2026, quality gaps are the #1 cause of crawled-currently-not-indexed」、「Google has become far more selective. You must prove that your page adds unique value」（[speedindex.pro](https://speedindex.pro/blog/crawled-currently-not-indexed-the-complete-fix-guide)、[eliteworkhubltd.com](https://eliteworkhubltd.com/google-indexing-issues-in-2026/)）。Information gain + 內部連結強化 + JS 渲染為三大根因 [searchengineland.com](https://searchengineland.com/understanding-resolving-discovered-currently-not-indexed-392659)。
+- [2026-05-01 NEW] **Coverage 下降在 volatility 期間的解讀**：「volatility 期間 don't make massive site-wide changes immediately after an update」（[openclaws.blog](https://openclaws.blog/google-search-console-impressions-2026-reality-check/)）。本站 Coverage -14.8% 週需配合「流量頁面」交叉驗證。
+- [2026-04 ONGOING-W3] **AI Overviews CTR 持續反轉**：AIO CTR 1.3% Dec 2025 → 2.4% Feb 2026；Cited brands +35% / Non-cited -65%（持續，未新增來源）。
+
+### 本期 Web Research 失敗紀錄
+- 2026-04-29 起 Search Engine Roundtable 主站對 WebFetch 返回 403（可能 GPTBot blocking 或我方 IP rate limit）；改用 WebSearch + 多源驗證取代
+
+---
+
+## 2026-04-27
+
+### Google 官方
+- [2026-03-27~04-08] **March 2026 Core Update** — 已完成（4/8），但 4 月下旬波動再起，Search volatility 達 9.5/10 為 2026 全年最高（[searchengineland.com](https://searchengineland.com/march-2026-google-core-update-what-changed-474397)）。
+- [2026-04 ONGOING] **April 2026 Search Ranking Volatility 反彈**：近 80% top 3 排名變動（vs 12 月 Core Update 後 67%），部分網站單日 30-40% 流量波動，週後部分回補。
+- [2026-02-05~] **Feb 2026 Discover Core Update** 後遺效應持續，本站 Discover 月趨勢 -59.2% → -18.9% 大幅改善但週環比 -4.9% 首次轉負（V 型修正期）。
+
+### Google Search Central 公告
+- 無新內容（4/27 fetch 顯示與 4/13 相同）：Inside Googlebot / IP Range Files / Search Central Live Shanghai
+
+### 業界報導
+- [SearchEngineLand] March 2026 core update more volatile than December — 80% top-3 排名變動（vs Dec 2025 67%）
+- [SERoundtable] Google Search Ranking Volatility Heating Up April 23rd — Quasa.io 報導 SEO 報告 30-40% 單日波動
+- [ALM Corp] AI Overviews CTR 自 1.3% Dec 2025 反轉至 2.4% Feb 2026（被引用品牌 +35% / 未被引用 -65%）
+- [ALM Corp] Google AI Overviews 滲透至 14% shopping queries
+- [Optimum7] March 2026 Core Update 對 affiliate domains 影響：71% 域名負面、平均 -54%、「best X under $Y」類為最嚴重 casualties
+- [Ahrefs] Update: AI Overviews Reduce Clicks by 58%（最新數據）
+- [LinkedIn / Olga Zarr] 「crawled currently not indexed」突發大幅上升常為網站被駭警訊（commerce / 醫療廣告 URLs）
+
+### SERP Feature
+- AI Overviews 共現：Related searches 95.32% / People Also Ask 90.03% / Video Carousels 高頻
+- Google Ads 出現於底部比例 < 1% (early 2025) → 25% (March 2026)
+- Popular Products 元素 +36% YoY（2024 → 2026）
+- AIO 在 14% shopping queries 滲透；資訊型 40% 不變
+
+### Google Trends 驗證
+- KW 必買 / 攻略 下跌與業界 affiliate / commerce SERP 重整高度吻合（71% domains 負面）
+- KW 評價 下跌與 AIO 對 review queries 滲透方向一致
+
+### 服務狀態
+- status.search.google.com 正常取得（2 incidents 已 RESOLVED）
+- developers.google.com/search/blog 可取得但無 4/27 新內容
+- seroundtable.com 403（連續第二次）
+- WebSearch 全部成功（5/5 不同 query）
+
+---
+
+## 2026-04-13
+
+### Google 官方
+- [2026-03-27~04-08] **March 2026 Core Update** — **已完成**（4/8）。AI 生成內容流量降 71%，原創數據內容升 22%。Information Gain 為核心排名信號。
+- [2026-03-24~25] **March 2026 Spam Update** — 已完成，無後續異常。
+- [2026-02-05~27] **February 2026 Discover Core Update** — 已完成，殘留效應逐漸消退（Discover 連續兩週正向週環比）。
+
+### Google Search Central 公告
+- [2026-04] Search Central Live is Coming to Shanghai
+- [2026-03] Inside Googlebot: demystifying crawling, fetching, and the bytes we process
+- [2026-03] New Location for the Google Crawlers' IP Range Files
+- 無 AMP/CWV/Discover 具體技術變更公告
+
+### 業界報導
+- [SearchEngineJournal] Google Confirms March 2026 Core Update Is Complete（4/8）
+- [SearchEngineLand] March 2026 Core Update rollout complete
+- [linkdoctor.io] March 2026 Core Update: Early Data, Volatility & SEO Impact
+- [ALM Corp] Semrush AI Overviews Study 2026: AIO 出現在 30%+ 搜尋，有機點擊降 42%
+- [ALM Corp] Schema Markup 2026: Organization schema 提升 Knowledge Panel 3.7x
+
+### SERP Feature
+- AI Overviews 覆蓋 30%+ 搜尋（資訊型 40%、商業 25%）
+- 98.8% 第一頁含 SERP Feature
+- Organization schema 提升 Knowledge Panel 機率 3.7x
+
+### SER 重點
+- SER 首頁 403（2026-04-13 存取失敗），連續四次無法取得
+
+---
+
 ## 2026-04-05
 
 ### Google 官方
