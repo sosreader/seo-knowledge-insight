@@ -53,6 +53,18 @@ def _load_existing_index() -> dict[str, dict]:
         return {}
 
 
+def _derive_incremental_since_time(existing_index: dict[str, dict]) -> str | None:
+    """從既有索引推導預設增量 fetch 的 since_time。"""
+    timestamps = [
+        str(entry.get("last_edited_time") or "").strip()
+        for entry in existing_index.values()
+    ]
+    valid_timestamps = [timestamp for timestamp in timestamps if timestamp]
+    if not valid_timestamps:
+        return None
+    return max(valid_timestamps)
+
+
 def _parse_since_date(since_str: str) -> str:
     """
     將日期字符串轉為 ISO timestamp。
@@ -117,8 +129,15 @@ async def main(args: argparse.Namespace) -> None:
 
     # 載入現有索引（用於增量比對）
     existing_index = _load_existing_index()
+    derived_since_time = None
+    if not force and not since_time and existing_index:
+        derived_since_time = _derive_incremental_since_time(existing_index)
+        if derived_since_time:
+            since_time = derived_since_time
     if existing_index and not force:
         logger.info("現有索引: %d 份", len(existing_index))
+        if derived_since_time:
+            logger.info("預設增量 cutoff: last_edited_time >= %s", derived_since_time)
 
     # 擷取所有會議
     meetings = await fetch_all_meetings(
