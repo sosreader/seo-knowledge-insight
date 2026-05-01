@@ -151,6 +151,16 @@ python scripts/run_pipeline.py --dry-run
 | RAG 問答         | —                                                 | `/chat`          | `POST /api/v1/chat`   |
 | Agentic RAG 問答 | —                                                 | `/chat-agent`    | `POST /api/v1/chat`   |
 
+### 前端 SEO 修正（vocus-web-ui hotfix workflow）
+
+從 meeting-prep / weekly report 萃取「前端工程可實作」建議 → 驗證 2026 最佳實踐 → 在 `~/Documents/vocus-web-ui` worktree 修一版 → 發 PR。含駁回項回頭修正 source 報告機制（避免誤導累積）。
+
+| 功能 | Claude Code 指令 |
+| ---- | ---------------- |
+| SEO 報告 → 前端 hotfix → PR | `/seo-frontend-hotfix [<meeting-prep 路徑>]` |
+
+對應驗證紀錄：`data/seo-validation-log.jsonl`（駁回 / 微調紀錄）+ `data/seo-implementation-log.jsonl`（已實作 PR 紀錄）。詳見 `.claude/commands/seo-frontend-hotfix.md`。
+
 ### 資料查詢
 
 | 功能          | REST API                     |

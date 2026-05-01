@@ -135,3 +135,33 @@
 - [Google Organization docs](https://developers.google.com/search/docs/appearance/structured-data/organization)
 - [almcorp.com 2026 Schema Markup Guide](https://almcorp.com/blog/schema-markup-detailed-guide-2026-serp-visibility/)
 - [digitalapplied.com — Schema Markup After March 2026](https://www.digitalapplied.com/blog/schema-markup-after-march-2026-structured-data-strategies)
+
+### Schema「啟動部署」假設陷阱（首次驗證 2026-05-02，source: meeting_prep_20260501_9180c44c S10 P2-3）
+
+**原建議**：「啟動 Profile Page schema + Organization schema 部署（Top 50 作者頁面），目標 4 週內完成主要作者覆蓋」
+
+**驗證結論**：❌ **駁回**（先前判定為「微調」，再次驗證後實際是「假設錯誤」）
+
+`vocus-web-ui` 早已在 `utils/seo.ts` 部署完整 schema：
+- line 260 `getOrganizationJsonLd`
+- line 294 `getPersonJsonLd`
+- line 1389 `getProfilePageJsonLd`（含 mainEntity nest Person + interactionStatistic Follow/Like/Write + sameAs from socialLinks）
+
+`pages/user/[uid].js` 透過 `components/meta/pageMeta.js` line 575-582 注入 ProfilePage schema 至每個作者頁的 `<Head>`（不是「Top 50」而是全站）。
+
+但 Authoritativeness 仍從 2→1，**意味瓶頸不在 schema 缺失**。
+
+**根因待重新分析候選**：
+1. Discover niche reclassification（業界共識 broad UGC 受懲罰，Feb 2026 Discover Core Update）
+2. E-E-A-T 內容面（人物簽名 / 第一手經驗 signal 不足，schema 結構正確但內容信任度低）
+3. Referral 連結生態品質下降（外鏈品質而非數量）
+4. AI Overviews 引用率（GEO 維度，非 SERP 維度）
+
+**避免誤導**：未來 meeting-prep S10 行動項目應加 status 欄位 `unverified` / `verified-todo` / `verified-done`，或在「啟動」「部署」「建立」類動詞前先 grep 確認現況。
+
+**升級空間（不視為駁回理由）**：Organization schema 缺 `sameAs` 社群識別符（2026 最高槓桿實作）— 可獨立 follow-up PR 升級而非「啟動部署」名義。
+
+**Sources**：
+- [Google ProfilePage docs](https://developers.google.com/search/docs/appearance/structured-data/profile-page)
+- [Google Organization docs](https://developers.google.com/search/docs/appearance/structured-data/organization)
+- vocus-web-ui repo `utils/seo.ts` lines 260/294/1389（grep verified 2026-05-02）
