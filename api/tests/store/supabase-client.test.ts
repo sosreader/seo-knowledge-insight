@@ -142,9 +142,12 @@ describe("supabase-client", () => {
         onConflict: "id",
       });
 
+      // PostgREST takes on_conflict as a URL query parameter; Prefer carries
+      // only the resolution directive.
+      const url = mockFetch.mock.calls[0]![0] as string;
       const headers = mockFetch.mock.calls[0]![1].headers;
+      expect(url).toContain("on_conflict=id");
       expect(headers.Prefer).toContain("resolution=merge-duplicates");
-      expect(headers.Prefer).toContain("on_conflict=id");
     });
 
     it("throws on HTTP error with body", async () => {
