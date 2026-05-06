@@ -314,6 +314,18 @@ backfill-maturity-llm-merge: ## 套用 result_*.json 到 qa_final.json（實際�
 backfill-maturity-llm-merge-dry: ## 預覽 merge（不寫入）
 	$(PYTHON) scripts/backfill_maturity_llm.py merge --dry-run
 
+.PHONY: push-qa-metadata
+push-qa-metadata: ## 把本地 qa_final.json 變動 metadata（maturity + extraction_model）PATCH 至 Supabase
+	$(PYTHON) scripts/push_qa_metadata_to_supabase.py --execute
+
+.PHONY: push-qa-metadata-dry
+push-qa-metadata-dry: ## push 預覽
+	$(PYTHON) scripts/push_qa_metadata_to_supabase.py --dry-run
+
+.PHONY: push-qa-metadata-verify
+push-qa-metadata-verify: ## 驗證本地 vs Supabase metadata 差集
+	$(PYTHON) scripts/push_qa_metadata_to_supabase.py --verify
+
 .PHONY: update-freshness
 update-freshness: ## 更新 freshness_score 指數衰減（實際寫入）
 	$(PYTHON) scripts/update_freshness.py --execute
