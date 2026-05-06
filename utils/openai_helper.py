@@ -46,6 +46,13 @@ _TIME_SENSITIVE_MARKERS = (
     "2023", "2024", "2025", "2026", "update", "核心更新", "演算法", "ai overview",
     "sge", "study", "research", "experiment", "統計", "研究", "實驗", "trend",
 )
+_LOCAL_EXTRACTION_MODEL = "claude-code-heuristic"
+_LOCAL_EXTRACTION_CACHE_MODEL = "claude-code-heuristic-v2"
+_LOCAL_EXTRACTION_MARKERS = tuple(
+    marker.lower()
+    for _, markers in _CATEGORY_RULES
+    for marker in markers
+)
 
 
 def _has_openai_key() -> bool:
@@ -146,6 +153,123 @@ def _classify_qa_locally(question: str, answer: str) -> dict:
         "difficulty": difficulty,
         "evergreen": evergreen,
     }
+
+
+def _clean_local_excerpt(text: str, *, max_len: int = 220) -> str:
+    normalized = re.sub(r"\s+", " ", text).strip(" -*#\t")
+    if len(normalized) <= max_len:
+        return normalized
+    return normalized[: max_len - 1].rstrip() + "…"
+
+
+def _derive_local_keywords(text: str, meeting_title: str) -> list[str]:
+    source = f"{meeting_title}\n{text[:4000]}".lower()
+    keywords: list[str] = []
+    for _, markers in _CATEGORY_RULES:
+        for marker in markers:
+            marker_text = marker.strip()
+            if not marker_text:
+                continue
+            lowered = marker_text.lower()
+            if lowered in source and marker_text not in keywords:
+                keywords.append(marker_text)
+            if len(keywords) >= 6:
+                return keywords
+
+    title_tokens = re.findall(r"[A-Za-z][A-Za-z0-9\-]{2,}|[\u4e00-\u9fff]{2,}", meeting_title)
+    for token in title_tokens:
+        cleaned = token.strip()
+        if cleaned and cleaned not in keywords:
+            keywords.append(cleaned)
+        if len(keywords) >= 6:
+            break
+    return keywords[:6]
+
+
+def _extract_local_segments(text: str) -> list[str]:
+    segments: list[str] = []
+    seen: set[str] = set()
+    for block in re.split(r"\n\s*\n", text):
+        normalized = _clean_local_excerpt(block)
+        if len(normalized) < 24:
+            continue
+        lowered = normalized.lower()
+        if any(marker in lowered for marker in ("notion url", "page id", "建立時間", "最後編輯", "會議日期**")):
+            continue
+        if not any(marker in lowered for marker in _LOCAL_EXTRACTION_MARKERS):
+            continue
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        segments.append(normalized)
+        if len(segments) >= 3:
+            break
+
+    if segments:
+        return segments
+
+    fallback_segments: list[str] = []
+    for block in re.split(r"\n\s*\n", text):
+        normalized = _clean_local_excerpt(block)
+        if len(normalized) < 40:
+            continue
+        lowered = normalized.lower()
+        if any(marker in lowered for marker in ("notion url", "page id", "建立時間", "最後編輯", "會議日期**")):
+            continue
+        fallback_segments.append(normalized)
+        if len(fallback_segments) >= 2:
+            break
+    return fallback_segments
+
+
+def _build_local_extraction_result(
+    meeting_text: str,
+    meeting_title: str = "",
+    meeting_date: str = "",
+) -> dict:
+    keywords = _derive_local_keywords(meeting_text, meeting_title)
+    segments = _extract_local_segments(meeting_text)
+
+    if not keywords and not segments:
+        return {
+            "qa_pairs": [],
+            "meeting_summary": "內容缺乏可判定的 SEO 洞察，暫不產出 Q&A。",
+            "extraction_model": _LOCAL_EXTRACTION_MODEL,
+        }
+
+    qa_pairs: list[dict] = []
+    title_text = meeting_title or "這份內容"
+    effective_segments = segments or [_clean_local_excerpt(meeting_text, max_len=260)]
+    for index, segment in enumerate(effective_segments[:3], start=1):
+        lead_keyword = keywords[min(index - 1, len(keywords) - 1)] if keywords else "SEO"
+        question = f"{title_text} 提到的「{lead_keyword}」重點是什麼，後續應如何處理？"
+        answer = (
+            f"[What] {segment} "
+            "[Why] 這表示該議題已被視為會影響搜尋可見度、索引訊號或內容策略的重點。 "
+            "[How] 建議先把會議中提到的頁面、指標或設定列入排查清單，並用 Search Console、站內檢查或內容調整逐項驗證。 "
+            f"[Evidence] 依據{' ' + meeting_date if meeting_date else ''}內容原文可整理出上述重點。"
+        ).strip()
+        qa_pairs.append(
+            {
+                "question": question,
+                "answer": answer,
+                "keywords": keywords[:6] or [lead_keyword],
+                "confidence": 0.55,
+            }
+        )
+
+    summary_subject = effective_segments[0] if effective_segments else title_text
+    return {
+        "qa_pairs": qa_pairs,
+        "meeting_summary": f"{title_text} 聚焦在 {summary_subject}",
+        "extraction_model": _LOCAL_EXTRACTION_MODEL,
+    }
+
+
+def get_extraction_cache_model() -> str:
+    if _has_openai_key():
+        return config.OPENAI_MODEL
+    return _LOCAL_EXTRACTION_CACHE_MODEL
 
 
 @functools.lru_cache(maxsize=1)
@@ -303,6 +427,9 @@ def extract_qa_from_text(
     回傳 dict: {qa_pairs: [...], meeting_summary: str}
     """
     _logger.info(format_capability_tag(get_capabilities()))
+    if not _has_openai_key():
+        return _build_local_extraction_result(meeting_text, meeting_title, meeting_date)
+
     client = _client()
 
     user_msg = f"以下是一份 SEO 顧問會議紀錄"

@@ -30,7 +30,7 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import config
 
-from utils.openai_helper import extract_qa_from_text
+from utils.openai_helper import extract_qa_from_text, get_extraction_cache_model
 from utils.pipeline_cache import cache_get, cache_set
 from utils.pipeline_deps import preflight_check, StepDependency
 from utils.pipeline_version import record_artifact
@@ -102,6 +102,20 @@ def _detect_source_metadata(md_path: Path) -> dict:
     }
 
 
+def _resolve_artifact_extraction_model(data: dict) -> str:
+    model = str(data.get("extraction_model") or "").strip()
+    return model or config.OPENAI_MODEL
+
+
+def _resolve_batch_extraction_model(qa_pairs: list[dict]) -> str:
+    models = sorted({str(qa.get("extraction_model") or "").strip() for qa in qa_pairs if str(qa.get("extraction_model") or "").strip()})
+    if not models:
+        return config.OPENAI_MODEL
+    if len(models) == 1:
+        return models[0]
+    return "mixed"
+
+
 @observe(name="process_single_meeting")
 def process_single_meeting(md_path: Path) -> dict:
     """處理單份會議紀錄或文章（LLM 呼叫有 content-addressed cache 保護）"""
@@ -130,10 +144,12 @@ def process_single_meeting(md_path: Path) -> dict:
     # ── Layer 1 cache check ──────────────────────────────────
     # Key = markdown content（title/date 均由 content 衍生，deterministic）
     # Value = extract_qa_from_text() 的 LLM 輸出（不含 source 欄位）
-    cached = cache_get("extraction", content, model=config.OPENAI_MODEL)
+    cache_model = get_extraction_cache_model()
+    cached = cache_get("extraction", content, model=cache_model)
     if cached is not None:
         qa_count = len(cached.get("qa_pairs", []))
         logger.info("     [cache hit] %d Q&A", qa_count)
+        extraction_model = _resolve_artifact_extraction_model(cached)
         # Immutable enrichment — no mutation of cached data
         cache_enriched = [
             {
@@ -144,12 +160,12 @@ def process_single_meeting(md_path: Path) -> dict:
                 "source_type": source_meta["source_type"],
                 "source_collection": source_meta["source_collection"],
                 "source_url": source_meta["source_url"],
-                "extraction_model": config.OPENAI_MODEL,
+                "extraction_model": extraction_model,
                 "extraction_timestamp": datetime.now(timezone.utc).isoformat(),
             }
             for qa in cached.get("qa_pairs", [])
         ]
-        return {**cached, "qa_pairs": cache_enriched}
+        return {**cached, "qa_pairs": cache_enriched, "extraction_model": extraction_model}
 
     # ── Cache miss：呼叫 OpenAI ──────────────────────────────
     # 如果內容太長，分段處理
@@ -172,10 +188,11 @@ def process_single_meeting(md_path: Path) -> dict:
         meeting_result = extract_qa_from_text(content, title, date)
 
     # ── 寫入 cache（source 欄位不在 cache 中，以保持 content-addressable）
-    cache_set("extraction", content, meeting_result, model=config.OPENAI_MODEL)
+    cache_set("extraction", content, meeting_result, model=cache_model)
 
     # ── 為每個 Q&A 加上來源資訊 + model provenance（immutable）────
     extraction_ts = datetime.now(timezone.utc).isoformat()
+    extraction_model = _resolve_artifact_extraction_model(meeting_result)
     enriched_pairs = [
         {
             **qa,
@@ -185,12 +202,12 @@ def process_single_meeting(md_path: Path) -> dict:
             "source_type": source_meta["source_type"],
             "source_collection": source_meta["source_collection"],
             "source_url": source_meta["source_url"],
-            "extraction_model": config.OPENAI_MODEL,
+            "extraction_model": extraction_model,
             "extraction_timestamp": extraction_ts,
         }
         for qa in meeting_result.get("qa_pairs", [])
     ]
-    meeting_result = {**meeting_result, "qa_pairs": enriched_pairs}
+    meeting_result = {**meeting_result, "qa_pairs": enriched_pairs, "extraction_model": extraction_model}
 
     qa_count = len(enriched_pairs)
     logger.info("     萃取 %d 個 Q&A", qa_count)
@@ -248,7 +265,7 @@ def main(args: argparse.Namespace) -> None:
                 hint="請先執行 python scripts/01_fetch_notion.py",
             ),
         ],
-        env_keys=["OPENAI_API_KEY"],
+        env_keys=[],
         step_name="Step 2: Q&A 萃取",
         check_only=getattr(args, "check", False),
     )
@@ -321,7 +338,7 @@ def main(args: argparse.Namespace) -> None:
             metadata={
                 "qa_count": merged["total_qa_count"],
                 "meetings_processed": merged["meetings_processed"],
-                "extraction_model": config.OPENAI_MODEL,
+                "extraction_model": _resolve_batch_extraction_model(merged["qa_pairs"]),
             },
         )
         logger.info("版本記録: %s", version_entry['version_id'])
@@ -371,7 +388,7 @@ def main(args: argparse.Namespace) -> None:
         metadata={
             "qa_count": merged_output["total_qa_count"],
             "meetings_processed": merged_output["meetings_processed"],
-            "extraction_model": config.OPENAI_MODEL,
+            "extraction_model": _resolve_batch_extraction_model(merged_output["qa_pairs"]),
         },
     )
     logger.info("版本記録: %s", version_entry['version_id'])
