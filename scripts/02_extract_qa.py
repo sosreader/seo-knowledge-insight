@@ -40,6 +40,7 @@ from scripts.extract_qa_helpers import (
     _extract_date_from_content,
     _split_content,
 )
+from scripts.list_pipeline_state import _enrich_qa_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -233,7 +234,10 @@ def _rebuild_merged_from_per_meeting() -> dict:
                 if not _is_completed_qa_artifact(data):
                     continue
                 pairs = data["qa_pairs"]
-                all_qa.extend(pairs)
+                inferred_source = data.get("source_file") or (f.stem.replace("_qa", "") + ".md")
+                for qa in pairs:
+                    enriched = {**qa} if qa.get("source_file") else {**qa, "source_file": inferred_source}
+                    all_qa.append(_enrich_qa_metadata(enriched))
                 summary.append({
                     "file": f.stem.replace("_qa", "") + ".md",
                     "qa_count": len(pairs),

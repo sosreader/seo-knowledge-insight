@@ -46,6 +46,7 @@ from scripts.dedupe_helpers import _cosine_similarity_matrix
 
 
 from utils.stable_id import compute_stable_id
+from utils.maturity_classifier import classify_maturity_level
 
 
 def compute_stable_id_from_sources(source_ids: list[str]) -> str:
@@ -99,9 +100,29 @@ def _group_by_collection(qa_pairs: list[dict]) -> dict[str, list[dict]]:
     from collections import defaultdict
     by_collection: dict[str, list[dict]] = defaultdict(list)
     for qa in qa_pairs:
-        collection = qa.get("source_collection", "seo-meetings")
+        collection = qa.get("source_collection") or "seo-meetings"
         by_collection[collection].append(qa)
     return dict(by_collection)
+
+
+def _infer_source_type(qa: dict, collection: str) -> str:
+    source_type = qa.get("source_type")
+    if source_type:
+        return str(source_type)
+    if collection == "seo-meetings":
+        return "meeting"
+    return "article"
+
+
+def _infer_maturity_relevance(qa: dict) -> str | None:
+    existing = qa.get("maturity_relevance")
+    if existing:
+        return str(existing)
+    return classify_maturity_level(
+        qa.get("keywords", []),
+        qa.get("question", ""),
+        qa.get("answer", ""),
+    )
 
 
 def _normalize_extraction_model(value: object) -> str | None:
@@ -215,7 +236,7 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
                         **merged_raw,
                         "is_merged": True,
                         "merge_count": len(group_qas),
-                        "source_type": group_qas[0].get("source_type", "meeting"),
+                        "source_type": _infer_source_type(group_qas[0], collection),
                         "source_collection": collection,
                         "source_url": group_qas[0].get("source_url", ""),
                         "stable_id": compute_stable_id_from_sources(source_ids),
@@ -262,18 +283,24 @@ def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
 
             new_qa = {
                 **qa,
+                "source_collection": qa.get("source_collection") or "seo-meetings",
+                "source_type": _infer_source_type(qa, qa.get("source_collection") or "seo-meetings"),
                 "category": labels.get("category", "其他"),
                 "difficulty": labels.get("difficulty", "基礎"),
                 "evergreen": labels.get("evergreen", True),
+                "maturity_relevance": _infer_maturity_relevance(qa),
             }
         except Exception as e:
             logger.warning("分類失敗: %s", e)
             used_remote_classification = False
             new_qa = {
                 **qa,
+                "source_collection": qa.get("source_collection") or "seo-meetings",
+                "source_type": _infer_source_type(qa, qa.get("source_collection") or "seo-meetings"),
                 "category": "其他",
                 "difficulty": "基礎",
                 "evergreen": True,
+                "maturity_relevance": _infer_maturity_relevance(qa),
             }
 
         result.append(new_qa)
