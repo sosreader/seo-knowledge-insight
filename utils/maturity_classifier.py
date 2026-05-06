@@ -18,31 +18,36 @@ from typing import Optional
 
 # --- Keyword patterns per level (ordered from most specific to least) ---
 
+# L4_KEYWORDS — implementation-level / leading-edge terms only.
+# 純 trend/topic 詞移到 TREND_TOPIC_TERMS，避免單一趨勢詞自動觸發 L4。
 L4_KEYWORDS = frozenset([
     "預測", "predictive", "forecasting",
+    "排名預測", "流量預測", "預測模型",
     "機器學習", "machine learning", "ml model",
-    "跨通路", "cross-channel", "omnichannel",
-    "歸因分析", "attribution model", "multi-touch",
-    "自動化測試", "automated testing framework",
-    "competitive intelligence", "競爭情報",
-    "ai 驅動", "ai-driven", "ai-powered",
+    "跨通路", "跨通路整合", "cross-channel", "omnichannel",
+    "歸因分析", "歸因模型", "attribution model", "multi-touch",
+    "自動化測試", "seo 自動化測試", "automated testing framework", "regression testing",
+    "competitive intelligence", "競爭情報", "競爭情報系統",
     "程式化 seo", "programmatic seo",
-    # v3.4 擴充：中文 variants + 缺口主題
-    "競爭情報系統", "跨通路整合", "歸因模型",
     "增量價值", "incremental value",
     "知識圖譜", "knowledge graph",
-    "排名預測", "流量預測",
     "內容生成 pipeline", "content pipeline",
-    "seo 自動化測試", "regression testing",
     "推薦系統", "recommendation engine",
+    "citation growth", "引用成長",
+    "scenario planning", "情境規劃",
+    "authority building", "decision gates",
+])
+
+# TREND_TOPIC_TERMS — 趨勢主題詞（topic ≠ maturity）。
+# 只給 +1 輔助分；單獨命中無法升 L4，必須與 advanced pattern / L4_STRATEGY_TERMS / 長答案並存。
+TREND_TOPIC_TERMS = frozenset([
     "ai overview", "ai overviews", "aio",
     "ai search", "生成式搜尋",
     "geo", "generative engine optimization",
     "aeo", "answer engine optimization",
     "llm seo", "ai 可見度", "ai visibility",
-    "品牌可見度", "citation growth",
-    "scenario planning", "情境規劃",
-    "authority building", "decision gates",
+    "ai 驅動", "ai-driven", "ai-powered",
+    "品牌可見度", "brand visibility",
 ])
 
 AI_SEARCH_TERMS = frozenset([
@@ -53,8 +58,8 @@ AI_SEARCH_TERMS = frozenset([
     "llm seo", "ai 可見度", "ai visibility",
 ])
 
+# L4_STRATEGY_TERMS — 真正的策略級信號（去掉純 topic 詞 brand visibility）。
 L4_STRATEGY_TERMS = frozenset([
-    "品牌可見度", "brand visibility",
     "citation growth", "引用成長",
     "scenario planning", "情境規劃",
     "authority building", "decision gates",
@@ -124,6 +129,9 @@ BASIC_PATTERNS = [
     re.compile(r"(?:what is|定義是)", re.IGNORECASE),
 ]
 
+# 雙重證據 demote 門檻
+_L4_DUAL_EVIDENCE_TRIGGER = 2
+
 
 def classify_maturity_level(
     keywords: list[str],
@@ -135,11 +143,13 @@ def classify_maturity_level(
     Returns "L1", "L2", "L3", "L4", or None if confidence is too low.
 
         Strategy (scoring):
-            1. Match level-specific keywords in keywords/question/answer text
-            2. Apply advanced/basic pattern bonuses from answer phrasing
-            3. Apply AI-search strategy bonus when AI-search and advanced strategy signals coexist
-            4. Use answer length only as a weak supporting signal
-            5. Return None if max score stays below the minimum confidence threshold
+            1. Match level-specific keywords in keywords/question/answer text (L4_KEYWORDS +2)
+            2. TREND_TOPIC_TERMS only +1 each (topics, not maturity)
+            3. Apply advanced/basic pattern bonuses from answer phrasing
+            4. Apply AI-search strategy bonus when AI-search and L4 strategy signals coexist
+            5. Dual-evidence demote: L4 must be backed by advanced pattern / L4 strategy term
+               / long answer; otherwise reset L4 score to 0
+            6. Return None if max score stays below the minimum confidence threshold
     """
     combined_text = f"{question} {answer}".lower()
     kw_text = " ".join(k.lower() for k in keywords)
@@ -151,6 +161,11 @@ def classify_maturity_level(
     for term in L4_KEYWORDS:
         if term in full_text:
             scores["L4"] += 2
+
+    # 趨勢詞：給 +1 輔助分（不足以單獨升 L4）
+    for term in TREND_TOPIC_TERMS:
+        if term in full_text:
+            scores["L4"] += 1
 
     for term in L3_KEYWORDS:
         if term in full_text:
@@ -165,10 +180,12 @@ def classify_maturity_level(
             scores["L1"] += 1
 
     # Complexity modifiers from answer patterns
+    has_advanced = False
     for pattern in ADVANCED_PATTERNS:
         if pattern.search(answer):
             scores["L3"] += 1
             scores["L4"] += 1
+            has_advanced = True
 
     has_ai_search_signal = any(term in full_text for term in AI_SEARCH_TERMS)
     has_l4_strategy_signal = any(term in full_text for term in L4_STRATEGY_TERMS)
@@ -187,6 +204,14 @@ def classify_maturity_level(
 
     if "預測" not in full_text and ("預期" in full_text or "預設" in full_text):
         scores["L4"] = max(0, scores["L4"] - 2)
+
+    # ── Dual-evidence rule (Task B) ────────────────────────────────────
+    # 若 L4 達門檻但缺乏 advanced pattern / L4 strategy term / 長答案佐證，
+    # 視為「只談趨勢」而非真正 L4，重置 L4 分數。
+    if scores["L4"] >= _L4_DUAL_EVIDENCE_TRIGGER:
+        has_long_answer = len(answer) > 500
+        if not (has_advanced or has_l4_strategy_signal or has_long_answer):
+            scores["L4"] = 0
 
     # Pick highest score level
     max_score = max(scores.values())

@@ -162,3 +162,139 @@ class TestClassifyMaturityLevel:
             answer="Title tag 是 HTML 中的標題標籤，簡單來說就是瀏覽器標籤上顯示的文字。",
         )
         assert result == "L1"
+
+
+class TestL4RetightenFixtures:
+    """L4 retighten sprint regression — 5 TP（應為 L4）+ 5 FP（應降至非 L4）。
+
+    驗證 plans/active/maturity-l4-retighten.md 的雙重證據規則：
+    L4 必須同時有 keyword 命中 AND (advanced pattern OR L4_STRATEGY_TERMS OR 長答案 > 500)。
+    純談 trend 詞（AI Overview / GEO / AEO / ai-driven / brand visibility）不再單獨升 L4。
+    """
+
+    # ── True-Positive：實作層級內容應維持 L4 ──────────────────────────────
+
+    def test_tp_programmatic_seo_system(self):
+        """大規模 programmatic SEO 系統設計 — 應為 L4。"""
+        result = classify_maturity_level(
+            keywords=["programmatic seo", "程式化 seo"],
+            question="如何建立大規模 programmatic SEO 系統？",
+            answer=(
+                "建立 programmatic SEO 系統需要從資料來源、模板架構、URL 生成、品質審核四個面向設計 pipeline。"
+                "先設計資料 schema，整合 API 自動化生成內容，建立 regression testing 框架確保品質。"
+            ),
+        )
+        assert result == "L4"
+
+    def test_tp_predictive_ranking_model(self):
+        """排名預測模型 with ML — 應為 L4。"""
+        result = classify_maturity_level(
+            keywords=["排名預測", "預測模型", "machine learning"],
+            question="如何建立 SEO 排名預測模型？",
+            answer=(
+                "排名預測模型可使用 machine learning 方法，結合歷史 GSC 資料、競爭對手指標、季節性因子訓練模型。"
+                "建議用 random forest 或 XGBoost 架構，定期 retrain 並驗證 forecasting 準確度。"
+            ),
+        )
+        assert result == "L4"
+
+    def test_tp_cross_channel_attribution(self):
+        """跨通路歸因模型實作 — 應為 L4。"""
+        result = classify_maturity_level(
+            keywords=["跨通路整合", "歸因模型", "multi-touch"],
+            question="如何設計跨通路 SEO 歸因模型？",
+            answer=(
+                "跨通路整合需要結合 SEO、付費搜尋、社群、Email 等管道。"
+                "建議使用 multi-touch attribution model，搭配 GA4 的事件追蹤建立資料 pipeline，"
+                "整合到 BI 系統做 cross-channel 分析。"
+            ),
+        )
+        assert result == "L4"
+
+    def test_tp_recommendation_engine_for_internal_links(self):
+        """推薦系統優化內部連結 — 應為 L4。"""
+        result = classify_maturity_level(
+            keywords=["推薦系統", "recommendation engine"],
+            question="如何用推薦系統優化內部連結？",
+            answer=(
+                "建立內部連結推薦系統可使用協同過濾或 content-based recommendation engine。"
+                "設計流程：從 GSC 抓 query → 嵌入向量 → 相似度排序 → 推薦給編輯器。"
+                "需要架構 pipeline 並建立 A/B 測試框架驗證。"
+            ),
+        )
+        assert result == "L4"
+
+    def test_tp_seo_automated_regression_testing(self):
+        """SEO 自動化測試框架 — 應為 L4。"""
+        result = classify_maturity_level(
+            keywords=["seo 自動化測試", "regression testing"],
+            question="如何建立 SEO 自動化測試框架？",
+            answer=(
+                "SEO 自動化測試框架可使用 Playwright + GSC API 整合，建立 regression testing pipeline。"
+                "每次發版前跑：meta tag 驗證、canonical 一致性、sitemap 完整性、robots.txt 規則、"
+                "結構化資料 schema 驗證。發現問題自動建立 issue。"
+            ),
+        )
+        assert result == "L4"
+
+    # ── False-Positive：純 trend 內容應降為非 L4 ──────────────────────────
+
+    def test_fp_ai_overview_concept_only(self):
+        """純解釋 AI Overview 概念 — 不應為 L4。"""
+        result = classify_maturity_level(
+            keywords=["AI Overview", "AIO"],
+            question="什麼是 AI Overview？",
+            answer=(
+                "AI Overview 是 Google 在搜尋結果頂部顯示的 AI 摘要功能。"
+                "AIO 整合 LLM 為使用者提供問題答案，影響傳統藍色連結的點擊率。"
+            ),
+        )
+        assert result != "L4"
+
+    def test_fp_geo_aeo_definition_listing(self):
+        """純列舉 GEO / AEO 名詞定義 — 不應為 L4。"""
+        result = classify_maturity_level(
+            keywords=["GEO", "AEO", "generative engine optimization"],
+            question="GEO 和 AEO 有什麼差別？",
+            answer=(
+                "GEO 是 generative engine optimization 的縮寫，"
+                "AEO 則是 answer engine optimization。兩者都是針對 AI 搜尋的優化概念。"
+            ),
+        )
+        assert result != "L4"
+
+    def test_fp_ai_driven_concept_explanation(self):
+        """純談 ai-driven SEO 概念 — 不應為 L4。"""
+        result = classify_maturity_level(
+            keywords=["ai-driven", "ai-powered"],
+            question="什麼是 ai-driven SEO？",
+            answer=(
+                "ai-driven SEO 是利用 AI 工具輔助 SEO 工作的概念，"
+                "目前 ai-powered 工具越來越多，但實際應用仍在發展中。"
+            ),
+        )
+        assert result != "L4"
+
+    def test_fp_brand_visibility_short_note(self):
+        """品牌可見度短篇科普 — 不應為 L4。"""
+        result = classify_maturity_level(
+            keywords=["品牌可見度", "ai visibility"],
+            question="品牌可見度為什麼重要？",
+            answer=(
+                "品牌可見度反映使用者是否認得你的品牌，對 SEO 有間接影響。"
+                "AI visibility 也是同樣道理，與品牌建立有關。"
+            ),
+        )
+        assert result != "L4"
+
+    def test_fp_aeo_introduction_paragraph(self):
+        """AEO 入門介紹段落 — 不應為 L4。"""
+        result = classify_maturity_level(
+            keywords=["AEO", "answer engine optimization"],
+            question="AEO 跟傳統 SEO 有什麼不一樣？",
+            answer=(
+                "AEO（answer engine optimization）著重在問答型搜尋的優化，"
+                "而傳統 SEO 主要處理藍色連結排名。對 SEO 從業者來說是新概念。"
+            ),
+        )
+        assert result != "L4"
