@@ -40,6 +40,7 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import re
 import sys
 from datetime import datetime
@@ -118,6 +119,10 @@ _SHEET_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{10,60}$")
 _GID_RE = re.compile(r"^\d{1,10}$")
 _MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB 上限
 _ALLOWED_HOST = "docs.google.com"
+
+
+def _has_openai_key() -> bool:
+    return bool(os.getenv("OPENAI_API_KEY", "").strip())
 
 
 def _validate_sheet_id(sheet_id: str) -> None:
@@ -504,6 +509,10 @@ def _rerank_qas(
     if len(candidates) <= top_k:
         return candidates  # 候選數量不足，不須 rerank
 
+    if not _has_openai_key():
+        logger.info("   ↪ 無 OPENAI_API_KEY，Reranker 使用原始排序")
+        return candidates[:top_k]
+
     client = OpenAI(api_key=config.OPENAI_API_KEY)
 
     # 建立候選清單（截短 answer 節省 token）
@@ -713,6 +722,179 @@ def _build_metrics_summary(alerts: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _split_metrics_summary_sections(metrics_summary: str) -> dict[str, list[str]]:
+    sections = {"core": [], "down": [], "up": []}
+    current: str | None = None
+    for raw_line in metrics_summary.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line == "【核心指標】":
+            current = "core"
+            continue
+        if line == "【顯著下滑（月趨勢）】":
+            current = "down"
+            continue
+        if line == "【顯著上升（月趨勢）】":
+            current = "up"
+            continue
+        if current:
+            sections[current].append(line)
+    return sections
+
+
+def _health_label(score: int) -> str:
+    if score >= 80:
+        return "🟢 良好"
+    if score >= 60:
+        return "🟡 需關注"
+    return "🔴 警示"
+
+
+def _metric_names_from_summary_lines(lines: list[str]) -> list[str]:
+    names = []
+    for line in lines:
+        if ":" in line:
+            names.append(line.split(":", 1)[0].strip())
+        else:
+            names.append(line.strip())
+    return names
+
+
+def _extract_answer_block(answer: str, label: str) -> str:
+    pattern = rf"\[{label}\](.*?)(?=\[(?:What|Why|How|Evidence)\]|$)"
+    match = re.search(pattern, answer, flags=re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return answer.strip()
+
+
+def _build_local_citation_block(qa: dict, citation_number: int) -> str:
+    answer = qa.get("answer", "")
+    what = _extract_answer_block(answer, "What")
+    why = _extract_answer_block(answer, "Why")
+    how = _extract_answer_block(answer, "How")
+    evidence = _extract_answer_block(answer, "Evidence")
+    source_title = qa.get("source_title", "")
+    source_date = qa.get("source_date", "")
+    source_label = "、".join(part for part in [source_title, source_date] if part)
+    qa_id = qa.get("id", "")
+    return (
+        f"> **現象** {what}\n"
+        f"> **原因** {why}\n"
+        f"> **行動** {how}\n"
+        f"> **依據** {evidence}\n"
+        f">\n"
+        f"> — {source_label}  [知識庫{citation_number} →](/admin/seoInsight/{qa_id})"
+    )
+
+
+def _build_local_report_body(
+    metrics_summary: str,
+    relevant_qas: list[dict],
+    metrics_date: str,
+) -> str:
+    sections = _split_metrics_summary_sections(metrics_summary)
+    core = sections["core"]
+    down = sections["down"]
+    up = sections["up"]
+    score = max(0, 100 - len(down) * 10 + min(len(up), 3) * 5)
+    health = _health_label(score)
+
+    citations = relevant_qas[: min(len(relevant_qas), 8)]
+    traffic_refs = citations[:2]
+    tech_refs = citations[2:4] or citations[:2]
+    action_refs = citations[4:6] or citations[:2]
+    alert_down_names = _metric_names_from_summary_lines(down)
+
+    top_down = down[:3]
+    top_up = up[:2]
+    phenomenon_lines = []
+    for item in top_down:
+        phenomenon_lines.append(f"- 🔴 {item}")
+    for item in top_up:
+        phenomenon_lines.append(f"- 🟢 {item}")
+    if not phenomenon_lines:
+        phenomenon_lines.append("- 本期沒有超過閾值的異常指標，整體指標相對平穩。")
+
+    traffic_blocks = "\n\n".join(
+        _build_local_citation_block(qa, idx + 1) for idx, qa in enumerate(traffic_refs)
+    )
+    tech_blocks = "\n\n".join(
+        _build_local_citation_block(qa, idx + 1 + len(traffic_refs)) for idx, qa in enumerate(tech_refs)
+    )
+    action_blocks = "\n\n".join(
+        _build_local_citation_block(qa, idx + 1 + len(traffic_refs) + len(tech_refs)) for idx, qa in enumerate(action_refs)
+    )
+
+    source_lines = []
+    for idx, qa in enumerate(citations, 1):
+        qa_id = qa.get("id", "")
+        source_title = qa.get("source_title", "")
+        source_date = qa.get("source_date", "")
+        title = "、".join(part for part in [source_title, source_date] if part)
+        snippet = (qa.get("answer", "").replace("\n", " ")[:80]).strip()
+        source_lines.append(f"[知識庫{idx} →](/admin/seoInsight/{qa_id}) **{title}** — {snippet}…")
+
+    body = f"""# SEO 週報 — {metrics_date}
+
+## 一、本週 SEO 情勢快照
+
+**Health Score: {score} / 100（{health}）**
+
+本週摘要顯示核心指標 {len(core)} 項、顯著下滑 {len(down)} 項、顯著上升 {len(up)} 項。這份報告採用本地 fallback 生成，因此重點是把指標異常與既有知識庫做對照，先建立可行的判讀與行動優先序。
+
+### 五大現象
+{chr(10).join(phenomenon_lines)}
+
+## 二、流量信號解讀
+
+從流量訊號來看，最需要先判斷的是曝光、點擊、CTR 與 Discover 是否同向變化；若曝光與點擊同步下滑，通常代表觸及縮小或索引/排名層面的問題，若 CTR 相對穩定則更可能是曝光來源改變而非標題吸引力崩壞。以下知識庫條目可作為本週判讀的直接佐證 [1][2]。
+
+{traffic_blocks or '目前沒有可引用的知識庫條目。'}
+
+## 三、技術 SEO 健康度
+
+技術面優先看 Coverage、檢索未索引、AMP 與伺服器回應時間。如果「已檢索未索引」快速增加，或渲染路徑讓 Googlebot 難以取得完整內容，就算其他流量信號短期波動，也應先把技術排查列為高優先。以下條目可協助對照本週技術訊號 [3][4]。
+
+{tech_blocks or '目前沒有可引用的知識庫條目。'}
+
+## 四、搜尋意圖對映
+
+本週若出現特定頁型或查詢族群波動，應將異常拆回 Awareness / Consideration / Conversion 三層來看，而不是把所有流量變化都視為單一演算法事件。最安全的做法是用 Search Console 先分頁型、分查詢、分搜尋外觀確認流量來源，再決定要修內容、技術或版位。
+
+- Awareness：先看曝光與 Discover 是否同跌。
+- Consideration：再看 CTR、圖片曝光與內容頁型是否互相排擠。
+- Conversion：最後看商業頁型或高意圖查詢是否連帶下滑。
+
+## 五、跨週趨勢比較
+
+以下是本次輸入摘要中最值得持續追蹤的趨勢：
+
+- 核心指標：{'; '.join(core[:3]) if core else '本次未提供核心指標摘要。'}
+- 顯著下滑：{'; '.join(top_down) if top_down else '無。'}
+- 顯著上升：{'; '.join(top_up) if top_up else '無。'}
+
+若同一指標連續兩週以上惡化，優先把它從「觀察項」升級成「處理項」；若是同一頁型在多個指標同時惡化，代表問題很可能不是單一數值偶發噪音，而是結構性變化。
+
+## 六、本週優先行動清單
+
+本週列入優先排查的下滑指標：{', '.join(alert_down_names) if alert_down_names else '無'}。
+
+- 🔴 先用 Search Console 把異常指標拆成頁型與查詢層級，確認問題是流量重分配、索引門檻變化，還是渲染抓取效率下降。 [1]
+- 🔴 若本週同時看到曝光波動與「已檢索未索引」升高，優先排查 CSR 頁面、SSR/pre-render 覆蓋率與伺服器回應異常。 [2]
+- 🟡 把圖片曝光、Tag 頁點擊與 article 頁表現分開觀察，避免把頁型互相排擠誤判成單純演算法起伏。 [3]
+- 🟢 針對已確認有效的知識庫條目，補上更可重用的問句與正式來源標記，讓下週報表檢索品質更穩定。 [4]
+
+{action_blocks or ''}
+
+## 七、來源
+
+{chr(10).join(source_lines) if source_lines else '本次未使用知識庫來源。'}
+"""
+    return body
+
+
 # ──────────────────────────────────────────────────────
 # LLM 報告產生
 # ──────────────────────────────────────────────────────
@@ -805,7 +987,8 @@ body text 引用 KB 後，句末加 `[N]`（同一 QA 重複引用用同一 N）
 
 @observe(name="generate_report")
 def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date: str, weeks: int = 1) -> str:
-    client = OpenAI(api_key=config.OPENAI_API_KEY)
+    use_openai = _has_openai_key()
+    client = OpenAI(api_key=config.OPENAI_API_KEY) if use_openai else None
     
     # ─ Meta 前置（動態取出 KB 大小）─
     _qa_path = config.OUTPUT_DIR / "qa_final.json"
@@ -819,13 +1002,18 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
     except Exception as e:
         logger.warning("無法讀取 qa_final.json 以取得 KB 大小：%s", e)
     _kb_label = f"{_total_qa} Q&A" if _total_qa else "知識庫"
-    _model_name = config.REPORT_MODEL
+    _model_name = config.REPORT_MODEL if use_openai else "claude-code-local"
+    _generation_label = (
+        f"OpenAI {_model_name} 生成"
+        if use_openai
+        else "Claude Code 生成（無 OpenAI / 外部 LLM 依賴）"
+    )
     meta_block = f"""---
 **報告資訊**
-- 生成方式：OpenAI {_model_name} 生成
+- 生成方式：{_generation_label}
 - 知識庫版本：{_kb_label}，{_source_collections} 個來源集合
 - 分析框架：Semrush 2025 / GSC 官方指引 / First Page Sage 2025 排名因素
-- 分析維度：6 維度（情勢 / 流量 / 技術 / 意圖 / 行動 / 知識庫）
+- 分析維度：7 維度（情勢 / 流量 / 技術 / 意圖 / 趨勢 / 行動 / 知識庫）
 - 生成日期：{metrics_date}
 ---
 """
@@ -863,40 +1051,44 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
         f"{qa_context}"
     )
 
-    response = _retry(
-        lambda: client.chat.completions.create(
-            model=config.REPORT_MODEL,
-            messages=[
-                {"role": "system", "content": REPORT_SYSTEM_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
-            max_completion_tokens=16384,
-        ),
-        retryable=(OSError, TimeoutError),
-        label="generate_report",
-    )
+    if use_openai:
+        response = _retry(
+            lambda: client.chat.completions.create(
+                model=config.REPORT_MODEL,
+                messages=[
+                    {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+                max_completion_tokens=16384,
+            ),
+            retryable=(OSError, TimeoutError),
+            label="generate_report",
+        )
 
-    msg = response.choices[0].message
-    content = msg.content
+        msg = response.choices[0].message
+        content = msg.content
 
-    # gpt-5 系列可能將內容放在 reasoning_content（thinking output）
-    if not content:
-        reasoning = getattr(msg, "reasoning_content", None)
-        if reasoning:
-            logger.warning(f"   ⚠️  content 為空，嘗試使用 reasoning_content（{len(reasoning)} chars）")
-            content = reasoning
-        else:
-            logger.error(f"   ❌ finish_reason={response.choices[0].finish_reason}")
-            logger.error(f"   ❌ refusal={getattr(msg, 'refusal', None)}")
-            logger.error(f"   ❌ msg fields: {getattr(msg, 'model_fields_set', None)}")
+        # gpt-5 系列可能將內容放在 reasoning_content（thinking output）
+        if not content:
+            reasoning = getattr(msg, "reasoning_content", None)
+            if reasoning:
+                logger.warning(f"   ⚠️  content 為空，嘗試使用 reasoning_content（{len(reasoning)} chars）")
+                content = reasoning
+            else:
+                logger.error(f"   ❌ finish_reason={response.choices[0].finish_reason}")
+                logger.error(f"   ❌ refusal={getattr(msg, 'refusal', None)}")
+                logger.error(f"   ❌ msg fields: {getattr(msg, 'model_fields_set', None)}")
+    else:
+        logger.info("   ↪ 無 OPENAI_API_KEY，使用本地 fallback 生成週報")
+        content = _build_local_report_body(metrics_summary, relevant_qas, metrics_date)
 
     # 將 meta_block 加入報告開頭，citations + report_meta JSON 加入尾端
     _generated_at = datetime.now().isoformat()
     _report_meta = json.dumps({
         "weeks": weeks,
         "generated_at": _generated_at,
-        "generation_mode": "openai",
-        "generation_label": f"OpenAI {_model_name} 生成",
+        "generation_mode": "openai" if use_openai else "local-fallback",
+        "generation_label": _generation_label,
         "model": _model_name,
     }, ensure_ascii=False)
 
@@ -933,7 +1125,7 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
         if span:
             span.set_metadata({
                 "step": "generate_report",
-                "execution_mode": "openai_api",
+                "execution_mode": "openai_api" if use_openai else "local_fallback",
                 "model": config.REPORT_MODEL,
                 "knowledge_base_size": _total_qa,
                 "generation_timestamp": metrics_date,
@@ -1025,7 +1217,7 @@ def main() -> None:
         ]
     preflight_check(
         deps=deps,
-        env_keys=["OPENAI_API_KEY"],
+        env_keys=[],
         step_name="Step 4: 週報生成",
         check_only=args.check,
     )
