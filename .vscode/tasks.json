@@ -88,7 +88,7 @@
 		{
 			"label": "Pipeline: evaluate-qa — 品質評估",
 			"type": "shell",
-			"command": ".venv/bin/python scripts/run_pipeline.py --step evaluate-qa",
+			"command": "make evaluate-qa",
 			"presentation": {
 				"reveal": "always",
 				"panel": "shared"
@@ -98,7 +98,7 @@
 		{
 			"label": "Pipeline: evaluate-qa-full — 完整評估 (100 筆 + Retrieval)",
 			"type": "shell",
-			"command": ".venv/bin/python scripts/run_pipeline.py --step evaluate-qa --sample 100 --with-source --eval-retrieval",
+			"command": "make evaluate-qa-full",
 			"presentation": {
 				"reveal": "always",
 				"panel": "shared"

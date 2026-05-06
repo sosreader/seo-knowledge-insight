@@ -45,3 +45,10 @@ supabase/.temp/
 
 # Generated docs (built by CI from openapi.ts)
 docs-site/openapi.json
+
+# Tooling artifacts (do not commit)
+.playwright-cli/
+.tmp/
+entities.json
+mempalace.yaml
+scripts/_tmp_*.py
