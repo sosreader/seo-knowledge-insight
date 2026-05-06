@@ -391,9 +391,12 @@ def _reclassify_l4_only(execute: bool) -> None:
         new_level = _infer_maturity_relevance(qa)
         key = f"L4->{new_level or 'None'}"
         transitions[key] = transitions.get(key, 0) + 1
+        # 對「原本是 L4 但新規則信心不足回 None」的項目：保守降到 L3
+        # 這些是雙重證據規則 demote 後 max_score < 2 的項目——既然舊系統能標 L4，
+        # 至少還有部分 L4 跡象，但缺乏實作佐證；降到 L3 比保留 L4 或設 None 更合理
+        write_level = new_level if new_level is not None else "L3"
         if execute:
-            if new_level is not None:
-                qa["maturity_relevance"] = new_level
+            qa["maturity_relevance"] = write_level
         else:
             # dry-run：恢復原值
             qa["maturity_relevance"] = original
