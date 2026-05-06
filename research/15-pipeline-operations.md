@@ -227,7 +227,7 @@ $$
 
 - **區分 Notion-core 與 full-data refresh**：`make pipeline` 與 `/pipeline-local` 僅代表 Notion-core Steps 1–3；若要把 9 個外部來源一起納入，應明確執行 `make fetch-all` 後再跑 `extract-qa` / `dedupe-classify`。
 - **保留歷史模型 lineage**：合併或回填 QA metadata 時，不要把既有 `extraction_model` 粗暴改寫成當前預設模型；應優先保留原值，並用 `extraction_provenance` / `legacy-unknown` 表達來源與不確定性。
-- **slash command 要對齊真實 runtime contract**：`/generate-report` 現在是 `scripts/04_generate_report.py` 的操作入口，依賴 `OPENAI_API_KEY`；`/pipeline-local` 則只涵蓋不需 OpenAI 的本地 Steps 1–3。當 Step 4、backfill 或 fetch contract 變動時，應一起檢查 `Makefile`、`README.md`、`CLAUDE.md`、`api/README.md` 與 `.claude/commands/`。
+- **slash command 要對齊真實 runtime contract**：`/generate-report` 現在是 `scripts/04_generate_report.py` 的操作入口；2026-05-06 PR #38 之後支援雙模式 — `OPENAI_API_KEY` 設定時走 OpenAI（rerank + LLM 摘要），未設定時 fallback 到 `claude-code-heuristic`（rerank no-op + 本地 metrics summary builder）。`/pipeline-local` 仍只涵蓋本地 Steps 1–3。當 Step 4、backfill 或 fetch contract 變動時，應一起檢查 `Makefile`、`README.md`、`CLAUDE.md`、`api/README.md` 與 `.claude/commands/`。
 
 ### 已知限制
 
