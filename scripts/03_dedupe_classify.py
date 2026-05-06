@@ -118,11 +118,23 @@ def _infer_maturity_relevance(qa: dict) -> str | None:
     existing = qa.get("maturity_relevance")
     if existing:
         return str(existing)
-    return classify_maturity_level(
+    level = classify_maturity_level(
         qa.get("keywords", []),
         qa.get("question", ""),
         qa.get("answer", ""),
     )
+    # L4 LLM gate: only when LLM available and rule layer voted L4.
+    # Without OPENAI_API_KEY the rule layer's dual-evidence check is the only gate
+    # (preserves the OpenAI-less pipeline path; PR #38).
+    if level == "L4" and os.getenv("OPENAI_API_KEY", "").strip():
+        from utils.maturity_llm_judge import llm_validate_l4
+        if not llm_validate_l4(
+            qa.get("question", ""),
+            qa.get("answer", ""),
+            qa.get("keywords", []),
+        ):
+            return "L3"  # Demoted by LLM gate — was a trendy-topic false positive
+    return level
 
 
 def _normalize_extraction_model(value: object) -> str | None:
@@ -352,11 +364,71 @@ def _rebuild_embeddings_from_final() -> None:
     logger.info("qa_embeddings.npy: %d rows", len(texts))
 
 
+def _reclassify_l4_only(execute: bool) -> None:
+    """重新分類 qa_final.json 中所有 L4 項目（套用新的雙重證據規則 + LLM gate）。
+
+    用途：L4 retighten sprint（plans/active/maturity-l4-retighten.md）。
+    對既有 qa_final.json 中標記 L4 的 Q&A 重跑 _infer_maturity_relevance。
+    """
+    final_path = config.OUTPUT_DIR / "qa_final.json"
+    if not final_path.exists():
+        logger.error("qa_final.json 不存在；請先執行完整 Step 3")
+        return
+
+    final_data = json.loads(final_path.read_text(encoding="utf-8"))
+    qa_pairs = final_data.get("qa_database", [])
+    if not qa_pairs:
+        logger.error("qa_final.json 中沒有 qa_database，格式異常")
+        return
+
+    l4_items = [qa for qa in qa_pairs if qa.get("maturity_relevance") == "L4"]
+    logger.info("找到 %d 筆 L4 待重新分類（總共 %d 筆）", len(l4_items), len(qa_pairs))
+
+    # transitions 紀錄「實際寫入的等級」（即 None→L3 fallback 後的結果），
+    # 與 maturity_relevance 欄位最終值一致；rule-layer 原始輸出另外印 raw_outcomes 以利除錯
+    transitions = {"L4->L4": 0, "L4->L3": 0, "L4->L2": 0, "L4->L1": 0}
+    raw_outcomes = {"rule->L4": 0, "rule->L3": 0, "rule->L2": 0, "rule->L1": 0, "rule->None": 0}
+    for qa in l4_items:
+        # 強制重跑 — 清掉現有 maturity 欄位讓 _infer_maturity_relevance 走規則路徑
+        original = qa.pop("maturity_relevance", None)
+        new_level = _infer_maturity_relevance(qa)
+        raw_outcomes[f"rule->{new_level or 'None'}"] += 1
+        # 對「原本是 L4 但新規則信心不足回 None」的項目：保守降到 L3
+        # 這些是雙重證據規則 demote 後 max_score < 2 的項目——既然舊系統能標 L4，
+        # 至少還有部分 L4 跡象，但缺乏實作佐證；降到 L3 比保留 L4 或設 None 更合理
+        write_level = new_level if new_level is not None else "L3"
+        transitions[f"L4->{write_level}"] += 1
+        if execute:
+            qa["maturity_relevance"] = write_level
+        else:
+            # dry-run：恢復原值
+            qa["maturity_relevance"] = original
+
+    logger.info("L4 重新分類結果（實際寫入）：%s", transitions)
+    logger.info("L4 規則層原始輸出（含 None fallback 前）：%s", raw_outcomes)
+    if not execute:
+        logger.info("Dry-run 模式：未寫入檔案。加 --execute 才會寫回。")
+        return
+
+    final_path.write_text(
+        json.dumps(final_data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    logger.info("已寫回 %s", final_path)
+
+
 def main(args: argparse.Namespace) -> None:
     # ── Rebuild-only 模式（不需要 OPENAI_API_KEY，只走 embedding cache）──
     if getattr(args, "rebuild_embeddings", False):
         init_laminar()
         _rebuild_embeddings_from_final()
+        flush_laminar()
+        return
+
+    # ── L4 重新分類模式（套用新雙重證據規則 + LLM gate）──
+    if getattr(args, "reclassify_l4_only", False):
+        init_laminar()
+        _reclassify_l4_only(execute=getattr(args, "execute", False))
         flush_laminar()
         return
 
@@ -618,6 +690,16 @@ if __name__ == "__main__":
         "--rebuild-embeddings",
         action="store_true",
         help="從現有 qa_final.json 重建 qa_embeddings.npy（優先走 cache，不重跑 dedup/classify）",
+    )
+    parser.add_argument(
+        "--reclassify-l4-only",
+        action="store_true",
+        help="只對 qa_final.json 中現有 L4 項目套用新分類規則（含 LLM gate）",
+    )
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="搭配 --reclassify-l4-only：實際寫入；未指定則為 dry-run",
     )
     args = parser.parse_args()
     main(args)

@@ -246,6 +246,54 @@ $$
 
 - **Heuristic difficulty 偏態（已知限制）**：`_classify_qa_locally` 的 difficulty 規則嚴重偏向「進階」（實測 98% 進階 / 2% 基礎）。若需正確分布，需有 OpenAI key 重跑 classify，或調整 heuristic 規則。Lineage 角度建議：difficulty 欄位若由 heuristic 產生應標 `extraction_model="claude-code-heuristic"`，下游搜尋若依賴 difficulty 過濾應併考慮 model 來源。
 
+### 2026-05-07 L4 Maturity Retighten — `--reclassify-l4-only` flag（PR #42）
+
+`scripts/03_dedupe_classify.py` 新增 `--reclassify-l4-only --execute` 子命令，**對既有 `output/qa_final.json` 中所有 L4 項目套用新雙重證據規則 + LLM gate 重跑分類**，不重做 dedupe / embedding。
+
+**用法**：
+
+```bash
+# Dry-run（不寫檔，看 transition 分布）
+python scripts/03_dedupe_classify.py --reclassify-l4-only
+
+# 實際寫入
+python scripts/03_dedupe_classify.py --reclassify-l4-only --execute
+
+# 推 Supabase（PATCH 變動的 maturity_relevance 欄位）
+python scripts/push_qa_metadata_to_supabase.py --verify   # 先看 diff
+python scripts/push_qa_metadata_to_supabase.py --execute
+```
+
+**內部行為**：
+
+1. 讀 `qa_final.json`，篩出 `maturity_relevance == "L4"` 的項目
+2. 強制清掉 `maturity_relevance` 欄位讓 `_infer_maturity_relevance()` 走規則路徑
+3. 規則層回 None 時 → **conservative fallback to L3**（避免 push 腳本跳過 None 留 stale L4，line 120 `if lv and lv != rv`）
+4. `--execute` 時寫回原檔
+5. 印 transition 分布：`{"L4->L4": N, "L4->L3": N, ...}`
+
+**典型轉換結果**（2026-05-07 retighten 實測）：
+
+```
+L4→L4: 256（56% 維持，真正的實作型 L4）
+L4→L3: 163（其中 26 來自規則 demote，137 來自 None→L3 fallback）
+L4→L2: 31
+L4→L1: 7
+```
+
+**搭配 LLM gate**：若 `OPENAI_API_KEY` 已設定，每筆規則層判 L4 的項目會多打一次 `gpt-5.4-nano` 做 reality check（走 `pipeline_cache` namespace `l4_judge`，重複呼叫不會重打 API）。無 key 時走純規則路徑（保留 PR #38 OpenAI-less 流程）。
+
+**何時用此 flag**：
+
+- 規則層調整後（拆 keyword、改 threshold、加新 strategy term）想重新評估既有 L4
+- 新增 LLM gate 後想對歷史 L4 補做 reality check
+- 從 git checkout 取得新版 `maturity_classifier.py` 後，不想全 pipeline 重跑只想刷新分類
+
+**何時不該用**：
+
+- 想動 L1/L2/L3（本 flag 只處理 L4 candidates）
+- 想加分類給目前未分類（None）的 QA → 跑 `make dedupe-classify` 全流程
+
 ### 已知限制
 
 1. **分類呼叫 API 次數 = Q&A 數量** — 沒有批次化，每筆各呼叫一次 `gpt-5-mini`。

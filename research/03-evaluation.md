@@ -200,6 +200,53 @@ v3.3 起，成熟度模型（L1-L4）成為評估體系的新橫切維度：
 - **L3 Enhancement**：Chat system prompt 注入成熟度脈絡，回答深度適配
 - **L4 Context**：Session 跨輪次成熟度持久化，一致性體驗
 
+### L4 分類規則收緊（v3.8, 2026-05-07, PR #42）
+
+成熟度分類器發生過 **trendy keyword 灌水偏差**——`L4_KEYWORDS` 包含 `ai overview` / `geo` / `aeo` / `ai-driven` 等趨勢主題詞，外部文章一觸發就 +2 達 L4 threshold，導致 Supabase L4 從 03 月 189 漂移到 05 月 618（13.7%，業界典型 5–10%）。
+
+**根因**：`scripts/03_dedupe_classify.py:_infer_maturity_relevance()` 完全沒呼叫 LLM，純走 keyword scoring；trend 詞與 implementation 詞混雜在同一 frozenset 用同一權重。
+
+**三層架構修正（`utils/maturity_classifier.py` + `utils/maturity_llm_judge.py`）**：
+
+1. **Topic vs Maturity 分離（rule layer）**：
+   - `L4_KEYWORDS`（+2）只留 implementation 詞：`predictive` / `programmatic seo` / `recommendation engine` / `regression testing` / `cross-channel` / `attribution model` 等
+   - 新增 `TREND_TOPIC_TERMS`（+1）：`ai overview` / `aio` / `ai search` / `geo` / `aeo` / `llm seo` / `ai-driven` / `品牌可見度` 等趨勢主題詞
+   - `L4_STRATEGY_TERMS` 移除 `品牌可見度` / `brand visibility`（這是 topic 不是 strategy）
+
+2. **雙重證據規則（rule layer）**：
+   ```python
+   if scores["L4"] >= _L4_DUAL_EVIDENCE_TRIGGER:  # 預設 2
+       has_long_answer = len(answer) > 500
+       if not (has_advanced or has_l4_strategy_signal or has_long_answer):
+           scores["L4"] = 0  # 純 keyword 無實作佐證 → 重置
+   ```
+   `has_advanced` 由 `ADVANCED_PATTERNS`（regex: 分析/分群/模型/框架/架構/演算法/pipeline/integrate/api）判定。`_L4_DUAL_EVIDENCE_TRIGGER` 定義於 `utils/maturity_classifier.py`（魔法數字常數化以便將來調整）。
+
+3. **LLM Reality Check Gate（`utils/maturity_llm_judge.py`）**：
+   - `llm_validate_l4(question, answer, keywords) -> bool` 用 `gpt-5.4-nano` 對 rule-promoted L4 做二次審查
+   - System prompt 明確區隔「topic vs maturity」：純談趨勢、純列舉名詞、純解釋概念（即使是 AI Overview / GEO / 程式化 SEO）不算 L4；L4 必須具備「實作具體性」+「領先級判斷」
+   - 走 `pipeline_cache` namespace `l4_judge`（與 classify/merge/embedding 區隔）
+   - **Fail-safe**：無 `OPENAI_API_KEY` / 網路失敗 / JSON parse 失敗都 return True 不降級（鎖定 PR #38 OpenAI-less 流程）
+
+**重訓 CLI（既有資料一次套用新規則）**：
+
+```bash
+python scripts/03_dedupe_classify.py --reclassify-l4-only --execute
+python scripts/push_qa_metadata_to_supabase.py --execute
+```
+
+`--reclassify-l4-only` 內含 None→L3 conservative fallback，避免 push 腳本 line 120 `if lv and lv != rv` 跳過 None 值留 stale L4。
+
+**實測效果（2026-05-07）**：
+
+| 維度 | 前 | 後 | 變化 |
+|------|----|----|------|
+| 本地 qa_final.json L4 | 13.4% (457/3,422) | **7.5%** (256/3,422) | -201 ✅ |
+| Supabase qa_items L4 | 13.7% (618/4,507) | **9.3%** (417/4,507) | -201 ✅ |
+| 抽樣 20 筆 L4 | — | 13 明確合理 + 7 邊緣 + 0 不合理 | DOD 達標 |
+
+**測試**：`tests/test_maturity_classifier.py` 5 TP + 5 FP fixture（programmatic SEO 系統 / 預測模型 / 跨通路歸因 / 推薦引擎 / 自動化測試 vs AI Overview 概念解釋 / GEO 名詞列舉 / ai-driven 概念 / 品牌可見度短篇 / AEO 入門）。`tests/test_maturity_llm_judge.py` 7 個（無 key fallback / cache 短路 / LLM true/false / 網路失敗 / malformed JSON）。`tests/test_infer_maturity_relevance.py` 6 個（既有 maturity 保留 / L2 不觸發 LLM / L4 + 各 key 狀態組合）。
+
 ### L4 External Sources 評估快照（2026-03-14）
 
 這一輪不是單純「多加幾個 external-source case」，而是把 retrieval gate、golden dataset、成熟度欄位完整度一起重新校正。

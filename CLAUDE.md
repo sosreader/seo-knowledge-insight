@@ -158,6 +158,8 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 
 > **無 OPENAI_API_KEY 時的 fallback（PR #38, 2026-05-06）**：`make extract-qa`、`make dedupe-classify` 與 `make generate-report` 偵測到 `OPENAI_API_KEY` 為空時自動 fallback — `extract-qa` 走 heuristic 萃取（`utils/openai_helper.py:_LOCAL_EXTRACTION_MODEL = "claude-code-heuristic"`），`dedupe-classify` 走 hash-based embedding（`get_local_embeddings`）+ 最長 question + concat answers + 規則匹配 classify（`_classify_qa_locally`），`generate-report` 改用本地 metrics summary builder + rerank no-op，整段 pipeline 不會 fail。產出 QA 的 `extraction_model` 欄位會標記為 `claude-code-heuristic`。已知限制：heuristic difficulty 規則嚴重偏向「進階」（實測 98%）；若需正確分布需改用 OpenAI 模式重跑。
 
+> **L4 maturity retighten（PR #42, 2026-05-07）**：`scripts/03_dedupe_classify.py` 新增三層 L4 防偽機制 — (1) `utils/maturity_classifier.py` 拆 `L4_KEYWORDS` ↔ `TREND_TOPIC_TERMS`（趨勢詞給 +1 而非 +2）+ 雙重證據規則（L4 必須伴隨 advanced pattern / `L4_STRATEGY_TERMS` / answer > 500 字）；(2) `utils/maturity_llm_judge.py`（新檔）gpt-5.4-nano LLM gate 對 rule-promoted L4 做 reality check；(3) 無 `OPENAI_API_KEY` 時跳過 LLM gate，純規則層 fallback。新增 `python scripts/03_dedupe_classify.py --reclassify-l4-only --execute` flag 對現有 `qa_final.json` 重跑分類（搭配 `push_qa_metadata_to_supabase.py --execute` 推 Supabase）。實測效果：本地 L4 13.4% → 7.5%、Supabase L4 13.7% → 9.3%。
+
 ---
 
 ## Available Claude Commands
