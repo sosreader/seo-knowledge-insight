@@ -286,6 +286,18 @@ backfill-maturity-dry: ## 回填 maturity_relevance 預覽（不寫入）
 backfill-maturity-verify: ## 驗證 maturity_relevance 分布
 	$(PYTHON) scripts/backfill_maturity_relevance.py --verify
 
+.PHONY: backfill-qa-final-metadata
+backfill-qa-final-metadata: ## 回填 qa_final.json 缺漏 metadata（實際寫入）
+	$(PYTHON) scripts/backfill_qa_final_metadata.py --execute
+
+.PHONY: backfill-qa-final-metadata-dry
+backfill-qa-final-metadata-dry: ## 回填 qa_final.json 缺漏 metadata 預覽
+	$(PYTHON) scripts/backfill_qa_final_metadata.py --dry-run
+
+.PHONY: backfill-qa-final-metadata-verify
+backfill-qa-final-metadata-verify: ## 驗證 qa_final.json metadata 缺漏
+	$(PYTHON) scripts/backfill_qa_final_metadata.py --verify
+
 .PHONY: update-freshness
 update-freshness: ## 更新 freshness_score 指數衰減（實際寫入）
 	$(PYTHON) scripts/update_freshness.py --execute
