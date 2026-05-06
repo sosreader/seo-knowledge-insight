@@ -156,7 +156,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 > 首次執行 `make extract-qa` 會重新萃取全部文件，請先 `make cache-stats` 確認 cache 狀態。
 > 若 cache 為空，建議從 `--limit 3` 小量驗證開始：`make extract-qa-test`。
 
-> **無 OPENAI_API_KEY 時的 fallback（PR #38, 2026-05-06）**：`make extract-qa` 與 `make generate-report` 偵測到 `OPENAI_API_KEY` 為空時自動 fallback — `extract-qa` 走 heuristic 萃取（`utils/openai_helper.py:_LOCAL_EXTRACTION_MODEL = "claude-code-heuristic"`），`generate-report` 改用本地 metrics summary builder + rerank no-op，整段 pipeline 不會 fail。產出 QA 的 `extraction_model` 欄位會標記為 `claude-code-heuristic`。
+> **無 OPENAI_API_KEY 時的 fallback（PR #38, 2026-05-06）**：`make extract-qa`、`make dedupe-classify` 與 `make generate-report` 偵測到 `OPENAI_API_KEY` 為空時自動 fallback — `extract-qa` 走 heuristic 萃取（`utils/openai_helper.py:_LOCAL_EXTRACTION_MODEL = "claude-code-heuristic"`），`dedupe-classify` 走 hash-based embedding（`get_local_embeddings`）+ 最長 question + concat answers + 規則匹配 classify（`_classify_qa_locally`），`generate-report` 改用本地 metrics summary builder + rerank no-op，整段 pipeline 不會 fail。產出 QA 的 `extraction_model` 欄位會標記為 `claude-code-heuristic`。已知限制：heuristic difficulty 規則嚴重偏向「進階」（實測 98%）；若需正確分布需改用 OpenAI 模式重跑。
 
 ---
 

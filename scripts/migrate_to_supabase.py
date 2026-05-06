@@ -235,13 +235,14 @@ def _verify_count(supabase_url: str, service_key: str) -> int:
         "apikey": service_key,
         "Authorization": f"Bearer {service_key}",
         "Prefer": "count=exact",
+        "Range": "0-0",
     }
     resp = requests.get(
         f"{supabase_url}/rest/v1/qa_items?select=id",
         headers=headers,
         timeout=10,
     )
-    if resp.status_code == 200:
+    if resp.status_code in (200, 206):
         count = int(resp.headers.get("content-range", "*/0").split("/")[-1])
         return count
     return -1

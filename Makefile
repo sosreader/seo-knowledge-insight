@@ -217,15 +217,7 @@ merge-qa: ## 合併所有 per-meeting Q&A → qa_all_raw.json（AI 工具完成�
 
 .PHONY: cache-stats
 cache-stats: ## 查看各 namespace 的 cache 使用量
-	@$(PYTHON) -c "\
-import sys; sys.path.insert(0, '.')\n\
-from utils.pipeline_cache import cache_stats\n\
-print('Cache stats:')\n\
-for ns in ['extraction', 'embedding', 'classify', 'merge', 'report']:\n\
-    s = cache_stats(ns)\n\
-    kb = s['size_bytes'] / 1024\n\
-    print(f'  {ns:<12}: {s[\"count\"]:>5} 筆  {kb:>8.1f} KB')\n\
-"
+	@$(PYTHON) -c "import sys; sys.path.insert(0, '.'); from utils.pipeline_cache import cache_stats; print('Cache stats:'); [print(f'  {ns:<12}: {cache_stats(ns)[\"count\"]:>5} 筆  {cache_stats(ns)[\"size_bytes\"]/1024:>8.1f} KB') for ns in ('extraction', 'embedding', 'classify', 'merge', 'report')]"
 
 # 使用方式: make cache-clear ns=embedding
 .PHONY: cache-clear
@@ -293,6 +285,46 @@ backfill-maturity-dry: ## 回填 maturity_relevance 預覽（不寫入）
 .PHONY: backfill-maturity-verify
 backfill-maturity-verify: ## 驗證 maturity_relevance 分布
 	$(PYTHON) scripts/backfill_maturity_relevance.py --verify
+
+.PHONY: backfill-qa-final-metadata
+backfill-qa-final-metadata: ## 回填 qa_final.json 缺漏 metadata（實際寫入）
+	$(PYTHON) scripts/backfill_qa_final_metadata.py --execute
+
+.PHONY: backfill-qa-final-metadata-dry
+backfill-qa-final-metadata-dry: ## 回填 qa_final.json 缺漏 metadata 預覽
+	$(PYTHON) scripts/backfill_qa_final_metadata.py --dry-run
+
+.PHONY: backfill-qa-final-metadata-verify
+backfill-qa-final-metadata-verify: ## 驗證 qa_final.json metadata 缺漏
+	$(PYTHON) scripts/backfill_qa_final_metadata.py --verify
+
+.PHONY: backfill-maturity-llm-prepare
+backfill-maturity-llm-prepare: ## 切批次（給 Claude Code sub-agents 分類用，預設 8 批）
+	$(PYTHON) scripts/backfill_maturity_llm.py prepare-batches --count 8
+
+.PHONY: backfill-maturity-llm-status
+backfill-maturity-llm-status: ## 顯示 batch 與 result 進度
+	$(PYTHON) scripts/backfill_maturity_llm.py status
+
+.PHONY: backfill-maturity-llm-merge
+backfill-maturity-llm-merge: ## 套用 result_*.json 到 qa_final.json（實際寫入）
+	$(PYTHON) scripts/backfill_maturity_llm.py merge --execute
+
+.PHONY: backfill-maturity-llm-merge-dry
+backfill-maturity-llm-merge-dry: ## 預覽 merge（不寫入）
+	$(PYTHON) scripts/backfill_maturity_llm.py merge --dry-run
+
+.PHONY: push-qa-metadata
+push-qa-metadata: ## 把本地 qa_final.json 變動 metadata（maturity + extraction_model）PATCH 至 Supabase
+	$(PYTHON) scripts/push_qa_metadata_to_supabase.py --execute
+
+.PHONY: push-qa-metadata-dry
+push-qa-metadata-dry: ## push 預覽
+	$(PYTHON) scripts/push_qa_metadata_to_supabase.py --dry-run
+
+.PHONY: push-qa-metadata-verify
+push-qa-metadata-verify: ## 驗證本地 vs Supabase metadata 差集
+	$(PYTHON) scripts/push_qa_metadata_to_supabase.py --verify
 
 .PHONY: update-freshness
 update-freshness: ## 更新 freshness_score 指數衰減（實際寫入）
