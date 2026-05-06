@@ -156,6 +156,8 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 > 首次執行 `make extract-qa` 會重新萃取全部文件，請先 `make cache-stats` 確認 cache 狀態。
 > 若 cache 為空，建議從 `--limit 3` 小量驗證開始：`make extract-qa-test`。
 
+> **無 OPENAI_API_KEY 時的 fallback（PR #38, 2026-05-06）**：`make extract-qa` 與 `make generate-report` 偵測到 `OPENAI_API_KEY` 為空時自動 fallback — `extract-qa` 走 heuristic 萃取（`utils/openai_helper.py:_LOCAL_EXTRACTION_MODEL = "claude-code-heuristic"`），`generate-report` 改用本地 metrics summary builder + rerank no-op，整段 pipeline 不會 fail。產出 QA 的 `extraction_model` 欄位會標記為 `claude-code-heuristic`。
+
 ---
 
 ## Available Claude Commands
@@ -169,7 +171,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/pipeline-local` — Notion-core pipeline Steps 1–3（外部文章需先 `make fetch-articles`，你是 LLM 引擎）
 - `/extract-qa` — 只執行 Step 2 Q&A 萃取（parallel sub-agents）
 - `/dedupe-classify` — 只執行 Step 3 去重 + 分類
-- `/generate-report <URL 或路徑>` — 生成 SEO 週報（對齊 `scripts/04_generate_report.py`，需要 `OPENAI_API_KEY`；支援 `--snapshot <snapshot_id>`）
+- `/generate-report <URL 或路徑>` — 生成 SEO 週報（對齊 `scripts/04_generate_report.py`；`OPENAI_API_KEY` 設定時走 OpenAI rerank + LLM 摘要，未設定時 fallback 到本地 metrics summary builder；支援 `--snapshot <snapshot_id>`）
 - `/meeting-prep <snapshot 路徑 或 --report 週報路徑>` — 顧問會議準備深度研究報告（11 sections：異常地圖/業界動態/根因假設/交叉比對/審計缺口/E-E-A-T/人本要素/成熟度/提問清單/行動核查）
 - `/search <問題>` — 搜尋知識庫（關鍵字加權，回傳 top-K Q&A）
 - `/chat` — 互動式 RAG 問答（每輪自動搜尋知識庫）
@@ -384,7 +386,7 @@ make autoresearch-baseline
 | 去重 + 分類       | `text-embedding-3-small` + `gpt-5.4-nano`                    | 語意理解取代向量                                                      |
 | 指標解析          | `metrics-parser.ts`（純 TS，v2.26）                          | `qa_tools.py load-metrics`                                            |
 | 知識庫搜尋        | `text-embedding-3-small` + cosine                            | `qa_tools.py search`（關鍵字加權）                                    |
-| 週報生成          | `report-llm.ts` + `gpt-5.4`（純 TS，v2.26）                  | `/generate-report` 指令（對齊 `scripts/04_generate_report.py`，需要 `OPENAI_API_KEY`） |
+| 週報生成          | `report-llm.ts` + `gpt-5.4`（純 TS，v2.26）                  | `/generate-report` 指令（對齊 `scripts/04_generate_report.py`；`OPENAI_API_KEY` 設定時走 OpenAI，未設定時 fallback 到本地 metrics summary） |
 | Q&A 品質評估      | `gpt-5.4-nano`                                               | `/evaluate-qa-local`（Claude Code 作為 Judge）                        |
 | Provider 品質評估 | 無對應                                                       | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
 | API 伺服器        | `cd api && pnpm dev`（Hono, port 8002，需要 OPENAI_API_KEY） | `cd api && pnpm dev`（Hono, port 8002）                               |
