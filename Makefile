@@ -298,6 +298,22 @@ backfill-qa-final-metadata-dry: ## 回填 qa_final.json 缺漏 metadata 預覽
 backfill-qa-final-metadata-verify: ## 驗證 qa_final.json metadata 缺漏
 	$(PYTHON) scripts/backfill_qa_final_metadata.py --verify
 
+.PHONY: backfill-maturity-llm-prepare
+backfill-maturity-llm-prepare: ## 切批次（給 Claude Code sub-agents 分類用，預設 8 批）
+	$(PYTHON) scripts/backfill_maturity_llm.py prepare-batches --count 8
+
+.PHONY: backfill-maturity-llm-status
+backfill-maturity-llm-status: ## 顯示 batch 與 result 進度
+	$(PYTHON) scripts/backfill_maturity_llm.py status
+
+.PHONY: backfill-maturity-llm-merge
+backfill-maturity-llm-merge: ## 套用 result_*.json 到 qa_final.json（實際寫入）
+	$(PYTHON) scripts/backfill_maturity_llm.py merge --execute
+
+.PHONY: backfill-maturity-llm-merge-dry
+backfill-maturity-llm-merge-dry: ## 預覽 merge（不寫入）
+	$(PYTHON) scripts/backfill_maturity_llm.py merge --dry-run
+
 .PHONY: update-freshness
 update-freshness: ## 更新 freshness_score 指數衰減（實際寫入）
 	$(PYTHON) scripts/update_freshness.py --execute
