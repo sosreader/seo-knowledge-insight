@@ -384,24 +384,28 @@ def _reclassify_l4_only(execute: bool) -> None:
     l4_items = [qa for qa in qa_pairs if qa.get("maturity_relevance") == "L4"]
     logger.info("找到 %d 筆 L4 待重新分類（總共 %d 筆）", len(l4_items), len(qa_pairs))
 
-    transitions = {"L4->L4": 0, "L4->L3": 0, "L4->L2": 0, "L4->L1": 0, "L4->None": 0}
+    # transitions 紀錄「實際寫入的等級」（即 None→L3 fallback 後的結果），
+    # 與 maturity_relevance 欄位最終值一致；rule-layer 原始輸出另外印 raw_outcomes 以利除錯
+    transitions = {"L4->L4": 0, "L4->L3": 0, "L4->L2": 0, "L4->L1": 0}
+    raw_outcomes = {"rule->L4": 0, "rule->L3": 0, "rule->L2": 0, "rule->L1": 0, "rule->None": 0}
     for qa in l4_items:
         # 強制重跑 — 清掉現有 maturity 欄位讓 _infer_maturity_relevance 走規則路徑
         original = qa.pop("maturity_relevance", None)
         new_level = _infer_maturity_relevance(qa)
-        key = f"L4->{new_level or 'None'}"
-        transitions[key] = transitions.get(key, 0) + 1
+        raw_outcomes[f"rule->{new_level or 'None'}"] += 1
         # 對「原本是 L4 但新規則信心不足回 None」的項目：保守降到 L3
         # 這些是雙重證據規則 demote 後 max_score < 2 的項目——既然舊系統能標 L4，
         # 至少還有部分 L4 跡象，但缺乏實作佐證；降到 L3 比保留 L4 或設 None 更合理
         write_level = new_level if new_level is not None else "L3"
+        transitions[f"L4->{write_level}"] += 1
         if execute:
             qa["maturity_relevance"] = write_level
         else:
             # dry-run：恢復原值
             qa["maturity_relevance"] = original
 
-    logger.info("L4 重新分類結果：%s", transitions)
+    logger.info("L4 重新分類結果（實際寫入）：%s", transitions)
+    logger.info("L4 規則層原始輸出（含 None fallback 前）：%s", raw_outcomes)
     if not execute:
         logger.info("Dry-run 模式：未寫入檔案。加 --execute 才會寫回。")
         return

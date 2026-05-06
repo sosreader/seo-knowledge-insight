@@ -122,7 +122,7 @@ def llm_validate_l4(
         )
         content = response.choices[0].message.content or "{}"
         result = json.loads(content)
-    except (json.JSONDecodeError, Exception) as exc:
+    except Exception as exc:
         _logger.warning(
             "L4 judge LLM call failed (%s); keeping rule-layer L4 decision",
             exc,

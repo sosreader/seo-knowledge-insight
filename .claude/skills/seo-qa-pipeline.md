@@ -47,6 +47,7 @@ python scripts/run_pipeline.py --step evaluate-qa              # 品質評估
 python scripts/run_pipeline.py --step fetch-notion --force      # 強制全量重抓
 python scripts/run_pipeline.py --step extract-qa --limit 3    # 只處理 3 份（測試用）
 python scripts/run_pipeline.py --step dedupe-classify --skip-dedup # 只分類不去重
+python scripts/03_dedupe_classify.py --reclassify-l4-only --execute # 只重跑既有 L4 分類（PR #42, 套用新雙重證據規則 + LLM gate）
 python scripts/run_pipeline.py --step generate-report --input metrics.tsv  # 本機指標檔
 python scripts/run_pipeline.py --step evaluate-qa --sample 50  # 抽樣 50 筆評估
 python scripts/run_pipeline.py --step evaluate-qa --with-source # 帶原始 Markdown 驗證
