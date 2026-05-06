@@ -133,7 +133,25 @@ def cmd_list_unprocessed(_args: argparse.Namespace) -> None:
     """列出待 Q&A 萃取的 Markdown 檔（委派給 list_pipeline_state.py）。"""
     sys.path.insert(0, str(PROJECT_ROOT))
     from scripts.list_pipeline_state import list_unprocessed_extract_qa
+    source_dir = getattr(_args, "source_dir", None)
+    if source_dir:
+        list_unprocessed_extract_qa([PROJECT_ROOT / source_dir])
+        return
     list_unprocessed_extract_qa()
+
+
+def cmd_list_unprocessed_names(_args: argparse.Namespace) -> None:
+    """列出待處理檔名，方便喂給 --file。"""
+    sys.path.insert(0, str(PROJECT_ROOT))
+    from scripts.list_pipeline_state import _classify_extract_qa
+
+    source_dir = getattr(_args, "source_dir", None)
+    if source_dir:
+        _, paths = _classify_extract_qa([PROJECT_ROOT / source_dir])
+    else:
+        _, paths = _classify_extract_qa()
+    for path in paths:
+        print(path.name)
 
 
 # ──────────────────────────────────────────────────────
@@ -1320,7 +1338,10 @@ def main() -> None:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("pipeline-status", help="顯示 pipeline 各步驟狀態")
-    sub.add_parser("list-unprocessed", help="列出待萃取的 Markdown 檔")
+    p_list = sub.add_parser("list-unprocessed", help="列出待萃取的 Markdown 檔")
+    p_list.add_argument("--source-dir", help="只列出指定來源目錄（例如 raw_data/google_blog_zhtw_markdown）")
+    p_list_names = sub.add_parser("list-unprocessed-names", help="列出待處理檔名")
+    p_list_names.add_argument("--source-dir", help="只列出指定來源目錄（例如 raw_data/google_blog_zhtw_markdown）")
     sub.add_parser("list-needs-review", help="列出 needs_review=true 的 merged Q&A")
     sub.add_parser("merge-qa", help="合併 per-meeting JSON → qa_all_raw.json")
 
@@ -1386,6 +1407,7 @@ def main() -> None:
     dispatch = {
         "pipeline-status":  cmd_pipeline_status,
         "list-unprocessed": cmd_list_unprocessed,
+        "list-unprocessed-names": cmd_list_unprocessed_names,
         "list-needs-review": cmd_list_needs_review,
         "merge-qa":         cmd_merge_qa,
         "add-meeting":      cmd_add_meeting,

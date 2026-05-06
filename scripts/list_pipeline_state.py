@@ -103,13 +103,13 @@ def _enrich_qa_metadata(qa: dict) -> dict:
     }
 
 
-def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
+def _classify_extract_qa(source_dirs: list[Path] | None = None) -> tuple[list[Path], list[Path]]:
     """
     回傳 (already_done, unprocessed) 兩份清單（精確定義：_qa.json 存在且非空非失敗才算完成）。
     掃描所有來源目錄（DIR_COLLECTION_MAP + Notion）。
     不輸出任何內容，供 show_full_status 與 list_unprocessed_extract_qa 共用。
     """
-    source_dirs = list(config.get_all_markdown_source_dirs())
+    source_dirs = list(source_dirs or config.get_all_markdown_source_dirs())
     md_files: list[Path] = []
     for d in source_dirs:
         if d.exists():
@@ -142,12 +142,12 @@ def _classify_extract_qa() -> tuple[list[Path], list[Path]]:
     return already_done, unprocessed
 
 
-def list_unprocessed_extract_qa() -> list[Path]:
+def list_unprocessed_extract_qa(source_dirs: list[Path] | None = None) -> list[Path]:
     """
     回傳尚未萃取 Q&A 的 Markdown 檔案清單（涵蓋所有來源）。
     （沒有對應的 _qa.json，或 _qa.json 為空的檔案）
     """
-    already_done, unprocessed = _classify_extract_qa()
+    already_done, unprocessed = _classify_extract_qa(source_dirs=source_dirs)
     if not already_done and not unprocessed:
         print("所有來源目錄下沒有 .md 檔案，請先執行 fetch 步驟")
         return []
@@ -167,6 +167,11 @@ def list_unprocessed_extract_qa() -> list[Path]:
         print(f"  [{i:3d}] {path}")
 
     return unprocessed
+
+
+def list_unprocessed_extract_qa_for_source_dir(source_dir: Path) -> list[Path]:
+    """列出指定來源目錄的待處理 Markdown 檔。"""
+    return list_unprocessed_extract_qa(source_dirs=[source_dir])
 
 
 def check_dedupe_classify_state() -> bool:
