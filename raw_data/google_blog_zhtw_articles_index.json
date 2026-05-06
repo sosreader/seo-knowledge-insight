@@ -1,0 +1,2572 @@
+[
+  {
+    "slug": "zhtw-2020-01-data-vocabulary",
+    "title": "即將停止支援 data-vocabulary",
+    "url": "https://developers.google.com/search/blog/2020/01/data-vocabulary?hl=zh-tw",
+    "published": "2020-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:02:08.337658+00:00",
+    "md_file": "zhtw-2020-01-data-vocabulary.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-01-get-ready-for-new-samesitenone-secure",
+    "title": "準備好迎接全新的 Cookie 設定：SameSite=None; Secure透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/01/get-ready-for-new-samesitenone-secure?hl=zh-tw",
+    "published": "2020-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:02:11.426712+00:00",
+    "md_file": "zhtw-2020-01-get-ready-for-new-samesitenone-secure.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-01-google-search-news-for-january-2020",
+    "title": "2020 年 1 月份「Google 搜尋新聞」新上架",
+    "url": "https://developers.google.com/search/blog/2020/01/google-search-news-for-january-2020?hl=zh-tw",
+    "published": "2020-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:02:02.513916+00:00",
+    "md_file": "zhtw-2020-01-google-search-news-for-january-2020.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-01-new-removals-report-in-search-console",
+    "title": "Search Console 的新版「移除網址」報告透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/01/new-removals-report-in-search-console?hl=zh-tw",
+    "published": "2020-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:02:05.444182+00:00",
+    "md_file": "zhtw-2020-01-new-removals-report-in-search-console.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-01-search-console-training-videos",
+    "title": "Search Console 訓練課程系列影片正式推出",
+    "url": "https://developers.google.com/search/blog/2020/01/search-console-training-videos?hl=zh-tw",
+    "published": "2020-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:02:14.312772+00:00",
+    "md_file": "zhtw-2020-01-search-console-training-videos.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-02-best-practices-for-news-coverage-with",
+    "title": "在 Google 搜尋服務中呈現新聞報導的最佳做法透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/02/best-practices-for-news-coverage-with?hl=zh-tw",
+    "published": "2020-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:49.599843+00:00",
+    "md_file": "zhtw-2020-02-best-practices-for-news-coverage-with.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-02-data-export",
+    "title": "從 Search Console 匯出更多優質資料透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/02/data-export?hl=zh-tw",
+    "published": "2020-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:52.560953+00:00",
+    "md_file": "zhtw-2020-02-data-export.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-02-events-on-search",
+    "title": "如何在 Google 搜尋中呈現您的活動透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/02/events-on-search?hl=zh-tw",
+    "published": "2020-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:55.576314+00:00",
+    "md_file": "zhtw-2020-02-events-on-search.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-02-review-snippets",
+    "title": "Search Console 推出新的評論摘錄報告透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/02/review-snippets?hl=zh-tw",
+    "published": "2020-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:58.410048+00:00",
+    "md_file": "zhtw-2020-02-review-snippets.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-03-announcing-mobile-first-indexing-for",
+    "title": "所有網站將採用行動版內容優先索引系統",
+    "url": "https://developers.google.com/search/blog/2020/03/announcing-mobile-first-indexing-for?hl=zh-tw",
+    "published": "2020-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:46.542182+00:00",
+    "md_file": "zhtw-2020-03-announcing-mobile-first-indexing-for.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-03-coronavirus-covid-19-and-webmaster",
+    "title": "因應 COVID-19 疫情，Webmaster Conference 延期舉行透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/03/coronavirus-covid-19-and-webmaster?hl=zh-tw",
+    "published": "2020-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:43.626317+00:00",
+    "md_file": "zhtw-2020-03-coronavirus-covid-19-and-webmaster.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-03-health-organizations-covid19",
+    "title": "協助衛生機構提升 COVID-19 資訊的曝光度",
+    "url": "https://developers.google.com/search/blog/2020/03/health-organizations-covid19?hl=zh-tw",
+    "published": "2020-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:34.810249+00:00",
+    "md_file": "zhtw-2020-03-health-organizations-covid19.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-03-how-to-pause-your-business-online-in",
+    "title": "如何在 Google 搜尋顯示暫停線上業務",
+    "url": "https://developers.google.com/search/blog/2020/03/how-to-pause-your-business-online-in?hl=zh-tw",
+    "published": "2020-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:37.760501+00:00",
+    "md_file": "zhtw-2020-03-how-to-pause-your-business-online-in.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-03-new-properties-virtual-or-canceled-events",
+    "title": "新增活動屬性：線上舉行、已延後和已取消",
+    "url": "https://developers.google.com/search/blog/2020/03/new-properties-virtual-or-canceled-events?hl=zh-tw",
+    "published": "2020-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:40.693367+00:00",
+    "md_file": "zhtw-2020-03-new-properties-virtual-or-canceled-events.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-04-highlight-covid-19-announcements-search",
+    "title": "以全新做法讓網站在 Google 搜尋中醒目顯示 COVID-19 公告",
+    "url": "https://developers.google.com/search/blog/2020/04/highlight-covid-19-announcements-search?hl=zh-tw",
+    "published": "2020-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:31.724513+00:00",
+    "md_file": "zhtw-2020-04-highlight-covid-19-announcements-search.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-04-looking-back-at-last-years-webmaster",
+    "title": "回顧去年的 Webmaster Conference 產品高峰會",
+    "url": "https://developers.google.com/search/blog/2020/04/looking-back-at-last-years-webmaster?hl=zh-tw",
+    "published": "2020-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:28.794785+00:00",
+    "md_file": "zhtw-2020-04-looking-back-at-last-years-webmaster.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-04-showcasing-value-of-seo",
+    "title": "展現搜尋引擎最佳化 (SEO) 的價值",
+    "url": "https://developers.google.com/search/blog/2020/04/showcasing-value-of-seo?hl=zh-tw",
+    "published": "2020-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:26.045850+00:00",
+    "md_file": "zhtw-2020-04-showcasing-value-of-seo.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-05-evaluating-page-experience",
+    "title": "評估網頁體驗以打造更美好的網路環境",
+    "url": "https://developers.google.com/search/blog/2020/05/evaluating-page-experience?hl=zh-tw",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:04.819511+00:00",
+    "md_file": "zhtw-2020-05-evaluating-page-experience.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-05-frequently-asked-questions-about",
+    "title": "JavaScript 和連結的相關常見問題與解答",
+    "url": "https://developers.google.com/search/blog/2020/05/frequently-asked-questions-about?hl=zh-tw",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:10.972512+00:00",
+    "md_file": "zhtw-2020-05-frequently-asked-questions-about.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-05-google-translates-website-translator",
+    "title": "Google 翻譯的網站翻譯工具 - 僅限非商業用途透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/05/google-translates-website-translator?hl=zh-tw",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:14.091991+00:00",
+    "md_file": "zhtw-2020-05-google-translates-website-translator.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-05-guided-recipes",
+    "title": "Search Console 推出新的 Google 助理引導式食譜報告",
+    "url": "https://developers.google.com/search/blog/2020/05/guided-recipes?hl=zh-tw",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:16.977507+00:00",
+    "md_file": "zhtw-2020-05-guided-recipes.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-05-pl-tr-forums",
+    "title": "再次隆重介紹：波蘭與土耳其網站擁有者社群",
+    "url": "https://developers.google.com/search/blog/2020/05/pl-tr-forums?hl=zh-tw",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:20.028717+00:00",
+    "md_file": "zhtw-2020-05-pl-tr-forums.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-05-search-console-webtoon-ep01",
+    "title": "Hello Search Console. Nice to meet you!",
+    "url": "https://developers.google.com/search/blog/2020/05/search-console-webtoon-ep01?hl=zh-tw",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:07.718862+00:00",
+    "md_file": "zhtw-2020-05-search-console-webtoon-ep01.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-05-special-announcements-search-console",
+    "title": "Search Console 推出新的特殊公告報告透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/05/special-announcements-search-console?hl=zh-tw",
+    "published": "2020-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:23.228914+00:00",
+    "md_file": "zhtw-2020-05-special-announcements-search-console.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-06-how-we-fought-search-spam-on-google",
+    "title": "Google 處理垃圾搜尋結果的成效 - 2019 年網路垃圾內容處置報告透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/06/how-we-fought-search-spam-on-google?hl=zh-tw",
+    "published": "2020-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:01:01.263816+00:00",
+    "md_file": "zhtw-2020-06-how-we-fought-search-spam-on-google.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-06-search-console-webtoon-ep02",
+    "title": "Why are my pages not shown on the search result page?",
+    "url": "https://developers.google.com/search/blog/2020/06/search-console-webtoon-ep02?hl=zh-tw",
+    "published": "2020-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:58.326921+00:00",
+    "md_file": "zhtw-2020-06-search-console-webtoon-ep02.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-07-how-spam-reports-are-used-at-google",
+    "title": "Google 如何使用您提供的垃圾內容報告",
+    "url": "https://developers.google.com/search/blog/2020/07/how-spam-reports-are-used-at-google?hl=zh-tw",
+    "published": "2020-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:54.067774+00:00",
+    "md_file": "zhtw-2020-07-how-spam-reports-are-used-at-google.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-07-prepare-for-mobile-first-indexing-with",
+    "title": "多一點時間，「行動版內容優先索引系統」導入更周延透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/07/prepare-for-mobile-first-indexing-with?hl=zh-tw",
+    "published": "2020-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:48.204124+00:00",
+    "md_file": "zhtw-2020-07-prepare-for-mobile-first-indexing-with.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-07-rich-results-test-out-of-beta",
+    "title": "複合式搜尋結果測試已通過測試階段",
+    "url": "https://developers.google.com/search/blog/2020/07/rich-results-test-out-of-beta?hl=zh-tw",
+    "published": "2020-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:51.160485+00:00",
+    "md_file": "zhtw-2020-07-rich-results-test-out-of-beta.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-08-identify-and-fix-amp-signed-exchange",
+    "title": "透過 Search Console 找出 AMP 的 Signed Exchange 錯誤，並加以修正",
+    "url": "https://developers.google.com/search/blog/2020/08/identify-and-fix-amp-signed-exchange?hl=zh-tw",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:33.543673+00:00",
+    "md_file": "zhtw-2020-08-identify-and-fix-amp-signed-exchange.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-08-join-our-first-virtual-webmaster",
+    "title": "歡迎參加第一屆 Virtual Webmaster Unconference透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/08/join-our-first-virtual-webmaster?hl=zh-tw",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:36.514336+00:00",
+    "md_file": "zhtw-2020-08-join-our-first-virtual-webmaster.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-08-make-licensing-information-for-your",
+    "title": "在 Google 圖片上顯示圖片的授權資訊透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/08/make-licensing-information-for-your?hl=zh-tw",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:27.488442+00:00",
+    "md_file": "zhtw-2020-08-make-licensing-information-for-your.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-08-options-for-retailers-to-control-how",
+    "title": "零售商能夠過更多選項掌控已檢索產品資訊在 Google 上的呈現方式",
+    "url": "https://developers.google.com/search/blog/2020/08/options-for-retailers-to-control-how?hl=zh-tw",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:30.394669+00:00",
+    "md_file": "zhtw-2020-08-options-for-retailers-to-control-how.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-08-rich-results-search-console",
+    "title": "複合式搜尋結果與 Search Console Webmaster Conference Lightning Talks",
+    "url": "https://developers.google.com/search/blog/2020/08/rich-results-search-console?hl=zh-tw",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:39.377280+00:00",
+    "md_file": "zhtw-2020-08-rich-results-search-console.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-08-search-console-api-announcements",
+    "title": "Search Console API 公告",
+    "url": "https://developers.google.com/search/blog/2020/08/search-console-api-announcements?hl=zh-tw",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:42.511942+00:00",
+    "md_file": "zhtw-2020-08-search-console-api-announcements.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-08-search-off-record-podcast-behind-scenes",
+    "title": "《Search Off the Record》Podcast 節目 - Google 搜尋關係團隊的幕後故事",
+    "url": "https://developers.google.com/search/blog/2020/08/search-off-record-podcast-behind-scenes?hl=zh-tw",
+    "published": "2020-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:45.435666+00:00",
+    "md_file": "zhtw-2020-08-search-off-record-podcast-behind-scenes.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-09-googlebot-will-soon-speak-http2",
+    "title": "Googlebot 即將支援 HTTP/2 檢索",
+    "url": "https://developers.google.com/search/blog/2020/09/googlebot-will-soon-speak-http2?hl=zh-tw",
+    "published": "2020-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:20.254901+00:00",
+    "md_file": "zhtw-2020-09-googlebot-will-soon-speak-http2.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-09-new-open-source-robotstxt-projects",
+    "title": "新的開放原始碼 robots.txt 專案透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/09/new-open-source-robotstxt-projects?hl=zh-tw",
+    "published": "2020-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:17.342300+00:00",
+    "md_file": "zhtw-2020-09-new-open-source-robotstxt-projects.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-09-new-schemaorg-support-for-retailer",
+    "title": "Schema.org 新增支援零售商運送資料透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/09/new-schemaorg-support-for-retailer?hl=zh-tw",
+    "published": "2020-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:14.400956+00:00",
+    "md_file": "zhtw-2020-09-new-schemaorg-support-for-retailer.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-09-sharing-what-we-learned-on-first",
+    "title": "第一屆 Virtual Webmaster Unconference 的經驗分享",
+    "url": "https://developers.google.com/search/blog/2020/09/sharing-what-we-learned-on-first?hl=zh-tw",
+    "published": "2020-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:23.692518+00:00",
+    "md_file": "zhtw-2020-09-sharing-what-we-learned-on-first.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-10-best-practices-black-friday",
+    "title": "「黑色星期五」和「網購星期一」網頁的最佳做法透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/10/best-practices-black-friday?hl=zh-tw",
+    "published": "2020-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:05.578545+00:00",
+    "md_file": "zhtw-2020-10-best-practices-black-friday.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-10-search-console-training",
+    "title": "Search Console 訓練課程上線",
+    "url": "https://developers.google.com/search/blog/2020/10/search-console-training?hl=zh-tw",
+    "published": "2020-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:11.208021+00:00",
+    "md_file": "zhtw-2020-10-search-console-training.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-10-search-console-webtoon-ep03",
+    "title": "如何讓我的網頁出現在搜尋結果網頁？透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/10/search-console-webtoon-ep03?hl=zh-tw",
+    "published": "2020-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:08.340377+00:00",
+    "md_file": "zhtw-2020-10-search-console-webtoon-ep03.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-11-goodbye-google-webmasters",
+    "title": "珍重再見，Google 網站管理員；熱烈歡迎 Google 搜尋中心透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/11/goodbye-google-webmasters?hl=zh-tw",
+    "published": "2020-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:55.853767+00:00",
+    "md_file": "zhtw-2020-11-goodbye-google-webmasters.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-11-introducing-new-home-for-blog",
+    "title": "我們搬家了！Google 網站管理員網誌將在新家與您見面",
+    "url": "https://developers.google.com/search/blog/2020/11/introducing-new-home-for-blog?hl=zh-tw",
+    "published": "2020-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:52.997392+00:00",
+    "md_file": "zhtw-2020-11-introducing-new-home-for-blog.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-11-pes-at-home",
+    "title": "PES@Home 2020：Google 為產品專家舉辦的第一屆線上高峰會透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/11/pes-at-home?hl=zh-tw",
+    "published": "2020-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T20:00:02.199190+00:00",
+    "md_file": "zhtw-2020-11-pes-at-home.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-11-search-console-crawl-stats-report",
+    "title": "全新改版的網站檢索統計資料透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2020/11/search-console-crawl-stats-report?hl=zh-tw",
+    "published": "2020-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:49.085558+00:00",
+    "md_file": "zhtw-2020-11-search-console-crawl-stats-report.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-11-timing-for-page-experience",
+    "title": "Google 搜尋服務導入網頁體驗的時機點",
+    "url": "https://developers.google.com/search/blog/2020/11/timing-for-page-experience?hl=zh-tw",
+    "published": "2020-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:58.693187+00:00",
+    "md_file": "zhtw-2020-11-timing-for-page-experience.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-12-a-weird-year-in-a-review",
+    "title": "回顧這不尋常的一年",
+    "url": "https://developers.google.com/search/blog/2020/12/a-weird-year-in-a-review?hl=zh-tw",
+    "published": "2020-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:40.189256+00:00",
+    "md_file": "zhtw-2020-12-a-weird-year-in-a-review.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-12-search-console-api-updates",
+    "title": "Search Console API 相關更新內容",
+    "url": "https://developers.google.com/search/blog/2020/12/search-console-api-updates?hl=zh-tw",
+    "published": "2020-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:46.164116+00:00",
+    "md_file": "zhtw-2020-12-search-console-api-updates.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2020-12-structured-data-testing-tool-update",
+    "title": "結構化資料測試工具的最新資訊",
+    "url": "https://developers.google.com/search/blog/2020/12/structured-data-testing-tool-update?hl=zh-tw",
+    "published": "2020-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:43.116149+00:00",
+    "md_file": "zhtw-2020-12-structured-data-testing-tool-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-01-google-news-performance-report",
+    "title": "隆重推出 Google 新聞成效報表透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/01/google-news-performance-report?hl=zh-tw",
+    "published": "2021-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:34.449330+00:00",
+    "md_file": "zhtw-2021-01-google-news-performance-report.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-01-index-coverage-data-improvements",
+    "title": "改善索引涵蓋範圍資料",
+    "url": "https://developers.google.com/search/blog/2021/01/index-coverage-data-improvements?hl=zh-tw",
+    "published": "2021-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:37.273051+00:00",
+    "md_file": "zhtw-2021-01-index-coverage-data-improvements.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-02-join-us-at-search-central-live",
+    "title": "歡迎參加 2021 年 Search Central Live",
+    "url": "https://developers.google.com/search/blog/2021/02/join-us-at-search-central-live?hl=zh-tw",
+    "published": "2021-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:28.802315+00:00",
+    "md_file": "zhtw-2021-02-join-us-at-search-central-live.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-02-product-information",
+    "title": "提供購物者更完善的產品資訊",
+    "url": "https://developers.google.com/search/blog/2021/02/product-information?hl=zh-tw",
+    "published": "2021-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:23.041672+00:00",
+    "md_file": "zhtw-2021-02-product-information.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-02-search-console-associations",
+    "title": "Search Console 新增關聯功能透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/02/search-console-associations?hl=zh-tw",
+    "published": "2021-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:25.851211+00:00",
+    "md_file": "zhtw-2021-02-search-console-associations.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-02-search-console-performance-discover-chrome",
+    "title": "Search Console 的探索報表已提供 Chrome 資料",
+    "url": "https://developers.google.com/search/blog/2021/02/search-console-performance-discover-chrome?hl=zh-tw",
+    "published": "2021-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:31.540585+00:00",
+    "md_file": "zhtw-2021-02-search-console-performance-discover-chrome.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-03-education-sites-practice-problems-math-solver",
+    "title": "為教育網站提供的新功能：練習題與數學解題工具結構化資料透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/03/education-sites-practice-problems-math-solver?hl=zh-tw",
+    "published": "2021-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:14.087275+00:00",
+    "md_file": "zhtw-2021-03-education-sites-practice-problems-math-solver.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-03-new-resources-for-video-seo",
+    "title": "影片搜尋引擎最佳化 (SEO) 的新資源",
+    "url": "https://developers.google.com/search/blog/2021/03/new-resources-for-video-seo?hl=zh-tw",
+    "published": "2021-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:20.140971+00:00",
+    "md_file": "zhtw-2021-03-new-resources-for-video-seo.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-03-sharedarraybuffer-notes",
+    "title": "關於 SharedArrayBuffer 物件郵件的說明",
+    "url": "https://developers.google.com/search/blog/2021/03/sharedarraybuffer-notes?hl=zh-tw",
+    "published": "2021-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:17.029854+00:00",
+    "md_file": "zhtw-2021-03-sharedarraybuffer-notes.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-03-wix",
+    "title": "Korean Blog: How Wix improved website performance by evolving their infrastructure",
+    "url": "https://developers.google.com/search/blog/2021/03/wix?hl=zh-tw",
+    "published": "2021-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:11.215383+00:00",
+    "md_file": "zhtw-2021-03-wix.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-03-yahoo-japan-news",
+    "title": "Korean Blog: How CLS optimizations increased Yahoo! JAPAN News's page views per session by 15%",
+    "url": "https://developers.google.com/search/blog/2021/03/yahoo-japan-news?hl=zh-tw",
+    "published": "2021-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:08.024756+00:00",
+    "md_file": "zhtw-2021-03-yahoo-japan-news.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-04-agrofy-case-study",
+    "title": "Korean Blog: Agrofy: A 70% improvement in LCP correlated to a 76% reduction in load abandonment",
+    "url": "https://developers.google.com/search/blog/2021/04/agrofy-case-study?hl=zh-tw",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:40.165921+00:00",
+    "md_file": "zhtw-2021-04-agrofy-case-study.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-04-changes-to-feedburner",
+    "title": "FeedBurner 即將異動透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/04/changes-to-feedburner?hl=zh-tw",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:52.246375+00:00",
+    "md_file": "zhtw-2021-04-changes-to-feedburner.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-04-expanding-support-for-apac-help",
+    "title": "擴大支援 APAC 搜尋中心產品討論社群透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/04/expanding-support-for-apac-help?hl=zh-tw",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:57.959133+00:00",
+    "md_file": "zhtw-2021-04-expanding-support-for-apac-help.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-04-how-we-fought-search-spam-2020",
+    "title": "Google 於 2020 年處理垃圾搜尋結果的成效",
+    "url": "https://developers.google.com/search/blog/2021/04/how-we-fought-search-spam-2020?hl=zh-tw",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:37.183322+00:00",
+    "md_file": "zhtw-2021-04-how-we-fought-search-spam-2020.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-04-more-details-page-experience",
+    "title": "網頁體驗更新的更多時程、工具與詳細資料透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/04/more-details-page-experience?hl=zh-tw",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:49.272201+00:00",
+    "md_file": "zhtw-2021-04-more-details-page-experience.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-04-performance-report-data-filtering",
+    "title": "成效報表功能改良：資料篩選和比較模式",
+    "url": "https://developers.google.com/search/blog/2021/04/performance-report-data-filtering?hl=zh-tw",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:04.338600+00:00",
+    "md_file": "zhtw-2021-04-performance-report-data-filtering.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-04-product-reviews-update",
+    "title": "內容創作者應瞭解的 Google 2021 年 4 月產品評論更新",
+    "url": "https://developers.google.com/search/blog/2021/04/product-reviews-update?hl=zh-tw",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:59:00.855373+00:00",
+    "md_file": "zhtw-2021-04-product-reviews-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-04-search-console-webtoon-ep04",
+    "title": "Korean Blog: Two helpful tips: meta tags and sitemaps",
+    "url": "https://developers.google.com/search/blog/2021/04/search-console-webtoon-ep04?hl=zh-tw",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:46.495124+00:00",
+    "md_file": "zhtw-2021-04-search-console-webtoon-ep04.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-04-sustainable-monetized-websites",
+    "title": "「Sustainable Monetized Websites」系列影片上架",
+    "url": "https://developers.google.com/search/blog/2021/04/sustainable-monetized-websites?hl=zh-tw",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:55.241108+00:00",
+    "md_file": "zhtw-2021-04-sustainable-monetized-websites.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-04-vodafone-case-study",
+    "title": "Korean Blog: Vodafone: A 31% improvement in LCP increased sales by 8%",
+    "url": "https://developers.google.com/search/blog/2021/04/vodafone-case-study?hl=zh-tw",
+    "published": "2021-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:43.195897+00:00",
+    "md_file": "zhtw-2021-04-vodafone-case-study.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-05-prevent-portions-of-site-from-spam",
+    "title": "防範網站的部分內容遭到垃圾內容濫用",
+    "url": "https://developers.google.com/search/blog/2021/05/prevent-portions-of-site-from-spam?hl=zh-tw",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:22.614207+00:00",
+    "md_file": "zhtw-2021-05-prevent-portions-of-site-from-spam.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-05-rich-results-search-appearance-sunsetting",
+    "title": "Search Console 即將停止支援一般複合式搜尋結果的搜尋外觀",
+    "url": "https://developers.google.com/search/blog/2021/05/rich-results-search-appearance-sunsetting?hl=zh-tw",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:28.518028+00:00",
+    "md_file": "zhtw-2021-05-rich-results-search-appearance-sunsetting.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-05-search-console-webtoon-ep05",
+    "title": "Korean Blog: The lonely site owner learns about linking; and the power of Dalgona Coffee",
+    "url": "https://developers.google.com/search/blog/2021/05/search-console-webtoon-ep05?hl=zh-tw",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:31.438908+00:00",
+    "md_file": "zhtw-2021-05-search-console-webtoon-ep05.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-05-search-io-2021",
+    "title": "2021 年 Google I/O 大會的 Google 搜尋相關資訊",
+    "url": "https://developers.google.com/search/blog/2021/05/search-io-2021?hl=zh-tw",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:19.773386+00:00",
+    "md_file": "zhtw-2021-05-search-io-2021.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-05-video-for-ecommerce",
+    "title": "電子商務網站的影片搜尋引擎最佳化 (SEO) 最佳做法",
+    "url": "https://developers.google.com/search/blog/2021/05/video-for-ecommerce?hl=zh-tw",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:34.320743+00:00",
+    "md_file": "zhtw-2021-05-video-for-ecommerce.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-05-working-with-you-for-safe-and-spam-free-search-2020",
+    "title": "2020 年垃圾內容處理成效：我們如何與您攜手打造杜絕垃圾內容的安全搜尋體驗",
+    "url": "https://developers.google.com/search/blog/2021/05/working-with-you-for-safe-and-spam-free-search-2020?hl=zh-tw",
+    "published": "2021-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:25.494847+00:00",
+    "md_file": "zhtw-2021-05-working-with-you-for-safe-and-spam-free-search-2020.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-06-google-news-sources",
+    "title": "瞭解 Google 新聞的報導來源",
+    "url": "https://developers.google.com/search/blog/2021/06/google-news-sources?hl=zh-tw",
+    "published": "2021-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:16.948306+00:00",
+    "md_file": "zhtw-2021-06-google-news-sources.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-06-regex-negative-match",
+    "title": "Search Console 規則運算式篩選器更新和使用小訣竅",
+    "url": "https://developers.google.com/search/blog/2021/06/regex-negative-match?hl=zh-tw",
+    "published": "2021-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:14.119017+00:00",
+    "md_file": "zhtw-2021-06-regex-negative-match.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-06-search-central-unconference-emea",
+    "title": "Search Central Unconference 即將再度舉辦 - 2021透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/06/search-central-unconference-emea?hl=zh-tw",
+    "published": "2021-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:11.131627+00:00",
+    "md_file": "zhtw-2021-06-search-central-unconference-emea.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-06-search-console-insights",
+    "title": "瞭解如何使用 Search Console 深入分析改善內容透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/06/search-console-insights?hl=zh-tw",
+    "published": "2021-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:07.924467+00:00",
+    "md_file": "zhtw-2021-06-search-console-insights.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-07-customer-support",
+    "title": "在 Google 搜尋中醒目顯示您的客戶服務管道",
+    "url": "https://developers.google.com/search/blog/2021/07/customer-support?hl=zh-tw",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:05.219231+00:00",
+    "md_file": "zhtw-2021-07-customer-support.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-07-deals-best-practices",
+    "title": "透過 Google 搜尋中的特惠頁面吸引購物者",
+    "url": "https://developers.google.com/search/blog/2021/07/deals-best-practices?hl=zh-tw",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:48.994549+00:00",
+    "md_file": "zhtw-2021-07-deals-best-practices.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-07-google-news-top-questions",
+    "title": "關於 Google 新聞顯示方式的部分常見問題與解答",
+    "url": "https://developers.google.com/search/blog/2021/07/google-news-top-questions?hl=zh-tw",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:57.884544+00:00",
+    "md_file": "zhtw-2021-07-google-news-top-questions.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-07-job-posting-updates",
+    "title": "更新徵人啟事規範，為求職者提供更優質的搜尋結果透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/07/job-posting-updates?hl=zh-tw",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:58:00.871922+00:00",
+    "md_file": "zhtw-2021-07-job-posting-updates.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-07-link-tagging-and-link-spam-update",
+    "title": "如何提供合格連結以及垃圾連結相關更新提醒",
+    "url": "https://developers.google.com/search/blog/2021/07/link-tagging-and-link-spam-update?hl=zh-tw",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:46.101081+00:00",
+    "md_file": "zhtw-2021-07-link-tagging-and-link-spam-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-07-new-way-key-moments",
+    "title": "在 Google 搜尋中啟用影片重要時刻的全新方式",
+    "url": "https://developers.google.com/search/blog/2021/07/new-way-key-moments?hl=zh-tw",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:55.057023+00:00",
+    "md_file": "zhtw-2021-07-new-way-key-moments.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-07-search-traffic-drops",
+    "title": "分析 Google 搜尋流量下滑的原因",
+    "url": "https://developers.google.com/search/blog/2021/07/search-traffic-drops?hl=zh-tw",
+    "published": "2021-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:52.078147+00:00",
+    "md_file": "zhtw-2021-07-search-traffic-drops.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-08-search-console-insights-faq",
+    "title": "Google Search Console 深入分析功能幕後揭密",
+    "url": "https://developers.google.com/search/blog/2021/08/search-console-insights-faq?hl=zh-tw",
+    "published": "2021-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:40.579388+00:00",
+    "md_file": "zhtw-2021-08-search-console-insights-faq.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-08-simplifying-the-page-experience-report",
+    "title": "簡化網頁體驗報表透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/08/simplifying-the-page-experience-report?hl=zh-tw",
+    "published": "2021-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:43.338865+00:00",
+    "md_file": "zhtw-2021-08-simplifying-the-page-experience-report.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-08-update-to-generating-page-titles",
+    "title": "網頁標題產生機制更新",
+    "url": "https://developers.google.com/search/blog/2021/08/update-to-generating-page-titles?hl=zh-tw",
+    "published": "2021-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:37.612958+00:00",
+    "md_file": "zhtw-2021-08-update-to-generating-page-titles.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-09-more-info-about-titles",
+    "title": "進一步瞭解 Google 如何產生網頁搜尋結果的標題",
+    "url": "https://developers.google.com/search/blog/2021/09/more-info-about-titles?hl=zh-tw",
+    "published": "2021-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:34.754119+00:00",
+    "md_file": "zhtw-2021-09-more-info-about-titles.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-10-search-analytics-discover-gnews",
+    "title": "Search Analytics API 現已支援 Google 探索、Google 新聞和規則運算式透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/10/search-analytics-discover-gnews?hl=zh-tw",
+    "published": "2021-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:28.547647+00:00",
+    "md_file": "zhtw-2021-10-search-analytics-discover-gnews.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-10-search-console-tools-alignment",
+    "title": "Search Console 測試工具和網址檢查工具將提供一致體驗透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/10/search-console-tools-alignment?hl=zh-tw",
+    "published": "2021-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:31.462732+00:00",
+    "md_file": "zhtw-2021-10-search-console-tools-alignment.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-11-bringing-page-experience-to-desktop",
+    "title": "將網頁體驗納入電腦版網頁排名考量的更新推出時程",
+    "url": "https://developers.google.com/search/blog/2021/11/bringing-page-experience-to-desktop?hl=zh-tw",
+    "published": "2021-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:22.811429+00:00",
+    "md_file": "zhtw-2021-11-bringing-page-experience-to-desktop.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-11-improve-job-posting-description",
+    "title": "提供完整說明以便求職者瞭解徵人啟事內容透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/11/improve-job-posting-description?hl=zh-tw",
+    "published": "2021-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:25.612237+00:00",
+    "md_file": "zhtw-2021-11-improve-job-posting-description.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-11-one-year-of-search-central",
+    "title": "Google 搜尋中心一年回顧透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/11/one-year-of-search-central?hl=zh-tw",
+    "published": "2021-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:19.850135+00:00",
+    "md_file": "zhtw-2021-11-one-year-of-search-central.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-11-update-on-mobile-indexing",
+    "title": "行動網頁索引系統的 2021 年最新資訊",
+    "url": "https://developers.google.com/search/blog/2021/11/update-on-mobile-indexing?hl=zh-tw",
+    "published": "2021-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:16.947301+00:00",
+    "md_file": "zhtw-2021-11-update-on-mobile-indexing.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-12-eoy-blogpost",
+    "title": "網誌文章作者們的 2021 年回顧透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2021/12/eoy-blogpost?hl=zh-tw",
+    "published": "2021-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:10.770988+00:00",
+    "md_file": "zhtw-2021-12-eoy-blogpost.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2021-12-product-reviews-update-and-your-site",
+    "title": "2021 年 12 月產品評論更新和您的網站",
+    "url": "https://developers.google.com/search/blog/2021/12/product-reviews-update-and-your-site?hl=zh-tw",
+    "published": "2021-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:14.035349+00:00",
+    "md_file": "zhtw-2021-12-product-reviews-update-and-your-site.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-01-robots-meta-tag-indexifembedded",
+    "title": "全新漫遊器標記：indexifembed透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/01/robots-meta-tag-indexifembedded?hl=zh-tw",
+    "published": "2022-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:57:02.208852+00:00",
+    "md_file": "zhtw-2022-01-robots-meta-tag-indexifembedded.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-01-url-inspection-api",
+    "title": "歡迎使用全新 Search Console URL Inspection API透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/01/url-inspection-api?hl=zh-tw",
+    "published": "2022-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:59.341012+00:00",
+    "md_file": "zhtw-2022-01-url-inspection-api.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-03-connecting-data-studio",
+    "title": "將 Search Console 連結至數據分析",
+    "url": "https://developers.google.com/search/blog/2022/03/connecting-data-studio?hl=zh-tw",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:56.060073+00:00",
+    "md_file": "zhtw-2022-03-connecting-data-studio.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-03-japanese-search-for-beginner",
+    "title": "Google Search for Beginners YouTube Series now available in Japanese",
+    "url": "https://developers.google.com/search/blog/2022/03/japanese-search-for-beginner?hl=zh-tw",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:53.221017+00:00",
+    "md_file": "zhtw-2022-03-japanese-search-for-beginner.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-03-monitoring-dashboard",
+    "title": "使用數據分析監控搜尋流量和其他更多資料",
+    "url": "https://developers.google.com/search/blog/2022/03/monitoring-dashboard?hl=zh-tw",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:38.211654+00:00",
+    "md_file": "zhtw-2022-03-monitoring-dashboard.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-03-product-review-ranking-one-year-on",
+    "title": "改善產品評論排名方式一年後",
+    "url": "https://developers.google.com/search/blog/2022/03/product-review-ranking-one-year-on?hl=zh-tw",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:49.941381+00:00",
+    "md_file": "zhtw-2022-03-product-review-ranking-one-year-on.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-03-search-central-unconference-japan-2022",
+    "title": "Japanese Blog: Register for the first Search Central Virtual Unconference Japan 2022!",
+    "url": "https://developers.google.com/search/blog/2022/03/search-central-unconference-japan-2022?hl=zh-tw",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:47.080615+00:00",
+    "md_file": "zhtw-2022-03-search-central-unconference-japan-2022.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-03-structured-data-issues-context",
+    "title": "為 Search Console 中的結構化資料問題新增脈絡資訊透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/03/structured-data-issues-context?hl=zh-tw",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:41.114741+00:00",
+    "md_file": "zhtw-2022-03-structured-data-issues-context.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-03-url-parameters-tool-deprecated",
+    "title": "春季大掃除：網址參數工具透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/03/url-parameters-tool-deprecated?hl=zh-tw",
+    "published": "2022-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:44.101565+00:00",
+    "md_file": "zhtw-2022-03-url-parameters-tool-deprecated.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-04-performance-optimization-bubble-chart",
+    "title": "使用 Search Console 泡泡圖最佳化網站成效",
+    "url": "https://developers.google.com/search/blog/2022/04/performance-optimization-bubble-chart?hl=zh-tw",
+    "published": "2022-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:34.651368+00:00",
+    "md_file": "zhtw-2022-04-performance-optimization-bubble-chart.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-04-webspam-report-2021",
+    "title": "Google 於 2021 年處理垃圾搜尋結果的成效",
+    "url": "https://developers.google.com/search/blog/2022/04/webspam-report-2021?hl=zh-tw",
+    "published": "2022-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:31.398258+00:00",
+    "md_file": "zhtw-2022-04-webspam-report-2021.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-05-global-search-central-unconference-2022-is-a-wrap",
+    "title": "「2022 年搜尋中心全球虛擬開放式會議」(Global Search Central Virtual Unconference 2022) 圓滿落幕！",
+    "url": "https://developers.google.com/search/blog/2022/05/global-search-central-unconference-2022-is-a-wrap?hl=zh-tw",
+    "published": "2022-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:22.259399+00:00",
+    "md_file": "zhtw-2022-05-global-search-central-unconference-2022-is-a-wrap.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-05-may-2022-core-update",
+    "title": "Google 搜尋在 2022 年 5 月推出核心更新透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/05/may-2022-core-update?hl=zh-tw",
+    "published": "2022-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:19.361278+00:00",
+    "md_file": "zhtw-2022-05-may-2022-core-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-05-recap-search-central-unconference-japan-2022",
+    "title": "Event recap: Search Central Virtual Unconference Japan 2022",
+    "url": "https://developers.google.com/search/blog/2022/05/recap-search-central-unconference-japan-2022?hl=zh-tw",
+    "published": "2022-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:25.243385+00:00",
+    "md_file": "zhtw-2022-05-recap-search-central-unconference-japan-2022.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-05-spring-cleaning-sitemap-extensions",
+    "title": "春季大掃除：部分 Sitemap 擴充元素標記即將停用透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/05/spring-cleaning-sitemap-extensions?hl=zh-tw",
+    "published": "2022-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:28.382480+00:00",
+    "md_file": "zhtw-2022-05-spring-cleaning-sitemap-extensions.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-06-googlebot-15mb",
+    "title": "Googlebot 和 15 MB 的內容",
+    "url": "https://developers.google.com/search/blog/2022/06/googlebot-15mb?hl=zh-tw",
+    "published": "2022-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:10.410695+00:00",
+    "md_file": "zhtw-2022-06-googlebot-15mb.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-06-search-console-item-classification",
+    "title": "使用更新後的項目分類功能簡化 Search Console 報表",
+    "url": "https://developers.google.com/search/blog/2022/06/search-console-item-classification?hl=zh-tw",
+    "published": "2022-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:13.220962+00:00",
+    "md_file": "zhtw-2022-06-search-console-item-classification.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-06-title-script-misalignment",
+    "title": "Google 如何為語言或指令碼不一致的文件產生標題",
+    "url": "https://developers.google.com/search/blog/2022/06/title-script-misalignment?hl=zh-tw",
+    "published": "2022-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:16.404786+00:00",
+    "md_file": "zhtw-2022-06-title-script-misalignment.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-07-video-indexing-report",
+    "title": "隆重推出新版 Search Console 影片索引報表透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/07/video-indexing-report?hl=zh-tw",
+    "published": "2022-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:07.101062+00:00",
+    "md_file": "zhtw-2022-07-video-indexing-report.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-08-helpful-content-update",
+    "title": "內容創作者應瞭解的 Google 2022 年 8 月實用內容更新",
+    "url": "https://developers.google.com/search/blog/2022/08/helpful-content-update?hl=zh-tw",
+    "published": "2022-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:01.237689+00:00",
+    "md_file": "zhtw-2022-08-helpful-content-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-08-pros-and-cons-structured-data",
+    "title": "結構化資料的新功能：優缺點",
+    "url": "https://developers.google.com/search/blog/2022/08/pros-and-cons-structured-data?hl=zh-tw",
+    "published": "2022-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:56:04.117272+00:00",
+    "md_file": "zhtw-2022-08-pros-and-cons-structured-data.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-09-https-search-console-report",
+    "title": "Search Console 新推出的 HTTPS 報表透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/09/https-search-console-report?hl=zh-tw",
+    "published": "2022-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:55.338098+00:00",
+    "md_file": "zhtw-2022-09-https-search-console-report.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-09-merchant-listings",
+    "title": "新版 Search Console 商家資訊報表：透過產品結構化資料擴大資格條件",
+    "url": "https://developers.google.com/search/blog/2022/09/merchant-listings?hl=zh-tw",
+    "published": "2022-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:58.064710+00:00",
+    "md_file": "zhtw-2022-09-merchant-listings.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-10-introducing-site-names-on-search",
+    "title": "Google 搜尋網站名稱功能簡介透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/10/introducing-site-names-on-search?hl=zh-tw",
+    "published": "2022-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:46.245876+00:00",
+    "md_file": "zhtw-2022-10-introducing-site-names-on-search.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-10-performance-data-deep-dive",
+    "title": "深入瞭解 Search Console 的成效資料篩選與限制透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/10/performance-data-deep-dive?hl=zh-tw",
+    "published": "2022-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:43.180809+00:00",
+    "md_file": "zhtw-2022-10-performance-data-deep-dive.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-10-search-central-live-is-here",
+    "title": "恢復運作：Search Central Live 活動透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/10/search-central-live-is-here?hl=zh-tw",
+    "published": "2022-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:52.342228+00:00",
+    "md_file": "zhtw-2022-10-search-central-live-is-here.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-10-search-essentials",
+    "title": "網站擁有者指南更新透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/10/search-essentials?hl=zh-tw",
+    "published": "2022-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:49.401851+00:00",
+    "md_file": "zhtw-2022-10-search-essentials.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-11-introducing-guide-to-ranking-systems",
+    "title": "隆重推出 Google 搜尋排名系統新版指南透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/11/introducing-guide-to-ranking-systems?hl=zh-tw",
+    "published": "2022-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:37.155689+00:00",
+    "md_file": "zhtw-2022-11-introducing-guide-to-ranking-systems.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-11-november-office-hours",
+    "title": "11 月 Google 搜尋引擎最佳化 (SEO) 諮詢時間",
+    "url": "https://developers.google.com/search/blog/2022/11/november-office-hours?hl=zh-tw",
+    "published": "2022-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:34.010704+00:00",
+    "md_file": "zhtw-2022-11-november-office-hours.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-11-shopping-tab-with-search-console",
+    "title": "開始使用 Search Console，在「購物」分頁顯示產品",
+    "url": "https://developers.google.com/search/blog/2022/11/shopping-tab-with-search-console?hl=zh-tw",
+    "published": "2022-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:40.036282+00:00",
+    "md_file": "zhtw-2022-11-shopping-tab-with-search-console.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-12-december-22-link-spam-update",
+    "title": "Google 搜尋 2022 年 12 月垃圾連結更新透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/12/december-22-link-spam-update?hl=zh-tw",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:21.898116+00:00",
+    "md_file": "zhtw-2022-12-december-22-link-spam-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-12-google-raters-guidelines-e-e-a-t",
+    "title": "品質評分者指南的最新資訊：在 E-A-T 中增加了 E (Experience)透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/12/google-raters-guidelines-e-e-a-t?hl=zh-tw",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:18.984460+00:00",
+    "md_file": "zhtw-2022-12-google-raters-guidelines-e-e-a-t.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-12-google-services-in-czechia",
+    "title": "為因應捷克《歐盟著作權指令》的內容變更，Google 將更新捷克地區的服務透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/12/google-services-in-czechia?hl=zh-tw",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:30.998572+00:00",
+    "md_file": "zhtw-2022-12-google-services-in-czechia.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-12-search-central-live-2022",
+    "title": "2022 年 Search Central Live 重點回顧",
+    "url": "https://developers.google.com/search/blog/2022/12/search-central-live-2022?hl=zh-tw",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:15.881140+00:00",
+    "md_file": "zhtw-2022-12-search-central-live-2022.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-12-status-dashboard",
+    "title": "Google 搜尋狀態資訊主頁簡介",
+    "url": "https://developers.google.com/search/blog/2022/12/status-dashboard?hl=zh-tw",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:25.272732+00:00",
+    "md_file": "zhtw-2022-12-status-dashboard.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-12-thanks-2022",
+    "title": "感謝 2022 年！透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2022/12/thanks-2022?hl=zh-tw",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:12.889910+00:00",
+    "md_file": "zhtw-2022-12-thanks-2022.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2022-12-visual-elements",
+    "title": "Google 搜尋的視覺元素",
+    "url": "https://developers.google.com/search/blog/2022/12/visual-elements?hl=zh-tw",
+    "published": "2022-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:28.173982+00:00",
+    "md_file": "zhtw-2022-12-visual-elements.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-01-registrate-para-search-central-unconference-espanol",
+    "title": "Spanish blog: Register for the Search Central Virtual Unconference en español 2023",
+    "url": "https://developers.google.com/search/blog/2023/01/registrate-para-search-central-unconference-espanol?hl=zh-tw",
+    "published": "2023-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:09.798615+00:00",
+    "md_file": "zhtw-2023-01-registrate-para-search-central-unconference-espanol.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-02-bulk-data-export",
+    "title": "大量資料匯出：透過全新且強大的工具存取 Search Console 資料",
+    "url": "https://developers.google.com/search/blog/2023/02/bulk-data-export?hl=zh-tw",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:54.024763+00:00",
+    "md_file": "zhtw-2023-02-bulk-data-export.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-02-dont-404-my-yum",
+    "title": "請勿使用 403 或 404 限制檢索頻率",
+    "url": "https://developers.google.com/search/blog/2023/02/dont-404-my-yum?hl=zh-tw",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:57.106240+00:00",
+    "md_file": "zhtw-2023-02-dont-404-my-yum.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-02-google-search-and-ai-content",
+    "title": "Google 搜尋的 AI 產生內容相關指引",
+    "url": "https://developers.google.com/search/blog/2023/02/google-search-and-ai-content?hl=zh-tw",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:00.817993+00:00",
+    "md_file": "zhtw-2023-02-google-search-and-ai-content.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-02-search-central-live-brazil",
+    "title": "Announcing the Search Central Live Brazil roadshow",
+    "url": "https://developers.google.com/search/blog/2023/02/search-central-live-brazil?hl=zh-tw",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:03.870822+00:00",
+    "md_file": "zhtw-2023-02-search-central-live-brazil.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-02-search-console-user-permissions-update",
+    "title": "更新 Search Console 的使用者和權限管理功能",
+    "url": "https://developers.google.com/search/blog/2023/02/search-console-user-permissions-update?hl=zh-tw",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:51.233398+00:00",
+    "md_file": "zhtw-2023-02-search-console-user-permissions-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-02-video-indexing-report-update",
+    "title": "Search Console 影片索引報表更新",
+    "url": "https://developers.google.com/search/blog/2023/02/video-indexing-report-update?hl=zh-tw",
+    "published": "2023-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:55:06.653373+00:00",
+    "md_file": "zhtw-2023-02-video-indexing-report-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-03-2022-recap-search-central-community",
+    "title": "2022 年搜尋中心社群透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2023/03/2022-recap-search-central-community?hl=zh-tw",
+    "published": "2023-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:48.344830+00:00",
+    "md_file": "zhtw-2023-03-2022-recap-search-central-community.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-03-gsc-data-blending-looker-studio",
+    "title": "在 Looker Studio 中混合 Search Console 和內部資料",
+    "url": "https://developers.google.com/search/blog/2023/03/gsc-data-blending-looker-studio?hl=zh-tw",
+    "published": "2023-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:44.988035+00:00",
+    "md_file": "zhtw-2023-03-gsc-data-blending-looker-studio.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-04-page-experience-in-search",
+    "title": "網頁體驗對建立實用內容的作用",
+    "url": "https://developers.google.com/search/blog/2023/04/page-experience-in-search?hl=zh-tw",
+    "published": "2023-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:30.167774+00:00",
+    "md_file": "zhtw-2023-04-page-experience-in-search.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-04-search-central-unconference-espanol-2023-recap",
+    "title": "Event recap: Search Central Virtual Unconference en español 2023",
+    "url": "https://developers.google.com/search/blog/2023/04/search-central-unconference-espanol-2023-recap?hl=zh-tw",
+    "published": "2023-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:42.124093+00:00",
+    "md_file": "zhtw-2023-04-search-central-unconference-espanol-2023-recap.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-04-shipping-and-returns-information",
+    "title": "Google 搜尋網頁結果中的運送與退貨資訊",
+    "url": "https://developers.google.com/search/blog/2023/04/shipping-and-returns-information?hl=zh-tw",
+    "published": "2023-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:33.057767+00:00",
+    "md_file": "zhtw-2023-04-shipping-and-returns-information.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-04-simplifying-video",
+    "title": "簡化 Google 搜尋結果中的影片呈現畫面",
+    "url": "https://developers.google.com/search/blog/2023/04/simplifying-video?hl=zh-tw",
+    "published": "2023-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:35.795163+00:00",
+    "md_file": "zhtw-2023-04-simplifying-video.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-04-webspam-report-2022",
+    "title": "Google 於 2022 年處理垃圾搜尋結果的成效",
+    "url": "https://developers.google.com/search/blog/2023/04/webspam-report-2022?hl=zh-tw",
+    "published": "2023-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:38.625194+00:00",
+    "md_file": "zhtw-2023-04-webspam-report-2022.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-05-introducing-inp",
+    "title": "Core Web Vitals 推出 INP",
+    "url": "https://developers.google.com/search/blog/2023/05/introducing-inp?hl=zh-tw",
+    "published": "2023-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:22.742144+00:00",
+    "md_file": "zhtw-2023-05-introducing-inp.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-05-scl-apac-2023",
+    "title": "Search Central Live：首站落腳東京，下半年巡迴亞太地區透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2023/05/scl-apac-2023?hl=zh-tw",
+    "published": "2023-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:19.837201+00:00",
+    "md_file": "zhtw-2023-05-scl-apac-2023.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-05-understanding-news-topic-authority",
+    "title": "瞭解新聞主題權威性",
+    "url": "https://developers.google.com/search/blog/2023/05/understanding-news-topic-authority?hl=zh-tw",
+    "published": "2023-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:16.989568+00:00",
+    "md_file": "zhtw-2023-05-understanding-news-topic-authority.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-05-x-default",
+    "title": "x-default 如何提供協助",
+    "url": "https://developers.google.com/search/blog/2023/05/x-default?hl=zh-tw",
+    "published": "2023-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:26.043363+00:00",
+    "md_file": "zhtw-2023-05-x-default.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-06-bigquery-efficiency-tips",
+    "title": "Search Console 大量資料匯出作業的 BigQuery 效率提升要訣",
+    "url": "https://developers.google.com/search/blog/2023/06/bigquery-efficiency-tips?hl=zh-tw",
+    "published": "2023-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:13.949135+00:00",
+    "md_file": "zhtw-2023-06-bigquery-efficiency-tips.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-06-reporting-search-quality-issues",
+    "title": "透過新的使用者意見回饋表單回報搜尋品質問題",
+    "url": "https://developers.google.com/search/blog/2023/06/reporting-search-quality-issues?hl=zh-tw",
+    "published": "2023-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:04.929377+00:00",
+    "md_file": "zhtw-2023-06-reporting-search-quality-issues.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-06-search-central-live-jakarta-2023",
+    "title": "Indonesian Blog: Search Central Live Jakarta 2023",
+    "url": "https://developers.google.com/search/blog/2023/06/search-central-live-jakarta-2023?hl=zh-tw",
+    "published": "2023-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:10.835307+00:00",
+    "md_file": "zhtw-2023-06-search-central-live-jakarta-2023.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-06-sitemaps-lastmod-ping",
+    "title": "Sitemap 連線偵測 (ping) 端點即將淘汰",
+    "url": "https://developers.google.com/search/blog/2023/06/sitemaps-lastmod-ping?hl=zh-tw",
+    "published": "2023-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:02.122684+00:00",
+    "md_file": "zhtw-2023-06-sitemaps-lastmod-ping.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-06-video-indexing-specific-issues",
+    "title": "改善 Search Console 影片索引報表中的顯著性報告功能",
+    "url": "https://developers.google.com/search/blog/2023/06/video-indexing-specific-issues?hl=zh-tw",
+    "published": "2023-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:54:07.784179+00:00",
+    "md_file": "zhtw-2023-06-video-indexing-specific-issues.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-07-search-central-live-tok-jkt-2023-recap",
+    "title": "東京和雅加達 Search Central Live：圓滿落幕",
+    "url": "https://developers.google.com/search/blog/2023/07/search-central-live-tok-jkt-2023-recap?hl=zh-tw",
+    "published": "2023-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:59.356053+00:00",
+    "md_file": "zhtw-2023-07-search-central-live-tok-jkt-2023-recap.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-07-sitenames",
+    "title": "網站名稱更新內容",
+    "url": "https://developers.google.com/search/blog/2023/07/sitenames?hl=zh-tw",
+    "published": "2023-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:56.524884+00:00",
+    "md_file": "zhtw-2023-07-sitenames.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-08-howto-faq-changes",
+    "title": "HowTo 和 FAQ 複合式搜尋結果異動",
+    "url": "https://developers.google.com/search/blog/2023/08/howto-faq-changes?hl=zh-tw",
+    "published": "2023-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:53.548571+00:00",
+    "md_file": "zhtw-2023-08-howto-faq-changes.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-08-search-central-live-india-2023",
+    "title": "Search Central Live 即將在印度舉行",
+    "url": "https://developers.google.com/search/blog/2023/08/search-central-live-india-2023?hl=zh-tw",
+    "published": "2023-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:50.096821+00:00",
+    "md_file": "zhtw-2023-08-search-central-live-india-2023.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-08-where-art-thou-error",
+    "title": "錯誤的喜劇",
+    "url": "https://developers.google.com/search/blog/2023/08/where-art-thou-error?hl=zh-tw",
+    "published": "2023-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:47.433636+00:00",
+    "md_file": "zhtw-2023-08-where-art-thou-error.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-09-multilingual-searches",
+    "title": "Google 搜尋處理多語言搜尋的方式",
+    "url": "https://developers.google.com/search/blog/2023/09/multilingual-searches?hl=zh-tw",
+    "published": "2023-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:41.552597+00:00",
+    "md_file": "zhtw-2023-09-multilingual-searches.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-09-search-central-live-mexico",
+    "title": "Announcing the Search Central Live Mexico roadshow",
+    "url": "https://developers.google.com/search/blog/2023/09/search-central-live-mexico?hl=zh-tw",
+    "published": "2023-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:35.066008+00:00",
+    "md_file": "zhtw-2023-09-search-central-live-mexico.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-09-search-central-live-zurich",
+    "title": "Search Central Live 於蘇黎世再次召開！",
+    "url": "https://developers.google.com/search/blog/2023/09/search-central-live-zurich?hl=zh-tw",
+    "published": "2023-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:31.948629+00:00",
+    "md_file": "zhtw-2023-09-search-central-live-zurich.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-09-search-console-merchant-center-association",
+    "title": "將 Search Console 與 Merchant Center 建立關聯以發掘成長商機",
+    "url": "https://developers.google.com/search/blog/2023/09/search-console-merchant-center-association?hl=zh-tw",
+    "published": "2023-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:38.318856+00:00",
+    "md_file": "zhtw-2023-09-search-console-merchant-center-association.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-09-site-names-global-rollout",
+    "title": "Google 搜尋中的網站名稱現在適用於所有語言",
+    "url": "https://developers.google.com/search/blog/2023/09/site-names-global-rollout?hl=zh-tw",
+    "published": "2023-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:44.557116+00:00",
+    "md_file": "zhtw-2023-09-site-names-global-rollout.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-10-mobile-first-is-here",
+    "title": "行動版內容優先索引系統隆重登場，感謝您的支持與愛護",
+    "url": "https://developers.google.com/search/blog/2023/10/mobile-first-is-here?hl=zh-tw",
+    "published": "2023-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:20.145811+00:00",
+    "md_file": "zhtw-2023-10-mobile-first-is-here.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-10-october-2023-spam-update",
+    "title": "2023 年 10 月垃圾內容相關更新",
+    "url": "https://developers.google.com/search/blog/2023/10/october-2023-spam-update?hl=zh-tw",
+    "published": "2023-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:29.009191+00:00",
+    "md_file": "zhtw-2023-10-october-2023-spam-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-10-search-central-live-singapore-2023",
+    "title": "2023 年新加坡 Search Central Live 活動",
+    "url": "https://developers.google.com/search/blog/2023/10/search-central-live-singapore-2023?hl=zh-tw",
+    "published": "2023-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:23.012940+00:00",
+    "md_file": "zhtw-2023-10-search-central-live-singapore-2023.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-10-vehicle-listings-structured-data",
+    "title": "汽車經銷商的車輛資訊結構化資料",
+    "url": "https://developers.google.com/search/blog/2023/10/vehicle-listings-structured-data?hl=zh-tw",
+    "published": "2023-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:26.066106+00:00",
+    "md_file": "zhtw-2023-10-vehicle-listings-structured-data.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-11-discussion-and-profile-markup",
+    "title": "結構化資料新功能：討論區和個人資料頁面標記",
+    "url": "https://developers.google.com/search/blog/2023/11/discussion-and-profile-markup?hl=zh-tw",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:02.014682+00:00",
+    "md_file": "zhtw-2023-11-discussion-and-profile-markup.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-11-introducing-organization-markup",
+    "title": "擴大機構詳細資料的標記支援範圍，包括標誌結構化資料",
+    "url": "https://developers.google.com/search/blog/2023/11/introducing-organization-markup?hl=zh-tw",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:59.010202+00:00",
+    "md_file": "zhtw-2023-11-introducing-organization-markup.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-11-new-course-info-markup",
+    "title": "使用全新課程資訊結構化資料列出課程",
+    "url": "https://developers.google.com/search/blog/2023/11/new-course-info-markup?hl=zh-tw",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:11.192759+00:00",
+    "md_file": "zhtw-2023-11-new-course-info-markup.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-11-q-and-a-on-search-updates",
+    "title": "Google 搜尋更新問與答",
+    "url": "https://developers.google.com/search/blog/2023/11/q-and-a-on-search-updates?hl=zh-tw",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:14.059414+00:00",
+    "md_file": "zhtw-2023-11-q-and-a-on-search-updates.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-11-sc-crawl-limiter-byebye",
+    "title": "Search Console 中的檢索頻率限制工具即將淘汰",
+    "url": "https://developers.google.com/search/blog/2023/11/sc-crawl-limiter-byebye?hl=zh-tw",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:05.337590+00:00",
+    "md_file": "zhtw-2023-11-sc-crawl-limiter-byebye.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-11-search-central-live-taipei-2023",
+    "title": "Search Central Live 來台北了透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2023/11/search-central-live-taipei-2023?hl=zh-tw",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:16.805097+00:00",
+    "md_file": "zhtw-2023-11-search-central-live-taipei-2023.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-11-search-quality-rater-guidelines-update",
+    "title": "搜尋品質評分者指南更新",
+    "url": "https://developers.google.com/search/blog/2023/11/search-quality-rater-guidelines-update?hl=zh-tw",
+    "published": "2023-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:53:08.279668+00:00",
+    "md_file": "zhtw-2023-11-search-quality-rater-guidelines-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-12-definitely-not-ai-generated-post",
+    "title": "劃下句點",
+    "url": "https://developers.google.com/search/blog/2023/12/definitely-not-ai-generated-post?hl=zh-tw",
+    "published": "2023-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:49.752877+00:00",
+    "md_file": "zhtw-2023-12-definitely-not-ai-generated-post.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-12-hello-vacation-rentals",
+    "title": "新增度假民宿標記支援",
+    "url": "https://developers.google.com/search/blog/2023/12/hello-vacation-rentals?hl=zh-tw",
+    "published": "2023-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:55.986753+00:00",
+    "md_file": "zhtw-2023-12-hello-vacation-rentals.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2023-12-video-is-the-main-content",
+    "title": "影片模式現在只會顯示以影片為主要內容的網頁",
+    "url": "https://developers.google.com/search/blog/2023/12/video-is-the-main-content?hl=zh-tw",
+    "published": "2023-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:53.095688+00:00",
+    "md_file": "zhtw-2023-12-video-is-the-main-content.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-02-product-variants",
+    "title": "為產品子類新增結構化資料支援",
+    "url": "https://developers.google.com/search/blog/2024/02/product-variants?hl=zh-tw",
+    "published": "2024-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:34.029033+00:00",
+    "md_file": "zhtw-2024-02-product-variants.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-02-search-central-live-argentina",
+    "title": "Announcing Search Central Live Argentina",
+    "url": "https://developers.google.com/search/blog/2024/02/search-central-live-argentina?hl=zh-tw",
+    "published": "2024-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:43.203889+00:00",
+    "md_file": "zhtw-2024-02-search-central-live-argentina.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-02-search-central-live-sao-paulo-2024",
+    "title": "Search Central Live is returning to Brazil",
+    "url": "https://developers.google.com/search/blog/2024/02/search-central-live-sao-paulo-2024?hl=zh-tw",
+    "published": "2024-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:46.743758+00:00",
+    "md_file": "zhtw-2024-02-search-central-live-sao-paulo-2024.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-02-search-experiences-in-eea",
+    "title": "歐洲經濟區的全新搜尋體驗：複合式搜尋結果、集結網站單元和分類方塊",
+    "url": "https://developers.google.com/search/blog/2024/02/search-experiences-in-eea?hl=zh-tw",
+    "published": "2024-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:36.956099+00:00",
+    "md_file": "zhtw-2024-02-search-experiences-in-eea.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-02-ssg-gets-a-makeover",
+    "title": "搜尋引擎最佳化 (SEO) 入門指南改版",
+    "url": "https://developers.google.com/search/blog/2024/02/ssg-gets-a-makeover?hl=zh-tw",
+    "published": "2024-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:39.638161+00:00",
+    "md_file": "zhtw-2024-02-ssg-gets-a-makeover.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-03-core-update-spam-policies",
+    "title": "2024 年 3 月的核心更新和新版垃圾內容政策中，網站創作者須瞭解的事項",
+    "url": "https://developers.google.com/search/blog/2024/03/core-update-spam-policies?hl=zh-tw",
+    "published": "2024-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:28.024543+00:00",
+    "md_file": "zhtw-2024-03-core-update-spam-policies.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-03-search-central-live-poland-2024",
+    "title": "2024 年 Search Central Live 將於波蘭華沙舉辦",
+    "url": "https://developers.google.com/search/blog/2024/03/search-central-live-poland-2024?hl=zh-tw",
+    "published": "2024-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:25.122821+00:00",
+    "md_file": "zhtw-2024-03-search-central-live-poland-2024.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-03-search-central-live-romania-2024",
+    "title": "2024 年 Search Central Live 將於羅馬尼亞布加勒斯特舉辦",
+    "url": "https://developers.google.com/search/blog/2024/03/search-central-live-romania-2024?hl=zh-tw",
+    "published": "2024-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:31.072338+00:00",
+    "md_file": "zhtw-2024-03-search-central-live-romania-2024.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-04-search-console-ownership-token-management",
+    "title": "改善 Search Console 擁有權權杖管理作業",
+    "url": "https://developers.google.com/search/blog/2024/04/search-console-ownership-token-management?hl=zh-tw",
+    "published": "2024-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:22.232136+00:00",
+    "md_file": "zhtw-2024-04-search-console-ownership-token-management.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-05-search-central-live-jakarta-apac-2024",
+    "title": "2024 年 Search Central Live 即將回到 APAC 地區舉辦透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2024/05/search-central-live-jakarta-apac-2024?hl=zh-tw",
+    "published": "2024-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:19.330256+00:00",
+    "md_file": "zhtw-2024-05-search-central-live-jakarta-apac-2024.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-06-linkedin-we-are-here",
+    "title": "我們設立了 LinkedIn 帳戶 (終於)",
+    "url": "https://developers.google.com/search/blog/2024/06/linkedin-we-are-here?hl=zh-tw",
+    "published": "2024-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:16.115795+00:00",
+    "md_file": "zhtw-2024-06-linkedin-we-are-here.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-06-search-central-live-bangkok-2024",
+    "title": "Search Central Live Bangkok 2024",
+    "url": "https://developers.google.com/search/blog/2024/06/search-central-live-bangkok-2024?hl=zh-tw",
+    "published": "2024-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:10.229358+00:00",
+    "md_file": "zhtw-2024-06-search-central-live-bangkok-2024.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-06-structured-data-return-policies",
+    "title": "為機構層級退貨政策新增標記支援",
+    "url": "https://developers.google.com/search/blog/2024/06/structured-data-return-policies?hl=zh-tw",
+    "published": "2024-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:13.099182+00:00",
+    "md_file": "zhtw-2024-06-structured-data-return-policies.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-07-configure-shipping-and-returns-search-console",
+    "title": "直接在 Search Console 中設定運送和退貨資訊",
+    "url": "https://developers.google.com/search/blog/2024/07/configure-shipping-and-returns-search-console?hl=zh-tw",
+    "published": "2024-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:06.909910+00:00",
+    "md_file": "zhtw-2024-07-configure-shipping-and-returns-search-console.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-08-august-2024-core-update",
+    "title": "2024 年 8 月核心更新的重要須知",
+    "url": "https://developers.google.com/search/blog/2024/08/august-2024-core-update?hl=zh-tw",
+    "published": "2024-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:00.645451+00:00",
+    "md_file": "zhtw-2024-08-august-2024-core-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-08-happy-avifriday",
+    "title": "支援 Google 搜尋中的 AVIF",
+    "url": "https://developers.google.com/search/blog/2024/08/happy-avifriday?hl=zh-tw",
+    "published": "2024-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:54.950489+00:00",
+    "md_file": "zhtw-2024-08-happy-avifriday.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-08-search-central-live-kl-tpe-2024",
+    "title": "Search Central Live 重返台北：2024 Search Central Live 將於台北與吉隆坡舉辦！透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2024/08/search-central-live-kl-tpe-2024?hl=zh-tw",
+    "published": "2024-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:57.762164+00:00",
+    "md_file": "zhtw-2024-08-search-central-live-kl-tpe-2024.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-08-search-console-recommendations",
+    "title": "Google Search Console 建議功能簡介",
+    "url": "https://developers.google.com/search/blog/2024/08/search-console-recommendations?hl=zh-tw",
+    "published": "2024-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:52:03.768655+00:00",
+    "md_file": "zhtw-2024-08-search-console-recommendations.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-09-google-trends-tutorials",
+    "title": "透過全新的 YouTube 教學課程，瞭解 Google 搜尋趨勢",
+    "url": "https://developers.google.com/search/blog/2024/09/google-trends-tutorials?hl=zh-tw",
+    "published": "2024-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:52.086885+00:00",
+    "md_file": "zhtw-2024-09-google-trends-tutorials.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-09-search-experiences-in-sa",
+    "title": "南非的全新搜尋體驗：徽章和分類方塊",
+    "url": "https://developers.google.com/search/blog/2024/09/search-experiences-in-sa?hl=zh-tw",
+    "published": "2024-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:49.291596+00:00",
+    "md_file": "zhtw-2024-09-search-experiences-in-sa.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-10-scl-2024-jkt-bkk",
+    "title": "2024 年雅加達和曼谷 Search Central Live：圓滿落幕透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2024/10/scl-2024-jkt-bkk?hl=zh-tw",
+    "published": "2024-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:43.281954+00:00",
+    "md_file": "zhtw-2024-10-scl-2024-jkt-bkk.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-10-sitelinks-search-box",
+    "title": "告別網站連結搜尋框",
+    "url": "https://developers.google.com/search/blog/2024/10/sitelinks-search-box?hl=zh-tw",
+    "published": "2024-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:40.562907+00:00",
+    "md_file": "zhtw-2024-10-sitelinks-search-box.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-10-store-ratings",
+    "title": "在更多國家/地區提供 Google 搜尋商店評分功能",
+    "url": "https://developers.google.com/search/blog/2024/10/store-ratings?hl=zh-tw",
+    "published": "2024-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:46.393257+00:00",
+    "md_file": "zhtw-2024-10-store-ratings.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-11-search-central-live-zurich",
+    "title": "歡迎參加蘇黎世 Search Central Live！",
+    "url": "https://developers.google.com/search/blog/2024/11/search-central-live-zurich?hl=zh-tw",
+    "published": "2024-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:34.844816+00:00",
+    "md_file": "zhtw-2024-11-search-central-live-zurich.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-11-site-reputation-abuse",
+    "title": "更新網站信譽濫用行為政策",
+    "url": "https://developers.google.com/search/blog/2024/11/site-reputation-abuse?hl=zh-tw",
+    "published": "2024-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:37.538262+00:00",
+    "md_file": "zhtw-2024-11-site-reputation-abuse.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-12-crawling-december-caching",
+    "title": "檢索 12 月：HTTP 快取",
+    "url": "https://developers.google.com/search/blog/2024/12/crawling-december-caching?hl=zh-tw",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:28.521290+00:00",
+    "md_file": "zhtw-2024-12-crawling-december-caching.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-12-crawling-december-cdns",
+    "title": "檢索 12 月：CDN 和檢索",
+    "url": "https://developers.google.com/search/blog/2024/12/crawling-december-cdns?hl=zh-tw",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:16.416747+00:00",
+    "md_file": "zhtw-2024-12-crawling-december-cdns.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-12-crawling-december-faceted-nav",
+    "title": "檢索 12 月：多面向導覽",
+    "url": "https://developers.google.com/search/blog/2024/12/crawling-december-faceted-nav?hl=zh-tw",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:19.649572+00:00",
+    "md_file": "zhtw-2024-12-crawling-december-faceted-nav.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-12-crawling-december-resources",
+    "title": "檢索 12 月：Googlebot 檢索的運作方式和原因",
+    "url": "https://developers.google.com/search/blog/2024/12/crawling-december-resources?hl=zh-tw",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:31.626598+00:00",
+    "md_file": "zhtw-2024-12-crawling-december-resources.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-12-crawling-out-of-december",
+    "title": "檢索 12 月：2024 年度回顧",
+    "url": "https://developers.google.com/search/blog/2024/12/crawling-out-of-december?hl=zh-tw",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:13.162053+00:00",
+    "md_file": "zhtw-2024-12-crawling-out-of-december.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-12-recent-data-search-console",
+    "title": "改善在 Search Console 中查看近期成效資料的方式",
+    "url": "https://developers.google.com/search/blog/2024/12/recent-data-search-console?hl=zh-tw",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:25.536508+00:00",
+    "md_file": "zhtw-2024-12-recent-data-search-console.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2024-12-scl-asia-h2-recap",
+    "title": "2024 年吉隆坡和臺北 Search Central Live：回顧",
+    "url": "https://developers.google.com/search/blog/2024/12/scl-asia-h2-recap?hl=zh-tw",
+    "published": "2024-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:22.592253+00:00",
+    "md_file": "zhtw-2024-12-scl-asia-h2-recap.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-01-search-central-live-brazil",
+    "title": "Search Central Live is returning to Brazil in 2025",
+    "url": "https://developers.google.com/search/blog/2025/01/search-central-live-brazil?hl=zh-tw",
+    "published": "2025-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:10.185324+00:00",
+    "md_file": "zhtw-2025-01-search-central-live-brazil.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-01-simplifying-breadcrumbs",
+    "title": "簡化行動搜尋結果中的可見網址元素",
+    "url": "https://developers.google.com/search/blog/2025/01/simplifying-breadcrumbs?hl=zh-tw",
+    "published": "2025-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:06.787293+00:00",
+    "md_file": "zhtw-2025-01-simplifying-breadcrumbs.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-02-intro-robots-refresher",
+    "title": "重溫漫遊器：介紹新系列",
+    "url": "https://developers.google.com/search/blog/2025/02/intro-robots-refresher?hl=zh-tw",
+    "published": "2025-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:01.002280+00:00",
+    "md_file": "zhtw-2025-02-intro-robots-refresher.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-02-search-central-live-nyc",
+    "title": "Search Central Live 即將在紐約市舉行",
+    "url": "https://developers.google.com/search/blog/2025/02/search-central-live-nyc?hl=zh-tw",
+    "published": "2025-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:51:03.933941+00:00",
+    "md_file": "zhtw-2025-02-search-central-live-nyc.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-03-first-search-central-live-in-south-africa",
+    "title": "南非首場 Search Central Live",
+    "url": "https://developers.google.com/search/blog/2025/03/first-search-central-live-in-south-africa?hl=zh-tw",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:58.195528+00:00",
+    "md_file": "zhtw-2025-03-first-search-central-live-in-south-africa.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-03-robots-future",
+    "title": "重溫漫遊器：符合未來趨勢的漫遊器排除通訊協定",
+    "url": "https://developers.google.com/search/blog/2025/03/robots-future?hl=zh-tw",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:43.637629+00:00",
+    "md_file": "zhtw-2025-03-robots-future.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-03-robots-refresher-page-level",
+    "title": "重溫漫遊器：頁面層級精細程度",
+    "url": "https://developers.google.com/search/blog/2025/03/robots-refresher-page-level?hl=zh-tw",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:49.312383+00:00",
+    "md_file": "zhtw-2025-03-robots-refresher-page-level.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-03-robotstxt-flexible-way-to-control",
+    "title": "重溫漫遊器：robots.txt  - 靈活控制機器人探索網站的方式",
+    "url": "https://developers.google.com/search/blog/2025/03/robotstxt-flexible-way-to-control?hl=zh-tw",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:52.154178+00:00",
+    "md_file": "zhtw-2025-03-robotstxt-flexible-way-to-control.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-03-search-central-live-deep-dive-apac-2025",
+    "title": "準備迎接 2025 年亞太地區 Search Central Live",
+    "url": "https://developers.google.com/search/blog/2025/03/search-central-live-deep-dive-apac-2025?hl=zh-tw",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:46.551734+00:00",
+    "md_file": "zhtw-2025-03-search-central-live-deep-dive-apac-2025.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-03-search-central-live-madrid",
+    "title": "Search Central Live is going to Madrid",
+    "url": "https://developers.google.com/search/blog/2025/03/search-central-live-madrid?hl=zh-tw",
+    "published": "2025-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:55.262715+00:00",
+    "md_file": "zhtw-2025-03-search-central-live-madrid.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-04-san-hourly-data",
+    "title": "Search Analytics API 現已支援每小時資料",
+    "url": "https://developers.google.com/search/blog/2025/04/san-hourly-data?hl=zh-tw",
+    "published": "2025-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:40.864459+00:00",
+    "md_file": "zhtw-2025-04-san-hourly-data.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-04-search-central-live-deep-dive-2025",
+    "title": "立即報名參加 2025 年 Search Central Live Deep Dive",
+    "url": "https://developers.google.com/search/blog/2025/04/search-central-live-deep-dive-2025?hl=zh-tw",
+    "published": "2025-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:37.844902+00:00",
+    "md_file": "zhtw-2025-04-search-central-live-deep-dive-2025.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-05-app-deep-links",
+    "title": "應用程式深層連結：連結網站和應用程式",
+    "url": "https://developers.google.com/search/blog/2025/05/app-deep-links?hl=zh-tw",
+    "published": "2025-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:34.927997+00:00",
+    "md_file": "zhtw-2025-05-app-deep-links.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-05-succeeding-in-ai-search",
+    "title": "在 Google 搜尋的 AI 體驗中，確保內容表現良好的最佳方法",
+    "url": "https://developers.google.com/search/blog/2025/05/succeeding-in-ai-search?hl=zh-tw",
+    "published": "2025-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:32.057259+00:00",
+    "md_file": "zhtw-2025-05-succeeding-in-ai-search.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-06-loyalty-program",
+    "title": "新增會員方案標記支援",
+    "url": "https://developers.google.com/search/blog/2025/06/loyalty-program?hl=zh-tw",
+    "published": "2025-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:29.187988+00:00",
+    "md_file": "zhtw-2025-06-loyalty-program.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-06-scl-dd-apac-2025-news",
+    "title": "2025 年 SCL Deep Dive APAC：社群講者和全新形式",
+    "url": "https://developers.google.com/search/blog/2025/06/scl-dd-apac-2025-news?hl=zh-tw",
+    "published": "2025-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:22.956567+00:00",
+    "md_file": "zhtw-2025-06-scl-dd-apac-2025-news.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-06-search-console-insights",
+    "title": "全新 Search Console 深入分析報表登場",
+    "url": "https://developers.google.com/search/blog/2025/06/search-console-insights?hl=zh-tw",
+    "published": "2025-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:19.797916+00:00",
+    "md_file": "zhtw-2025-06-search-console-insights.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-06-simplifying-search-results",
+    "title": "簡化搜尋結果網頁",
+    "url": "https://developers.google.com/search/blog/2025/06/simplifying-search-results?hl=zh-tw",
+    "published": "2025-06-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:26.303862+00:00",
+    "md_file": "zhtw-2025-06-simplifying-search-results.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-07-trends-api",
+    "title": "隆重推出 Google 搜尋趨勢 API (Alpha 版)：存取搜尋趨勢資料的新方式",
+    "url": "https://developers.google.com/search/blog/2025/07/trends-api?hl=zh-tw",
+    "published": "2025-07-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:16.669954+00:00",
+    "md_file": "zhtw-2025-07-trends-api.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-08-search-central-live-mexico-2025",
+    "title": "Search Central Live is back to Mexico City",
+    "url": "https://developers.google.com/search/blog/2025/08/search-central-live-mexico-2025?hl=zh-tw",
+    "published": "2025-08-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:13.673599+00:00",
+    "md_file": "zhtw-2025-08-search-central-live-mexico-2025.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-09-scl-dubai",
+    "title": "2025 年杜拜 Search Central Live",
+    "url": "https://developers.google.com/search/blog/2025/09/scl-dubai?hl=zh-tw",
+    "published": "2025-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:00.812143+00:00",
+    "md_file": "zhtw-2025-09-scl-dubai.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-09-scl-hkk",
+    "title": "2025 香港 Search Central Live：以中文進行的搜尋活動，專注於國際電子商務透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2025/09/scl-hkk?hl=zh-tw",
+    "published": "2025-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:09.433082+00:00",
+    "md_file": "zhtw-2025-09-scl-hkk.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-09-scl-tok",
+    "title": "東京 Search Central Live：2025 年回歸",
+    "url": "https://developers.google.com/search/blog/2025/09/scl-tok?hl=zh-tw",
+    "published": "2025-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:06.583747+00:00",
+    "md_file": "zhtw-2025-09-scl-tok.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-09-store-widget",
+    "title": "商店小工具登場：建立購物者信心並提高銷售量",
+    "url": "https://developers.google.com/search/blog/2025/09/store-widget?hl=zh-tw",
+    "published": "2025-09-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:50:03.832261+00:00",
+    "md_file": "zhtw-2025-09-store-widget.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-10-search-console-query-groups",
+    "title": "Search Console 深入分析推出「查詢」群組",
+    "url": "https://developers.google.com/search/blog/2025/10/search-console-query-groups?hl=zh-tw",
+    "published": "2025-10-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:57.536407+00:00",
+    "md_file": "zhtw-2025-10-search-console-query-groups.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-11-custom-chart-annotations",
+    "title": "使用自訂註解為 Search Console 資料新增脈絡資訊",
+    "url": "https://developers.google.com/search/blog/2025/11/custom-chart-annotations?hl=zh-tw",
+    "published": "2025-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:45.076960+00:00",
+    "md_file": "zhtw-2025-11-custom-chart-annotations.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-11-more-ways-to-share-shipping",
+    "title": "更多與 Google 分享運送和退貨政策的方式",
+    "url": "https://developers.google.com/search/blog/2025/11/more-ways-to-share-shipping?hl=zh-tw",
+    "published": "2025-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:47.958152+00:00",
+    "md_file": "zhtw-2025-11-more-ways-to-share-shipping.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-11-search-central-live-zurich-is-back",
+    "title": "Search Central Live 即將重返蘇黎世！",
+    "url": "https://developers.google.com/search/blog/2025/11/search-central-live-zurich-is-back?hl=zh-tw",
+    "published": "2025-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:50.902013+00:00",
+    "md_file": "zhtw-2025-11-search-central-live-zurich-is-back.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-11-search-console-branded-filter",
+    "title": "Search Console 推出含品牌名稱的查詢篩選器",
+    "url": "https://developers.google.com/search/blog/2025/11/search-console-branded-filter?hl=zh-tw",
+    "published": "2025-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:42.138032+00:00",
+    "md_file": "zhtw-2025-11-search-console-branded-filter.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-11-update-on-our-efforts",
+    "title": "簡化搜尋結果網頁的最新進展",
+    "url": "https://developers.google.com/search/blog/2025/11/update-on-our-efforts?hl=zh-tw",
+    "published": "2025-11-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:54.555414+00:00",
+    "md_file": "zhtw-2025-11-update-on-our-efforts.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-12-ai-powered-configuration",
+    "title": "運用全新 AI 輔助設定，簡化 Search Console 分析作業",
+    "url": "https://developers.google.com/search/blog/2025/12/ai-powered-configuration?hl=zh-tw",
+    "published": "2025-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:39.142728+00:00",
+    "md_file": "zhtw-2025-12-ai-powered-configuration.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-12-scl-eoy",
+    "title": "2025 年 Search Central Live APAC 年度回顧：感謝的話",
+    "url": "https://developers.google.com/search/blog/2025/12/scl-eoy?hl=zh-tw",
+    "published": "2025-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:30.198020+00:00",
+    "md_file": "zhtw-2025-12-scl-eoy.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-12-social-channels-search-console",
+    "title": "Search Console 推出社群管道",
+    "url": "https://developers.google.com/search/blog/2025/12/social-channels-search-console?hl=zh-tw",
+    "published": "2025-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:36.062818+00:00",
+    "md_file": "zhtw-2025-12-social-channels-search-console.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2025-12-weekly-monthly-views-search-console",
+    "title": "Search Console 推出每週和每月檢視畫面",
+    "url": "https://developers.google.com/search/blog/2025/12/weekly-monthly-views-search-console?hl=zh-tw",
+    "published": "2025-12-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:33.157941+00:00",
+    "md_file": "zhtw-2025-12-weekly-monthly-views-search-console.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2026-01-search-central-live-brasil-argentina",
+    "title": "Search Central Live is coming back to South America",
+    "url": "https://developers.google.com/search/blog/2026/01/search-central-live-brasil-argentina?hl=zh-tw",
+    "published": "2026-01-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T19:49:27.173583+00:00",
+    "md_file": "zhtw-2026-01-search-central-live-brasil-argentina.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2026-02-discover-core-update",
+    "title": "Google 2026 年 2 月探索核心更新",
+    "url": "https://developers.google.com/search/blog/2026/02/discover-core-update?hl=zh-tw",
+    "published": "2026-02-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T10:28:38.526856+00:00",
+    "md_file": "zhtw-2026-02-discover-core-update.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2026-03-crawler-blog-post",
+    "title": "Googlebot 內部運作：揭開檢索、擷取和處理位元組的神秘面紗",
+    "url": "https://developers.google.com/search/blog/2026/03/crawler-blog-post?hl=zh-tw",
+    "published": "2026-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T10:28:26.934806+00:00",
+    "md_file": "zhtw-2026-03-crawler-blog-post.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2026-03-crawler-ip-ranges",
+    "title": "Google 檢索器 IP 範圍檔案的新位置",
+    "url": "https://developers.google.com/search/blog/2026/03/crawler-ip-ranges?hl=zh-tw",
+    "published": "2026-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T10:28:29.911377+00:00",
+    "md_file": "zhtw-2026-03-crawler-ip-ranges.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2026-03-scl-apac-2026",
+    "title": "2026 亞太地區 Search Central Live：活動即將開始，您準備好了嗎！透過集合功能整理內容你可以依據偏好儲存及分類內容。",
+    "url": "https://developers.google.com/search/blog/2026/03/scl-apac-2026?hl=zh-tw",
+    "published": "2026-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T10:28:35.751563+00:00",
+    "md_file": "zhtw-2026-03-scl-apac-2026.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
+    "slug": "zhtw-2026-03-scl-canada-2026",
+    "title": "Search Central Live 即將在加拿大舉行！",
+    "url": "https://developers.google.com/search/blog/2026/03/scl-canada-2026?hl=zh-tw",
+    "published": "2026-03-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-04-07T10:28:32.823326+00:00",
+    "md_file": "zhtw-2026-03-scl-canada-2026.md",
+    "source_collection": "google-search-central-zh"
+  }
+]

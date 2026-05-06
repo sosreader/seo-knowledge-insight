@@ -86,9 +86,10 @@ make fetch-ahrefs      # 只執行 Ahrefs Blog 擷取（WP API → Markdown，L4
 make fetch-sej         # 只執行 Search Engine Journal 擷取（RSS → Markdown）
 make fetch-growthmemo  # 只執行 Growth Memo 擷取（Substack RSS → Markdown）
 make fetch-google-blog # 只執行 Google Search Central Blog 擷取（Atom → Markdown）
+make fetch-google-blog-zhtw # 只執行 Google Search Central Blog 繁體中文版擷取（HTML → Markdown）
 make fetch-webdev      # 只執行 Web.dev 擷取（CWV/Performance 技術文章，RSS → Markdown）
 make fetch-screaming-frog # 只執行 Screaming Frog Blog 擷取（技術 SEO 深度文章，RSS → Markdown）
-make fetch-articles    # 擷取所有外部文章（9 個來源：Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo + Google Blog + Web.dev + Screaming Frog）
+make fetch-articles    # 擷取所有外部文章（10 個來源：Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo + Google Blog + Google Blog zh-TW + Web.dev + Screaming Frog）
 make fetch-all         # Notion + 所有外部文章
 make backfill-extraction-model      # 回填 extraction_model（全量 Supabase UPDATE）
 make backfill-extraction-model-dry  # 回填 extraction_model（dry-run，不寫入）
@@ -126,7 +127,7 @@ make help              # 顯示所有可用 targets
 
 ```
 /run-pipeline          # 查看完整用法說明（需要 OpenAI API key）
-/pipeline-local        # Notion-core pipeline（外部文章需先 make fetch-articles）
+/pipeline-local        # Notion-core pipeline（外部文章需先 `make fetch-articles`）
 /extract-qa            # 只執行 Step 2 Q&A 萃取（不需要 OpenAI）
 /dedupe-classify       # 只執行 Step 3 去重+分類（不需要 OpenAI）
 ```
@@ -161,7 +162,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 
 ### Pipeline 命令（需要 OpenAI API key）
 
-- `/run-pipeline` — 執行完整 pipeline（Steps 1–5，使用 OpenAI）
+- `/run-pipeline` — 執行 Notion-core pipeline（Steps 1–5，使用 OpenAI）
 
 ### Claude Code 模式命令（多數流程不需要 OpenAI API key）
 
@@ -276,7 +277,7 @@ Reports API 端點：
 
 Pipeline API 端點：
 
-- `GET /api/v1/pipeline/status` — 各步驟完成狀態（12 步驟：fetch-notion + 9 個外部來源 + extract-qa + dedupe-classify）
+- `GET /api/v1/pipeline/status` — 各步驟完成狀態（13 步驟：fetch-notion + 10 個外部來源 + extract-qa + dedupe-classify）
 - `GET /api/v1/pipeline/meetings` — 會議列表（含 metadata）
 - `GET /api/v1/pipeline/meetings/:id/preview` — Markdown 預覽
 - `GET /api/v1/pipeline/source-docs` — 列出所有來源文件（支援 source_type、source_collection、keyword、is_processed 等 filter + pagination）
@@ -284,7 +285,7 @@ Pipeline API 端點：
 - `GET /api/v1/pipeline/unprocessed` — 待處理的 Markdown 列表（含 source_collection）
 - `GET /api/v1/pipeline/logs` — Fetch 歷史日誌
 - `POST /api/v1/pipeline/fetch` — 觸發 Notion 增量擷取（不暴露 --force）
-- `POST /api/v1/pipeline/fetch-articles` — 觸發外部文章擷取（9 來源：Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo + Google Blog + Web.dev + Screaming Frog）
+- `POST /api/v1/pipeline/fetch-articles` — 觸發外部文章擷取（10 來源：Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo + Google Blog + Google Blog zh-TW + Web.dev + Screaming Frog）
 - `POST /api/v1/pipeline/extract-qa` — 觸發 Q&A 萃取
 - `POST /api/v1/pipeline/dedupe-classify` — 觸發去重 + 分類
 - `POST /api/v1/pipeline/metrics` — 取得 Pipeline metrics（解析 SEO 指標）

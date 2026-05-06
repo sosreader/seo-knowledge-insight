@@ -1173,9 +1173,9 @@ const paths: Record<string, Record<string, unknown>> = {
   "/api/v1/pipeline/fetch-articles": {
     post: {
       tags: ["Pipeline"],
-      summary: "觸發外部文章擷取 / Trigger external article fetch",
+      summary: "觸發 10 個外部文章來源擷取 / Trigger all 10 external article fetchers",
       description:
-        "Runs all 9 external article fetchers (Medium, iThome, Google Cases, Ahrefs, SEJ, Growth Memo, Google Search Central Blog, web.dev, Screaming Frog) and returns per-source results. The route can succeed with partial failures.",
+        "Runs all 10 external article fetchers (Medium, iThome, Google Cases, Ahrefs, SEJ, Growth Memo, Google Search Central Blog, Google Search Central Blog zh-TW, web.dev, Screaming Frog) and returns per-source results. The route can succeed with partial failures.",
       operationId: "triggerFetchArticles",
       responses: {
         "200": jsonContent(

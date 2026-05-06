@@ -205,7 +205,10 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
                 )
 
                 try:
-                    merged_raw = merge_similar_qas(group_qas)
+                    merged_raw, used_remote_merge = merge_similar_qas(
+                        group_qas,
+                        return_used_remote=True,
+                    )
                     source_ids = [qa.get("stable_id", "") for qa in group_qas]
                     source_models = _collect_source_models(group_qas)
                     result.append({
@@ -231,8 +234,9 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
                         "is_merged": False,
                         "merge_note": f"合併失敗，共 {len(group_qas)} 筆相似",
                     })
+                    used_remote_merge = False
 
-                if use_remote_llm:
+                if used_remote_merge:
                     time.sleep(0.5)
 
         logger.info("去重後: %d 筆", len(result))
@@ -245,13 +249,17 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
 @observe(name="classify_all_qas")
 def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
     """對每個 Q&A 加分類標籤（回傳新 list，不直接修改傳入的 list）"""
-    use_remote_llm = bool(os.getenv("OPENAI_API_KEY", "").strip())
     logger.info("分類標籤（共 %d 個 Q&A）", len(qa_pairs))
 
     result: list[dict] = []
     for qa in tqdm(qa_pairs, desc="  分類中"):
         try:
-            labels = classify_qa(qa["question"], qa["answer"])
+            labels, used_remote_classification = classify_qa(
+                qa["question"],
+                qa["answer"],
+                return_used_remote=True,
+            )
+
             new_qa = {
                 **qa,
                 "category": labels.get("category", "其他"),
@@ -260,6 +268,7 @@ def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
             }
         except Exception as e:
             logger.warning("分類失敗: %s", e)
+            used_remote_classification = False
             new_qa = {
                 **qa,
                 "category": "其他",
@@ -268,7 +277,7 @@ def classify_all_qas(qa_pairs: list[dict]) -> list[dict]:
             }
 
         result.append(new_qa)
-        if use_remote_llm:
+        if used_remote_classification:
             time.sleep(0.3)  # rate limit
 
     # 統計

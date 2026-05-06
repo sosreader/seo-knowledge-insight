@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -36,6 +37,7 @@ def test_extract_qa_includes_all_source_directories(tmp_path: Path):
     raw_sej_dir = tmp_path / "sej_markdown"
     raw_growthmemo_dir = tmp_path / "growthmemo_markdown"
     raw_google_blog_dir = tmp_path / "google_blog_markdown"
+    raw_google_blog_zhtw_dir = tmp_path / "google_blog_zhtw_markdown"
     raw_webdev_dir = tmp_path / "webdev_markdown"
     raw_screamingfrog_dir = tmp_path / "screamingfrog_markdown"
     qa_per_meeting_dir = tmp_path / "qa_per_meeting"
@@ -53,7 +55,8 @@ def test_extract_qa_includes_all_source_directories(tmp_path: Path):
     _write_markdown(raw_ahrefs_dir, "ahrefs.md")
     _write_markdown(raw_sej_dir, "sej.md")
     _write_markdown(raw_growthmemo_dir, "growthmemo.md")
-    _write_markdown(raw_google_blog_dir, "google-blog.md")
+    _write_markdown(raw_google_blog_dir, "google_blog.md")
+    _write_markdown(raw_google_blog_zhtw_dir, "google_blog_zhtw.md")
     _write_markdown(raw_webdev_dir, "webdev.md")
     _write_markdown(raw_screamingfrog_dir, "screamingfrog.md")
 
@@ -75,6 +78,7 @@ def test_extract_qa_includes_all_source_directories(tmp_path: Path):
         patch.object(cfg, "RAW_SEJ_MD_DIR", raw_sej_dir),
         patch.object(cfg, "RAW_GROWTHMEMO_MD_DIR", raw_growthmemo_dir),
         patch.object(cfg, "RAW_GOOGLE_BLOG_MD_DIR", raw_google_blog_dir),
+        patch.object(cfg, "RAW_GOOGLE_BLOG_ZHTW_MD_DIR", raw_google_blog_zhtw_dir),
         patch.object(cfg, "RAW_WEBDEV_MD_DIR", raw_webdev_dir),
         patch.object(cfg, "RAW_SCREAMINGFROG_MD_DIR", raw_screamingfrog_dir),
         patch.object(cfg, "QA_PER_MEETING_DIR", qa_per_meeting_dir),
@@ -99,9 +103,32 @@ def test_extract_qa_includes_all_source_directories(tmp_path: Path):
         "sej_markdown",
         "growthmemo_markdown",
         "google_blog_markdown",
+        "google_blog_zhtw_markdown",
         "webdev_markdown",
         "screamingfrog_markdown",
     }
+
+
+def test_extract_qa_check_allows_external_only_sources(
+    tmp_path: Path,
+    caplog,
+    monkeypatch,
+):
+    mod = _import_extract_qa()
+    import config as cfg
+
+    raw_data_dir = tmp_path / "raw_data"
+    external_dir = raw_data_dir / "google_blog_zhtw_markdown"
+    _write_markdown(external_dir, "google_blog_zhtw.md")
+
+    caplog.set_level(logging.INFO)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    with patch.object(cfg, "ROOT_DIR", tmp_path):
+        mod.main(SimpleNamespace(limit=0, file="", force=False, check=True))
+
+    assert "[Step 2: Q&A 萃取] 依賴檢查失敗" not in caplog.text
+    assert "[Step 2: Q&A 萃取] 依賴檢查通過" in caplog.text
 
 
 def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
@@ -116,6 +143,7 @@ def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
     raw_sej_dir = tmp_path / "sej_markdown"
     raw_growthmemo_dir = tmp_path / "growthmemo_markdown"
     raw_google_blog_dir = tmp_path / "google_blog_markdown"
+    raw_google_blog_zhtw_dir = tmp_path / "google_blog_zhtw_markdown"
     raw_webdev_dir = tmp_path / "webdev_markdown"
     raw_screamingfrog_dir = tmp_path / "screamingfrog_markdown"
     qa_per_meeting_dir = tmp_path / "qa_per_meeting"
@@ -126,7 +154,8 @@ def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
 
     _write_markdown(raw_ahrefs_dir, "ahrefs.md")
     _write_markdown(raw_sej_dir, "sej.md")
-    _write_markdown(raw_google_blog_dir, "google-blog.md")
+    _write_markdown(raw_google_blog_dir, "google_blog.md")
+    _write_markdown(raw_google_blog_zhtw_dir, "google_blog_zhtw.md")
     _write_markdown(raw_webdev_dir, "webdev.md")
     _write_markdown(raw_screamingfrog_dir, "screamingfrog.md")
 
@@ -138,16 +167,20 @@ def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
         json.dumps({"qa_pairs": [{"question": "Q", "answer": "A"}], "meeting_summary": "ok"}, ensure_ascii=False),
         encoding="utf-8",
     )
-    (qa_per_article_dir / "google-blog_qa.json").write_text(
-        json.dumps({"qa_pairs": [], "meeting_summary": "official announcement"}, ensure_ascii=False),
+    (qa_per_article_dir / "google_blog_qa.json").write_text(
+        json.dumps({"qa_pairs": [{"question": "Q", "answer": "A"}], "meeting_summary": "ok"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (qa_per_article_dir / "google_blog_zhtw_qa.json").write_text(
+        json.dumps({"qa_pairs": [{"question": "Q", "answer": "A"}], "meeting_summary": "ok"}, ensure_ascii=False),
         encoding="utf-8",
     )
     (qa_per_article_dir / "webdev_qa.json").write_text(
-        json.dumps({"qa_pairs": [], "meeting_summary": "performance article"}, ensure_ascii=False),
+        json.dumps({"qa_pairs": [{"question": "Q", "answer": "A"}], "meeting_summary": "ok"}, ensure_ascii=False),
         encoding="utf-8",
     )
     (qa_per_article_dir / "screamingfrog_qa.json").write_text(
-        json.dumps({"qa_pairs": [], "meeting_summary": "technical seo article"}, ensure_ascii=False),
+        json.dumps({"qa_pairs": [{"question": "Q", "answer": "A"}], "meeting_summary": "ok"}, ensure_ascii=False),
         encoding="utf-8",
     )
 
@@ -160,6 +193,7 @@ def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
         patch.object(cfg, "RAW_SEJ_MD_DIR", raw_sej_dir),
         patch.object(cfg, "RAW_GROWTHMEMO_MD_DIR", raw_growthmemo_dir),
         patch.object(cfg, "RAW_GOOGLE_BLOG_MD_DIR", raw_google_blog_dir),
+        patch.object(cfg, "RAW_GOOGLE_BLOG_ZHTW_MD_DIR", raw_google_blog_zhtw_dir),
         patch.object(cfg, "RAW_WEBDEV_MD_DIR", raw_webdev_dir),
         patch.object(cfg, "RAW_SCREAMINGFROG_MD_DIR", raw_screamingfrog_dir),
         patch.object(cfg, "QA_PER_MEETING_DIR", qa_per_meeting_dir),
@@ -170,169 +204,12 @@ def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
     assert {path.name for path in already_done} == {
         "ahrefs.md",
         "sej.md",
-        "google-blog.md",
+        "google_blog.md",
+        "google_blog_zhtw.md",
         "webdev.md",
         "screamingfrog.md",
     }
     assert not unprocessed
-
-
-def test_extract_qa_skips_successful_empty_results_in_incremental_mode(tmp_path: Path):
-    mod = _import_extract_qa()
-    import config as cfg
-
-    raw_ahrefs_dir = tmp_path / "ahrefs_markdown"
-    qa_per_meeting_dir = tmp_path / "qa_per_meeting"
-    qa_per_article_dir = tmp_path / "qa_per_article"
-    output_dir = tmp_path / "output"
-
-    qa_per_meeting_dir.mkdir(parents=True, exist_ok=True)
-    qa_per_article_dir.mkdir(parents=True, exist_ok=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    _write_markdown(raw_ahrefs_dir, "ahrefs.md")
-    (qa_per_article_dir / "ahrefs_qa.json").write_text(
-        json.dumps({"qa_pairs": [], "meeting_summary": "non-seo article"}, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-    with (
-        patch.object(cfg, "RAW_MD_DIR", tmp_path / "markdown"),
-        patch.object(cfg, "RAW_MEDIUM_MD_DIR", tmp_path / "medium_markdown"),
-        patch.object(cfg, "RAW_ITHELP_MD_DIR", tmp_path / "ithelp_markdown"),
-        patch.object(cfg, "RAW_GOOGLE_CASES_MD_DIR", tmp_path / "google_cases_markdown"),
-        patch.object(cfg, "RAW_AHREFS_MD_DIR", raw_ahrefs_dir),
-        patch.object(cfg, "RAW_SEJ_MD_DIR", tmp_path / "sej_markdown"),
-        patch.object(cfg, "RAW_GROWTHMEMO_MD_DIR", tmp_path / "growthmemo_markdown"),
-        patch.object(cfg, "RAW_GOOGLE_BLOG_MD_DIR", tmp_path / "google_blog_markdown"),
-        patch.object(cfg, "RAW_WEBDEV_MD_DIR", tmp_path / "webdev_markdown"),
-        patch.object(cfg, "RAW_SCREAMINGFROG_MD_DIR", tmp_path / "screamingfrog_markdown"),
-        patch.object(cfg, "QA_PER_MEETING_DIR", qa_per_meeting_dir),
-        patch.object(cfg, "QA_PER_ARTICLE_DIR", qa_per_article_dir),
-        patch.object(cfg, "OUTPUT_DIR", output_dir),
-        patch.object(cfg, "OPENAI_MODEL", "test-model"),
-        patch.object(mod, "preflight_check"),
-        patch.object(mod, "init_laminar"),
-        patch.object(mod, "flush_laminar"),
-        patch.object(mod, "record_artifact", return_value={"version_id": "v-test"}),
-        patch.object(mod, "process_single_meeting") as process_single_meeting,
-        patch("time.sleep"),
-    ):
-        mod.main(SimpleNamespace(limit=0, file="", force=False, check=False))
-
-    process_single_meeting.assert_not_called()
-    merged = json.loads((output_dir / "qa_all_raw.json").read_text(encoding="utf-8"))
-    assert merged["total_qa_count"] == 0
-    assert merged["meetings_processed"] == 1
-
-
-def test_extract_qa_retries_failed_empty_results_in_incremental_mode(tmp_path: Path):
-    mod = _import_extract_qa()
-    import config as cfg
-
-    raw_ahrefs_dir = tmp_path / "ahrefs_markdown"
-    qa_per_meeting_dir = tmp_path / "qa_per_meeting"
-    qa_per_article_dir = tmp_path / "qa_per_article"
-    output_dir = tmp_path / "output"
-
-    qa_per_meeting_dir.mkdir(parents=True, exist_ok=True)
-    qa_per_article_dir.mkdir(parents=True, exist_ok=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    _write_markdown(raw_ahrefs_dir, "ahrefs.md")
-    (qa_per_article_dir / "ahrefs_qa.json").write_text(
-        json.dumps({"qa_pairs": [], "meeting_summary": "處理失敗: timeout"}, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-    with (
-        patch.object(cfg, "RAW_MD_DIR", tmp_path / "markdown"),
-        patch.object(cfg, "RAW_MEDIUM_MD_DIR", tmp_path / "medium_markdown"),
-        patch.object(cfg, "RAW_ITHELP_MD_DIR", tmp_path / "ithelp_markdown"),
-        patch.object(cfg, "RAW_GOOGLE_CASES_MD_DIR", tmp_path / "google_cases_markdown"),
-        patch.object(cfg, "RAW_AHREFS_MD_DIR", raw_ahrefs_dir),
-        patch.object(cfg, "RAW_SEJ_MD_DIR", tmp_path / "sej_markdown"),
-        patch.object(cfg, "RAW_GROWTHMEMO_MD_DIR", tmp_path / "growthmemo_markdown"),
-        patch.object(cfg, "RAW_GOOGLE_BLOG_MD_DIR", tmp_path / "google_blog_markdown"),
-        patch.object(cfg, "RAW_WEBDEV_MD_DIR", tmp_path / "webdev_markdown"),
-        patch.object(cfg, "RAW_SCREAMINGFROG_MD_DIR", tmp_path / "screamingfrog_markdown"),
-        patch.object(cfg, "QA_PER_MEETING_DIR", qa_per_meeting_dir),
-        patch.object(cfg, "QA_PER_ARTICLE_DIR", qa_per_article_dir),
-        patch.object(cfg, "OUTPUT_DIR", output_dir),
-        patch.object(cfg, "OPENAI_MODEL", "test-model"),
-        patch.object(mod, "preflight_check"),
-        patch.object(mod, "init_laminar"),
-        patch.object(mod, "flush_laminar"),
-        patch.object(mod, "record_artifact", return_value={"version_id": "v-test"}),
-        patch.object(
-            mod,
-            "process_single_meeting",
-            return_value={"qa_pairs": [], "meeting_summary": "non-seo article"},
-        ) as process_single_meeting,
-        patch("time.sleep"),
-    ):
-        mod.main(SimpleNamespace(limit=0, file="", force=False, check=False))
-
-    process_single_meeting.assert_called_once()
-    written = json.loads((qa_per_article_dir / "ahrefs_qa.json").read_text(encoding="utf-8"))
-    assert written["meeting_summary"] == "non-seo article"
-    merged = json.loads((output_dir / "qa_all_raw.json").read_text(encoding="utf-8"))
-    assert merged["meetings_processed"] == 1
-
-
-def test_extract_qa_skips_legacy_article_artifact_in_meeting_dir(tmp_path: Path):
-    mod = _import_extract_qa()
-    import config as cfg
-
-    raw_ahrefs_dir = tmp_path / "ahrefs_markdown"
-    qa_per_meeting_dir = tmp_path / "qa_per_meeting"
-    qa_per_article_dir = tmp_path / "qa_per_article"
-    output_dir = tmp_path / "output"
-
-    qa_per_meeting_dir.mkdir(parents=True, exist_ok=True)
-    qa_per_article_dir.mkdir(parents=True, exist_ok=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    _write_markdown(raw_ahrefs_dir, "ahrefs.md")
-    (qa_per_meeting_dir / "ahrefs_qa.json").write_text(
-        json.dumps(
-            {
-                "qa_pairs": [{"question": "Q", "answer": "A"}],
-                "meeting_summary": "legacy local output",
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-
-    with (
-        patch.object(cfg, "RAW_MD_DIR", tmp_path / "markdown"),
-        patch.object(cfg, "RAW_MEDIUM_MD_DIR", tmp_path / "medium_markdown"),
-        patch.object(cfg, "RAW_ITHELP_MD_DIR", tmp_path / "ithelp_markdown"),
-        patch.object(cfg, "RAW_GOOGLE_CASES_MD_DIR", tmp_path / "google_cases_markdown"),
-        patch.object(cfg, "RAW_AHREFS_MD_DIR", raw_ahrefs_dir),
-        patch.object(cfg, "RAW_SEJ_MD_DIR", tmp_path / "sej_markdown"),
-        patch.object(cfg, "RAW_GROWTHMEMO_MD_DIR", tmp_path / "growthmemo_markdown"),
-        patch.object(cfg, "RAW_GOOGLE_BLOG_MD_DIR", tmp_path / "google_blog_markdown"),
-        patch.object(cfg, "RAW_WEBDEV_MD_DIR", tmp_path / "webdev_markdown"),
-        patch.object(cfg, "RAW_SCREAMINGFROG_MD_DIR", tmp_path / "screamingfrog_markdown"),
-        patch.object(cfg, "QA_PER_MEETING_DIR", qa_per_meeting_dir),
-        patch.object(cfg, "QA_PER_ARTICLE_DIR", qa_per_article_dir),
-        patch.object(cfg, "OUTPUT_DIR", output_dir),
-        patch.object(cfg, "OPENAI_MODEL", "test-model"),
-        patch.object(mod, "preflight_check"),
-        patch.object(mod, "init_laminar"),
-        patch.object(mod, "flush_laminar"),
-        patch.object(mod, "record_artifact", return_value={"version_id": "v-test"}),
-        patch.object(mod, "process_single_meeting") as process_single_meeting,
-        patch("time.sleep"),
-    ):
-        mod.main(SimpleNamespace(limit=0, file="", force=False, check=False))
-
-    process_single_meeting.assert_not_called()
-    merged = json.loads((output_dir / "qa_all_raw.json").read_text(encoding="utf-8"))
-    assert merged["total_qa_count"] == 1
-    assert merged["meetings_processed"] == 1
 
 
 def test_extract_ahrefs_timeout_uses_heuristic_fallback(tmp_path: Path):

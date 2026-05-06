@@ -33,7 +33,7 @@ def test_deduplicate_preserves_single_source_model_on_merge() -> None:
 
     with (
         patch.object(mod, "find_duplicate_groups", return_value=([[0, 1]], [])),
-        patch.object(mod, "merge_similar_qas", return_value={"question": "Merged", "answer": "Merged answer"}),
+        patch.object(mod, "merge_similar_qas", return_value=({"question": "Merged", "answer": "Merged answer"}, True)),
         patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}, clear=False),
         patch("time.sleep"),
     ):
@@ -70,7 +70,7 @@ def test_deduplicate_marks_mixed_source_models_without_overwriting_history() -> 
 
     with (
         patch.object(mod, "find_duplicate_groups", return_value=([[0, 1]], [])),
-        patch.object(mod, "merge_similar_qas", return_value={"question": "Merged", "answer": "Merged answer"}),
+        patch.object(mod, "merge_similar_qas", return_value=({"question": "Merged", "answer": "Merged answer"}, True)),
         patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}, clear=False),
         patch("time.sleep"),
     ):

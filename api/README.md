@@ -251,7 +251,7 @@ Client → Function URL / localhost:8002
 | GET    | `/api/v1/pipeline/unprocessed`                           | 待處理的 Markdown 列表                                           | ✓    | 60/min     |
 | GET    | `/api/v1/pipeline/logs`                                  | Fetch 歷史日誌                                                   | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/fetch`                                 | 觸發 Notion 增量擷取                                             | ✓    | 60/min     |
-| POST   | `/api/v1/pipeline/fetch-articles`                        | 觸發外部文章擷取（9 來源；逐來源回報，允許 partial failure）     | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/fetch-articles`                        | 觸發外部文章擷取（10 來源：Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo + Google Blog + Google Blog zh-TW + Web.dev + Screaming Frog；逐來源回報，允許 partial failure） | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/extract-qa`                            | 觸發 Q&A 萃取                                                    | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/dedupe-classify`                       | 觸發去重 + 分類                                                  | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/crawled-not-indexed`                   | 分析檢索未索引路徑（從 Google Sheet 解析 + 規則引擎 + LLM 分析） | ✓    | 60/min     |

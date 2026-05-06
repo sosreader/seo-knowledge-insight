@@ -25,6 +25,7 @@ RAW_AHREFS_MD_DIR = ROOT_DIR / "raw_data" / "ahrefs_markdown"
 RAW_SEJ_MD_DIR = ROOT_DIR / "raw_data" / "sej_markdown"
 RAW_GROWTHMEMO_MD_DIR = ROOT_DIR / "raw_data" / "growthmemo_markdown"
 RAW_GOOGLE_BLOG_MD_DIR = ROOT_DIR / "raw_data" / "google_blog_markdown"
+RAW_GOOGLE_BLOG_ZHTW_MD_DIR = ROOT_DIR / "raw_data" / "google_blog_zhtw_markdown"
 RAW_WEBDEV_MD_DIR = ROOT_DIR / "raw_data" / "webdev_markdown"
 RAW_SCREAMINGFROG_MD_DIR = ROOT_DIR / "raw_data" / "screamingfrog_markdown"
 IMAGES_DIR = ROOT_DIR / "raw_data" / "images"
@@ -43,6 +44,7 @@ def get_external_markdown_source_dirs() -> tuple[Path, ...]:
         RAW_SEJ_MD_DIR,
         RAW_GROWTHMEMO_MD_DIR,
         RAW_GOOGLE_BLOG_MD_DIR,
+        RAW_GOOGLE_BLOG_ZHTW_MD_DIR,
         RAW_WEBDEV_MD_DIR,
         RAW_SCREAMINGFROG_MD_DIR,
     )
@@ -62,6 +64,7 @@ DIR_COLLECTION_MAP: Dict[str, tuple] = {
     "sej_markdown": ("article", "sej"),
     "growthmemo_markdown": ("article", "growth-memo"),
     "google_blog_markdown": ("article", "google-search-central"),
+    "google_blog_zhtw_markdown": ("article", "google-search-central-zh"),
     "webdev_markdown": ("article", "web-dev"),
     "screamingfrog_markdown": ("article", "screaming-frog"),
 }

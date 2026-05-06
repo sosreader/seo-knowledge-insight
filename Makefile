@@ -103,6 +103,10 @@ fetch-growthmemo: ## Growth Memo (Kevin Indig) 擷取（Substack RSS → Markdow
 fetch-google-blog: ## Google Search Central Blog 擷取（官方 SEO 公告，Atom → Markdown）
 	$(PYTHON) scripts/01h_fetch_google_blog.py
 
+.PHONY: fetch-google-blog-zhtw
+fetch-google-blog-zhtw: ## Google Search Central Blog 繁體中文版擷取（官方 SEO 公告，HTML → Markdown）
+	$(PYTHON) scripts/01h_fetch_google_blog.py --lang zh-tw
+
 .PHONY: fetch-webdev
 fetch-webdev: ## Web.dev 擷取（CWV / Performance 技術文章，RSS → Markdown）
 	$(PYTHON) scripts/01i_fetch_webdev.py
@@ -112,7 +116,7 @@ fetch-screaming-frog: ## Screaming Frog Blog 擷取（技術 SEO 深度文章，
 	$(PYTHON) scripts/01j_fetch_screaming_frog.py
 
 .PHONY: fetch-articles
-fetch-articles: ## 擷取所有外部文章（9 個來源）
+fetch-articles: ## 擷取所有外部文章（10 個來源）
 	$(PYTHON) scripts/01b_fetch_medium.py
 	$(PYTHON) scripts/01c_fetch_ithelp.py
 	$(PYTHON) scripts/01d_fetch_google_cases.py
@@ -120,6 +124,7 @@ fetch-articles: ## 擷取所有外部文章（9 個來源）
 	$(PYTHON) scripts/01f_fetch_sej.py
 	$(PYTHON) scripts/01g_fetch_growthmemo.py
 	$(PYTHON) scripts/01h_fetch_google_blog.py
+	$(PYTHON) scripts/01h_fetch_google_blog.py --lang zh-tw
 	$(PYTHON) scripts/01i_fetch_webdev.py
 	$(PYTHON) scripts/01j_fetch_screaming_frog.py
 
