@@ -1,5 +1,5 @@
 /**
- * sync-db.ts — Upload local reports & sessions to Supabase.
+ * sync-db.ts — Upload local reports, sessions & meeting-prep to Supabase.
  *
  * Usage:
  *   cd api && npx tsx scripts/sync-db.ts status
@@ -7,6 +7,7 @@
  *   cd api && npx tsx scripts/sync-db.ts upload --dry-run
  *   cd api && npx tsx scripts/sync-db.ts upload --force
  *   cd api && npx tsx scripts/sync-db.ts upload --type reports
+ *   cd api && npx tsx scripts/sync-db.ts upload --type meeting-prep
  */
 
 import { parseArgs } from "node:util";
@@ -23,6 +24,7 @@ dotenvConfig({ path: resolve(ROOT_DIR, ".env") });
 import { hasSupabase } from "../src/store/supabase-client.js";
 import { ReportSyncer } from "../src/sync/report-sync.js";
 import { SessionSyncer } from "../src/sync/session-sync.js";
+import { MeetingPrepSyncer } from "../src/sync/meeting-prep-sync.js";
 import type { SyncDiff, SyncResult } from "../src/sync/sync-types.js";
 
 // ────────────────────────────────────────────────────────────
@@ -43,20 +45,21 @@ const subcommand = positionals[0] ?? "status";
 
 if (flags.help || !["status", "upload"].includes(subcommand)) {
   console.log(`
-sync-db — Upload local reports & sessions to Supabase
+sync-db — Upload local reports, sessions & meeting-prep to Supabase
 
 Usage:
   npx tsx scripts/sync-db.ts status              Show diff summary
   npx tsx scripts/sync-db.ts upload              Upload local-only items
   npx tsx scripts/sync-db.ts upload --dry-run    Show what would be uploaded
   npx tsx scripts/sync-db.ts upload --force      Overwrite existing items
-  npx tsx scripts/sync-db.ts upload --type reports  Only sync reports
+  npx tsx scripts/sync-db.ts upload --type reports       Only sync reports
+  npx tsx scripts/sync-db.ts upload --type meeting-prep  Only sync meeting-prep
 
 Options:
-  --type <reports|sessions|all>   Resource type (default: all)
-  --dry-run                       Preview without writing
-  --force                         Overwrite existing items in Supabase
-  -h, --help                      Show this help
+  --type <reports|sessions|meeting-prep|all>   Resource type (default: all)
+  --dry-run                                    Preview without writing
+  --force                                      Overwrite existing items in Supabase
+  -h, --help                                   Show this help
 `.trim());
   process.exit(0);
 }
@@ -95,16 +98,18 @@ async function main(): Promise<void> {
   }
 
   const syncType = flags.type as string;
-  const VALID_TYPES = new Set(["all", "reports", "sessions"]);
+  const VALID_TYPES = new Set(["all", "reports", "sessions", "meeting-prep"]);
   if (!VALID_TYPES.has(syncType)) {
-    console.error(`Invalid --type "${syncType}". Expected: all, reports, sessions`);
+    console.error(`Invalid --type "${syncType}". Expected: all, reports, sessions, meeting-prep`);
     process.exit(1);
   }
   const includeReports = syncType === "all" || syncType === "reports";
   const includeSessions = syncType === "all" || syncType === "sessions";
+  const includeMeetingPrep = syncType === "all" || syncType === "meeting-prep";
 
   const reportSyncer = new ReportSyncer();
   const sessionSyncer = new SessionSyncer();
+  const meetingPrepSyncer = new MeetingPrepSyncer();
 
   if (subcommand === "status") {
     console.log("\n=== Sync Status (Local vs Supabase) ===\n");
@@ -120,6 +125,14 @@ async function main(): Promise<void> {
     if (includeSessions) {
       const diff = await sessionSyncer.computeDiff();
       printDiff("Sessions", diff);
+      if (diff.localOnly.length > 0) {
+        console.log(`    local-only: ${diff.localOnly.map((i) => i.key).join(", ")}`);
+      }
+    }
+
+    if (includeMeetingPrep) {
+      const diff = await meetingPrepSyncer.computeDiff();
+      printDiff("MeetingPrep", diff);
       if (diff.localOnly.length > 0) {
         console.log(`    local-only: ${diff.localOnly.map((i) => i.key).join(", ")}`);
       }
@@ -171,6 +184,23 @@ async function main(): Promise<void> {
     } else {
       const result = await sessionSyncer.upload(options);
       printResult("Sessions", result);
+    }
+  }
+
+  if (includeMeetingPrep) {
+    if (options.dryRun) {
+      const diff = await meetingPrepSyncer.computeDiff();
+      const count = options.force ? diff.localOnly.length + diff.both.length : diff.localOnly.length;
+      console.log(`  MeetingPrep: would upload ${count} items`);
+      if (diff.localOnly.length > 0) {
+        console.log(`    new: ${diff.localOnly.map((i) => i.key).join(", ")}`);
+      }
+      if (options.force && diff.both.length > 0) {
+        console.log(`    overwrite: ${diff.both.length} items`);
+      }
+    } else {
+      const result = await meetingPrepSyncer.upload(options);
+      printResult("MeetingPrep", result);
     }
   }
 

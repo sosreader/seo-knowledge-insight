@@ -104,6 +104,57 @@ def _group_by_collection(qa_pairs: list[dict]) -> dict[str, list[dict]]:
     return dict(by_collection)
 
 
+def _normalize_extraction_model(value: object) -> str | None:
+    if value is None:
+        return None
+    model = str(value).strip()
+    return model or None
+
+
+def _collect_source_models(qa_group: list[dict]) -> list[str]:
+    seen: set[str] = set()
+    models: list[str] = []
+    for qa in qa_group:
+        model = _normalize_extraction_model(qa.get("extraction_model"))
+        if not model or model in seen:
+            continue
+        seen.add(model)
+        models.append(model)
+    return models
+
+
+def _resolve_group_extraction_model(source_models: list[str]) -> str | None:
+    if not source_models:
+        return None
+    if len(source_models) == 1:
+        return source_models[0]
+    return "mixed"
+
+
+def _build_extraction_provenance(
+    qa_group: list[dict],
+    merge_model: str | None,
+    merge_strategy: str,
+) -> dict:
+    source_models = _collect_source_models(qa_group)
+    source_ids = [
+        str(source_id)
+        for source_id in (qa.get("stable_id") for qa in qa_group)
+        if source_id
+    ]
+    status = "unknown"
+    if source_models:
+        status = "single-source" if len(source_models) == 1 else "mixed-source"
+    return {
+        "source_models": source_models,
+        "source_stable_ids": source_ids,
+        "source_count": len(qa_group),
+        "merge_model": merge_model,
+        "merge_strategy": merge_strategy,
+        "provenance_status": status,
+    }
+
+
 @observe(name="deduplicate_qas")
 def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
     """Collection-scoped 去重：各 collection 內部獨立 dedup，跨 collection 不 dedup。"""
@@ -127,10 +178,17 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
         # 獨立的直接保留（immutable — dict unpacking）
         for idx in unique_indices:
             item = items[idx]
+            source_model = _normalize_extraction_model(item.get("extraction_model"))
+            provenance = item.get("extraction_provenance") or _build_extraction_provenance(
+                [item],
+                merge_model=None,
+                merge_strategy="none",
+            )
             result.append({
                 **item,
                 "is_merged": False,
-                "extraction_model": item.get("extraction_model") or None,
+                "extraction_model": source_model,
+                "extraction_provenance": provenance,
             })
 
         # 重複的合併
@@ -152,6 +210,7 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
                         return_used_remote=True,
                     )
                     source_ids = [qa.get("stable_id", "") for qa in group_qas]
+                    source_models = _collect_source_models(group_qas)
                     result.append({
                         **merged_raw,
                         "is_merged": True,
@@ -160,7 +219,12 @@ def deduplicate_qas(qa_pairs: list[dict]) -> list[dict]:
                         "source_collection": collection,
                         "source_url": group_qas[0].get("source_url", ""),
                         "stable_id": compute_stable_id_from_sources(source_ids),
-                        "extraction_model": config.OPENAI_MODEL,
+                        "extraction_model": _resolve_group_extraction_model(source_models),
+                        "extraction_provenance": _build_extraction_provenance(
+                            group_qas,
+                            merge_model=config.OPENAI_MODEL,
+                            merge_strategy="llm",
+                        ),
                     })
                 except Exception as e:
                     logger.warning("merge_similar_qas failed for group %d: %s", group_i + 1, e, exc_info=True)
