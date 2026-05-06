@@ -217,15 +217,7 @@ merge-qa: ## 合併所有 per-meeting Q&A → qa_all_raw.json（AI 工具完成�
 
 .PHONY: cache-stats
 cache-stats: ## 查看各 namespace 的 cache 使用量
-	@$(PYTHON) -c "\
-import sys; sys.path.insert(0, '.')\n\
-from utils.pipeline_cache import cache_stats\n\
-print('Cache stats:')\n\
-for ns in ['extraction', 'embedding', 'classify', 'merge', 'report']:\n\
-    s = cache_stats(ns)\n\
-    kb = s['size_bytes'] / 1024\n\
-    print(f'  {ns:<12}: {s[\"count\"]:>5} 筆  {kb:>8.1f} KB')\n\
-"
+	@$(PYTHON) -c "import sys; sys.path.insert(0, '.'); from utils.pipeline_cache import cache_stats; print('Cache stats:'); [print(f'  {ns:<12}: {cache_stats(ns)[\"count\"]:>5} 筆  {cache_stats(ns)[\"size_bytes\"]/1024:>8.1f} KB') for ns in ('extraction', 'embedding', 'classify', 'merge', 'report')]"
 
 # 使用方式: make cache-clear ns=embedding
 .PHONY: cache-clear
