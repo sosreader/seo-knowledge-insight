@@ -4,7 +4,7 @@ REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（No
 
 **特點：**
 
-- 10 個路由器（Routers）、42 個 API endpoints、745 個測試（65 檔案，coverage 80%+）
+- 10 個路由器（Routers）、38 個 paths / 42+ 個 operations、838 個測試（67 檔案，coverage 80%+）
 - OpenAPI 3.1 規格 + Scalar 互動式文件（`/openapi.json`、`/docs`）
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
@@ -251,7 +251,7 @@ Client → Function URL / localhost:8002
 | GET    | `/api/v1/pipeline/unprocessed`                           | 待處理的 Markdown 列表                                           | ✓    | 60/min     |
 | GET    | `/api/v1/pipeline/logs`                                  | Fetch 歷史日誌                                                   | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/fetch`                                 | 觸發 Notion 增量擷取                                             | ✓    | 60/min     |
-| POST   | `/api/v1/pipeline/fetch-articles`                        | 觸發外部文章擷取（10 來源：Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo + Google Blog + Google Blog zh-TW + Web.dev + Screaming Frog） | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/fetch-articles`                        | 觸發外部文章擷取（10 來源：Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo + Google Blog + Google Blog zh-TW + Web.dev + Screaming Frog；逐來源回報，允許 partial failure） | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/extract-qa`                            | 觸發 Q&A 萃取                                                    | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/dedupe-classify`                       | 觸發去重 + 分類                                                  | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/crawled-not-indexed`                   | 分析檢索未索引路徑（從 Google Sheet 解析 + 規則引擎 + LLM 分析） | ✓    | 60/min     |
@@ -445,9 +445,9 @@ api/
 ├── scripts/
 │   ├── ai-crawler-checker.ts  # AI crawler readiness CLI（GPTBot/ClaudeBot 等 10 bots）
 │   ├── feedback-to-golden.ts  # 使用者回饋 → golden dataset 候選
-│   ├── sync-db.ts             # Reports + Sessions → Supabase 同步
+│   ├── sync-db.ts             # Reports + Sessions + Meeting-Prep → Supabase 同步
 │   └── eval-semantic.ts       # Retrieval eval（keyword/hybrid/rerank）
-├── tests/                      # 65 個測試檔案，734 tests
+├── tests/                      # 67 個測試檔案，838 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
 ├── Dockerfile
 ├── package.json

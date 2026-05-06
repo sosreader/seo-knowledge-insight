@@ -36,6 +36,29 @@ const schemas: Record<string, Record<string, unknown>> = {
       version: { type: "string" },
     },
   },
+  ExtractionProvenance: {
+    type: "object",
+    properties: {
+      source_models: {
+        type: "array",
+        items: { type: "string" },
+        example: ["claude-code", "local-heuristic"],
+      },
+      source_stable_ids: {
+        type: "array",
+        items: { type: "string" },
+        example: ["a1b2c3d4e5f67890", "0f1e2d3c4b5a6978"],
+      },
+      source_count: { type: "integer", example: 2 },
+      merge_model: { type: "string", nullable: true, example: "gpt-5.4-nano" },
+      merge_strategy: { type: "string", nullable: true, example: "semantic-merge" },
+      provenance_status: {
+        type: "string",
+        nullable: true,
+        example: "mixed-source",
+      },
+    },
+  },
   QAItem: {
     type: "object",
     properties: {
@@ -60,6 +83,10 @@ const schemas: Record<string, Record<string, unknown>> = {
       source_collection: { type: "string" },
       source_url: { type: "string" },
       extraction_model: { type: "string", nullable: true },
+      extraction_provenance: {
+        anyOf: [ref("ExtractionProvenance"), { type: "null" }],
+        description: "Additive provenance for merged/backfilled QA items",
+      },
       maturity_relevance: {
         type: "string",
         enum: ["L1", "L2", "L3", "L4"],
@@ -85,6 +112,10 @@ const schemas: Record<string, Record<string, unknown>> = {
       source_collection: { type: "string" },
       source_url: { type: "string" },
       extraction_model: { type: "string", nullable: true },
+      extraction_provenance: {
+        anyOf: [ref("ExtractionProvenance"), { type: "null" }],
+        description: "Additive provenance for merged/backfilled QA items",
+      },
       maturity_relevance: {
         type: "string",
         enum: ["L1", "L2", "L3", "L4"],
@@ -1143,6 +1174,8 @@ const paths: Record<string, Record<string, unknown>> = {
     post: {
       tags: ["Pipeline"],
       summary: "觸發 10 個外部文章來源擷取 / Trigger all 10 external article fetchers",
+      description:
+        "Runs all 10 external article fetchers (Medium, iThome, Google Cases, Ahrefs, SEJ, Growth Memo, Google Search Central Blog, Google Search Central Blog zh-TW, web.dev, Screaming Frog) and returns per-source results. The route can succeed with partial failures.",
       operationId: "triggerFetchArticles",
       responses: {
         "200": jsonContent(

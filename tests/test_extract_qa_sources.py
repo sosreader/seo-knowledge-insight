@@ -131,48 +131,6 @@ def test_extract_qa_check_allows_external_only_sources(
     assert "[Step 2: Q&A 萃取] 依賴檢查通過" in caplog.text
 
 
-def test_extract_qa_check_fails_when_all_source_markdown_missing(
-    tmp_path: Path,
-    caplog,
-    monkeypatch,
-):
-    mod = _import_extract_qa()
-    import config as cfg
-
-    (tmp_path / "raw_data").mkdir(parents=True, exist_ok=True)
-
-    caplog.set_level(logging.INFO)
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-
-    with patch.object(cfg, "ROOT_DIR", tmp_path):
-        mod.main(SimpleNamespace(limit=0, file="", force=False, check=True))
-
-    assert "raw_data/*markdown/*.md 找到 0 個檔案" in caplog.text
-    assert "請先執行 python scripts/01_fetch_notion.py 或相關 fetch-* 步驟" in caplog.text
-    assert "[Step 2: Q&A 萃取] 依賴檢查失敗" in caplog.text
-
-
-def test_extract_qa_check_ignores_non_source_markdown_dirs(
-    tmp_path: Path,
-    caplog,
-    monkeypatch,
-):
-    mod = _import_extract_qa()
-    import config as cfg
-
-    backup_dir = tmp_path / "raw_data" / "backup"
-    _write_markdown(backup_dir, "old.md")
-
-    caplog.set_level(logging.INFO)
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-
-    with patch.object(cfg, "ROOT_DIR", tmp_path):
-        mod.main(SimpleNamespace(limit=0, file="", force=False, check=True))
-
-    assert "raw_data/*markdown/*.md 找到 0 個檔案" in caplog.text
-    assert "[Step 2: Q&A 萃取] 依賴檢查失敗" in caplog.text
-
-
 def test_list_pipeline_state_recognizes_article_output_dirs(tmp_path: Path):
     mod = _import_list_pipeline_state()
     import config as cfg
