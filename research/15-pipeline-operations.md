@@ -229,6 +229,23 @@ $$
 - **保留歷史模型 lineage**：合併或回填 QA metadata 時，不要把既有 `extraction_model` 粗暴改寫成當前預設模型；應優先保留原值，並用 `extraction_provenance` / `legacy-unknown` 表達來源與不確定性。
 - **slash command 要對齊真實 runtime contract**：`/generate-report` 現在是 `scripts/04_generate_report.py` 的操作入口；2026-05-06 PR #38 之後支援雙模式 — `OPENAI_API_KEY` 設定時走 OpenAI（rerank + LLM 摘要），未設定時 fallback 到 `claude-code-heuristic`（rerank no-op + 本地 metrics summary builder）。`/pipeline-local` 仍只涵蓋本地 Steps 1–3。當 Step 4、backfill 或 fetch contract 變動時，應一起檢查 `Makefile`、`README.md`、`CLAUDE.md`、`api/README.md` 與 `.claude/commands/`。
 
+### 2026-05-06 dedupe-classify 規模規則 + PR #38 fallback 範圍實測
+
+- **PR #38 fallback 涵蓋範圍比 CLAUDE.md 描述更廣**：CLAUDE.md 標註 PR #38 fallback 適用 `make extract-qa` 與 `make generate-report`，實測 `make dedupe-classify` 也走 fallback。`utils/openai_helper.py` 三個關鍵函數都有 `_has_openai_key()` 判斷 + heuristic 路徑：
+  - `get_embeddings` (L521) → `get_local_embeddings()`（hash-based）
+  - `merge_similar_qas` (L618) → 取最長 question + concat answers + merge keywords
+  - `classify_qa` (L860) → `_classify_qa_locally()`（規則 + 關鍵字匹配）
+  - 結論：整段 pipeline（fetch → extract → dedupe → classify）在無 OpenAI key 下都能跑完，fallback model 標記為 `claude-code-heuristic`。CLAUDE.md「無 OPENAI_API_KEY 時的 fallback」段應補上 dedupe-classify。
+
+- **`/dedupe-classify` skill 不適合 4,000+ QA 規模**：當 `qa_all_raw.json` 規模超過約 2,000 筆，Claude Code sub-agent 無法在單次 context 內處理完整去重比對。實測 4,455 筆規模下，正確路徑是直接跑 `make dedupe-classify`（21 秒完成；heuristic 模式或 OpenAI 模式都可）。skill 適合的場景是首次跑或小規模驗證批（<500 筆）。
+
+- **高合併率（>80%）是 KB 成熟度指標，非品質問題**：本次新加 95 筆 zh-TW Q&A，dedupe 後 78 筆併入既有群組（合併率 82%），僅 17 筆獨立。這代表新來源主題（GSC 教學、結構化資料、mobile-first indexing）與既有資料庫高度重疊，是 KB 已成熟的訊號。判斷準則：
+  - 合併率 <30% → 來源帶來大量新主題（值得投資擴大批次）
+  - 合併率 30%–70% → 部分擴增、部分覆蓋（合理）
+  - 合併率 >80% → 主題已飽和，新批次主要在補強既有群組（KB 進入精煉期）
+
+- **Heuristic difficulty 偏態（已知限制）**：`_classify_qa_locally` 的 difficulty 規則嚴重偏向「進階」（實測 98% 進階 / 2% 基礎）。若需正確分布，需有 OpenAI key 重跑 classify，或調整 heuristic 規則。Lineage 角度建議：difficulty 欄位若由 heuristic 產生應標 `extraction_model="claude-code-heuristic"`，下游搜尋若依賴 difficulty 過濾應併考慮 model 來源。
+
 ### 已知限制
 
 1. **分類呼叫 API 次數 = Q&A 數量** — 沒有批次化，每筆各呼叫一次 `gpt-5-mini`。
