@@ -249,3 +249,25 @@
 - [2026-03-20] AI Overviews Showing For Breaking News More Often And Above Top Stories
 - [2026-03-19] Universal Commerce Protocol Get New Additions Including Cart & Catalog
 - [2026-03-18] Google "Developing" Opt-Out of Generative AI Features in Search — 回應英國 CMA
+
+---
+
+## 2026-05-08（快照日期：2026-05-08）
+
+### Google 官方
+- [2026-04 公告] **Back Button Hijacking 反詐騙政策** — 對欺騙性返回鈕劫持行為加強執法（[developers.google.com/search/blog/2026/04/back-button-hijacking](https://developers.google.com/search/blog/2026/04/back-button-hijacking)）
+- [2026-03 公告] **Inside Googlebot deep dive** — 詳述 Googlebot 處理檢索/擷取/索引的位元組過程（[developers.google.com/search/blog/2026/03/crawler-blog-post](https://developers.google.com/search/blog/2026/03/crawler-blog-post)）
+- [2026-03 公告] **Google Crawlers IP Range Files 新位置** — 更新 IP range 取得管道
+- [2026-04-08] March 2026 Core Update Complete（已完成、滾動中波動仍持續至 4/23 起）
+
+### 業界報導
+- [almcorp.com] Google Search Ranking Volatility April 2026 — 4/23 起新一輪波動，多個 SERP 工具同步紅色
+- [aeoengine.ai] Search Volatility Guide — **5/8 預期續波**，建議 stabilize rankings
+- [unrealwebmarketing.com] 2026 Volatility Extended Report — Semrush Sensor / Mozcast 自 1 月持續紅色
+- [greatape.digital] 2026 Volatility Crisis — 「significant and ongoing ranking instability」業界共識
+- [bigorangeplanet.com] Understanding Volatility 4/25 — 強調「don't make massive site-wide changes immediately after an update」
+- [aivisibility.systeme.io] 2026 Survival Guide — 「quality gaps are the #1 cause」of crawled-not-indexed 2026
+- [speedindex.pro] 2026 Complete Fix Guide — 「Publishing content alone is no longer enough」
+
+### SER 重點
+- [2026-04-29 起] WebFetch 對 SER 主站持續 403——可能為 SER 端封鎖 GPTBot 或 fetch 工具 IP，改用 WebSearch + 多源驗證
