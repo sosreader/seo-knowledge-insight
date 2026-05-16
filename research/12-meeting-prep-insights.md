@@ -165,3 +165,48 @@
 - [Google ProfilePage docs](https://developers.google.com/search/docs/appearance/structured-data/profile-page)
 - [Google Organization docs](https://developers.google.com/search/docs/appearance/structured-data/organization)
 - vocus-web-ui repo `utils/seo.ts` lines 260/294/1389（grep verified 2026-05-02）
+
+---
+
+## 2026-05-08：Discover 反彈 × Coverage 結構崩裂並存格局
+
+### 評分追蹤
+
+| 維度 | 5/1 | 5/8 | Δ |
+|------|-----|-----|---|
+| E-E-A-T 平均 | 2.25 | 2.50 | +0.25（過去四週首次正向）|
+| 人本七要素平均 | 2.71 | 2.86 | +0.15 |
+| 成熟度 Strategy | L1-warning | L2 | +1（plan 文件成立 + 條件觸發決策回穩）|
+| 成熟度 Metrics | L3 | L3.5 | +0.5（多框架交叉驗證進入 L4 邊緣）|
+| Health Score | 18 | 58 | +40 |
+
+### 交叉比對新發現
+
+**1. Discover 反彈 +11.68% W 部分證偽前週「永久結構下移」假設**
+- 前週 H1 假設 Discover -40% 為 niche reclassification 永久格局
+- 本週 Discover 從 -40% 反彈至 +11.68% W、AMP Article W +79.95% / M +145.52% 爆發、Google News W +85.71% 領先指標翻正
+- 但月線 Discover 仍 -55.32%、Organic Search 仍 -43.50% M——**短期擾動回彈 vs 長期月線結構下移並存**格局
+- 5/15、5/22 為 V 型修正期 vs 個別熱門事件（KW: 股 +62.73% 同期飆升）的兩個檢核點
+
+**2. 已檢索未索引絕對量逼近 100 萬紅線**
+- 95.3 萬（W +18.54% / M +73.41%），距 100 萬剩 4.7%、未索引/有效比 0.7944 距 0.80 警戒剩 0.0056
+- 6 週累積 +141.6%（3/22 39.4 萬 → 4/27 59.6 萬 → 5/8 95.3 萬），4/27 後從線性轉為指數式升溫
+- 已成立 plan `crawled-not-indexed-fix-20260508.md` 對應業界 2026 framework「information gain + 內部連結 + JS 渲染」三因素
+- 前週 A2「採樣 50-100 個未索引 URL 確認非被駭注入」**仍未取得答案**，本週升級為 P0+
+
+**3. AI 流量首次月翻負是新警訊**
+- GPT (工作階段) W -14.76% / M -15.30%（1,444）—— 前週「AI 為唯一未受影響渠道」假設**部分證偽**
+- 業界整體流量系統性下調訊號擴散到 AI 引擎側
+- GEO 策略優先序需重新評估，建議維持 Plan B 候選 (γ) 但優先序低於技術修復 (α)
+
+**4. 5/15 Plan A vs Plan B 切換決策框架建立**
+- 4 項硬條件：(a) Discover 月跌幅 ≤ -30%、(b) 未索引絕對量 < 100 萬、(c) Coverage 止跌、(d) Organic Search 月跌幅 ≤ -30%
+- ≥ 2 項未達 → 啟動 Plan B
+- Plan B 主軸候選：(α) 已檢索未索引修復 + IG 內容深度化（推薦）、(β) KW: 股 single-topic deep authority、(γ) GEO
+
+### KW: 股 +62.73% W / +75.43% M 是 Plan B 候選入口
+
+- 5,310 點擊（KW 群第 3 名），單週爆發
+- 財經類為 2026 上升趨勢主軸（AI、半導體相關），與業界整體環境吻合
+- 4 週觀察期（5/8 → 6/5）若維持 W ≥ +20% 則啟動深度化試點
+- 與娛樂類 KW（電影 W -29.80%、劇 W -18.86%、影評 W -9.34%）形成「broad coverage 衰退 vs single-topic 興起」對比
