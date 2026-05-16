@@ -2570,6 +2570,16 @@
     "source_collection": "google-search-central"
   },
   {
+    "slug": "2026-04-back-button-hijacking",
+    "title": "Introducing a new spam policy for \"back button hijacking\"",
+    "url": "https://developers.google.com/search/blog/2026/04/back-button-hijacking",
+    "published": "2026-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-05-16T14:11:56.436143+00:00",
+    "md_file": "2026-04-back-button-hijacking.md",
+    "source_collection": "google-search-central"
+  },
+  {
     "slug": "2026-04-scl-shanghai-2026",
     "title": "Search Central Live is Coming to Shanghai in 2026!",
     "url": "https://developers.google.com/search/blog/2026/04/scl-shanghai-2026",
@@ -2577,6 +2587,16 @@
     "author": "Google Search Central",
     "fetched_at": "2026-04-07T19:49:14.624831+00:00",
     "md_file": "2026-04-scl-shanghai-2026.md",
+    "source_collection": "google-search-central"
+  },
+  {
+    "slug": "2026-05-a-new-resource-for-optimizing",
+    "title": "A new resource for optimizing for generative AI in Google Search",
+    "url": "https://developers.google.com/search/blog/2026/05/a-new-resource-for-optimizing",
+    "published": "2026-05-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-05-16T14:11:53.725536+00:00",
+    "md_file": "2026-05-a-new-resource-for-optimizing.md",
     "source_collection": "google-search-central"
   }
 ]

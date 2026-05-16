@@ -1,5 +1,16 @@
 [
   {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=359184",
+    "slug": "best-practices-for-on-site-campaign-content",
+    "title": "Out of Site, Out of Mind: Best Practices for Creating Valuable On-Site Campaign Content",
+    "url": "https://www.screamingfrog.co.uk/blog/best-practices-for-on-site-campaign-content/",
+    "published": "2026-04-13",
+    "author": "Mark Porter",
+    "fetched_at": "2026-05-16T14:11:59.457478+00:00",
+    "md_file": "best-practices-for-on-site-campaign-content.md",
+    "source_collection": "screaming-frog"
+  },
+  {
     "guid": "https://www.screamingfrog.co.uk/blog/?p=335523",
     "slug": "brightonseo-october-25",
     "title": "The brightonSEO Crawling Clinic October ’25",
@@ -66,6 +77,39 @@
     "source_collection": "screaming-frog"
   },
   {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=360756",
+    "slug": "generate-markdown-at-scale",
+    "title": "Using the Screaming Frog SEO Spider to Generate Markdown at Scale",
+    "url": "https://www.screamingfrog.co.uk/blog/generate-markdown-at-scale/",
+    "published": "2026-04-21",
+    "author": "Mark Porter",
+    "fetched_at": "2026-05-16T14:11:56.427209+00:00",
+    "md_file": "generate-markdown-at-scale.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=360036",
+    "slug": "green-seo",
+    "title": "Green SEO: Leveraging Screaming Frog for a Sustainable Web",
+    "url": "https://www.screamingfrog.co.uk/blog/green-seo/",
+    "published": "2026-04-16",
+    "author": "Mark Porter",
+    "fetched_at": "2026-05-16T14:11:57.947310+00:00",
+    "md_file": "green-seo.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=361966",
+    "slug": "log-file-analyser-7-0",
+    "title": "Screaming Frog Log File Analyser Update – Version 7.0",
+    "url": "https://www.screamingfrog.co.uk/blog/log-file-analyser-7-0/",
+    "published": "2026-04-29",
+    "author": "screamingfrog",
+    "fetched_at": "2026-05-16T14:11:53.409688+00:00",
+    "md_file": "log-file-analyser-7-0.md",
+    "source_collection": "screaming-frog"
+  },
+  {
     "guid": "https://www.screamingfrog.co.uk/blog/?p=321937",
     "slug": "pr-wins-may-be-missing-from-ai",
     "title": "Out of Cite: Why Your PR Wins May Be Missing From AI Search",
@@ -107,6 +151,17 @@
     "author": "screamingfrog",
     "fetched_at": "2026-03-30T02:34:51.364425+00:00",
     "md_file": "seo-spider-23.md",
+    "source_collection": "screaming-frog"
+  },
+  {
+    "guid": "https://www.screamingfrog.co.uk/blog/?p=361770",
+    "slug": "the-brightonseo-crawling-clinic-april-may-26",
+    "title": "The brightonSEO Crawling Clinic April/May ’26",
+    "url": "https://www.screamingfrog.co.uk/blog/the-brightonseo-crawling-clinic-april-may-26/",
+    "published": "2026-04-27",
+    "author": "Mark Porter",
+    "fetched_at": "2026-05-16T14:11:54.915558+00:00",
+    "md_file": "the-brightonseo-crawling-clinic-april-may-26.md",
     "source_collection": "screaming-frog"
   }
 ]
