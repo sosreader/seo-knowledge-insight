@@ -2570,6 +2570,16 @@
     "source_collection": "google-search-central-zh"
   },
   {
+    "slug": "zhtw-2026-04-back-button-hijacking",
+    "title": "針對「返回按鈕劫持」推出新版垃圾內容政策",
+    "url": "https://developers.google.com/search/blog/2026/04/back-button-hijacking?hl=zh-tw",
+    "published": "2026-04-01",
+    "author": "Google Search Central",
+    "fetched_at": "2026-05-16T14:11:54.945278+00:00",
+    "md_file": "zhtw-2026-04-back-button-hijacking.md",
+    "source_collection": "google-search-central-zh"
+  },
+  {
     "slug": "zhtw-2026-04-scl-shanghai-2026",
     "title": "2026 Search Central Live 與您相約上海！透過集合功能整理內容你可以依據偏好儲存及分類內容。",
     "url": "https://developers.google.com/search/blog/2026/04/scl-shanghai-2026?hl=zh-tw",
