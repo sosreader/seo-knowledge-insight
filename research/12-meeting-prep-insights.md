@@ -21,6 +21,7 @@
 | 2026-04-13 | E:3 E:3 A:2 T:3 (avg 2.75) | 策略:L2 流程:L2 KW:L3 指標:L2 | ALERT_DOWN 27→33 但主因聚焦 AMP 崩塌（警告 47K→241K）；「雙速復甦」——Organic +6.0% 翻正、Referral +89.7% 爆發 vs AMP/News 持續惡化；娛樂 KW 連續兩週反彈（影評 -81→-16.9%）；March Core Update 4/8 完成；Discover 連續兩週正向週環比；Authoritativeness 1→2（外鏈穩定+Referral 爆發）；技術體質 2→3；連結生態 1→2 |
 | 2026-04-27 | E:3 E:3 A:2 T:3 (avg 2.75) | 策略:L2 流程:**L3↑** KW:L3 指標:**L3↑** | **「結構復原 vs 流量斷層」悖論週**——AMP 警告 -69.5% 週（217K→66K）、有效 +57.2% 週、Mobile 好 +57.9% 週同步爆發 vs Organic Search -19.0% 週（過去三月最大幅）、工作階段 -15.2% 週；CTR 仍 +0.8% 週支持「Google 重新驗證過渡期」假設；回應時間 283ms 創歷史新低；檢索未索引第五週上升 +15.6%；技術體質 3→4（AMP 復原+回應時間+Mobile 連動）；Process L2→L3（修復循環自動化）；Metrics L2→L3（CTR/曝光/點擊三軸悖論診斷） |
 | 2026-05-01 | E:3 E:3 A:**1↓** T:**2↓** (avg **2.25 ↓-0.50**) | 策略:**L2 退化警訊** 流程:L3 KW:L3 指標:L3 | **「結構復原完成 × 流量懸崖加深 × Discover V 型修正期證偽」三軸惡化週**——AMP 警告 -96.4% 週清零至 2,399（Closed）vs Discover -40% 週崩盤式下跌（V 型修正證偽）+ 檢索未索引 +34.9% 週（連六週、過去六週最高）+ Coverage 自身 -14.8% 首次跟跌 + 5XX 反彈 +27.1%；Health Score 28→18；CTR +4.5% 週連續第二週正向且加大幅度（質量篩選論述強化）；Authoritativeness 2→1（Referral 月翻負 + Discover 崩盤）；Trustworthiness 3→2（Coverage 跟跌 + 未索引爆發 + 5XX 反彈）；內容靈魂 3→2（broad UGC 被 niche reclassification）；連結生態 2→1（Referral 月翻負）；Strategy L2 退化警訊（Plan A 證偽但 Plan B 未啟動）；新發現「決策鏈分離」假設（AMP 修復屬技術 layer，Discover/Coverage 屬內容 layer，獨立運作） |
+| 2026-05-29 | E:3 E:3 A:**4↑↑** T:**2.5↑** (avg **3.13 ↑+0.88**) | 策略:L2.5 流程:L3 KW:L3 指標:L3.5 | **「上週兩風險出清 × 回應時間反撲新 P0 × B7 錨點修正」週**——Direct -42.72% 回吐（歸因雜訊證實 [RESOLVED]）+ 內連回 21.2M（口徑波動證實 [RESOLVED]）；回應時間反撲 544ms（+67.9%，>300ms 觸發 Google 自動降速）→ 週檢索 -16.25%、威脅 Coverage 回填（新 P0）；**B7 四週來首次取得 DR 76/AS 65/月流量 8.03M → A 1→4、連結生態 1→4（錨點修正非真實躍升）**；「長期權威強 vs 短期分發弱」分離；AMP Article -70.72% 強化退場驗證；Perplexity -78%/Gemini -52% AI 崩盤加劇；曝光 +13.73% 翻紅；Health Score 42→45；資料敘事 3→4（跨週歸因閉環） |
 
 ### Autoresearch Meeting-Prep 實驗結果 (2026-03-22~23)
 
@@ -31,6 +32,34 @@
 **瓶頸**：cross_section_coherence 受 eval S3/S9 regex 不對稱限制（S3 broad regex 提取 GPT/Gemini/Video/salon，S9 narrow regex 無法匹配），theoretical ceiling 0.919。
 
 <!-- 以下為自動累積區域 -->
+
+## 2026-05-29（快照日期：2026-05-29）評分追蹤 + 交叉比對
+
+### 評分趨勢
+- **E-E-A-T 平均**：2.25（5/22）→ **3.13**（+0.88）。**主因 A 1→4：B7 四週來首次取得客觀錨點（Ahrefs DR 76 ≥70、Semrush AS 65、月流量 8.03M）**——過去連 3 週「1/5 純主觀」是錨點缺失低估，本週修正。T 2→2.5（上週升 3 的 3 條件達 2：Coverage 守住 + 內連腰斬證實口徑，駭客排除仍 pending；回應時間反撲抵消部分）。E/Ex 維持 3。
+- **人本七要素平均**：2.71 → **3.29**（+0.58）。**連結生態 1→4**（DR 76 ≥60 錨點 + 內連回 21.2M 口徑解除）；**資料敘事 3→4**（上週 Direct/內連兩個「真因未定」項本週同步閉環）；趨勢敏銳度維持 4。
+- **成熟度**：四維度持平（Strategy L2.5 / Process L3 / Keywords L3 / Metrics L3.5）——本週是「執行品質高、制度化能力未進」典型：能做高品質跨週歸因，但 alerting/Brand Radar/GSC API 自動化均未落地（L3→L4 門檻）。
+
+### 交叉比對新發現
+1. **跨週歸因閉環法**：上週兩個「待查」風險本週同步出清——Direct 暴衝 +44.30%（上週「歸因待查」）→ 本週 −42.72% 回吐 + Organic 全程平穩 = **H1 歸因雜訊證實**；內連腰斬 18→9.57（上週「真實改版 vs 口徑待查」）→ 本週回 21.2M / 每頁 14 = **快照口徑波動證實**。教訓：**Direct 暴起暴落 + 他管道平穩 = 歸因雜訊非品牌帶量；單指標單週數倍跳動先當快照口徑波動處理、先證實再處置**。
+2. **B7 錨點「長期權威 vs 短期分發分離」**：DR 76（行業領先）+ AS 65 + 8M 月流量 **vs** AI 占比 M −61.5% / Discover M −20.6%——本站**有反向連結權威、無 AI 引用權威**。重新定性：本站問題不是權威不足、是 AI 時代分發弱（被引用 + Discover），資源應從 link building 轉向 GEO + Discover 助燃。業界佐證：AI 引用 82–89% 來自 earned media，中型 UGC 平台難進引用池。
+3. **回應時間是 Coverage 回填的上游瓶頸**：回應時間反撲 544ms（+67.9%）→ Google 2026 官方「>300ms 自動降速」→ 週平均檢索數 −16.25%；而 Coverage 連兩週回填全靠既有 URL 重訪（Sitemap 索引仍 0）。兩股力量賽跑——**回應時間若不壓回，重訪式回填燃料被掐斷、Coverage 下週恐回吐**。列為新 P0，ROI 高於 AMP/AI。
+
+### 評分方法論教訓
+- **客觀錨點首次取得 ≠ 趨勢波動，應破例即時重估**：A 與連結生態單週各跳 +3，看似違反「4 週連續同向才調分」減噪原則——但「資料補完」與「趨勢波動」性質不同，錨點取得應作為破例即時重估條件。已在 S9 C3 列為顧問確認題。
+- **錨點修正須明確標注「非真實躍升」**：E-E-A-T +0.88、人本 +0.58 的大躍升絕大部分來自 B7 錨點修正而非真實改善，報告中明確標注避免誤讀為「本站本週大幅進步」。
+
+### AMP 退場 — 本週數據強化驗證（carry from 2026-05-25）
+- 本週 AMP Article **−70.72%**、有效 −8.74%、警告 +91.5%——正是「逐步去索引」形態，**強化** 2026-05-25 已定性的「AMP 退場、不修警告」結論。新增前提條件：原生頁 CWV 須先達標，但本週「手機 好」−8.30% + 回應時間反撲使原生頁體質惡化，遷出前提尚未具備，先處理 H1 回應時間。
+
+### 前端 hotfix 驗證（範圍澄清 2026-06-02，source: meeting_prep_20260529 S10）
+- **本週 S10 無前端可實作項**——S10 11 項全為後端（TTFB 排查）/ SEO-ops（GSC/Ahrefs/Screaming Frog/Semrush/Majestic）/ analytics / monitoring；唯一帶前端關鍵字的「LCP > 2.5s 加 preload hint」經 Grep + Read source 驗證 vocus-web-ui **已完整實作**。
+- **「preload hint」LCP 最佳化已存在**（首次驗證 2026-06-02）：`contexts/article/ui/ArticleMeta.tsx:88-117` 已含 `dns-prefetch + preconnect + rel=preload + fetchpriority="high"` 於文章縮圖（LCP 元素）；`AdaptiveColorThumbnail.tsx` 以 `eager` flag 控制 `fetchPriority`/`loading`（含測試）。
+  - **用詞校正**：「加入 preload hint」屬舊式；2026 best practice + 本 codebase 以 **`fetchpriority="high"` / next/image `priority`** 為主、preload 為輔。未來報告不應再單獨建議「preload hint」。
+  - **根因歸屬校正**：「手機 好 −8.30%」LCP 退化由 **TTFB 反撲（324→544ms，後端/CDN）** 主導；前端資源載入端已最佳化、無法修 TTFB。此類項應歸後端，非前端 hotfix。
+  - 驗證方式：live code（Grep + Read source）；WebSearch 2026 佐證因 Anthropic API 529 過載未取得，結論以 live code 為據（已實作即無需求）。
+
+---
 
 ---
 
