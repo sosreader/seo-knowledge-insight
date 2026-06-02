@@ -7,6 +7,28 @@
 
 <!-- 以下為自動累積區域，請勿手動編輯格式 -->
 
+## 2026-05-29（快照日期：2026-05-29）
+
+### Google 官方
+- [2026-05-21 起，rollout 中] **May 2026 Core Update** — **5/30–5/31 週末「重擊」**大幅排名波動（[Search Engine Roundtable](https://www.seroundtable.com/)），預期數天內完成。本站 5/23–5/29 資料窗為 rollout 中期，完整衝擊（重擊在窗末端後）下週 6/5 才反映
+- [2026 官方爬取文件] **Google explains how crawling works in 2026** — 「伺服器回應時間超過 ~300ms benchmark，檢索速率按比例自動下降」（[Search Engine Land](https://searchengineland.com/google-explains-how-crawling-works-in-2026-473110)）——直接解釋本站回應時間 544ms → 週平均檢索數 −16.25%
+- [SER 6/1] 推出 **Volatility Aggregator**（多源波動分數整合）；測試 **AI Overviews link card sliding carousel**（引用版位強化）、AI Mode 醫療廣告限量測試
+
+### 業界報導
+- **AMP 非 Top Stories 必要條件再確認**：2021 起 Top Stories 改 Page Experience（LCP/CLS/INP）；publisher 關閉 AMP 後流量穩定（[Search Engine Land](https://searchengineland.com/amp-wont-be-required-for-googles-top-stories-section-335276)、[turn off AMP case](https://searchengineland.com/what-happened-when-we-turned-off-amp-378591)）——強化本站「AMP 退場」定性
+- **AI 引用 82–89% 來自 earned media**（Forbes/TechCrunch/WSJ/Reuters）（[Goodie 2026 AI Search Report](https://higoodie.com/blog/ai-search-traffic-report-2026/)）；ChatGPT 62.6% / Claude 18.5% / Gemini 10.6% / Perplexity 7.3%——中型 UGC 平台難進引用池
+- **AIO 娛樂垂直滲透 35–40%**（[Semrush AIO Study 2026](https://almcorp.com/blog/semrush-ai-overviews-study-2026-complete-analysis/)、[GrowByData](https://growbydata.com/google-serp-features/)）——壓 organic #1–3 到摺疊下、非引用內容 CTR −15~30%
+
+### Off-Page Authority（B7 首次取得）
+- **vocus.cc：Ahrefs DR=76、Semrush AS=65、月流量 8.03M、參考網域 8.1K–17.87K**（[Ahrefs](https://ahrefs.com/websites/vocus.cc)、[Semrush](https://www.semrush.com/website/vocus.cc/overview/)）；Moz DA 已停免費公開查詢
+- 判讀：**長期域權威強（DR 76 行業領先）vs 短期 AI/Discover 分發弱（AI 占比 M −61.5%）分離**——S6 Authoritativeness、S7 連結生態 1→4 為錨點修正
+
+### 對本站意涵
+- 上週兩風險 [RESOLVED]：Direct 暴衝（歸因雜訊證實，−42.72% 回吐）+ 內連腰斬（口徑波動證實，回 21.2M）
+- 新 P0：回應時間反撲 544ms（+67.9%）觸發 Google 自動降速、威脅 Coverage 回填；AMP 崩盤（Article −70.72%）強化退場驗證；AI 雙引擎崩盤加劇（Perplexity −78.0%）
+
+---
+
 ## 2026-05-01
 
 ### Google 官方
@@ -211,26 +233,6 @@
 ### SER 重點
 - [2026-03-11] Branded Queries Filter Rolling Out in Search Console
 - [2026-03-11] Google explains undocumented way to disavow entire TLDs
-
----
-
-## 2026-03-12（快照日期：2026-03-06）
-
-### Google 官方
-- [2026-02-05~27] **February 2026 Discover Core Update** — 已完成。首次 Discover-only 核心更新，強調深度、原創、在地內容；目前僅影響美國英語用戶，即將擴展至所有語言。
-- [2026-02-25] Serving 服務故障 — 已修復。可能導致當週 GSC 資料延遲。
-
-### 業界報導
-- [Search Engine Land] Google February 2026 Discover core update is now complete — 歷時 21 天完成
-- [Search Engine Land] Organic search is fundamentally disrupted — 73% B2B 網站 2024-2025 流量顯著下滑，AI Overviews 造成 15-64% 有機流量降幅
-- [Search Engine Land] The dark SEO funnel — 流量不再是 SEO 成功的證明
-
-### SER 重點
-- [2026-03-11] Branded Queries Filter Rolling Out in Search Console
-- [2026-03-11] Google explains undocumented way to disavow entire TLDs
-- [2026-03-10] Survey: PPC is Harder Than 2 Years Ago
-
----
 
 ## 2026-03-21（快照日期：2026-03-21）
 
