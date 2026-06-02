@@ -4,6 +4,15 @@
 
 ---
 
+## 語言規則
+
+- 回覆與產出**唯一允許繁體中文（台灣用語，zh-TW）**；對齊全域 `~/.claude/CLAUDE.md`。
+- 技術術語可保留英文（`useState`、`git commit`、API、schema 名稱、指標欄位）。
+- **次要 agent / subagent 的 prompt 與回傳摘要也要求繁體中文**（除非任務本質是擷取英文原文，如業界來源標題/引文可保留原文，但分析與結論用繁體中文）。
+- 報告產出（週報 / meeting-prep）、commit message、PR 說明一律繁體中文（commit 可夾英文技術術語，但敘述主體為繁體中文）。
+
+---
+
 ## Critical Rules
 
 ### 1. Code Organization
@@ -401,7 +410,7 @@ make autoresearch-baseline
 - Conventional commits：`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`
 - 禁止直接 commit 到 `main`
 - PR 需通過所有測試才能合併
-- Commit message 以中文或英文皆可，但須清楚描述「為什麼」而非「做了什麼」
+- Commit message 以繁體中文為主（可夾英文技術術語），須清楚描述「為什麼」而非「做了什麼」
 
 ### Commit 前知識沉澱清單（必做）
 
