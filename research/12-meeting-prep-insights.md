@@ -23,6 +23,8 @@
 | 2026-05-01 | E:3 E:3 A:**1↓** T:**2↓** (avg **2.25 ↓-0.50**) | 策略:**L2 退化警訊** 流程:L3 KW:L3 指標:L3 | **「結構復原完成 × 流量懸崖加深 × Discover V 型修正期證偽」三軸惡化週**——AMP 警告 -96.4% 週清零至 2,399（Closed）vs Discover -40% 週崩盤式下跌（V 型修正證偽）+ 檢索未索引 +34.9% 週（連六週、過去六週最高）+ Coverage 自身 -14.8% 首次跟跌 + 5XX 反彈 +27.1%；Health Score 28→18；CTR +4.5% 週連續第二週正向且加大幅度（質量篩選論述強化）；Authoritativeness 2→1（Referral 月翻負 + Discover 崩盤）；Trustworthiness 3→2（Coverage 跟跌 + 未索引爆發 + 5XX 反彈）；內容靈魂 3→2（broad UGC 被 niche reclassification）；連結生態 2→1（Referral 月翻負）；Strategy L2 退化警訊（Plan A 證偽但 Plan B 未啟動）；新發現「決策鏈分離」假設（AMP 修復屬技術 layer，Discover/Coverage 屬內容 layer，獨立運作） |
 | 2026-05-29 | E:3 E:3 A:**4↑↑** T:**2.5↑** (avg **3.13 ↑+0.88**) | 策略:L2.5 流程:L3 KW:L3 指標:L3.5 | **「上週兩風險出清 × 回應時間反撲新 P0 × B7 錨點修正」週**——Direct -42.72% 回吐（歸因雜訊證實 [RESOLVED]）+ 內連回 21.2M（口徑波動證實 [RESOLVED]）；回應時間反撲 544ms（+67.9%，>300ms 觸發 Google 自動降速）→ 週檢索 -16.25%、威脅 Coverage 回填（新 P0）；**B7 四週來首次取得 DR 76/AS 65/月流量 8.03M → A 1→4、連結生態 1→4（錨點修正非真實躍升）**；「長期權威強 vs 短期分發弱」分離；AMP Article -70.72% 強化退場驗證；Perplexity -78%/Gemini -52% AI 崩盤加劇；曝光 +13.73% 翻紅；Health Score 42→45；資料敘事 3→4（跨週歸因閉環） |
 
+| 2026-06-05 | E:3 E:3 A:4 T:2.5 (avg **3.13 持平**) | 策略:L2.5 流程:L3 KW:L3 指標:L3.5 | **「核心軸月線首翻正 × 回應時間連三週破600但預測失準 × 分析能力升級」週**——曝光月線 +11.46%、Coverage 月線 +29.97%、檢索未索引 -29.14% 同步翻正（過去半年首見，與 May Core Update 6/2 完成重疊待辨紅利 vs 真修復）；**回應時間 324→544→694ms 連三週，破上週 600ms 警戒線、爬蟲量 -7.29%，但 Coverage 反升——上週「破600→Coverage崩」預測失準，模型過度權重單一因果鏈、低估重訪回填韌性**；手機 CWV 大規模重分類（好 +117%/+44.5萬頁、中 -96%）但與回應時間背離→欄位資料延遲生效待驗證；AMP 四指標 WoW 全反轉（Article +351%、警告 -7.54%）→上週退場確認需重估、佐證「單週數倍跳動先當口徑波動」；AI 靠 GPT +14% 撐盤、Perplexity/Gemini 月線崩破 -100%；**KW 股 +168.98% 查證為真實台股熱潮（COMPUTEX+台積電股東會）非雜訊**；Crawl Budget API/GSC AI 報告新工具到位（GEO 首次有官方工具）；E-E-A-T 持平（無新 B7 錨點、T 被回應時間鎖死）；人本 3.29→3.43（資料敘事+趨勢敏銳度各 +0.5，預測對帳為能力躍升）；Health Score 45→48 |
+
 ### Autoresearch Meeting-Prep 實驗結果 (2026-03-22~23)
 
 33 rounds 自主 prompt 優化（`autoresearch/meeting-prep-mar22`），composite eval 0.831→0.903（+8.7%）。
@@ -32,34 +34,6 @@
 **瓶頸**：cross_section_coherence 受 eval S3/S9 regex 不對稱限制（S3 broad regex 提取 GPT/Gemini/Video/salon，S9 narrow regex 無法匹配），theoretical ceiling 0.919。
 
 <!-- 以下為自動累積區域 -->
-
-## 2026-05-29（快照日期：2026-05-29）評分追蹤 + 交叉比對
-
-### 評分趨勢
-- **E-E-A-T 平均**：2.25（5/22）→ **3.13**（+0.88）。**主因 A 1→4：B7 四週來首次取得客觀錨點（Ahrefs DR 76 ≥70、Semrush AS 65、月流量 8.03M）**——過去連 3 週「1/5 純主觀」是錨點缺失低估，本週修正。T 2→2.5（上週升 3 的 3 條件達 2：Coverage 守住 + 內連腰斬證實口徑，駭客排除仍 pending；回應時間反撲抵消部分）。E/Ex 維持 3。
-- **人本七要素平均**：2.71 → **3.29**（+0.58）。**連結生態 1→4**（DR 76 ≥60 錨點 + 內連回 21.2M 口徑解除）；**資料敘事 3→4**（上週 Direct/內連兩個「真因未定」項本週同步閉環）；趨勢敏銳度維持 4。
-- **成熟度**：四維度持平（Strategy L2.5 / Process L3 / Keywords L3 / Metrics L3.5）——本週是「執行品質高、制度化能力未進」典型：能做高品質跨週歸因，但 alerting/Brand Radar/GSC API 自動化均未落地（L3→L4 門檻）。
-
-### 交叉比對新發現
-1. **跨週歸因閉環法**：上週兩個「待查」風險本週同步出清——Direct 暴衝 +44.30%（上週「歸因待查」）→ 本週 −42.72% 回吐 + Organic 全程平穩 = **H1 歸因雜訊證實**；內連腰斬 18→9.57（上週「真實改版 vs 口徑待查」）→ 本週回 21.2M / 每頁 14 = **快照口徑波動證實**。教訓：**Direct 暴起暴落 + 他管道平穩 = 歸因雜訊非品牌帶量；單指標單週數倍跳動先當快照口徑波動處理、先證實再處置**。
-2. **B7 錨點「長期權威 vs 短期分發分離」**：DR 76（行業領先）+ AS 65 + 8M 月流量 **vs** AI 占比 M −61.5% / Discover M −20.6%——本站**有反向連結權威、無 AI 引用權威**。重新定性：本站問題不是權威不足、是 AI 時代分發弱（被引用 + Discover），資源應從 link building 轉向 GEO + Discover 助燃。業界佐證：AI 引用 82–89% 來自 earned media，中型 UGC 平台難進引用池。
-3. **回應時間是 Coverage 回填的上游瓶頸**：回應時間反撲 544ms（+67.9%）→ Google 2026 官方「>300ms 自動降速」→ 週平均檢索數 −16.25%；而 Coverage 連兩週回填全靠既有 URL 重訪（Sitemap 索引仍 0）。兩股力量賽跑——**回應時間若不壓回，重訪式回填燃料被掐斷、Coverage 下週恐回吐**。列為新 P0，ROI 高於 AMP/AI。
-
-### 評分方法論教訓
-- **客觀錨點首次取得 ≠ 趨勢波動，應破例即時重估**：A 與連結生態單週各跳 +3，看似違反「4 週連續同向才調分」減噪原則——但「資料補完」與「趨勢波動」性質不同，錨點取得應作為破例即時重估條件。已在 S9 C3 列為顧問確認題。
-- **錨點修正須明確標注「非真實躍升」**：E-E-A-T +0.88、人本 +0.58 的大躍升絕大部分來自 B7 錨點修正而非真實改善，報告中明確標注避免誤讀為「本站本週大幅進步」。
-
-### AMP 退場 — 本週數據強化驗證（carry from 2026-05-25）
-- 本週 AMP Article **−70.72%**、有效 −8.74%、警告 +91.5%——正是「逐步去索引」形態，**強化** 2026-05-25 已定性的「AMP 退場、不修警告」結論。新增前提條件：原生頁 CWV 須先達標，但本週「手機 好」−8.30% + 回應時間反撲使原生頁體質惡化，遷出前提尚未具備，先處理 H1 回應時間。
-
-### 前端 hotfix 驗證（範圍澄清 2026-06-02，source: meeting_prep_20260529 S10）
-- **本週 S10 無前端可實作項**——S10 11 項全為後端（TTFB 排查）/ SEO-ops（GSC/Ahrefs/Screaming Frog/Semrush/Majestic）/ analytics / monitoring；唯一帶前端關鍵字的「LCP > 2.5s 加 preload hint」經 Grep + Read source 驗證 vocus-web-ui **已完整實作**。
-- **「preload hint」LCP 最佳化已存在**（首次驗證 2026-06-02）：`contexts/article/ui/ArticleMeta.tsx:88-117` 已含 `dns-prefetch + preconnect + rel=preload + fetchpriority="high"` 於文章縮圖（LCP 元素）；`AdaptiveColorThumbnail.tsx` 以 `eager` flag 控制 `fetchPriority`/`loading`（含測試）。
-  - **用詞校正**：「加入 preload hint」屬舊式；2026 best practice + 本 codebase 以 **`fetchpriority="high"` / next/image `priority`** 為主、preload 為輔。未來報告不應再單獨建議「preload hint」。
-  - **根因歸屬校正**：「手機 好 −8.30%」LCP 退化由 **TTFB 反撲（324→544ms，後端/CDN）** 主導；前端資源載入端已最佳化、無法修 TTFB。此類項應歸後端，非前端 hotfix。
-  - 驗證方式：live code（Grep + Read source）；WebSearch 2026 佐證因 Anthropic API 529 過載未取得，結論以 live code 為據（已實作即無需求）。
-
----
 
 ---
 
@@ -239,3 +213,182 @@
 - 財經類為 2026 上升趨勢主軸（AI、半導體相關），與業界整體環境吻合
 - 4 週觀察期（5/8 → 6/5）若維持 W ≥ +20% 則啟動深度化試點
 - 與娛樂類 KW（電影 W -29.80%、劇 W -18.86%、影評 W -9.34%）形成「broad coverage 衰退 vs single-topic 興起」對比
+
+---
+
+## 2026-05-15 評分追蹤
+
+| 維度 | 上週（5/8） | 本週（5/15） | 變化 |
+|------|------------|-------------|------|
+| E-E-A-T 平均 | 2.50 | **2.00** | **-0.50**（A + T 同步下調 1/5） |
+| 人本七要素平均 | 2.86 | **2.57** | **-0.29**（技術體質 + 趨勢敏銳度 4→3） |
+| Maturity Strategy | L2 | **L2.5** | +0.5（Plan A 切換條件首次達標 ≥ 2） |
+| Maturity Metrics | L3.5 | **L3** | -0.5（H2 V 型修正預測失敗、模型需修正） |
+| ALERT_DOWN 主項 | 12 | **20+** | +8 |
+| Health Score | 58 | **38** | **-20** |
+
+### 跨週發現
+
+**1. H2 「Discover V 型修正期啟動」假設 [Discarded]**
+- 5/8 預判：5/15 月跌幅若收斂至 -30% → V 型啟動；實際 5/15 退至 -66.62%
+- 預測失準根因：依賴「W 級單一指標」（Discover +11.68% W），未要求「2W 連續同向 + 3 軸組合」
+- 模型修正：閾值改為「2W 累積同向 > +30%」才作為復原候選
+
+**2. KW: 股 Plan B 入口候選 [Discarded]**
+- 5/8 預判：W +62.73% 飆升 = Plan B 候選；觀察 4 週確認趨勢
+- 5/15 實際：W -32.15% 崩盤 — 4 週觀察期未完成即被市場證偽
+- 教訓：「短週期事件型」流量不適合作為 single-topic deep authority 入口
+- Plan B 新候選 α：影視評論深度系列（News +49.58% W + Video +25.86% W + KW: 電影 +4.32% W 三同步走強）
+
+**3. Plan A vs Plan B 切換條件首次硬達標 ≥ 2**
+- (a) Discover 月線 -66.62% > -55% 線 ✓
+- (b) 未索引突破 100 萬警戒前緣（982,054）✓
+- (c) Coverage 月跌幅再擴大 -36.48% ✓
+- 4/4 達標 — 顧問會議**必須**做 Plan B 啟動決策
+
+**4. 業界 publisher Discover -15-21% YoY vs 本站 -66.62%**
+- 本站獨立問題 estimated 70% / 業界結構性 30%（待顧問確認）
+- 拆分權重影響 Plan B 資源配置（業界對抗 vs 本站獨立修復）
+
+**5. 駭客風險排除（A2）連續第 4 週 carry**
+- 必須 5/22 前完成，否則紅線級不作為
+- 建議顧問層級介入排程
+
+**6. GEO 升級為 Q2 P0 候選**
+- Google 5 月發 GenAI 優化新資源 → 民間 GEO 紅利期接近尾聲
+- AIO CTR -61% / cited brands +35% 反向受惠
+- Brand Radar 監測必須啟動 baseline
+
+### 領先指標模型 v2
+
+```
+舊版（5/8）：W 級單一指標 → Discover W +11.68% → V 型啟動候選
+新版（5/15）：2W 連續同向 + 3 軸組合 → (Discover + Google News + AMP Article) 2W 累積同向 > +30% → 復原候選
+```
+
+
+---
+
+## 2026-05-17 補充：seo-frontend-hotfix cycle 教訓
+
+### C1 — worktree 命名衝突陷阱
+
+vocus-web-ui 已有 `hotfix` 主 branch、佔了 `refs/heads/hotfix/*` namespace，導致原 `/seo-frontend-hotfix` skill 模板的 `hotfix/seo-frontend-{date}` 無法建立（git 回 `fatal: 'refs/heads/hotfix' exists; cannot create 'refs/heads/hotfix/...'`）。
+
+**修正命名規則**：使用 `seo-hotfix/frontend-{date}` —— 獨立 namespace prefix 避免衝突。
+
+對 skill 模板的修正建議：將 `hotfix/seo-frontend-$SLUG` 替換為 `seo-hotfix/frontend-$SLUG`。
+
+### C9 — Live verify 後撤回的兩項假修正（重要教訓）
+
+第二輪審視 PR #7662 時提出 4 個延伸修正候選，live WebSearch 驗證後 **2/4 被推翻**：
+
+**F3 — headline truncate 至 110 字元**（撤回）
+- 業界傳說「Article schema headline 上限 110 字」
+- 但 [Google 已於 2023 撤銷此限制](https://searchengineland.com/google-drops-the-character-limit-for-headlines-in-article-structured-data-390937)，現僅建議「concise」
+- 教訓：模型既有知識可能保留已失效的 Google 規範
+
+**F4 — robots.txt 加 `Disallow: /en/`**（撤回，**嚴重反模式**）
+- 看似搭配 /en/ 301 redirect 加速 de-index
+- 實際：Google 文件明說「make sure the URLs being redirected aren't blocked via robots.txt. If they are, search engines won't crawl the URL to honor the redirect, **old URLs will remain indexed**」
+- **後果**：若盲推，會讓 PR #7662 commit `4dbe1f5ab` 的 /en/ 301 完全失效、/en/ 永遠留索引——比不修還糟
+- 教訓：「順手再加個小修」的衝動最容易產出反模式；live verify 不分大小
+
+### C11 — PR pre-mature merge 補救流程
+
+PR #7662 包含 3 commits（commit 1 + 2 + iter2 commit 3 `367b9dc74`），但**只有 commit 1 + 2 在 iter2 commit push 之前被 reviewer 點 merge**——iter2 commit 變孤兒。
+
+**補救步驟**（已建檔以供下次參考）：
+1. `git fetch origin hotfix` 同步遠端
+2. `git checkout origin/hotfix` + `git checkout -b seo-hotfix/frontend-iter2-{date}`（新 branch 從最新 hotfix tip 起）
+3. `git cherry-pick <iter2-commit-sha>`
+4. Push + 開新 PR，在描述中註明「PR #N 已 merge 在 iter2 commit landing 前，本 PR 補上」
+
+**對下次的提示**：iter2 commit 不要假設 reviewer 會等所有 commits 才 merge；若需要 atomic merge，應於 PR 描述開頭明確要求「請等所有 commits push 完再 review/merge」。
+
+
+---
+
+## 2026-05-29（快照日期：2026-05-29）評分追蹤 + 交叉比對
+
+### 評分趨勢
+- **E-E-A-T 平均**：2.25（5/22）→ **3.13**（+0.88）。**主因 A 1→4：B7 四週來首次取得客觀錨點（Ahrefs DR 76 ≥70、Semrush AS 65、月流量 8.03M）**——過去連 3 週「1/5 純主觀」是錨點缺失低估，本週修正。T 2→2.5（上週升 3 的 3 條件達 2：Coverage 守住 + 內連腰斬證實口徑，駭客排除仍 pending；回應時間反撲抵消部分）。E/Ex 維持 3。
+- **人本七要素平均**：2.71 → **3.29**（+0.58）。**連結生態 1→4**（DR 76 ≥60 錨點 + 內連回 21.2M 口徑解除）；**資料敘事 3→4**（上週 Direct/內連兩個「真因未定」項本週同步閉環）；趨勢敏銳度維持 4。
+- **成熟度**：四維度持平（Strategy L2.5 / Process L3 / Keywords L3 / Metrics L3.5）——本週是「執行品質高、制度化能力未進」典型：能做高品質跨週歸因，但 alerting/Brand Radar/GSC API 自動化均未落地（L3→L4 門檻）。
+
+### 交叉比對新發現
+1. **跨週歸因閉環法**：上週兩個「待查」風險本週同步出清——Direct 暴衝 +44.30%（上週「歸因待查」）→ 本週 −42.72% 回吐 + Organic 全程平穩 = **H1 歸因雜訊證實**；內連腰斬 18→9.57（上週「真實改版 vs 口徑待查」）→ 本週回 21.2M / 每頁 14 = **快照口徑波動證實**。教訓：**Direct 暴起暴落 + 他管道平穩 = 歸因雜訊非品牌帶量；單指標單週數倍跳動先當快照口徑波動處理、先證實再處置**。
+2. **B7 錨點「長期權威 vs 短期分發分離」**：DR 76（行業領先）+ AS 65 + 8M 月流量 **vs** AI 占比 M −61.5% / Discover M −20.6%——本站**有反向連結權威、無 AI 引用權威**。重新定性：本站問題不是權威不足、是 AI 時代分發弱（被引用 + Discover），資源應從 link building 轉向 GEO + Discover 助燃。業界佐證：AI 引用 82–89% 來自 earned media，中型 UGC 平台難進引用池。
+3. **回應時間是 Coverage 回填的上游瓶頸**：回應時間反撲 544ms（+67.9%）→ Google 2026 官方「>300ms 自動降速」→ 週平均檢索數 −16.25%；而 Coverage 連兩週回填全靠既有 URL 重訪（Sitemap 索引仍 0）。兩股力量賽跑——**回應時間若不壓回，重訪式回填燃料被掐斷、Coverage 下週恐回吐**。列為新 P0，ROI 高於 AMP/AI。
+
+### 評分方法論教訓
+- **客觀錨點首次取得 ≠ 趨勢波動，應破例即時重估**：A 與連結生態單週各跳 +3，看似違反「4 週連續同向才調分」減噪原則——但「資料補完」與「趨勢波動」性質不同，錨點取得應作為破例即時重估條件。已在 S9 C3 列為顧問確認題。
+- **錨點修正須明確標注「非真實躍升」**：E-E-A-T +0.88、人本 +0.58 的大躍升絕大部分來自 B7 錨點修正而非真實改善，報告中明確標注避免誤讀為「本站本週大幅進步」。
+
+### AMP 退場 — 本週數據強化驗證（carry from 2026-05-25）
+- 本週 AMP Article **−70.72%**、有效 −8.74%、警告 +91.5%——正是「逐步去索引」形態，**強化** 2026-05-25 已定性的「AMP 退場、不修警告」結論。新增前提條件：原生頁 CWV 須先達標，但本週「手機 好」−8.30% + 回應時間反撲使原生頁體質惡化，遷出前提尚未具備，先處理 H1 回應時間。
+
+### 前端 hotfix 驗證（範圍澄清 2026-06-02，source: meeting_prep_20260529 S10）
+- **本週 S10 無前端可實作項**——S10 11 項全為後端（TTFB 排查）/ SEO-ops（GSC/Ahrefs/Screaming Frog/Semrush/Majestic）/ analytics / monitoring；唯一帶前端關鍵字的「LCP > 2.5s 加 preload hint」經 Grep + Read source 驗證 vocus-web-ui **已完整實作**。
+- **「preload hint」LCP 最佳化已存在**（首次驗證 2026-06-02）：`contexts/article/ui/ArticleMeta.tsx:88-117` 已含 `dns-prefetch + preconnect + rel=preload + fetchpriority="high"` 於文章縮圖（LCP 元素）；`AdaptiveColorThumbnail.tsx` 以 `eager` flag 控制 `fetchPriority`/`loading`（含測試）。
+  - **用詞校正**：「加入 preload hint」屬舊式；2026 best practice + 本 codebase 以 **`fetchpriority="high"` / next/image `priority`** 為主、preload 為輔。未來報告不應再單獨建議「preload hint」。
+  - **根因歸屬校正**：「手機 好 −8.30%」LCP 退化由 **TTFB 反撲（324→544ms，後端/CDN）** 主導；前端資源載入端已最佳化、無法修 TTFB。此類項應歸後端，非前端 hotfix。
+  - 驗證方式：live code（Grep + Read source）；WebSearch 2026 佐證因 Anthropic API 529 過載未取得，結論以 live code 為據（已實作即無需求）。
+
+---
+
+## 2026-05-24（快照日期：2026-05-22）評分追蹤 + 交叉比對
+
+### 評分趨勢
+- **E-E-A-T 平均**：2.00（5/15）→ **2.25**（+0.25，連續兩週反向後首次回升）。T 1→2（索引能量 WoW 回填）；A 維持 1（AI 引擎崩盤抵消 Discover 微反彈）；E/Ex 維持 3。
+- **人本七要素平均**：2.57 → **2.71**（+0.14）。趨勢敏銳度 3→4（預判 5/22 volatility 升級為 May core update 命中 + HS 預測命中下緣）；連結生態維持 1（內連腰斬 18→9.57 + 外連 M −54.64%）。
+- **成熟度**：Metrics L3→**L3.5**（預判命中 + 能識別「回填屬 core update 副產品而非本站修復」的關鍵歸因區分）；Strategy 維持 L2.5（Plan B 試點仍未啟動）。
+
+### 交叉比對新發現
+1. **指標反轉 = May 2026 Core Update（5/21）副產品**：Coverage +15.79%、檢索未索引 −11.93%、Discover +5.37% 同步反轉，資料窗末端正逢 core update 啟動。業界定調「索引變挑剔」（高價值回填、低價值剔除）完美對應形態——**關鍵教訓：WoW 全面轉好但月線全面深負時，先排除 core update 重分配，勿誤判為本站修復見效**。
+2. **AI 引擎背離偵測法**：本站 Perplexity 跌「符合產業」（產業 Perplexity 被 Gemini 超車），但 Gemini 跌「背離產業」（產業升）——用「產業方向 vs 本站方向」背離度區分產業現象 vs 本站獨立問題，比單看本站 WoW 更精準。顧問 Gene Hong：AI 導流低 = 內容品質弱訊號的領先指標。
+3. **內連腰斬與 Coverage 回填的因果張力**：同週內連 −46.20%（孤島頁風險）與 Coverage +15.79%（回填）並存——回填靠既有 URL 重訪（Sitemap 索引仍 0），若內連斷裂深層頁入口，重訪式回填難持續。兩者互為因果，列為最高優先核查。
+
+### 領先指標模型 v2 驗證
+- 5/15 設定「2W 連續同向 + 3 軸組合」模型——本週 Discover 僅單週 +5.37%（未滿足 2W 同向），正確判定為「微反彈不可信」，模型 v2 首次實戰避免了 5/8 式的 V 型誤判。
+
+### 交叉比對新發現（2026-06-05）
+1. **預測對帳 > 預測本身（meeting-prep 可復用方法）**：上週模型預測「回應時間破 600 → Coverage 回吐至 140 萬打回 42」，本週回應時間破 600（694ms）、爬蟲量也縮（−7.29%）但 **Coverage 反升至 154 萬**——因果鏈只兌現前半段。教訓：模型過度權重「回應時間→Coverage」單一因果鏈、低估重訪式回填的韌性（既有 URL 高頻重訪在爬蟲量縮下仍能維持）。**把「模型錯在哪」寫進報告，比「分數對不對」更有沉澱價值；健康分模型應將回應時間→Coverage 由強因果改為弱因果 + 滯後效應**。
+2. **field data vs server metric 背離要主動標記、不可硬編同一因果**：手機 CWV「好」+117%（+44.5 萬頁重分類）與回應時間惡化（694ms）方向背離——CWV 是 CrUX 28 天欄位資料、回應時間是即時爬蟲 TTFB，測量對象不同。正確處理：標為「使用者端改善（前期前端優化延遲生效）vs 伺服器端惡化」雙軌並存、給驗證動作（SC CLS/LCP 群組記錄數），勿當技術面全面好轉。風險：若 TTFB 續飆，下個 28 天視窗欄位資料恐反向回吐。
+3. **曾被 [Discarded] 的指標再現要回頭查 + 外部事件查證**：KW 股 +168.98% 上週週報疑為 off-topic 雜訊，本週 WebSearch 查證為真實台股熱潮（COMPUTEX AI + 台積電股東會 + AI 半導體），且呼應 Perplexity 金融垂直市佔 24%——**用歷史標記約束本週判讀（不直接當正向）、再用外部市場事件查證真偽**，比單看本站數據更精準。但屬事件性高峰、且 SERP 被 AIO 48%+News+Finance 三層夾擊。
+4. **AMP 反轉印證減噪原則**：上週判「AMP 退場確認」（Article −70.72%、警告 +91.5%），本週四指標全反轉（Article +351.72%、警告 −7.54%）——印證「單指標單週數倍跳動先當口徑波動、需連兩週同向才定性」的減噪原則（與內連腰斬教訓同源）。建議納入 SOP。
+
+### 領先指標模型 v3 驗證（2026-06-05）
+- May Core Update 6/2 完成，本站核心軸月線翻正與完成時點重疊——套用「WoW/MoM 轉好但逢 core update 完成時，先當重分配紅利、待下週確認」原則（同 5/29 教訓），6/12 確認紅利是否回吐。
+- AI 引擎「對話型 vs 引用型」分化偵測：GPT（對話型、黏性高）回穩 vs Perplexity/Gemini（引用型、對品牌訊號敏感）月線崩——用引擎類型而非單看 AI 總量判讀。
+
+### AMP 警告修復 — 2026 已淘汰（首次驗證 2026-05-25，source: meeting_prep_20260522_1c6ba73b S10 P1 AMP 項）
+
+**原建議**：「篩選 23,348 筆 AMP 警告 Top 錯誤類型，修復模板層必填 schema + amphtml 雙向連結（批次清償）」
+
+**驗證結論**：❌ **駁回**
+- Google 自 2021/6 Page Experience 更新起 **Top Stories 不再要求 AMP**、AMP 無排名優勢、AMP badge 已移除
+- 主流 publisher（Washington Post / CNBC / Vox / BDG）2026 已大規模遷出；新站「almost certainly no」、既有站「問題是何時遷出而非是否」
+- 2026 由標準 HTML 的 Core Web Vitals 取代 AMP 的速度角色（Next.js / Vercel 已可達同等速度）
+
+**重新定性**：AMP 警告暴增（639→23,348）更可能反映 **AMP 逐步淘汰 / 去索引**，而非可修復的結構問題。投入前端工程修 AMP 警告是 2026 反模式。
+
+**替代方案**：規劃 **AMP 遷出（migrate-off）+ 強化原生頁 CWV**（呼應 KB「讓原生頁不需 AMP 就達良好 CWV」）；本項改列 Q3 規劃，不在前端 hotfix 範圍。
+
+**避免誤導**：未來 meeting-prep 不應再引用「AMP 沒死、仍是 Top Stories 版位門檻」作為投入 AMP 修復的依據（KB 該文章論點為 2021 前框架，已過時）。
+
+**Sources**：
+- [Press Gazette — publishers ditching AMP](https://pressgazette.co.uk/news/google-amp-publishers-top-stories/)
+- [Plausible — Google AMP is dead](https://plausible.io/blog/google-amp)
+- [Search Engine Land — drop AMP when no longer required for Top Stories](https://searchengineland.com/will-publishers-drop-amp-when-its-no-longer-a-requirement-for-top-stories-335612)
+
+### 內連分組區塊 — 前端基礎設施已存在（範圍澄清 2026-05-25，source: meeting_prep_20260522 S10 P1 #6）
+
+**原建議**：「加入 /article 同 tag 5 + 同作者 3 + 同系列 3 內連區塊」
+
+**驗證結論**：✅ best practice 通過（[ClickRank 2026](https://www.clickrank.ai/effective-internal-linking-structure/)：≤3 clicks、related-posts module 改善 discoverability），但 **非純前端 hotfix**
+- vocus-web-ui 已有 `contexts/article/RecommendContents.tsx`（「你可能也想看」← `article.readMoreArticles`）+ `contexts/article/relatedArticles` + `utils/seo.ts` `getRelatedItemListJsonLd`（related JSON-LD）
+- 缺的「依作者/系列分組」需後端 API 供應 author/series 文章清單 → 屬後端資料工作
+- **教訓重申**（同 2026-05-02 P2-3）：S10 動詞「加入/部署/建立」前必先 grep 確認現況——本週再次驗證「假設沒實作」會誤判
+
+**待後端**：擴充 article API 回傳 sameAuthor / sameSeries 清單後，前端 RecommendContents 可分組渲染。
