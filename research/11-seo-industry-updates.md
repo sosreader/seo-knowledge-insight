@@ -7,6 +7,31 @@
 
 <!-- 以下為自動累積區域，請勿手動編輯格式 -->
 
+## 2026-06-05（快照日期：2026-06-05）
+
+### Google 官方
+- [2026-06-02] **May 2026 Core Update 完成 rollout**（5/21→6/2，12 天，波動大於 3 月更新）（[Search Engine Land](https://searchengineland.com/google-may-2026-core-update-rollout-is-now-complete-479119)、[Search Engine Journal](https://www.searchenginejournal.com/googles-may-core-update-complete-after-volatile-rollout/577704/)）——本站核心軸月線翻正時點與完成重疊，需區分「重分配紅利 vs 真修復」
+- [2026-05] **Crawl Budget API 推出** — 站長可看爬蟲預算缺口與優先順序評分；官方「變慢則預算降」、動態頁爬取頻率比靜態低 22%（[Google Developers](https://developers.google.com/crawling/docs/crawl-budget)）——直擊本站回應時間 694ms → 爬蟲量 −7.29% 痛點
+- [2026-06-03] **GSC 生成式 AI 效能報告上線** + 內容阻擋 AI 回應控制（[Search Engine Land](https://searchengineland.com/google-search-console-ai-performance-reports-and-controls-to-block-your-content-in-ai-responses-479298)）——GEO 首次有官方引用率追蹤工具
+- [官方 benchmark] 伺服器回應時間 ≤200ms、TTFB ≤800ms，超過則 Googlebot 自動降速（[Google PageSpeed](https://developers.google.com/speed/docs/insights/Server)）——本站 694ms 遠超 benchmark
+
+### 業界報導
+- **「為何大量 SEO 工作不再帶來成長」**（[Search Engine Land 6/4](https://searchengineland.com/why-so-much-seo-work-no-longer-drives-growth-479424)）——流量焦點轉向 AI 分發與品牌；**agentic web schema**（[6/1](https://searchengineland.com/schema-markup-optimize-agentic-web-479080)）
+- **ChatGPT 佔 AI 引薦 87.4%**、8 月→1 月成長 206%（[Search Engine Land 13 個月 LLM 數據](https://searchengineland.com/what-13-months-of-data-reveals-about-llm-traffic-growth-and-conversions-470115)）；本站 GPT +14% 遠遜產業——Gemini 全球引薦超越 Perplexity（[Search Engine Journal](https://www.searchenginejournal.com/google-gemini-sends-more-traffic-to-sites-than-perplexity-report/570714/)）
+- **Perplexity 金融垂直市佔 24%**、整體查詢量 7.8 億——呼應本站 KW 股 +168.98% 財經熱潮（[Search Engine Land](https://searchengineland.com/perplexity-780-million-monthly-queries-month-456725)）
+
+### 關鍵字市場趨勢（B5/B6）
+- **KW 股 +168.98% 經查為真實台股熱潮**（COMPUTEX AI + 台積電股東會 + AI 半導體題材，[台股三大利多](https://money.udn.com/money/story/5607/9537229)）——非 off-topic 雜訊，但事件性、且「股」SERP 被 AIO 48% + News + Finance 小工具三層夾擊（CTR 8% vs 15%）
+- **KW 影評 +112%/電影 +28% 為新片檔期驅動**（玩具總動員 5 6/17 等，[2026 上映表](https://www.atmovies.com.tw/movie/next/)）；**KW 評價 −15% 為本站問題**（市場升、評測站 mybest/愛評網競爭）
+
+### 對本站意涵
+- 核心軸月線首翻正（曝光 +11.46%、Coverage +29.97%）但與 May Core Update 完成重疊，6/12 確認紅利是否回吐
+- 上週「破 600 → Coverage 崩」預測失準：回應時間破 600（694ms）但 Coverage 反升——模型過度權重單一因果鏈
+- 手機 CWV 大規模重分類（好 +117%、+44.5 萬頁）但與回應時間惡化背離——欄位資料延遲生效待驗證
+- AMP 四指標 WoW 全反轉（Article +351%、警告 −7.54%）——上週退場確認需重估，佐證「單週數倍跳動先當口徑波動」
+
+---
+
 ## 2026-05-29（快照日期：2026-05-29）
 
 ### Google 官方
@@ -26,6 +51,46 @@
 ### 對本站意涵
 - 上週兩風險 [RESOLVED]：Direct 暴衝（歸因雜訊證實，−42.72% 回吐）+ 內連腰斬（口徑波動證實，回 21.2M）
 - 新 P0：回應時間反撲 544ms（+67.9%）觸發 Google 自動降速、威脅 Coverage 回填；AMP 崩盤（Article −70.72%）強化退場驗證；AI 雙引擎崩盤加劇（Perplexity −78.0%）
+
+---
+
+## 2026-05-24（快照日期：2026-05-22）
+
+### Google 官方
+- [2026-05-21 起] **May 2026 Core Update** — 進行中（rollout 約 2 週，~6/4 完成）。2026 年第二個 core update，業界定調為 **Discover-targeted**，對 news/lifestyle publisher 影響最大。來源：[Google Search Status Dashboard](https://status.search.google.com/incidents/)、[Search Engine Land](https://searchengineland.com/google-may-2026-core-update-rolling-out-now-478430)
+- [March 2026 Core Update] 已於 4/8 完成；[March 2026 Spam Update] 3/24–25 完成
+- Google Search Central Blog 近 45 天無新 indexing/crawling 公告（僅 5 月 generative AI 優化資源 + 4 月 back-button-hijacking spam policy）
+
+### 業界報導
+- 「**Google's index is getting pickier, not broken**」（[Webiano](https://webiano.digital/googles-index-is-getting-pickier-not-broken/)）— core update 期間高價值頁回填、低價值/重複頁被剔除；對應本站 Coverage +15.79% / 檢索未索引 −11.93% 的同步反轉
+- **AI referral 版圖重分配**：Gemini（8.65%）超車 Perplexity（7.07%）成 AI referral 第二（[MediaPost](https://www.mediapost.com/publications/article/414030/google-ai-overtakes-perplexity-becomes-no-2-refe.html)）；AI chatbots <1% 出版商 referral、AI answers 60% zero-click（[PPC Land](https://ppc.land/small-publishers-lost-60-of-search-traffic-as-ai-reshapes-the-web/)）
+- 2025 出版商傳統搜尋 referral 51.10%→27.42%、Discover 占比近乎翻倍（[SEO Sherpa](https://seosherpa.com/google-web-search-traffic-to-news-publishers-has-collapsed-in-2025/)）
+
+### 對本站意涵
+- 本週指標反轉（Coverage 回填 +188k、未索引 −117k、Discover 微反彈 +5.37%）資料窗末端正逢 5/21 core update 啟動——**屬 core update 副產品而非本站修復，rollout 完成前不宣告勝利**
+- 本站 Perplexity 跌符合產業，**但 Gemini 背離產業（產業升、本站 W −15.42%）= 本站獨立警訊**
+
+---
+
+## 2026-05-15
+
+### Google 官方
+- [2026-05] **Google Search Central Blog**：「A new resource for optimizing for generative AI in Google Search」——官方收編 GEO 策略，民間 GEO 紅利期接近尾聲 ([developers.google.com](https://developers.google.com/search/blog/2026/05/generative-ai-optimization))
+- [2026-04-08] March 2026 Core Update 完成，後續 4/23 + 5/8 + 5/13-14 共 3 波 ranking volatility（[Google Search Status Dashboard](https://status.search.google.com/incidents/) — 最新 incident 截至 5/15 為止無新項）
+
+### 業界報導
+- [SE Roundtable 5/13-14] **Search Ranking Volatility 第二波確認**：「Google Search Ranking Volatility Heating Up May 13th & 14th」、「a large spike in signs of Google search ranking movement and volatility」([seroundtable.com](https://www.seroundtable.com/google-search-ranking-volatility-heated-41324.html))
+- [ALM Corp 5/8] **5/8 spike deserves attention beyond usual chatter**——本期報告 5/15 落點正中第二波視窗（[almcorp.com](https://almcorp.com/blog/google-search-ranking-volatility-may-8/)）
+- [Press Gazette 2025-2026 Publisher Trends] **Publisher Discover 流量 -15-21% YoY**——「Global publisher Google traffic dropped by a third in 2025」、「Referrals to 2,500+ publisher websites from Google Discover down 21% YoY」([pressgazette.co.uk](https://pressgazette.co.uk/media-audience-and-business-data/google-traffic-down-2025-trends-report-2026/))
+- [PPC Land] **News publishers 兩年內流量減半**：Google Search referral 從 51.10% → 27.42%（[ppc.land](https://ppc.land/news-publishers-lose-half-their-google-search-traffic-in-two-years/)）
+- [AI SEO Journal] **Publisher 流量按規模分群**：smaller publishers -60%、medium -47%、large -22%（[aiseojournal.net](https://aiseojournal.net/publishers-report/)）
+- [Search Engine Journal] **AIO CTR -61% / cited brands +35%**：「Organic CTR plummeted from 1.76% to 0.61%」（[searchenginejournal.com](https://www.searchenginejournal.com/ai-overview-ctr-fell-61-but-clicks-didnt-collapse/572993/)）
+- [Seer Interactive Recovery Report] **AIO CTR leveling-off**：「rebounded from 1.3% (Dec 2025) to 2.4% (Feb 2026)」但警告為 leveling-off 非 recovery（[searcheseverywhere.com](https://www.searcheseverywhere.com/blog/google-ai-overviews-ctr-increase-2026-seo-impact)）
+- [Host-Stage TTFB Study] **TTFB > 400ms 每 +100ms → Googlebot 日抓取 -12.4%**（[host-stage.net](https://www.host-stage.net/case-study/ttfb-seo/)）
+- [Captain DNS 2026 Crawl Budget] **TTFB 100ms = 10 pages/sec / 500ms = ~2 pages/sec**（[captaindns.com](https://www.captaindns.com/en/blog/crawl-budget-optimization)）
+
+### SER 重點
+- [2026-05-15] SE Roundtable 主站 WebFetch 持續 403，但 SE Roundtable 文章透過 WebSearch 仍可取得標題與 URL；建議將 SE Roundtable 完全切換到 WebSearch 取得
 
 ---
 
@@ -185,54 +250,6 @@
 - AI Overviews 在 Breaking News 出現頻率上升且排在 Top Stories 之上
 
 ---
-
-## 2026-03-12（快照日期：2026-02-20）
-
-### Google 官方
-- [2026-02-05 起] **February 2026 Discover Core Update** — 進行中。首次 Discover-only 核心更新。
-- [2026-02-25] Serving 服務故障 — 已修復。
-
-### 業界報導
-- [Search Engine Land] Google February 2026 Discover core update — 首次公告的 Discover-only 更新
-- [Search Engine Land] How to increase Google Discover traffic with technical fixes — 技術修復提升 Discover 流量
-- [Search Engine Land] Fix Crawled – Currently not indexed — 89% GSC profiles 有此問題
-
-### SER 重點
-- [2026-03-11] Branded Queries Filter Rolling Out in Search Console
-- [2026-03-11] Google explains undocumented way to disavow entire TLDs
-
----
-
-## 2026-03-12（快照日期：2026-02-27）
-
-### Google 官方
-- [2026-02-05~27] **February 2026 Discover Core Update** — 剛完成。2/27 結束，強調深度、原創、在地內容。
-- [2026-02-25] Serving 服務故障 — 已修復。
-
-### 業界報導
-- [Search Engine Land] Organic search is fundamentally disrupted — 73% B2B 網站流量下滑
-- [Search Engine Land] The dark SEO funnel — 流量不再是 SEO 成功的唯一證明
-
-### SER 重點
-- [2026-03-11] Branded Queries Filter Rolling Out in Search Console
-- [2026-03-10] Survey: PPC is Harder Than 2 Years Ago
-
----
-
-## 2026-03-12（快照日期：2026-03-09）
-
-### Google 官方
-- [2026-02-05~27] **February 2026 Discover Core Update** — 已完成。Discover 回穩（+0.7% 月 / +17.7% 週）。
-- [2026-02-25] Serving 服務故障 — 已修復。
-
-### 業界報導
-- [Search Engine Land] Organic search is fundamentally disrupted — AI Overviews 造成 15-64% 有機流量降幅
-- [Search Engine Land] Fix Crawled – Currently not indexed — 89% GSC profiles 有此問題
-- [Google Developers] Debug Google Search Traffic Drops — 官方流量下降除錯指南
-
-### SER 重點
-- [2026-03-11] Branded Queries Filter Rolling Out in Search Console
-- [2026-03-11] Google explains undocumented way to disavow entire TLDs
 
 ## 2026-03-21（快照日期：2026-03-21）
 
