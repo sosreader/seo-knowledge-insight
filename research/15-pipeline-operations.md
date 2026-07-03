@@ -294,6 +294,24 @@ L4→L1: 7
 - 想動 L1/L2/L3（本 flag 只處理 L4 candidates）
 - 想加分類給目前未分類（None）的 QA → 跑 `make dedupe-classify` 全流程
 
+### 2026-07-03 Notion Multi-Source API 400 判別與 CI Secret 排查方法論
+
+- **Multi-Source Database 觸發 400（API 版本過舊）**：Notion 的 Meeting Minutes database 現有 2 個 data sources（"Meeting Minutes" + "New data source"），成為 multi-source database；舊版 `NOTION_API_VERSION="2022-06-28"` 的 `GET /v1/databases/{id}` 對 multi-source 回 `400 validation_error: "Databases with multiple data sources are not supported in this API version."`，導致 `scripts/01_fetch_notion.py` 連 3 次重試後 traceback 崩潰（CI run 28654423476 與本地皆重現）。修法：升版至 `"2025-09-03"`；`utils/notion_client.py` 的 `list_child_pages` 改讀 db 回應的 `data_sources` 陣列，查詢由單一 `POST /v1/databases/{id}/query` 改為逐一 `POST /v1/data_sources/{data_source_id}/query`，多 source 結果以 page id 去重合併；`_list_database_pages` 更名 `_list_data_source_pages`、多 source 合併去重抽成 `_query_data_sources`；db-check 只對 400/404（物件類型不符）fallback 頁面模式，401/403/5xx 原樣拋出（code review 後收斂，避免認證錯誤被吞、誤入頁面模式二次重試模糊根因；順帶修掉原本 parent 為頁面時會直接 crash 的潛在 bug）；filter（`last_edited_time on_or_after`）與分頁 cursor 邏輯不變。新增 `tests/test_notion_multi_source.py`（9 個測試：多 source 合併去重、缺 data_sources 明確報錯、400/404 退頁面模式、401/403/500 必 re-raise、filter 形狀、分頁 cursor）。
+
+- **驗證批掀出的第二個 bug — callout icon 可為 null**：升版後本地實跑 fetch，新會議紀錄含無 icon 的 callout block，`utils/block_to_markdown.py` 的 `content.get("icon", {})` 對「key 存在但值為 None」仍回傳 None → `AttributeError` 崩潰。修法：`content.get("icon") or {}`；新增 `tests/test_block_to_markdown_callout.py`（2 測試）。教訓：`.get(key, default)` 的 default 只擋 key 缺失、擋不了 explicit null；解析外部 API 回應的巢狀欄位用 `or {}`。
+
+- **400 錯誤形態判別（修法不同，勿混用）**：
+
+  | 錯誤訊息片段 | 根因 | 修法 |
+  | --- | --- | --- |
+  | `Databases with multiple data sources...` | API 版本過舊 | 升 `NOTION_API_VERSION` + 改走 `data_sources` 查詢 |
+  | `path failed validation` | ID 格式錯 | 檢查傳入的 database/page ID 格式 |
+  | `is a database, not a page` | endpoint 用錯 | 換成對應 database vs page endpoint |
+
+- **CI「環境變數未設定」排查法：先三方比對，非先懷疑 token 過期**（PR #48）：排程 ETL（`etl-and-deploy.yml`，每週一）自 2026-03-09 起 17 次全數失敗、從未成功。根因兩層：(1) workflow 引用 `secrets.NOTION_TOKEN` 但 repo 只有 `NOTION_API_KEY`（env 為空、`pipeline_deps` 檢查 exit 1）；(2) workflow 傳 `NOTION_DATABASE_ID` 但 `scripts/01_fetch_notion.py` 讀的是 `config.NOTION_PARENT_PAGE_ID`（`config.py` 無 `DATABASE_ID` key）。排查順序：先比對 ①workflow 的 `${{ secrets.NAME }}` 引用名、②`gh secret list` 實際存在的 secret 名、③script/config 實際讀取的 env key，三者對不上即是根因；「token 過期」是最後才考慮的假設。另需注意：資料最後更新日（本地跑的日期）不等於 CI 最後成功日；判斷 CI 健康要看 `gh run list -L 30` 完整歷史，不能只看資料新鮮度。
+
+- **Secret 設定不落檔法**：以 `gh secret set` 補齊 `NOTION_TOKEN`、`NOTION_PARENT_PAGE_ID` 時，值取自本地 `.env`、先經 Notion API `/v1/users/me` 200 驗證有效，再用「python 讀值 → stdout pipe → `gh secret set` stdin」全程不 echo、不落檔的方式設定；workflow L40 改為 `NOTION_PARENT_PAGE_ID: ${{ secrets.NOTION_PARENT_PAGE_ID }}`（PR #48 squash merged）。
+
 ### 已知限制
 
 1. **分類呼叫 API 次數 = Q&A 數量** — 沒有批次化，每筆各呼叫一次 `gpt-5-mini`。
