@@ -1,0 +1,36 @@
+[
+  {
+    "id": "meeting_prep_20260626_f2c16c7b",
+    "description": "現行格式基線（2026-06-26 已採用報告）：Section N 標題、meta top-level eeat_avg + maturity 半階、S9 粗體題頭、S10 表格化 [層 維度 LX→LY] 標籤。A4/B5/C3/D2=14 提問、22 citations、S3 6 群、S5 5 層、S7 7 要素、S10 11 項。",
+    "report_path": "eval/fixtures/meeting_prep/meeting_prep_20260626_f2c16c7b.md",
+    "snapshot_id": "report_20260626_a283e3fd",
+    "expected_structure": {
+      "section_count": 11,
+      "citation_count_range": [10, 30],
+      "question_total_range": [11, 17],
+      "question_by_type": {"A": [3, 5], "B": [4, 6], "C": [2, 3], "D": [2, 3]},
+      "s3_anomaly_subsections_min": 3,
+      "s5_layer_count": 5,
+      "s7_element_count": 7,
+      "s10_checklist_min": 5
+    },
+    "notes": "S6/S8 全 No-Change（Changed/No-Change 折疊表）；S10 全項含成熟度標籤。取代已退役的中文數字（〇、一、…）舊格式 fixture。"
+  },
+  {
+    "id": "meeting_prep_20260619_a6ee9934",
+    "description": "現行格式回測（2026-06-19 已採用報告）：S6 有 Changed this week（Trustworthiness **3/5 ↑**）+ No-Change 拆表，測粗體分數/半階等級解析。A4/B5/C3/D2=14 提問、S3 6 群、S5 5 層、S7 7 要素、S10 10 項。",
+    "report_path": "eval/fixtures/meeting_prep/meeting_prep_20260619_a6ee9934.md",
+    "snapshot_id": "report_20260619_dc74c632",
+    "expected_structure": {
+      "section_count": 11,
+      "citation_count_range": [10, 30],
+      "question_total_range": [11, 17],
+      "question_by_type": {"A": [3, 5], "B": [4, 6], "C": [2, 3], "D": [2, 3]},
+      "s3_anomaly_subsections_min": 3,
+      "s5_layer_count": 5,
+      "s7_element_count": 7,
+      "s10_checklist_min": 5
+    },
+    "notes": "S6 Changed 表分數為 **3/5 ↑** 粗體；驗證 eeat_score_format / maturity_level_format 對粗體與半階（L2.5/L3.5）的耐受。"
+  }
+]

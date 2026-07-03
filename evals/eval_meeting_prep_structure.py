@@ -51,7 +51,7 @@ _args, _unknown = _parser.parse_known_args()
 
 # ── Golden dataset ────────────────────────────────────────────────────────────
 
-_golden_path = PROJECT_ROOT / "eval" / "golden_meeting_prep.json"
+_golden_path = PROJECT_ROOT / "eval" / "golden_meeting_prep_structure.json"
 if not _golden_path.exists():
     print(
         f"[eval_meeting_prep_structure] Golden dataset not found: {_golden_path}",
@@ -111,19 +111,33 @@ _dataset = [
 
 # ── Section definitions ───────────────────────────────────────────────────────
 
+# Current-format H2 titles (skill spec: `Section N：...`, retired Chinese-numeral
+# `〇、一、…` form). Matched by prefix so volatile suffixes such as
+# `Section 9：會議提問清單（核心輸出）` still resolve.
 _EXPECTED_SECTIONS = [
-    "〇、執行摘要",
-    "一、本週異常地圖",
-    "二、業界最新動態",
-    "三、深度根因假設",
-    "四、顧問視角交叉比對",
-    "五、五層審計缺口清單",
-    "六、E-E-A-T 現況評估",
-    "七、人本七要素分析",
-    "八、SEO 成熟度自評",
-    "九、會議提問清單",
-    "十、會議後行動核查表",
+    "Section 0：執行摘要",
+    "Section 1：本週異常地圖",
+    "Section 2：業界最新動態",
+    "Section 3：深度根因假設",
+    "Section 4：顧問視角交叉比對",
+    "Section 5：五層審計缺口清單",
+    "Section 6：E-E-A-T 現況評估",
+    "Section 7：人本七要素分析",
+    "Section 8：SEO 成熟度自評",
+    "Section 9：會議提問清單",
+    "Section 10：會議後行動核查表",
 ]
+
+# Section titles used by _extract_section_content (stable prefix, no suffix).
+_S3_TITLE = "Section 3：深度根因假設"
+_S5_TITLE = "Section 5：五層審計缺口清單"
+_S6_TITLE = "Section 6：E-E-A-T 現況評估"
+_S7_TITLE = "Section 7：人本七要素分析"
+_S8_TITLE = "Section 8：SEO 成熟度自評"
+_S10_TITLE = "Section 10：會議後行動核查表"
+
+# Maturity level token, allowing half-levels (L2.5, L3.5).
+_LEVEL_RE = r"L[1-4](?:\.\d)?"
 
 
 # ── Parsers ───────────────────────────────────────────────────────────────────
@@ -159,9 +173,14 @@ def _parse_citations(content: str) -> list[dict] | None:
 
 
 def _parse_questions(content: str) -> dict[str, list[str]]:
-    """Extract questions grouped by type (A, B, C, D) from S9."""
+    """Extract questions grouped by type (A, B, C, D) from S9.
+
+    Current format uses bold headers `**A1 [NEW]**：...` (retired the
+    `- [ ] [A1] ...` checklist form). Anchored to line start + a trailing
+    ``[`` delta tag so bold metric spans in question bodies never match.
+    """
     questions: dict[str, list[str]] = {"A": [], "B": [], "C": [], "D": []}
-    pattern = re.compile(r"- \[ \] \[([ABCD])\d+\]")
+    pattern = re.compile(r"^\*\*([ABCD])\d+\s*\[", re.MULTILINE)
     for match in pattern.finditer(content):
         q_type = match.group(1)
         questions[q_type].append(match.group(0))
@@ -207,33 +226,36 @@ def section_completeness(output: dict, target: dict) -> float:
     if "error" in output:
         return 0.0
     sections = output.get("sections", [])
-    found = sum(1 for expected in _EXPECTED_SECTIONS if expected in sections)
+    found = sum(
+        1
+        for expected in _EXPECTED_SECTIONS
+        if any(sec.startswith(expected) for sec in sections)
+    )
     return found / len(_EXPECTED_SECTIONS)
 
 
 def metadata_valid(output: dict, target: dict) -> float:
-    """Check that meeting_prep_meta JSON is parseable with valid schema."""
+    """Check that meeting_prep_meta JSON is parseable with valid schema.
+
+    Current schema uses top-level `eeat_avg` (single 1-5 float) + top-level
+    `maturity` dict with half-levels (L2.5/L3.5); retired the nested
+    `scores.eeat.{experience,...}` / `scores.maturity` form.
+    """
     if "error" in output:
         return 0.0
     meta = output.get("metadata")
     if meta is None:
         return 0.0
 
-    # Validate required fields
-    scores = meta.get("scores", {})
-    eeat = scores.get("eeat", {})
-    maturity = scores.get("maturity", {})
+    # E-E-A-T average must be numeric 1-5
+    eeat_avg = meta.get("eeat_avg")
+    eeat_valid = isinstance(eeat_avg, (int, float)) and 1 <= eeat_avg <= 5
 
-    # E-E-A-T scores must be 1-5
-    eeat_valid = all(
-        isinstance(eeat.get(k), (int, float)) and 1 <= eeat.get(k, 0) <= 5
-        for k in ["experience", "expertise", "authoritativeness", "trustworthiness"]
-    )
-
-    # Maturity levels must be L1-L4
-    valid_levels = {"L1", "L2", "L3", "L4"}
+    # Maturity levels must match L1-L4 (optionally half, e.g. L2.5)
+    maturity = meta.get("maturity", {})
+    level_re = re.compile(rf"^{_LEVEL_RE}$")
     maturity_valid = all(
-        maturity.get(k) in valid_levels
+        isinstance(maturity.get(k), str) and level_re.match(maturity[k])
         for k in ["strategy", "process", "keywords", "metrics"]
     )
 
@@ -269,18 +291,25 @@ def question_count_valid(output: dict, target: dict) -> float:
 
 
 def question_source_annotated(output: dict, target: dict) -> float:
-    """Check that all questions have source annotations (來源：S...)."""
+    """Fraction of S9 questions carrying a provenance tag.
+
+    Retired the `（來源：S...）` annotation. Current spec traces each question
+    via a bracketed tag in its bold header — a Delta lifecycle tag
+    (`[NEW]`/`[CARRY-W{n}]`/`[Updated]`/`[Validated]`/`[Discarded]`), a
+    trace-source tag (`[TS-...]`), or a KB citation (`[N]`).
+    """
     if "error" in output:
         return 0.0
     content = output.get("raw_content", "")
 
-    # Find all question lines
-    q_lines = re.findall(r"- \[ \] \[[ABCD]\d+\] .+", content)
+    q_lines = re.findall(r"^\*\*[ABCD]\d+.*$", content, re.MULTILINE)
     if not q_lines:
         return 0.0
 
-    # Check each has a source annotation
-    annotated = sum(1 for line in q_lines if re.search(r"[（(]來源：S\d", line))
+    tag = re.compile(
+        r"\[(?:NEW|CARRY(?:-W\d+)?|Updated|Validated|Discarded|TS-[A-Z]+|\d+)\]"
+    )
+    annotated = sum(1 for line in q_lines if tag.search(line))
     return annotated / len(q_lines)
 
 
@@ -289,18 +318,20 @@ def eeat_score_format(output: dict, target: dict) -> float:
     if "error" in output:
         return 0.0
     content = output.get("raw_content", "")
-    s6 = _extract_section_content(content, "六、E-E-A-T 現況評估")
+    s6 = _extract_section_content(content, _S6_TITLE)
     if not s6:
         return 0.0
 
-    # Parse table rows: | **Dimension** | N/5 | ...
-    # Only match from table rows, not free text
-    score_rows = re.findall(r"^\|[^|]*\|\s*(\d+)/5\s*\|", s6, re.MULTILINE)
+    # Score sits in the 2nd cell; may be bold + arrow (**3/5 ↑**) when a
+    # dimension changed, and may be a half-score. Four dimensions total,
+    # possibly split across "Changed this week" + "No Change" tables.
+    score_rows = re.findall(
+        r"^\|[^|]*\|\s*\*{0,2}\s*(\d+(?:\.\d)?)/5", s6, re.MULTILINE
+    )
     if len(score_rows) != 4:
         return 0.0
 
-    # Validate all scores are 1-5
-    return 1.0 if all(1 <= int(s) <= 5 for s in score_rows) else 0.0
+    return 1.0 if all(1 <= float(s) <= 5 for s in score_rows) else 0.0
 
 
 def maturity_level_format(output: dict, target: dict) -> float:
@@ -308,35 +339,45 @@ def maturity_level_format(output: dict, target: dict) -> float:
     if "error" in output:
         return 0.0
     content = output.get("raw_content", "")
-    s8 = _extract_section_content(content, "八、SEO 成熟度自評")
+    s8 = _extract_section_content(content, _S8_TITLE)
     if not s8:
         return 0.0
 
-    # Parse table rows: | **Dimension** | L2 ... | ...
-    level_rows = re.findall(r"^\|[^|]*\|\s*(L[1-4])\s", s8, re.MULTILINE)
+    # Level sits in the 2nd cell; may be bold + arrow (**L3 ↑**) when changed,
+    # and may be a half-level (L2.5). Four maturity dimensions total.
+    level_rows = re.findall(
+        rf"^\|[^|]*\|\s*\*{{0,2}}\s*({_LEVEL_RE})", s8, re.MULTILINE
+    )
     return 1.0 if len(level_rows) == 4 else 0.0
 
 
 def s3_hypothesis_structure(output: dict, target: dict) -> float:
-    """Check S3 has >= N ### subsections, each with >= 3 hypothesis rows."""
+    """Check S3 has >= N `### H{N}：` subsections, each with >= 3 hypotheses.
+
+    Current format uses `### H1：{指標}` groups each holding `**假設 N（…）**`
+    bold hypotheses; retired the `| H1 |` hypothesis-table form.
+    """
     if "error" in output:
         return 0.0
     content = output.get("raw_content", "")
-    s3 = _extract_section_content(content, "三、深度根因假設")
+    s3 = _extract_section_content(content, _S3_TITLE)
     if not s3:
         return 0.0
 
     min_subsections = target.get("s3_anomaly_subsections_min", 3)
 
-    # Find ### subsections
-    subsections = re.split(r"^### ", s3, flags=re.MULTILINE)[1:]  # skip pre-heading
+    # Keep only the H-numbered subsections (### H1：…)
+    subsections = [
+        sub
+        for sub in re.split(r"^### ", s3, flags=re.MULTILINE)[1:]
+        if re.match(r"H\d", sub)
+    ]
     if len(subsections) < min_subsections:
         return len(subsections) / min_subsections
 
-    # Check each subsection has >= 3 hypothesis rows (| H\d |)
     compliant = 0
     for sub in subsections:
-        hypotheses = re.findall(r"^\|\s*H\d[a-z]?\s*\|", sub, re.MULTILINE)
+        hypotheses = re.findall(r"^\*\*假設\s*\d", sub, re.MULTILINE)
         if len(hypotheses) >= 3:
             compliant += 1
 
@@ -348,13 +389,15 @@ def s5_all_layers_present(output: dict, target: dict) -> float:
     if "error" in output:
         return 0.0
     content = output.get("raw_content", "")
-    s5 = _extract_section_content(content, "五、五層審計缺口清單")
+    s5 = _extract_section_content(content, _S5_TITLE)
     if not s5:
         return 0.0
 
     expected_count = target.get("s5_layer_count", 5)
-    # Match table rows starting with | L1, | L2, etc.
-    layers_found = set(re.findall(r"^\|\s*(L[1-5])\s", s5, re.MULTILINE))
+    # 1st cell may be bold (| **L1 技術層** |).
+    layers_found = set(
+        re.findall(r"^\|\s*\*{0,2}\s*(L[1-5])", s5, re.MULTILINE)
+    )
     return len(layers_found) / expected_count
 
 
@@ -363,13 +406,20 @@ def s7_seven_elements(output: dict, target: dict) -> float:
     if "error" in output:
         return 0.0
     content = output.get("raw_content", "")
-    s7 = _extract_section_content(content, "七、人本七要素分析")
+    s7 = _extract_section_content(content, _S7_TITLE)
     if not s7:
         return 0.0
 
     expected_count = target.get("s7_element_count", 7)
-    # Match table rows: | N | **Element** | ...
-    elements = re.findall(r"^\|\s*\d+\s*\|", s7, re.MULTILINE)
+    # Elements are named rows carrying a N/5 score (retired the `| N |`
+    # numbered form), possibly split across Changed + No-Change tables.
+    # Count rows (not score occurrences) so a Changed row with 上週/本週
+    # scores still counts once.
+    elements = [
+        line
+        for line in s7.splitlines()
+        if line.lstrip().startswith("|") and re.search(r"\d+(?:\.\d)?/5", line)
+    ]
     return 1.0 if len(elements) >= expected_count else len(elements) / expected_count
 
 
@@ -378,20 +428,34 @@ def s10_checklist_present(output: dict, target: dict) -> float:
     if "error" in output:
         return 0.0
     content = output.get("raw_content", "")
-    s10 = _extract_section_content(content, "十、會議後行動核查表")
+    s10 = _extract_section_content(content, _S10_TITLE)
     if not s10:
         return 0.0
 
     min_items = target.get("s10_checklist_min", 5)
-    items = re.findall(r"^- \[ \]", s10, re.MULTILINE)
+    items = _s10_action_items(s10)
     return 1.0 if len(items) >= min_items else len(items) / min_items
+
+
+def _s10_action_items(s10_content: str) -> list[str]:
+    """Return S10 action rows.
+
+    Current format is a priority table (`| 🔴 P0 | … |`); falls back to the
+    retired `- [ ]` checklist form.
+    """
+    rows = re.findall(r"^\|[^|]*\bP\d.*$", s10_content, re.MULTILINE)
+    if rows:
+        return rows
+    return re.findall(r"^- \[ \].*$", s10_content, re.MULTILINE)
 
 
 def _parse_s8_table_levels(s8_content: str) -> dict[str, str]:
     """Parse maturity levels from S8 table rows.
 
-    Expects rows like: | **策略（Strategy）** | L2 發展 | ... |
-    Returns: {"strategy": "L2", "process": "L2", ...}
+    Rows like `| Strategy（策略）| L2.5（L2→L3 邊緣）| … |` or a Changed
+    `| Process（流程）| **L3 ↑** | … |`. re.search takes the first level token
+    per row (the level cell), so it tolerates half-levels and bold wrappers.
+    Returns e.g. {"strategy": "L2.5", "process": "L3", ...}.
     """
     dim_map = {
         "策略": "strategy",
@@ -405,7 +469,7 @@ def _parse_s8_table_levels(s8_content: str) -> dict[str, str]:
             continue
         for zh_name, en_key in dim_map.items():
             if zh_name in line:
-                m = re.search(r"(L[1-4])", line)
+                m = re.search(rf"({_LEVEL_RE})", line)
                 if m:
                     levels[en_key] = m.group(1)
                 break
@@ -420,12 +484,12 @@ def s8_meta_maturity_consistency(output: dict, target: dict) -> float:
     if not meta:
         return 0.0
 
-    meta_maturity = meta.get("scores", {}).get("maturity", {})
+    meta_maturity = meta.get("maturity", {})
     if not meta_maturity:
         return 0.0
 
     content = output.get("raw_content", "")
-    s8 = _extract_section_content(content, "八、SEO 成熟度自評")
+    s8 = _extract_section_content(content, _S8_TITLE)
     if not s8:
         return 0.0
 
@@ -442,21 +506,27 @@ def s8_meta_maturity_consistency(output: dict, target: dict) -> float:
 
 
 def s10_maturity_upgrade_labeled(output: dict, target: dict) -> float:
-    """S10 checklist should contain maturity upgrade markers [LX→LY]."""
+    """S10 action items should carry maturity markers `[… LX→LY]`.
+
+    Current label form is `[{層} {維度} L{X}→L{Y}]` (e.g. `[L2 內容 L3→L3]`,
+    `[Process L3→L4]`) with optional half-levels; retired the
+    `[策略 L2→L3]` form. Hold markers (L3→L3) count — the point is that every
+    item is labeled, not that every item upgrades.
+    """
     if "error" in output:
         return 0.0
     content = output.get("raw_content", "")
-    s10 = _extract_section_content(content, "十、會議後行動核查表")
+    s10 = _extract_section_content(content, _S10_TITLE)
     if not s10:
         return 0.0
 
     labels = re.findall(
-        r"\[(?:策略|流程|關鍵字|指標)\s*L[1-4]→L[1-4]\]", s10
+        rf"\[[^\[\]]*{_LEVEL_RE}\s*→\s*{_LEVEL_RE}\]", s10
     )
-    items = re.findall(r"- \[ \]", s10)
+    items = _s10_action_items(s10)
     if not items:
         return 0.0
-    # At least 30% of checklist items should have upgrade labels
+    # At least 30% of action items should carry an upgrade/hold label
     return min(len(labels) / max(len(items) * 0.3, 1), 1.0)
 
 
