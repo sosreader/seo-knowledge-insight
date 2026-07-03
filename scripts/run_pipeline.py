@@ -4,6 +4,7 @@
 
     python scripts/run_pipeline.py                              # 完整流程 (fetch-notion→extract-qa→dedupe-classify)
     python scripts/run_pipeline.py --step fetch-notion          # 只執行 Notion 擷取
+    python scripts/run_pipeline.py --step fetch-articles        # 外部文章（iThome + Google Cases；Medium 需 Playwright，本地另跑 01b）
     python scripts/run_pipeline.py --step extract-qa            # 只執行 Q&A 萃取
     python scripts/run_pipeline.py --step dedupe-classify       # 只執行去重 + 分類
     python scripts/run_pipeline.py --step generate-report --input metrics.tsv  # 產生週報
@@ -24,13 +25,19 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import config
 
-# ── 步驟名稱 → 腳本對照表 ────────────────────────────
+# ── 步驟名稱 → 腳本對照表（一步可對多腳本，依序執行）──
+# fetch-articles 不含 01b_fetch_medium.py：需 Playwright（requirements.txt 未含）
+# 且 Medium bot 偵測會擋 CI datacenter IP，Medium 維持本地執行
 STEP_SCRIPTS = {
-    "fetch-notion":    "01_fetch_notion.py",
-    "extract-qa":      "02_extract_qa.py",
-    "dedupe-classify": "03_dedupe_classify.py",
-    "generate-report": "04_generate_report.py",
+    "fetch-notion":    ("01_fetch_notion.py",),
+    "fetch-articles":  ("01c_fetch_ithelp.py", "01d_fetch_google_cases.py"),
+    "extract-qa":      ("02_extract_qa.py",),
+    "dedupe-classify": ("03_dedupe_classify.py",),
+    "generate-report": ("04_generate_report.py",),
 }
+
+# 這些子腳本沒有 preflight_check（不吃 --check flag），check 模式跳過
+_NO_PREFLIGHT_SCRIPTS = frozenset({"01c_fetch_ithelp.py", "01d_fetch_google_cases.py"})
 
 # 向下相容：數字 1-4 對應步驟名稱
 _STEP_NUMBER_MAP = {
@@ -77,7 +84,7 @@ def main() -> None:
         "--step",
         type=_parse_step,
         default=None,
-        metavar="{fetch-notion,extract-qa,dedupe-classify,generate-report}",
+        metavar="{fetch-notion,fetch-articles,extract-qa,dedupe-classify,generate-report}",
         help="只執行指定步驟（也接受數字 1-4，不指定則執行 fetch-notion→extract-qa→dedupe-classify）",
     )
     parser.add_argument(
@@ -109,17 +116,20 @@ def main() -> None:
     steps_to_run = [args.step] if args.step else default_steps
 
     for step in steps_to_run:
-        script = STEP_SCRIPTS[step]
+        for script in STEP_SCRIPTS[step]:
+            if check_only and script in _NO_PREFLIGHT_SCRIPTS:
+                print(f"（{script} 無 preflight_check，檢查模式跳過）")
+                continue
 
-        # 只在單步模式時轉發 remaining args（避免 step-specific flags 傳給不相關的步驟）
-        extra = list(remaining) if args.step else []
-        if check_only:
-            extra.append("--check")
+            # 只在單步模式時轉發 remaining args（避免 step-specific flags 傳給不相關的步驟）
+            extra = list(remaining) if args.step else []
+            if check_only:
+                extra.append("--check")
 
-        ok = run_step(script, extra)
-        if not ok:
-            print(f"\n步驟 {step} {'檢查' if check_only else '執行'}失敗，中止 pipeline")
-            sys.exit(1)
+            ok = run_step(script, extra)
+            if not ok:
+                print(f"\n步驟 {step}（{script}）{'檢查' if check_only else '執行'}失敗，中止 pipeline")
+                sys.exit(1)
 
     elapsed = time.time() - start
     minutes = int(elapsed // 60)
