@@ -522,15 +522,24 @@ CI 環境需要 `SUPABASE_URL` + `SUPABASE_ANON_KEY` secrets。
 
 ### 21.6 GitHub Actions Secrets
 
-| Secret                  | 用途                                        |
-| ----------------------- | ------------------------------------------- |
-| `AWS_ACCESS_KEY_ID`     | AWS IAM 認證（`seo-insight-deployer` user） |
-| `AWS_SECRET_ACCESS_KEY` | AWS IAM 認證                                |
-| `LMNR_PROJECT_API_KEY`  | Laminar eval + tracing                      |
-| `OPENAI_API_KEY`        | OpenAI API（RAG chat 需要）                 |
-| `SEO_API_KEY`           | API 認證金鑰                                |
-| `SUPABASE_URL`          | Supabase REST API URL                       |
-| `SUPABASE_ANON_KEY`     | Supabase anon key（RLS SELECT）             |
+> Secrets 現況以 2026-07-03 為準。
+
+| Secret                  | 用途                                         | 狀態                     |
+| ----------------------- | -------------------------------------------- | ------------------------ |
+| `AWS_ACCESS_KEY_ID`     | AWS IAM 認證（`seo-insight-deployer` user）  | 沿用                     |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM 認證                                 | 沿用                     |
+| `LMNR_PROJECT_API_KEY`  | Laminar eval + tracing                       | 沿用                     |
+| `OPENAI_API_KEY`        | OpenAI API（RAG chat 需要）                  | 沿用                     |
+| `SEO_API_KEY`           | API 認證金鑰                                 | 沿用                     |
+| `SUPABASE_URL`          | Supabase REST API URL                        | 沿用                     |
+| `SUPABASE_ANON_KEY`     | Supabase anon key（RLS SELECT）              | 沿用                     |
+| `SUPABASE_SERVICE_KEY`  | Supabase service key（bypass RLS）           | 沿用                     |
+| `NOTION_TOKEN`          | Notion API 認證（排程 ETL fetch）            | 生效（2026-07-03 設定） |
+| `NOTION_PARENT_PAGE_ID` | Notion Meeting Minutes 來源頁 ID              | 生效（2026-07-03 設定） |
+
+**孤兒 secret（workflow 已不引用，待清理）**：`NOTION_API_KEY`、`NOTION_DATABASE_ID`（皆 2026-03-06 設定）。
+
+> 排程 ETL（`etl-and-deploy.yml`）曾因 secret 名稱與 workflow 引用 / script 讀取的 env key 不對映，自 2026-03-09 起連續 17 次全數失敗、從未成功；根因排查與修復記錄見 [research/15-pipeline-operations.md](./15-pipeline-operations.md#2026-07-03-notion-multi-source-api-400-判別與-ci-secret-排查方法論)。
 
 ### 21.7 AWS 服務與 IAM 設定
 

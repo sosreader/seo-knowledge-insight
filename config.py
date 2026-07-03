@@ -74,7 +74,8 @@ MEDIUM_RSS_URL = "https://genehong.medium.com/feed"
 ITHELP_SERIES_URL = "https://ithelp.ithome.com.tw/users/20000065/ironman/4545"
 
 # ── 常數（不依賴 env，無副作用）──────────────────────
-NOTION_API_VERSION = "2022-06-28"
+# 2025-09-03 起支援 multi-source database（data_sources）；舊版對 multi-source 回 400
+NOTION_API_VERSION = "2025-09-03"
 NOTION_BASE_URL = "https://api.notion.com/v1"
 
 # ── 處理參數 ──────────────────────────────────────────
