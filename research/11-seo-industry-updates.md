@@ -229,48 +229,6 @@
 
 ---
 
-## 2026-03-22
-
-### Google 官方
-- [2026-02-25] Serving 服務故障 — 已修復（15 分鐘）
-- [2026-03] **February 2026 Discover Core Update** — 已完成部署。首次 Discover 專屬核心更新，收緊域名池（美國 172→158）。目標：減少 clickbait、優先原創深度報導、增加本地內容。目前僅英語市場，計畫擴展至其他語言。
-- [2026-03] **March 2026 Core Update** — 滾動中。與 Feb Discover Update 同步進行。
-
-### Google Search Central 公告
-- [2026-03] Search Central Live Asia Pacific 2026（Sydney 等亞太城市）
-- [2026-03] Google's February 2026 Discover Core Update 官方說明
-
-### 業界報導
-- AI Overviews 觸發 48% 搜尋查詢（2026 數據），有機 CTR 降 61%，Position 1 CTR 年降 32%
-- AI Overview 引用 Top-10 頁面佔比從 76% 降至 38%，被引用品牌反獲 +35% 有機點擊
-- AI Overviews 在突發新聞中排在 Top Stories 上方（SER 2026-03-20）
-
-### SER 重點
-- Google News Showcase Label 在 Discover Feed 測試中
-- AI Overviews 在 Breaking News 出現頻率上升且排在 Top Stories 之上
-
----
-
-## 2026-03-21（快照日期：2026-03-21）
-
-### Google 官方
-- [2026-02-05~27] **February 2026 Discover Core Update** — 已完成。67% 網站受影響，clickbait 過濾 + expertise 信號強化 + 在地內容優先。恢復期 2-4 週。
-- [2026-03 起] **March 2026 Core Update** — 滾動中。SEMrush Sensor 9.5（歷史高位），排名持續波動。
-- [2026-02-25] Serving 服務故障 — 已修復。
-
-### 業界報導
-- [almcorp.com] Google Search Ranking Volatility March 2026 — 社群論壇大量報告排名每日變動
-- [Brafton] Google Search Updates: Jan-Feb 2026 Recap — 雙核心更新影響整理
-- [業界共識] Backlinks 仍是 2026 top-3 ranking factor，但品質遠比數量重要
-
-### SER 重點
-- [2026-03-20] Google News Showcase Label In Discover Feed — 測試 Discover 新聞 Showcase 標籤
-- [2026-03-20] AI Overviews Showing For Breaking News More Often And Above Top Stories
-- [2026-03-19] Universal Commerce Protocol Get New Additions Including Cart & Catalog
-- [2026-03-18] Google "Developing" Opt-Out of Generative AI Features in Search — 回應英國 CMA
-
----
-
 ## 2026-05-08（快照日期：2026-05-08）
 
 ### Google 官方
@@ -290,3 +248,44 @@
 
 ### SER 重點
 - [2026-04-29 起] WebFetch 對 SER 主站持續 403——可能為 SER 端封鎖 GPTBot 或 fetch 工具 IP，改用 WebSearch + 多源驗證
+
+---
+
+## 2026-06-19（快照日期：2026-06-22，source: meeting_prep_20260619）
+
+### Google 官方
+- [May 2026 Core Update] 已 6/2 完成（5/21→6/2，12 天），但後續波動延續——[seroundtable.com](https://www.seroundtable.com/google-search-ranking-volatility-41523.html) 6/15–17 連三天排名波動、6/19 又有不明更新（主打黑帽側，[seroundtable.com](https://www.seroundtable.com/google-search-ranking-hits-black-hats-41541.html)）。本週資料窗（6/13–6/19）坐落核心更新後「重新評估期」
+- [GSC 生成式 AI 效能報告上線] Search Console 新增追蹤內容被 AI Overview 引用的曝光/點擊（developers.google.com/search/blog）
+- [GEO 官方指南] [SEJ: Google's New AI Search Guide Calls AEO And GEO 'Still SEO'](https://www.searchenginejournal.com/googles-new-ai-search-guide-calls-aeo-and-geo-still-seo/575026/)——AEO/GEO 不是獨立學科、是傳統 SEO 延伸，強化 E-E-A-T 即可同時得益
+- [6/15 llms.txt 澄清] Google 不需 llms.txt 來索引（加它屬選配非 SEO 必要）
+
+### 業界報導
+- **[關鍵] [SEL: What new AI search data reveals about visibility and trust](https://searchengineland.com/new-ai-search-data-visibility-trust-480089)**——75,000 品牌跨 ChatGPT/AI Mode/AI Overviews 分析：**AI 引用與品牌曝光度（YouTube、網路提及）相關性最高 r=0.50–0.74、與反鏈數量最低 <0.30**。直接解釋本站 DR 76 強卻 AI 弱的脫鉤
+- [SEL: AI search adoption rises as consumer trust declines](https://searchengineland.com/ai-search-adoption-rises-consumer-trust-declines-study-480338)——AI 搜尋信任度 2025 年 82% → 2026 年 54%（-28pp），用戶平均跨 2.4 平台驗證、referral 碎片化
+- [SEJ: Gemini Sends More Traffic Than Perplexity](https://www.searchenginejournal.com/google-gemini-sends-more-traffic-to-sites-than-perplexity-report/570714/)——Gemini Nov–Jan +115% 超越 Perplexity；整體 AI referral 仍 <1% 總流量。**Perplexity 下滑是業界普遍現象（非單站個案）、ChatGPT 仍佔 AI referral ~80%**
+- [SEJ: Google Updates Product Structured Data Documentation](https://www.searchenginejournal.com/google-updates-product-structured-data-documentation/484813/)——Google 拆 Product 文件為 product snippet（非購買頁/評論聚合）vs merchant listing（可購買頁）；屬性重判會在 GSC 兩報告間移轉計數
+
+### SER 重點
+- [2026-06] SERoundTable June Webmaster Report：May Core Update 完成 + Google I/O AI 搜尋功能 + HTML vs Markdown（Google 明示 HTML 是 Search 標準格式）
+- WebFetch 對 SER/SEL 主站仍易 403——改用 WebSearch + 多源交叉驗證（延續 4/29 起策略）
+
+---
+
+## 2026-06-26（快照日期：2026-06-29，source: meeting_prep_20260626）
+
+### Google 官方
+- [June 2026 Spam Update] **6/24 16:00 UTC → 6/26 17:00 UTC 完成**（約 48 小時、提前收尾），全語言/全地區、SpamBrain AI 主導。**明確不針對連結垃圾與 Site Reputation Abuse、針對其他內容操縱手法**（[Google Search Status Dashboard](https://status.search.google.com/products/rGHU1u87FJnkP6W2GwMi/history)、[seroundtable.com](https://www.seroundtable.com/google-june-2026-spam-update-out-41568.html)）。三波更新疊加：May Core Update（6/2）→ 不明更新（6/19）→ June Spam Update（6/24–26）
+- [GSC 生成式 AI 效能報告正式開放] [developers.google.com/search/blog/2026/06/gen-ai-performance-reports](https://developers.google.com/search/blog/2026/06/gen-ai-performance-reports)——可追蹤內容在 Gemini/AI Overview 的曝光與點擊，建 AI 引用率 baseline
+- [GEO 官方優化指南] [developers.google.com/search/blog/2026/05/a-new-resource-for-optimizing](https://developers.google.com/search/blog/2026/05/a-new-resource-for-optimizing)——結構化內容 + E-E-A-T + 清晰 facts 標記為被 AIO 引用的基礎
+
+### 業界報導
+- **AIO 桌機 CTR 壓縮已結構化**：2026 年 AIO 出現於 48% 查詢（YoY +58%），首位有機 CTR −58%（Ahrefs 300K KW）、AIO 查詢 CTR 系統性落後非 AIO 約 37%；被 AIO 引用頁多獲 +120% 點擊曝光比（[ALM Corp](https://almcorp.com/blog/google-ai-overviews-organic-ctr-2026/)、[Infinite Labs](https://infinitelabsdigital.com/google-ai-overviews-are-eating-your-organic-traffic-heres-how-to-fight-back/)）
+- **桌機 vs 行動分裂屬全球趨勢**：全球出版商搜尋流量年降 1/3（美國 −38%），桌機持續失血、行動因短影音/卡片維持（[Digital Strategy Force](https://digitalstrategyforce.com/journal/why-did-organic-traffic-drop-in-q1-2026/)）
+- **Perplexity 業界普遍下滑但 vocus 惡化更深**：Perplexity AI 引流市佔 7.3%、perplexity.ai 流量月降 10.82%（Similarweb May）；vocus −87.81% 遠超市場（[Goodie](https://higoodie.com/blog/ai-search-traffic-report-2026/)）。Perplexity Publisher Program 80/20 分潤、2,400+ 出版商加入後 referral +34%（[Digital Strategy Force](https://digitalstrategyforce.com/journal/perplexitys-2026-publisher-program-what-it-means-for-content-creators/)）
+- **內部連結 2026 最佳實踐**：Pillar-Cluster 雙向架構、每頁 12–25 contextual links（vocus 11.86 近下限）；Cluster 比孤立文章多 30% 有機流量、排名穩定 2.5 倍；**2026 AI 引擎（Perplexity/Gemini/SGE）同樣依賴內連理解站點結構**（[Digital Applied](https://www.digitalapplied.com/blog/internal-linking-strategy-2026-large-site-architecture-guide)、[Topical Map AI](https://topicalmap.ai/blog/auto/internal-linking-strategy-guide-2026)）
+
+### Google Trends / 院線檔期
+- 影評/電影 WoW 下滑屬院線空窗期：6/17 玩具總動員 5 首映衝頂 → 6/20–26 空窗 → 6/30 小小兵；月線仍 +58~68% 確認需求健康；7 月諾蘭《奧德賽》+ 蜘蛛人下波高峰將至（[2026 暑假片單](https://blog.enjoymovie.net/summer-2026-blockbuster-movies-preview/)）
+
+### SER 重點
+- WebFetch 對 SER 主站仍 403（bot detection），本週 B1–B6 全程改用 WebSearch + Google Status Dashboard JSON 多源交叉驗證
