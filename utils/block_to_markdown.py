@@ -103,7 +103,7 @@ async def _block_to_md(
 
     elif btype == "callout":
         icon = ""
-        icon_data = content.get("icon", {})
+        icon_data = content.get("icon") or {}  # icon 可為 null（無 icon 的 callout）
         if icon_data.get("type") == "emoji":
             icon = icon_data.get("emoji", "") + " "
         text = _rich_text_to_md(content.get("rich_text", []))

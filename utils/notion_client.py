@@ -96,8 +96,11 @@ async def list_child_pages(
 ) -> tuple[list[dict[str, str]], bool]:
     """
     自動偵測 parent_page_id 是頁面還是資料庫：
-    - 資料庫 → 用 POST /databases/{id}/query 查詢所有紀錄
+    - 資料庫 → 逐一查詢其 data sources（POST /data_sources/{id}/query）
     - 頁面 → 列出所有 child_page 類型 block
+
+    Notion API 2025-09-03 起 database 拆成多個 data source；
+    舊版 /databases/{id}/query 對 multi-source 資料庫直接回 400。
 
     Args:
         since_time: ISO 時間戳，資料庫模式下會用 Notion 原生 filter 在 server side 篩選
@@ -106,13 +109,27 @@ async def list_child_pages(
         (pages, server_filtered): pages 為 [{id, title}]，
         server_filtered 為 True 表示已在 DB 層做 since_time 過濾
     """
-    # 先試資料庫 API
+    # 先試資料庫 API；400/404 = ID 非資料庫（物件類型不符）→ 落到頁面模式，
+    # 401/403/5xx 等真實錯誤原樣拋出（避免誤入頁面模式重試、模糊根因）
     db_url = f"{config.NOTION_BASE_URL}/databases/{parent_page_id}"
-    db_check = await _api_get(client, db_url)
+    try:
+        db_check = await _api_get(client, db_url)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code not in (400, 404):
+            raise
+        db_check = {}
 
     if db_check.get("object") == "database":
-        logger.info("偵測到資料庫，使用 Database Query API ...")
-        pages = await _list_database_pages(client, parent_page_id, since_time=since_time)
+        data_source_ids = [ds["id"] for ds in db_check.get("data_sources", [])]
+        if not data_source_ids:
+            raise RuntimeError(
+                "資料庫回應缺少 data_sources；請確認 NOTION_API_VERSION >= 2025-09-03"
+            )
+        logger.info(
+            "偵測到資料庫（%d 個 data source），使用 Data Source Query API ...",
+            len(data_source_ids),
+        )
+        pages = await _query_data_sources(client, data_source_ids, since_time=since_time)
         return pages, since_time is not None
     else:
         logger.info("偵測到頁面，使用 Blocks Children API ...")
@@ -120,19 +137,35 @@ async def list_child_pages(
         return pages, False
 
 
-async def _list_database_pages(
+async def _query_data_sources(
     client: httpx.AsyncClient,
-    database_id: str,
+    data_source_ids: list[str],
     since_time: str | None = None,
 ) -> list[dict[str, str]]:
-    """查詢資料庫中的 page records，支援 server-side 時間篩選。
+    """逐一查詢多個 data source，以 page id 去重後合併（保留出現順序）。"""
+    seen: set[str] = set()
+    pages: list[dict[str, str]] = []
+    for ds_id in data_source_ids:
+        for page in await _list_data_source_pages(client, ds_id, since_time=since_time):
+            if page["id"] not in seen:
+                seen.add(page["id"])
+                pages.append(page)
+    return pages
+
+
+async def _list_data_source_pages(
+    client: httpx.AsyncClient,
+    data_source_id: str,
+    since_time: str | None = None,
+) -> list[dict[str, str]]:
+    """查詢單一 data source 中的 page records，支援 server-side 時間篩選。
 
     Args:
         since_time: ISO 時間戳（如 "2026-02-27T00:00:00.000Z"），
-                    會轉為 Notion Database filter 的 last_edited_time >= since_time
+                    會轉為 Notion filter 的 last_edited_time >= since_time
     """
     pages: list[dict[str, str]] = []
-    url = f"{config.NOTION_BASE_URL}/databases/{database_id}/query"
+    url = f"{config.NOTION_BASE_URL}/data_sources/{data_source_id}/query"
     cursor: str | None = None
 
     # Notion Database filter：server-side 篩選 last_edited_time
