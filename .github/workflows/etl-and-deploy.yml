@@ -40,10 +40,12 @@ jobs:
           NOTION_PARENT_PAGE_ID: ${{ secrets.NOTION_PARENT_PAGE_ID }}
         run: python scripts/01_fetch_notion.py
 
-      - name: Fetch external articles (Medium + iThome + Google Cases)
+      # 外部文章為補充資料源（核心資料迴路是 Notion→extract→dedupe→Supabase），
+      # 來源網站擋爬蟲屬可預期情況，故 best-effort 不阻斷 pipeline；
+      # Medium 需 Playwright（且 bot 偵測擋 CI IP），維持本地執行 01b
+      - name: Fetch external articles (iThome + Google Cases, best-effort)
         run: python scripts/run_pipeline.py --step fetch-articles
-        env:
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        continue-on-error: true
 
       - name: Extract Q&A (OpenAI)
         env:
