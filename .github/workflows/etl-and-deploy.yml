@@ -37,7 +37,7 @@ jobs:
       - name: Fetch from Notion (incremental)
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_PARENT_PAGE_ID: ${{ secrets.NOTION_PARENT_PAGE_ID }}
         run: python scripts/01_fetch_notion.py
 
       - name: Fetch external articles (Medium + iThome + Google Cases)
