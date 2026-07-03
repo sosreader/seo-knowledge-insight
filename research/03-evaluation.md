@@ -2206,6 +2206,25 @@ flowchart LR
 
 > **注意**：Dashboard 中的 `v2.12-fixed`、`v2.12-1317items`、`retrieval-eval-20...` 等為歷史一次性 run（測試或版本驗證），不是固定 group。
 
+### Meeting-Prep Structure Eval 對齊（PR #51，2026-07-03）
+
+`evals/eval_meeting_prep_structure.py` 於 PR #51 對齊現行 meeting-prep 報告格式，修復 13 個檢查器的漂移（前測 12/13 evaluators = 0.000）。
+
+**主要格式變更**：
+- 標題：`## 〇、` → `## Section N：`
+- 成熟度欄位：巢狀 `scores.eeat` / `scores.maturity` → top-level `eeat_avg(float)` + `maturity(str, L1-L4 含半階 L2.5/L3.5)`
+- 檢查清單：`- [ ] [A1]` → `**A1 [NEW]**：` 粗體題頭
+- S3/S7/S10 結構新增
+
+**評估框架（TDD 雙向驗收）**：
+- Golden dataset：`eval/golden_meeting_prep_structure.json`（new，以新格式標準化）
+- Baseline PASS：現行 accepted 報告對齊新格式後 13/13 evaluators pass
+- 壞樣本 6 類（對應實際測試斷言）：砍必要 section（section_completeness）/ maturity 亂值（metadata_valid）/ eeat_avg 非數值（metadata_valid）/ 清空提問題頭（question_count_valid + question_source_annotated）/ meta 與 S8 表不一致（s8_meta_maturity_consistency）/ 砍 S10 升級標籤（s10_maturity_upgrade_labeled）→ 各 FAIL 驗證
+- Pytest：12 個測試涵蓋上述場景
+
+**已知缺口（S1.x）**：
+共用 golden 檔案 `eval/golden_meeting_prep.json` 仍被 grounding/llm/web/coherence/novelty 5 個 eval 共用，存在相同的格式漂移問題。grounding eval 在 CI 中執行，下次對齊時需統一修復（預計 S1.0 優先級）。
+
 ---
 
 ## 步驟 6：Laminar 離線評估（從 README 搬入）

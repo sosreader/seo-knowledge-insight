@@ -223,6 +223,37 @@ $$
 - **重跑安全**：每個步驟都可以單獨重跑，不會影響其他步驟的資料。
 - **SEO 時效性**：部分 Q&A 的建議可能隨演算法更新而過時，建議定期 review `evergreen: false` 的項目。
 
+### 2026-07-03 Retry 層涵蓋原則 — Transport 層必納入（PR #50）
+
+長跑 pipeline（Notion fetch、external API）的 retry 邏輯必須涵蓋 **transport 層錯誤**（`httpx.TransportError` 含 ReadTimeout / ConnectError / PoolTimeout），而非只有 HTTP status 層錯誤（`httpx.HTTPStatusError`）。
+
+**背景**：CI run 28660141787 在 Notion fetch 跑 20 分鐘後被單次 `httpx.ReadTimeout` 中止，導致整個 job skipped，下游三個 verification jobs 也連鎖失敗。root cause 是 retry 邏輯只捕 `HTTPStatusError`，transport 超時漏網。
+
+**修復方案**（已實作於 `utils/notion_client.py`；以下為簡化示意，非原始碼 — 實際實作拆 `_api_get`/`_api_post` 兩支並另有 429 rate-limit 分支）：
+```python
+for attempt in range(max_retries):
+    try:
+        return session.post(url, ...)  # or .get()
+    except httpx.HTTPStatusError as e:
+        # 400/403/5xx 等 HTTP status 錯誤
+        if should_retry(e.status_code):
+            backoff = base_backoff ** attempt
+            time.sleep(backoff)
+            continue
+        else:
+            raise
+    except httpx.TransportError as e:
+        # ReadTimeout, ConnectError, PoolTimeout 等 transport 層瞬時故障
+        backoff = base_backoff ** attempt
+        time.sleep(backoff)
+        continue
+```
+
+**適用範圍**：
+- ✅ 冪等操作（GET、query POST）可安全重試 transport 錯誤
+- ❌ 非冪等操作（POST create、DELETE）需謹慎，應評估 idempotency key 機制
+- 建議：所有外部 API 呼叫都納入 transport 層 retry 涵蓋，backoff 策略統一（1.5^attempt 或指數退避）
+
 ### 2026-04-08 對齊守則
 
 - **區分 Notion-core 與 full-data refresh**：`make pipeline` 與 `/pipeline-local` 僅代表 Notion-core Steps 1–3；若要把 9 個外部來源一起納入，應明確執行 `make fetch-all` 後再跑 `extract-qa` / `dedupe-classify`。
