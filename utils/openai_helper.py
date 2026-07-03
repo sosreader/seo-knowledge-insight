@@ -43,9 +43,11 @@ _ADVANCED_MARKERS = (
 )
 _RAW_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9\-_/]{1,}|[\u4e00-\u9fff]")
 _TIME_SENSITIVE_MARKERS = (
-    "2023", "2024", "2025", "2026", "update", "核心更新", "演算法", "ai overview",
+    "update", "核心更新", "演算法", "ai overview",
     "sge", "study", "research", "experiment", "統計", "研究", "實驗", "trend",
 )
+# 任何 20xx 年份都視為時效性訊號；用正則取代逐年字面列舉，2027+ 免改碼
+_YEAR_MARKER_RE = re.compile(r"20\d{2}")
 _LOCAL_EXTRACTION_MODEL = "claude-code-heuristic"
 _LOCAL_EXTRACTION_CACHE_MODEL = "claude-code-heuristic-v2"
 _LOCAL_EXTRACTION_MARKERS = tuple(
@@ -136,6 +138,12 @@ def _merge_answers_locally(qa_group: list[dict]) -> str:
     return base_answer + "\n\n補充：" + "\n\n".join(supplements)
 
 
+def _is_evergreen(text: str) -> bool:
+    if _YEAR_MARKER_RE.search(text):
+        return False
+    return not any(marker in text for marker in _TIME_SENSITIVE_MARKERS)
+
+
 def _classify_qa_locally(question: str, answer: str) -> dict:
     combined = f"{question}\n{answer}".lower()
     scored = []
@@ -147,7 +155,7 @@ def _classify_qa_locally(question: str, answer: str) -> dict:
         category = "其他"
 
     difficulty = "進階" if len(answer) >= 180 or any(marker in combined for marker in _ADVANCED_MARKERS) else "基礎"
-    evergreen = not any(marker in combined for marker in _TIME_SENSITIVE_MARKERS)
+    evergreen = _is_evergreen(combined)
     return {
         "category": category,
         "difficulty": difficulty,
