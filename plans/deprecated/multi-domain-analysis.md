@@ -1,3 +1,5 @@
+> **Status: DEPRECATED（2026-07-03 triage）** — 4 個月未動；純架構分析未實作，泛化他領域非現行主線。
+
 # Multi-Domain Analysis: SEO Pipeline 多領域擴增分析
 
 > 狀態：計劃中（純架構分析，尚未開始實作）

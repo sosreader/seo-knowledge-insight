@@ -1,3 +1,5 @@
+> **Status: DEPRECATED（2026-07-03 triage）** — 4 個月未動；前置時間閘從未執行，依賴元件（usage_aggregator 等）不存在。
+
 # Phase 2：Learning Store 深化 + Query Understanding 計畫
 
 **狀態：待執行（前置條件未滿足）**
