@@ -57,6 +57,12 @@ async def _api_get(
                 raise
             logger.warning("HTTP %d, retrying (%d/%d) ...", e.response.status_code, attempt+1, retries)
             await asyncio.sleep(1.5 ** attempt)
+        except httpx.TransportError as e:
+            # ReadTimeout / ConnectError 等 transient 網路錯誤；Notion GET 為冪等，可安全重試
+            if attempt == retries - 1:
+                raise
+            logger.warning("%s, retrying (%d/%d) ...", type(e).__name__, attempt+1, retries)
+            await asyncio.sleep(1.5 ** attempt)
     return {}
 
 
@@ -81,6 +87,12 @@ async def _api_post(
             if attempt == retries - 1:
                 raise
             logger.warning("HTTP %d, retrying (%d/%d) ...", e.response.status_code, attempt+1, retries)
+            await asyncio.sleep(1.5 ** attempt)
+        except httpx.TransportError as e:
+            # 本專案的 POST 僅用於 Notion query 端點（唯讀），可安全重試
+            if attempt == retries - 1:
+                raise
+            logger.warning("%s, retrying (%d/%d) ...", type(e).__name__, attempt+1, retries)
             await asyncio.sleep(1.5 ** attempt)
     return {}
 
