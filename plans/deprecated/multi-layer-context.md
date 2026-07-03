@@ -1,3 +1,5 @@
+> **Status: DEPRECATED（2026-07-03 triage）** — 4 個月未動；僅 L3 learning_store 落地，RAG 線依 roadmap S2.4 於診斷前暫緩。
+
 # 多層知識庫架構改進計畫（Multi-Layer Context Enrichment）
 
 **版本**：v1.0

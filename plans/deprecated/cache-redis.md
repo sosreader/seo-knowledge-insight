@@ -1,3 +1,5 @@
+> **Status: DEPRECATED（2026-07-03 triage）** — 4 個月未動；本文自述「目前不需要 Redis」，保留作升級觸發條件的設計參考。
+
 # Cache & Redis 架構設計計畫
 
 > 目標：讓每次 pipeline 產生的版本可被記憶、避免重複消耗 LLM token；

@@ -1,3 +1,5 @@
+> **Priority: P2（2026-07-03 triage）** — 跨團隊 ops 計畫，執行不在本 repo；GSC 實況未驗證前保留追蹤（使用者未裁決時的預設，可覆寫為歸檔或 deprecated）。
+
 # Plan: crawled-not-indexed-fix-20260508
 
 **Status**: active

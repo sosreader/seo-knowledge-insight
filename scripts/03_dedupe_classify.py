@@ -367,7 +367,7 @@ def _rebuild_embeddings_from_final() -> None:
 def _reclassify_l4_only(execute: bool) -> None:
     """重新分類 qa_final.json 中所有 L4 項目（套用新的雙重證據規則 + LLM gate）。
 
-    用途：L4 retighten sprint（plans/active/maturity-l4-retighten.md）。
+    用途：L4 retighten sprint（plans/completed/maturity-l4-retighten.md）。
     對既有 qa_final.json 中標記 L4 的 Q&A 重跑 _infer_maturity_relevance。
     """
     final_path = config.OUTPUT_DIR / "qa_final.json"

@@ -1,3 +1,5 @@
+> **歸檔備註（2026-07-03 triage）**：起源計畫，API/evals/部署等核心已落地且現實實作已超越本文件內容。
+
 # Implementation Plan: SEO Insight 後端 API + Evals 系統 + 部署方案
 
 > 日期：2026-02-27
