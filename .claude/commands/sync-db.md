@@ -30,6 +30,11 @@ cd api && npx tsx scripts/sync-db.ts upload --type reports
 cd api && npx tsx scripts/sync-db.ts upload --type sessions
 ```
 
+## 委派界線（每週例行流程適用）
+
+- **可委派（唯讀）**：`make sync-db-status`、`make sync-db-dry` 不寫入 DB，可交給 `general-purpose`（sonnet）或 `Explore`（haiku，僅狀態查詢）subagent 執行並回報差異清單。
+- **不可委派（寫入）**：`make sync-db`（非 `--force` 的實際上傳）與 `make sync-db-force` 皆對共享 Supabase 執行真實寫入（`SUPABASE_SERVICE_KEY`，bypass RLS），一律留在主對話執行；或由 subagent 以 `sync-db-dry` 回報待上傳清單後，經主對話明確確認再於主對話執行。
+
 ## 前置條件
 
 `.env` 須設定：
