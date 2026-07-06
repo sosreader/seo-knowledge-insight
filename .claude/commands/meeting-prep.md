@@ -1,7 +1,6 @@
 # /meeting-prep — 顧問會議準備深度研究報告
 
-**你（Claude Code）就是語意判斷引擎**——直接推理，不呼叫任何外部 LLM API。
-WebFetch/WebSearch 是你的 built-in tools，用來取得最新網路資料，不算外部 LLM 呼叫。
+**你（Claude Code）就是語意判斷引擎**——直接推理，不呼叫任何外部 LLM API；WebFetch/WebSearch 是 built-in tools（不算外部 LLM 呼叫），用來取得最新網路資料。
 
 ---
 
@@ -118,11 +117,20 @@ WebFetch/WebSearch 是你的 built-in tools，用來取得最新網路資料，�
 **若輸入為 --report <路徑>**：
 用 Read tool 讀取週報 markdown，從 Section 1（情勢快照）中萃取帶有 ALERT_DOWN / 下降標記的指標名稱。
 
+**同 session 續用（省 token）**：典型工作流「`/generate-report` → 緊接 `/meeting-prep --report`」中，週報動輒 60KB，若全文已在本 session context 內，重讀等同重複灌入。滿足以下**兩階段判準**才可跳過完整 Read：
+
+1. **軟訊號**（模型自我核對，非可程式化強制）：`--report <path>` 與本 session 內先前 `/generate-report` 寫入的路徑**完全相同**，且期間未發生 context compaction/摘要。
+2. **硬訊號**（可執行確認）：`grep "report_meta" <path>` 取出該行 JSON，以 `generated_at` 為**必要**比對欄位，與生成當下記錄的值核對一致；`snapshot_id` 若存在則一併核對，**缺席不視為判定失敗**（部分真實報告的 report_meta 無此欄位）。
+
+兩階段皆成立 → 沿用 context 中已讀內容，僅以 targeted grep 核對 citations 一致性；任一不成立（無法確認、跨 session、模型不確定）→ **一律回退完整 Read**（預設安全網，最壞情況等同現況）。
+
 ---
 
 ### Step B：網路研究（6 路並行，自動抓取）
 
 SEO 沒有新資料開會沒意義。**自動執行，不留給使用者處理。**
+
+**平行呼叫要求**：B1-B6 彼此獨立，必須在**同一則訊息**一次送出所有 WebFetch/WebSearch 呼叫（同批平行），不要逐路序列等待。B7 有前置依賴——先讀 `data/off-page-authority.jsonl` 判斷是否需要新查詢，確認需要時再將其三道 WebSearch 併為一批送出。
 
 **B1：Google Search Status Dashboard**
 ```
@@ -195,7 +203,9 @@ WebSearch: "vocus.cc Semrush Authority Score"
 
 ### Step C：多主題 KB 搜尋（7-10 輪）→ qaMap
 
-對每個 ALERT_DOWN 指標 + 廣域主題詞搜尋知識庫：
+對每個 ALERT_DOWN 指標 + 廣域主題詞搜尋知識庫。
+
+**平行呼叫要求**：以下 7-10 道 `qa_tools.py search` 查詢彼此獨立，應在**同一則訊息**以多個 Bash 呼叫同批平行送出，而非逐條序列執行：
 
 ```bash
 # 每個 ALERT_DOWN 指標
@@ -460,6 +470,23 @@ Grep: pattern="<指標關鍵字>" glob="raw_data/medium_markdown/*.md" --glob "!
 
 附加 metadata JSON blocks → 計算 hash → 存至 `output/meeting_prep_YYYYMMDD_{hash8}.md`
 
+#### F1b：自動化驗證（存檔後必跑，零 LLM 成本）
+
+Step E-prime 是自我計數；此步驟用 rule-based eval script 做外部驗證（「驗證不自驗」）：
+
+```bash
+.venv/bin/python evals/eval_meeting_prep_structure.py --report output/meeting_prep_YYYYMMDD_{hash8}.md
+.venv/bin/python evals/eval_meeting_prep_grounding.py --report output/meeting_prep_YYYYMMDD_{hash8}.md
+```
+
+structure 13 checkers + grounding 5 checkers，門檻見 `eval/eval_thresholds.json`。
+
+- **全數 PASS** → 繼續 F2。
+- **有 FAIL** → 先判斷是報告問題還是 eval 過時（baseline-first 判斷法）：對最近一份**已採用**報告（`Glob output/meeting_prep_*.md` 取本次之前一份）跑同一 eval——
+  - 前一份 PASS、本次 FAIL → 是本次報告的問題，回頭修正未達標項後重存、重跑本步驟。
+  - 兩份同 FAIL 同一 checker → eval 與現行格式漂移（可再跑 `make evaluate-meeting-prep-quick` golden 模式佐證：golden PASS 即確認 checker 對新格式解析失效），**勿為過時 eval 扭曲報告格式**；在輸出摘要註明漂移項並記錄另案修 eval，報告品質以 Step E-prime 自我驗證結果為準。
+  - 已知漂移（2026-07-06 發現，另案待修）：`s4_four_sources_populated` 的 parser 期望舊版 6 欄 S4 表格，SITREP `狀態` 欄（7 欄）導致解析失效——20260626/20260703 兩份已採用報告同 FAIL、golden PASS。
+
 #### F2：業界動態累積（research/11-seo-industry-updates.md）
 
 Append 新日期 section。超過 12 sections 時移除最舊。
@@ -511,6 +538,14 @@ Perplexity 風格 `[N]` 標記。密度目標 15-18 筆。
 - `source_url`：qa.source_url 或 null
 
 > **eval `citation_category_consistency`** 會逐筆比對 citations JSON 的 `category` 與 KB 實際 `category`，不一致會拉低分數。閾值 ≥ 0.8。
+
+---
+
+## Opus 4.8 使用建議
+
+- **執行前設定 `/effort xhigh`**：本指令是長 horizon agentic 任務（多輪 WebFetch/WebSearch/qa_tools 呼叫 + 11 sections 分批推理），官方 Effort 文件對 Opus 4.8 的 agentic 任務建議以 xhigh 為起點。
+- **Step E 三批生成（S0-S4 / S5-S8 / S9-S10 + S0 回填）必須留在同一 context 完成，不可拆分獨立 subagent**：後段依賴前段已建立的 ALERT_DOWN 清單、industryMap、prevReport 等跨批狀態，拆分會丟失。Opus 4.6+ 有較強的委派傾向，此處顯式劃界。
+- **僅 Step B / Step C 資料蒐集階段適合平行批次**（見各 Step 的「平行呼叫要求」）；蒐集結果的合成與評分推理留在主對話。
 
 ---
 

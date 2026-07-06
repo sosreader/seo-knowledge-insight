@@ -236,6 +236,10 @@ output/
 
 ## 最近改動
 
+### 每週指令 Opus 4.8 優化（2026-07-06）
+
+- 修改 `.claude/commands/{generate-report,meeting-prep,sync-db}.md` — 收尾 eval 閘門（Step 8 / F1b）、平行呼叫提示、同 session 續用判準、sync-db 委派界線；兩檔「Claude Code as LLM 模式」樣板句精簡為單句（詳見 research/06a-architecture-changelog.md）
+
 ### v2.0 Pipeline 全量重跑 + 統一清理（2026-03-02）
 
 - 87 場會議完整重萃取（防幻覺規則），670 筆原始 → 655 筆去重後

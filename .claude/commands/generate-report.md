@@ -1,4 +1,3 @@
-done
 # /generate-report — 執行 Step 4 週報生成
 
 直接執行 [scripts/04_generate_report.py](scripts/04_generate_report.py)，使用 OpenAI 產生報告內容。
@@ -90,6 +89,12 @@ done
    - 執行 `_validate_report()`
    - 寫入 `output/report_YYYYMMDD_<hash8>.md`
    - 更新 trend memory 與 artifact version registry
+8. 自動化驗證（存檔後必跑，零 LLM 成本；OpenAI 模式與 Claude Code as LLM 模式皆適用）：
+   ```bash
+   make evaluate-report REPORT=output/report_YYYYMMDD_<hash8>.md
+   ```
+   - `composite_v2 ≥ 0.65`（門檻見 `eval/eval_thresholds.json`）→ 通過，流程結束
+   - `composite_v2 < 0.65` → 先判斷是報告問題還是 eval 過時（baseline-first 判斷法）：對最近一份已採用報告跑同一指令——前一份 PASS、本次 FAIL 才是本次報告的問題，回頭修正未達標項（對照上方硬性 Checklist）再重存重跑；兩者同樣 FAIL 視為 eval 與格式漂移，**勿為過時 eval 扭曲報告格式**，在輸出中註明漂移項即可
 
 ## Embeddings 維護
 
@@ -161,7 +166,7 @@ Step 4 腳本路徑（`scripts/04_generate_report.py`）強制要求 OPENAI_API_
 
 ## Claude Code as LLM 模式
 
-當 `.env` 沒有 OPENAI_API_KEY、但仍要產出週報時，由 Claude Code 直接當語意判斷引擎，不呼叫任何外部 LLM API。WebFetch / WebSearch 是 built-in tools，不算外部 LLM 呼叫。
+當 `.env` 沒有 OPENAI_API_KEY、但仍要產出週報時，由 Claude Code 直接當語意判斷引擎組稿，不呼叫任何外部 LLM API（WebFetch / WebSearch 是 built-in tools，不算外部 LLM 呼叫）。
 
 跨 session 一致狀態：4/20、4/27、5/1 三次週報均走此模式（`.env` 第 7 / 9 行 OPENAI_API_KEY 持續被註解）。
 
@@ -180,6 +185,7 @@ Step 4 腳本路徑（`scripts/04_generate_report.py`）強制要求 OPENAI_API_
    .venv/bin/python scripts/qa_tools.py search --query "<主題>" --top-k 3
    ```
    多輪查詢萃取 30+ citations，無 OpenAI 限制。
+   **平行呼叫要求**：多道查詢彼此獨立，應在**同一則訊息**以多個 Bash 呼叫同批平行送出，而非逐條序列執行。
 
 4. **直接組稿**：對齊既有報告 7 段結構（情勢 / 流量 / 技術 / 意圖 / 跨週 / 行動 / 來源）。
 
@@ -199,3 +205,9 @@ Step 4 腳本路徑（`scripts/04_generate_report.py`）強制要求 OPENAI_API_
 | 因果歸因 | 單一假設 | 多假設並列（給人工核查空間） |
 
 > **設計原則**：authority metrics（DA/DR/AS）變化緩慢（月度級別），加進週報會稀釋訊號。週報專注 GSC + GA4 內部數據；外部權威指標由 `/meeting-prep` 在 S6/S7 評分依據中引用，並寫入 `data/off-page-authority.jsonl` 跨週追蹤。
+
+### Opus 4.8 使用建議
+
+- **執行前設定 `/effort xhigh`**：本指令屬長 horizon agentic 任務（多輪 metrics 解析、KB 搜尋、組稿、驗證），官方 Effort 文件對 Opus 4.8 的 agentic/coding 任務建議以 xhigh 為起點；機械式單步操作不需要。
+- **組稿與驗證留在主對話**：異常分群 → 組稿 → 硬性 Checklist 計數 → Step 8 自動化驗證是連續有狀態的流程，不可拆給 subagent；只有 KB 搜尋等資料蒐集適合平行批次。
+- **存檔後必跑「實際流程」Step 8 自動化驗證**（`make evaluate-report`），Claude Code as LLM 模式同樣適用。
