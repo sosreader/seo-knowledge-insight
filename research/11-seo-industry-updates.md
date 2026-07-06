@@ -207,28 +207,6 @@
 
 ---
 
-## 2026-03-29
-
-### Google 官方
-- [2026-03-27] **March 2026 Core Update** — 部署中（預計 2 週完成）。首次包含 Discover 專屬組件的廣泛核心更新。早期數據顯示部分網站 organic traffic 下降 20-35%。
-- [2026-03-24~25] **March 2026 Spam Update** — 已完成。影響 Ranking，可能強化 UGC 品質篩選。
-
-### Google Search Central 公告
-- [2026-03] Search Central Live is coming to Canada
-- [2026-03] Search Central Live Asia Pacific 2026（Sydney）
-
-### 業界報導
-- [9to5Google] Google Search referrals to the web have plummeted, AI links are 'less than 1%' of traffic（2026-03-18）
-- [Press Gazette] Global publisher Google traffic dropped by a third in 2025 — Search -34%, Discover -15% YoY
-- [Axios] Small publishers hit hardest by search traffic declines（2026-03-17）
-- [ALM Corp] Semrush AI Overviews Study: AI Overviews 出現在 ~58% 搜尋中，Featured Snippets 34%→18%
-- [ALM Corp] Google Search Ranking Volatility March 2026 — 部分網站 organic traffic -20~35%
-
-### SER 重點
-- SER 首頁 403（2026-03-29 存取失敗），無法取得最新報導
-
----
-
 ## 2026-05-08（快照日期：2026-05-08）
 
 ### Google 官方
@@ -289,3 +267,29 @@
 
 ### SER 重點
 - WebFetch 對 SER 主站仍 403（bot detection），本週 B1–B6 全程改用 WebSearch + Google Status Dashboard JSON 多源交叉驗證
+
+---
+
+## 2026-07-03（快照日期：2026-07-06，source: meeting_prep_20260703）
+
+### Google 官方
+- [GSC Page Indexing Report 官方延遲 2–3 週] John Mueller 證實 Page Indexing report 延遲近三週且無 ETA（[seroundtable.com](https://www.seroundtable.com/google-search-console-page-indexing-report-delayed-41571.html)）——**把本站索引面 weekly 全 0.00% 的 data lag 從「本站推論」升級為「Google 官方確認的全平台報表延遲」**；索引三鏈續延用讀數、WoW 判讀留白
+- [June 2026 Spam Update 已收尾（6/26）] status.search.google.com/incidents.json 確認 6/6 之後查無其他 incident——本資料窗（6/27–7/3）完整落在 Spam Update 完成後的「紅利/回吐確認窗」；本站未見排名崩跌（ALERT_DOWN 多屬流量分發層），Spam Update 對 vocus UGC 衝擊初步確認有限
+- [SER July Webmaster Report] 月度彙整重點：spam update 兩天內完成、Google 談 chunking / site signals / paywalls / AI clicks（[seroundtable.com](https://www.seroundtable.com/july-2026-google-webmaster-report-41591.html)）
+
+### 業界報導
+- **AIO 使有機 CTR 崩 61%（1.76%→0.61%）**（[Search Engine Land](https://searchengineland.com/google-ai-overviews-drive-drop-organic-paid-ctr-464212)）——本站本週 CTR 逆勢 +9.88% 與業界普遍崩跌方向相反，反證本站 CTR 上升屬曝光收縮的分母萎縮統計濃縮、非優化見效
+- **Organic search 產業級結構性收縮**：AIO 致資訊類站點有機流量 −15~64%、News 出版商月減 33–38%（[Search Engine Land](https://searchengineland.com/organic-search-is-fundamentally-disrupted-heres-what-to-do-about-it-470816)）；Google 對出版商整體導流年減 22%（[Medium/Alan Ronis](https://medium.com/@alanronis/google-is-sending-22-less-traffic-to-publishers-than-a-year-ago-what-should-you-do-a1a12de297f9)）——本站 Organic Search 月線首次翻負 −9.77% 屬同一趨勢
+- **Discover 數據 5/21 起平台異常**：出版商回報 Discover 數據記錄斷崖、可信度存疑（[PPC Land](https://ppc.land/googles-discover-data-went-dark-on-may-21-what-publishers-need-to-know/)）——本站 Discover −29.36% 崩跌須先排除平台數據面因素，但探索比例 −19.06% + Google 導流 −12.44% 同步走弱顯示部分為真實回落
+- **回應時間 crawl budget 外部標準**：GSC 平均回應時間應 ~100ms、上限 1,000ms，超過壓縮 crawl budget（[Matthew Edgar: Crawl Stats](https://www.matthewedgar.net/blog/crawl-stats-average-response-time/)）——支撐本站 285→366ms 反彈 + 爬蟲量 −4.01% 的因果
+
+### Google Trends / SERP Feature
+- KW 股 −56.34% 對應台股 6 月下旬–7 月初量縮（7/3 五日均量降至 1.15 兆、交投清淡）——偏外部因素、坐實上週辛普森脈衝判讀
+- 電影類 AIO rollout 已涵蓋（2026/04 起 Gemini 3 為預設模型、YouTube 為最大被引用網域 10.74%）（[SE Ranking](https://seranking.com/blog/ai-overviews/)）
+
+### Off-Page Authority（B7 refresh 2026-07-06，距上次 34 天）
+- Ahrefs DR **77**（76→77 +1）、參考網域 11,000（月增 718）；Semrush AS **64**（65→64 −1）——長期域權威持平於行業領先
+- Semrush 月流量 **5.89M**（5 月資料、4→5 月 MoM **−22%**）——外部第三方獨立驗證流量收縮，與本站曝光 −15.05%、Organic Search 月線 −9.77% 方向一致；Moz DA 仍停免費查詢、Majestic TF/CF 未取得
+
+### SER 重點
+- WebFetch 對 SER/SEL 主站仍 403（bot detection），本週 B1–B7 全程改用 WebSearch + Google Status Dashboard JSON 多源交叉驗證
