@@ -52,4 +52,4 @@ docs-site/openapi.json
 entities.json
 mempalace.yaml
 scripts/_tmp_*.py
-plans/active/.plan-state/
+plans/*/.plan-state/
