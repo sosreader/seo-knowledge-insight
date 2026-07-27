@@ -7,6 +7,65 @@
 
 <!-- 以下為自動累積區域，請勿手動編輯格式 -->
 
+## 2026-07-24（快照日期：2026-07-27，source: meeting_prep_20260724）
+
+### Google 官方
+- [2026-07-18~19] **未確認演算法震盪** — 14 個獨立 SERP 追蹤工具偵測到顯著位移（週六起、週日加重）；**Google Search Status Dashboard 全清、截至 7/21 未確認任何事項**。Search Engine Land 引述：四分之一前十名頁面跌出百名外、80% 前三名易主；中間商與薄聯盟型內容失血最重（[Digital Applied](https://www.digitalapplied.com/blog/google-weekend-algorithm-update-july-2026-volatility-triage)、[Joseph Charnin](https://www.josephcharnin.com/seo/unconfirmed-july-2026-google-ranking-volatility/)）
+- [2026-07-11] 另有「7-Eleven update」未確認震盪（[SER](https://www.seroundtable.com/google-search-ranking-volatility-july-11th-41676.html)）
+- [2026-06-24~26] June 2026 Spam Update — 仍為 Status Dashboard 45 天窗內**唯一**確認 incident
+- **框架修正（重要）**：連續三週使用的「Dashboard 查無 incident 即非演算法驅動」判讀**本週被推翻**——官方無記錄 ≠ 無事件發生。未來週度診斷須把第三方 SERP 波動追蹤納入固定輸入
+
+### Google Search Central 公告
+- [2026-07] See how content from social and video platforms performs on Google Search（新報表）
+- [2026-07] Search Central Deep Dive Europe 2026: Barcelona
+- [2026-06] Introducing Search Generative AI performance reports in Search Console（連續第 5 週可用、本站連續第 5 週未導入）
+
+### 結構化資料 / Rich Results
+- **Review snippet 資格收緊**：self-serving 評論（被評論實體 A 把評論放在 A 自己網站，含嵌入第三方 widget）不再具備資格，`LocalBusiness` / `Organization` 及子型別不再顯示評論 rich result；未揭露或有償評論同樣不具資格（[Google 官方文件](https://developers.google.com/search/docs/appearance/structured-data/review-snippet)、[SEOteric](https://www.seoteric.com/google-cracks-down-on-fake-and-undisclosed-incentivized-reviews-in-review-snippet-markup/)）
+- **FAQ rich results 全面退場**：2026/5/7 正式淘汰，Search Console 報表與 Rich Results Test 支援 6 月終止、API 8 月終止；`FAQPage` schema 型別本身仍有效（[inblog](https://inblog.ai/blog/google-faq-schema-rich-result-deprecation)）
+
+### GSC 資料口徑（桌機曝光偏斜，對應本站桌機 −20.94%）
+- **`num=100` 移除的長尾效應**：2025/9 Google 停止支援 `num=100`，此前排名工具一次拉 100 筆、第 99 名也計一次曝光；參數關閉後 bot 曝光自報表消失。LOCOMOTIVE 分析 319 個 property：**87.7% 網站損失曝光、77.6% 損失獨立排名詞**，短尾中尾受創最深（[Search Engine Land](https://searchengineland.com/google-num100-impact-data-462231)、[LOCOMOTIVE](https://locomotive.agency/blog/google-removes-num100-parameter-what-this-means-for-your-website/)）
+- **GSC 記錄錯誤修正**：Google 確認自 2025/5/13 起的記錄錯誤造成曝光灌水，修正 2026/4/27 上線（僅對新資料、不回溯）；**「曝光下修主要影響桌機，行動受創小得多」**（[Vizup](https://www.tryvizup.com/blog/google-search-console-impressions-drop-2026-what-the-gsc-bug)）
+- **時間點缺陷須標註**：兩者皆早於 2026/7，可解釋「桌機曝光長期承壓」的背景，**無法解釋單週跳變**
+
+### Discover / AIO
+- **Discover 跨投資組合成長 30%**，已成突發新聞分發主要成長引擎；資料集中**首次出現 Discover 與網頁搜尋導流量大致相當**（[Memeburn](https://memeburn.com/google-search-traffic-shifts-again-as-ai-overviews-expand-across-results/)）——本站 +34.60% 僅略高於市場，屬 beta 非 alpha
+- AIO 覆蓋約 **48–50%** 美國查詢（2025/1 僅 6.49%，15 個月近 8 倍擴張），使搜尋點擊減少 42%（[Search Engine Land](https://searchengineland.com/google-ai-overviews-cut-search-clicks-report-471497)、[Omnibound](https://www.omnibound.ai/blog/google-ai-overviews-statistics)）
+
+### Google Trends / SERP Feature
+- **B5 本週失敗**：WebSearch 未取得台灣區 2026/7 娛樂關鍵字量化搜尋量，僅回傳 Trends 工具教學頁。改以「同品類內部對照法」降級推導（劇 −32.38% vs 評價 −3.12% → 偏本站問題），證據等級低於前幾週
+
+### Off-Page Authority（B7 carry forward 2026-07-06，距今 21 天 ≤30）
+- 沿用 DR **77** / AS **64**；Majestic TF/CF **連續第 4 次未取得**，連結品質錨點續缺
+
+### SER 重點
+- WebFetch 對 seroundtable.com 主站續 403（bot detection），B2 降級改由 WebSearch 取得同源報導
+
+## 2026-07-10（快照日期：2026-07-10）
+
+### Google 官方
+- [本週] **Status Dashboard 查無新 incident** — 最近 30 天僅 June 2026 Spam Update（6/24–26 完成），本週（7/4–7/10）無新 ranking/indexing 事件。**本週異常皆「非演算法驅動」**：索引 refresh=data lag 解除、爬蟲量崩=基礎設施、Organic 月線深化=AIO 產業趨勢（[Status Dashboard](https://status.search.google.com/incidents.json)）
+- [2026-01] **2026 crawl 政策揭露** — HTML 檢索上限 15MB→2MB；Gary Illyes「基礎設施速度比站台規模更決定 crawl rate；站台變慢/回錯誤→crawl rate 降；內容看似低值→crawl demand 自動降」（[Google Developers](https://developers.google.com/crawling/docs/crawl-budget)、[Stan Ventures](https://www.stanventures.com/news/decrease-in-google-crawl-rate-why-it-happens-how-to-fix-it-4067/)）——直擊本站回應時間 374ms + 爬蟲量 −11.22%
+- [2026-07] **GSC 社群/影片平台成效報告上線** + 生成式 AI 效能報告（連第 4 週可用）（[Search Central Blog](https://developers.google.com/search/blog)）——量化影片外觀 vs 帶量背離、AI 引用率的官方工具，本站連 4 週未導入
+
+### 業界報導
+- **Digital Content Next：會員出版商 5→6 月整體搜尋流量再降 10%**、AIO 觸發查詢 CTR 崩 61%、AIO 出現在約 30% 查詢（[Search Engine Land](https://searchengineland.com/organic-search-is-fundamentally-disrupted-heres-what-to-do-about-it-470816)）；本站 Organic 月線深化 −14.53% 屬同一趨勢
+- **Google 對出版商導流年減 22%**、AIO「引用更少更權威的一組來源」（[Medium/Alan Ronis](https://medium.com/@alanronis/google-is-sending-22-less-traffic-to-publishers-than-a-year-ago-what-should-you-do-a1a12de297f9)）——本站 DR 77 本應是被引用候選卻 AI 崩，坐實「有連結權威缺品牌提及」脫鉤
+- **搜尋進入「有序衰退」而非崩盤**，對策是分散來源而非追曝光（[Press Gazette](https://pressgazette.co.uk/publishers/search-isnt-dead-its-fragmenting-how-to-manage-google-traffic-decline/)）——呼應本站工作階段月線首次翻負、須經營站外多元入口
+- **AIO 出現時 top 有機點擊再降約 58%**、只有 1.16% 首頁結果無 SERP feature（[Digital Applied](https://www.digitalapplied.com/blog/google-ai-overviews-surge-58-percent-queries-seo-impact)、[Ahrefs CTR 2026](https://ahrefs.com/blog/what-is-a-good-ctr/)）——電影/影評類資訊查詢是重災區，KW 影評 −44.98% 部分來自 SERP 排擠
+
+### 關鍵字市場趨勢（B5/B6）
+- **KW 影評 −44.98%/電影月線 −80.75%**：院線空窗 + AIO/影音排擠雙重因素，市場面為主但本站權重不可歸零（KW 劇月線 +30.62% 證娛樂需求未整體熄火），需人工複查 Google Trends TW
+- **KW 股 +81.55% 三度翻臉**（+90→−56→+81）：辛普森脈衝雜訊坐實、不追加資源
+
+### 對本站意涵
+- 索引清理紅利（檢索未索引 −39.53%）vs 爬蟲量崩跌（−11.22%）正面對撞——清理靠爬蟲回填、爬蟲量崩威脅紅利，官方 crawl 政策從外部佐證因果
+- 本週非演算法月份，更該把診斷聚焦本站可控（回應時間、內連、結構化）而非等外部演算法
+- 拿到索引清理大勝卻因執行債（告警未落地、內連惡化）升不動技術體質——Process 天花板新形式
+
+---
+
 ## 2026-06-05（快照日期：2026-06-05）
 
 ### Google 官方
@@ -175,35 +234,6 @@
 
 ### SER 重點
 - SER 首頁 403（2026-04-13 存取失敗），連續四次無法取得
-
----
-
-## 2026-04-05
-
-### Google 官方
-- [2026-03-27~進行中] **March 2026 Core Update** — 第 2 週滾動中（預計 ~4/10 完成）。早期數據：AI 生成內容流量降 71%，原創數據內容升 22%。Information Gain 確認為核心排名信號。55%+ 監控網站出現排名波動。
-- [2026-03-24~25] **March 2026 Spam Update** — 已完成，無後續異常。
-- [2026-02-05~27] **February 2026 Discover Core Update** — 已完成，影響消退。
-
-### Google Search Central 公告
-- [2026-03] Inside Googlebot: demystifying crawling, fetching, and the bytes we process
-- [2026-03] New Location for the Google Crawlers' IP Range Files
-- [2026-04] Search Central Live is Coming to Shanghai
-
-### 業界報導
-- [SearchEngineLand] Google AI Overviews cut search clicks 42%
-- [SearchEngineLand] News publishers expect search traffic to drop 43% by 2029
-- [SearchEngineLand] Small publisher search traffic fell 60% over two years
-- [SearchEngineLand] Breaking news traffic grew 103% since Nov 2024
-- [TempEmailNow] Google Knowledge Panel 2026: AI-powered verification layer + Ask button
-
-### SERP Feature
-- AI Overviews 覆蓋 ~40% 資訊型查詢、~25% 商業查詢
-- Knowledge Panel 整合 LLM（Gemini），新增 Ask 按鈕
-- CTR 在 AIO 出現時降 42%（全球）；新聞查詢 AIO 覆蓋僅 ~15%
-
-### SER 重點
-- SER 首頁 403（2026-04-05 存取失敗），連續兩次無法取得
 
 ---
 

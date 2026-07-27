@@ -2280,3 +2280,80 @@ https://laminar.sh/app/evals
 | **Chat 品質**       | `evals/eval_chat.py`       | 前 10 retrieval scenarios     | 回答長度、來源涵蓋、關鍵字匹配                 |
 
 ---
+
+## 25. 報告 eval 的「格式契約」機制（2026-07-27 實測）
+
+前述 24 節說明**評什麼**；本節記錄 `_eval_report.py` 與 `evals/eval_meeting_prep_*.py` 在**怎麼抓**這個層面的三個非顯而易見機制。這些機制不影響報告該寫什麼內容，但寫法不對會直接吃掉分數。
+
+實測來源：`report_20260724_5b41c7de`（composite_v2 **0.9705**）+ `meeting_prep_20260724_8e2f1a56`（structure **13/13 PASS**）。
+
+### 25.1 baseline-first：五個 FAIL 有兩種性質，必須先分流
+
+同一次 meeting-prep eval 跑出 5 個 FAIL。對**前一份已採用報告**（`meeting_prep_20260710`）跑同一組 eval 後，性質立刻分開：
+
+| checker | 本次 | baseline | 判定 |
+| --- | --- | --- | --- |
+| `s4_four_sources_populated` | 0.0 | **0.0** | eval 漂移 → **不動報告** |
+| `eeat_score_format` | 0.0 | 1.0 | 報告問題 → 修 |
+| `s7_seven_elements` | 0.7143 | 1.0 | 報告問題 → 修 |
+| `s8_meta_maturity_consistency` | 0.75 | 1.0 | 報告問題 → 修 |
+| `citation_count_in_range` | 0.5143 | 0.7429 | 報告問題 → 修 |
+
+**沒有 baseline 對照會犯兩種錯**：把 5 個全當漂移而整批放行（實際 4 個是真問題），或把 5 個全當自己的錯而去改 S4 表格格式（實際改了也沒用）。`make evaluate-report` / meeting-prep eval 的 FAIL 一律先跑 baseline 再判斷。
+
+### 25.2 週報 `section_depth_variance` 的 variance 集合含 **Section 七、來源**
+
+`L2_SECTION_MARKERS` 是 7 個（`## 一、`…`## 七、`），且 Section 七沒有下一個 `\n## ` 邊界，`_extract_section` 會一路吃到檔尾——**包含 `<!-- citations [...] -->` 與 `<!-- report_meta ... -->`**。
+
+本次實測 Section 七 = 9,496 字 > Section 一 = 8,859 字，**七才是 max**。這造成雙向拉扯：
+
+- 加引用拉高 `citation_integration` → Section 七變更長 → variance 變更差
+- 拉高 variance → 只能擴中間五節（Section 一不可壓，會斷 `causal_chain`）
+
+**收斂點：中間五節各擴到 ≈ Section 一的 50–52%**。本次 variance 軌跡 0.417 → 0.568 → **0.631**，兩輪共加約 12,000 字，全程未動 Section 一。
+
+另兩個零成本修正：
+
+- `citation_integration` 的 `CITATION_RE = \[(\d+)\]` **不匹配** `[知識庫39 →](...)`，故 Section 七天生無引用、卡在 6/7 = 0.857。在 Section 七開頭補一段帶 `[N]` 的導言即 → **1.0**。
+- `action_specificity` 的分母是**全文所有** `^\s*(?:-|\d+\.)\s` 行，不只行動清單。任何位置的 `- ` 項目都必須含工具名 + 動詞。
+
+### 25.3 meeting-prep：SITREP「Changed」表的箭頭寫法一次打破三個 parser
+
+PR #32 的 SITREP Changed / No-Change 折疊結構，讓 S6/S7/S8 分數同時有兩種呈現。No-Change toggle 內維持 `N/5`（parser 讀得到）；Changed 表若直覺寫成 `| Trustworthiness | 3 → **3.5** | ↑ +0.5 | … |` 則**三個 checker 全滅**：
+
+| checker | 實作 | 箭頭寫法後果 |
+| --- | --- | --- |
+| `eeat_score_format` | `^\|[^|]*\|\s*\*{0,2}\s*(\d+(?:\.\d)?)/5`，**需剛好 4 列** | 少一列 → `len != 4` → **直接 0.0**（非比例分） |
+| `s7_seven_elements` | 數 S7 內含 `\d+(\.\d)?/5` 的表格列，需 7 列 | 5/7 = 0.7143 |
+| `s8_meta_maturity_consistency` | `_parse_s8_table_levels(s8)` vs meta JSON `maturity` | `L3 → **L3.5**` 被讀成 `L3`、與 meta 的 `L3.5` 不符 → 0.75 |
+
+**正確寫法：分數放第 2 格、箭頭與舊值移到「變化」欄**，資訊零損失：
+
+```markdown
+| 維度 | 分數 | 變化 | 原因 |
+|------|------|------|------|
+| Trustworthiness | **3.5/5** | ↑ +0.5（3 → 3.5） | … |
+```
+
+S8 同理：`| Process（流程） | **L3.5** | ↑（L3 → L3.5） | … |`。
+
+**為什麼拖到現在才炸**——這三個 checker **只在分數真的變動時才會壞**。SITREP 上線後 S6/S7/S8 連續**六週全部 No Change**（E-E-A-T 卡 3.25、人本卡 3.43、成熟度卡 L2.5/L3/L3/L3.5），Changed 表從未出現。2026-07-24 是首次有維度實際升分，不相容才暴露。
+
+> 通則：**只在罕見分支才執行的格式路徑，其 eval 相容性不會被日常 baseline 覆蓋到**。看到「baseline 長期 PASS 但本次新走了某條分支」時，該分支的 checker 要單獨驗。
+
+### 25.4 `citation_count_in_range` 是 bell curve，不是越多越好
+
+```python
+center = 17.5
+score = 1.0 - abs(count - center) / center   # 0 或 35 時為 0
+```
+
+門檻 0.7 → **安全區 12–23 筆**。本次初版 26 筆得 0.5143（低於 baseline 22 筆的 0.7429）。修法是移除「已定義但從未 inline 引用」的條目後**重新編號成連續 1..N**（用暫存符號做兩段式替換避免號碼碰撞），並同步更新 meta JSON 的 `citations` 欄。副作用是 `inline_citation_coverage` 從 0.8462 升到 **1.0**。
+
+### 25.5 `action_maturity_labeled` 補標籤前必須先讀 meeting-prep 實際錨點
+
+該指標需 `成熟度參考` 行 + `[策略 L2→L3]` 形式標籤（regex 不吃小數）。**但憑印象標會產生看似合格、實則虛構的標籤**：本次週報初版標了 `[流程 L2→L3]`、`[指標 L1→L2]` 拿到 1.0，回查 `meeting_prep_20260710` 才發現實際錨點是 Strategy L2.5 / Process L3 / Keywords L3 / Metrics L3.5——普遍低估一到兩級。
+
+正確作法：`grep 成熟度概覽` 取最近一份 meeting-prep 的四維度，標籤對齊真實錨點的下一階（L2.5 寫成 `L2→L3`）。分數不變，但標籤從虛構變成可查證。
+
+---
