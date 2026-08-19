@@ -183,17 +183,19 @@ export async function supabasePatch(
 }
 
 /**
- * Count rows in a Supabase table.
+ * Count rows in a Supabase table via a HEAD request (no row data transferred).
  * Returns -1 on error.
  */
 export async function supabaseCount(
   table: string,
   queryString: string = "",
+  timeoutMs: number = SUPABASE_TIMEOUT_MS,
 ): Promise<number> {
   const url = `${config.SUPABASE_URL}/rest/v1/${table}${queryString}`;
   const resp = await fetch(url, {
     method: "HEAD",
     headers: { ...supabaseHeaders(), Prefer: "count=exact" },
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!resp.ok) return -1;

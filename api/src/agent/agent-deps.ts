@@ -4,6 +4,7 @@
 
 import { qaStore } from "../store/qa-store.js";
 import { getEmbedding } from "../services/embedding.js";
+import { SupabaseQAStore } from "../store/supabase-qa-store.js";
 import type { AgentDeps } from "./types.js";
 
 export function createAgentDeps(): AgentDeps {
@@ -17,10 +18,15 @@ export function createAgentDeps(): AgentDeps {
       }));
     },
 
-    getQaDetail: (id: string) => {
+    getQaDetail: async (id: string) => {
       const item = qaStore.getById(id);
       if (!item) return null;
-      return item as unknown as Record<string, unknown>;
+      // Supabase 後端的 in-memory item 沒帶 answer（省流量），detail 查詢才補撈。
+      const hydrated =
+        qaStore instanceof SupabaseQAStore
+          ? await qaStore.hydrateAnswer(item)
+          : item;
+      return hydrated as unknown as Record<string, unknown>;
     },
 
     listCategories: () => {

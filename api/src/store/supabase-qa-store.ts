@@ -13,8 +13,9 @@
  *   - hybridSearch is async (Supabase RPC), other methods stay sync
  */
 
-import { supabaseRpc, supabaseSelect } from "./supabase-client.js";
+import { supabaseCount, supabaseRpc, supabaseSelect } from "./supabase-client.js";
 import { computeKeywordBoostSingle } from "../utils/keyword-boost.js";
+import { mapWithConcurrency } from "../utils/concurrency.js";
 import {
   filterAndPaginateQa,
   categoriesFromItems,
@@ -77,21 +78,47 @@ interface MatchRow {
   similarity: number;
 }
 
-/** Row returned by search_qa_items_keyword() RPC. */
-type KeywordRow = Omit<MatchRow, "similarity">;
-
-/** DB row (no embedding in TypeScript). */
-type QARow = KeywordRow;
+/**
+ * 直接 SELECT qa_items 撈到的 row（startup load / 分頁撈取）。
+ *
+ * 不含 answer：最肥的欄位（約佔傳輸量 70%），startup 只載入 metadata，
+ * 命中後才由 hydrateAnswer() / hydrateAnswers() 批次補撈（見類別方法）。
+ *
+ * 不含 primary_category 等 extended retrieval 欄位：live schema（2026-08-19 實測）
+ * 沒有這些欄位，選取它們一律 42703 column does not exist；日後補 migration 再加回。
+ */
+interface QARow {
+  id: string;
+  seq: number;
+  question: string;
+  keywords: string[];
+  confidence: number;
+  category: string;
+  difficulty: string;
+  evergreen: boolean;
+  source_title: string;
+  source_date: string;
+  source_type: string;
+  source_collection: string;
+  source_url: string;
+  is_merged: boolean;
+  extraction_model: string | null;
+  maturity_relevance: string | null;
+  synonyms: string[];
+  freshness_score: number;
+  search_hit_count: number;
+}
 
 const OVER_RETRIEVE_FACTOR = 3;
 const KW_BOOST_CONFIG = { boost: 0.1, maxHits: 3, partial: 0.05 } as const;
 const SEMANTIC_WEIGHT = 0.7;
 const SYNONYM_BOOST = 0.05;
-const BASE_SELECT_COLUMNS = [
+
+/** startup select 用的欄位；刻意不含 answer 與 extended retrieval 欄位，理由見 QARow 註解。 */
+const SELECT_COLUMNS = [
   "id",
   "seq",
   "question",
-  "answer",
   "keywords",
   "confidence",
   "category",
@@ -109,20 +136,6 @@ const BASE_SELECT_COLUMNS = [
   "freshness_score",
   "search_hit_count",
 ] as const;
-const EXTENDED_SELECT_COLUMNS = [
-  ...BASE_SELECT_COLUMNS,
-  "primary_category",
-  "categories",
-  "intent_labels",
-  "scenario_tags",
-  "serving_tier",
-  "retrieval_phrases",
-  "retrieval_surface_text",
-  "content_granularity",
-  "evidence_scope",
-  "booster_target_queries",
-  "hard_negative_terms",
-] as const;
 
 function buildSelectQuery(
   columns: readonly string[],
@@ -132,17 +145,20 @@ function buildSelectQuery(
   return `?select=${columns.join(",")}&order=seq.asc&limit=${pageSize}&offset=${offset}`;
 }
 
-function isMissingColumnError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return /column\s+qa_items\.[a-z_]+\s+does not exist/i.test(error.message);
-}
-
-function rowToQAItem(row: QARow): QAItem {
+/**
+ * 建構 QAItem。answer 由呼叫端明確傳入：
+ *   - 直接 SELECT 路徑（load()）：answer 未撈取，傳 "" placeholder，命中後再 hydrate。
+ *   - RPC 路徑（hybridSearch 的 match_qa_items）：RPC 本來就回 answer，傳 row.answer。
+ *
+ * extended retrieval 欄位（primary_category 等）在兩條路徑都不存在於 live schema，
+ * 一律用 category / keywords 推導預設值，不再假裝這些欄位「可能存在」。
+ */
+function rowToQAItem(row: QARow, answer: string): QAItem {
   return {
     id: row.id,
     seq: row.seq,
     question: row.question,
-    answer: row.answer,
+    answer,
     keywords: row.keywords ?? [],
     confidence: row.confidence ?? 0,
     category: row.category ?? "",
@@ -161,19 +177,19 @@ function rowToQAItem(row: QARow): QAItem {
     extraction_model: row.extraction_model ?? undefined,
     maturity_relevance:
       (row.maturity_relevance as "L1" | "L2" | "L3" | "L4") ?? undefined,
-    primary_category: row.primary_category ?? row.category ?? "",
-    categories: row.categories ?? (row.category ? [row.category] : []),
-    intent_labels: row.intent_labels ?? [],
-    scenario_tags: row.scenario_tags ?? [],
-    serving_tier: row.serving_tier ?? "canonical",
-    retrieval_phrases: row.retrieval_phrases ?? row.keywords ?? [],
-    retrieval_surface_text:
-      row.retrieval_surface_text ??
-      [row.question, row.answer, ...(row.keywords ?? [])].join("\n"),
-    content_granularity: row.content_granularity ?? undefined,
-    evidence_scope: row.evidence_scope ?? [],
-    booster_target_queries: row.booster_target_queries ?? [],
-    hard_negative_terms: row.hard_negative_terms ?? [],
+    primary_category: row.category ?? "",
+    categories: row.category ? [row.category] : [],
+    intent_labels: [],
+    scenario_tags: [],
+    serving_tier: "canonical",
+    retrieval_phrases: row.keywords ?? [],
+    retrieval_surface_text: [row.question, answer, ...(row.keywords ?? [])]
+      .filter(Boolean)
+      .join("\n"),
+    content_granularity: undefined,
+    evidence_scope: [],
+    booster_target_queries: [],
+    hard_negative_terms: [],
   };
 }
 
@@ -330,10 +346,22 @@ function rerankResults(
 }
 
 export class SupabaseQAStore {
+  /** 分頁大小；拿掉 answer 後單頁約 0.45MB（實測 25,881 筆 → 13 頁）。 */
+  private static readonly PAGE_SIZE = 2000;
+
+  /**
+   * 分頁並行度；刻意保守，避免同時打爆 Supabase（這正是原本 500/503 的成因）。
+   * 不要調高。
+   */
+  private static readonly PAGE_CONCURRENCY = 4;
+
   private items: QAItem[] = [];
   private idIndex: Map<string, QAItem> = new Map();
   private seqIndex: Map<number, QAItem> = new Map();
   private _loaded = false;
+
+  /** answer 補撈的 memo cache：同一 Lambda instance 內重複命中同一 id 不用重打 Supabase。 */
+  private answerCache: Map<string, string> = new Map();
 
   get loaded(): boolean {
     return this._loaded;
@@ -354,49 +382,16 @@ export class SupabaseQAStore {
   }
 
   /**
-   * Load QA metadata from Supabase at startup (no embeddings in memory).
-   * Uses pagination to handle large datasets.
+   * Load QA metadata from Supabase at startup (no embeddings, no answer in memory).
+   * 先用 HEAD + count=exact 取得總筆數，再以受限並行度平行抓分頁——
+   * 13 頁循序約 11s，並行後目標壓到 5s 內（envoy route timeout 15s）。
    */
   async load(): Promise<void> {
-    const PAGE_SIZE = 500;
-    const MAX_PAGES = 100;
-    const allItems: QAItem[] = [];
-    let offset = 0;
-    let selectColumns: readonly string[] = EXTENDED_SELECT_COLUMNS;
-
-    for (let page = 0; page < MAX_PAGES; page++) {
-      let rows: QARow[];
-      try {
-        rows = await supabaseSelect<QARow>(
-          "qa_items",
-          buildSelectQuery(selectColumns, PAGE_SIZE, offset),
-          LOAD_TIMEOUT_MS,
-        );
-      } catch (error) {
-        if (
-          offset === 0 &&
-          selectColumns === EXTENDED_SELECT_COLUMNS &&
-          isMissingColumnError(error)
-        ) {
-          console.warn(
-            "SupabaseQAStore: qa_items is missing extended retrieval columns; falling back to base schema",
-          );
-          selectColumns = BASE_SELECT_COLUMNS;
-          rows = await supabaseSelect<QARow>(
-            "qa_items",
-            buildSelectQuery(selectColumns, PAGE_SIZE, offset),
-            LOAD_TIMEOUT_MS,
-          );
-        } else {
-          throw error;
-        }
-      }
-
-      if (rows.length === 0) break;
-      allItems.push(...rows.map(rowToQAItem));
-      if (rows.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
-    }
+    const total = await supabaseCount("qa_items", "", LOAD_TIMEOUT_MS);
+    const allItems =
+      total > 0
+        ? await this.loadKnownTotal(total)
+        : await this.loadUnknownTotal();
 
     this.items = allItems;
     this.idIndex = new Map(allItems.map((item) => [item.id, item]));
@@ -408,12 +403,104 @@ export class SupabaseQAStore {
     );
   }
 
+  /** 已知總筆數：直接算出頁數，以 PAGE_CONCURRENCY 並行抓取全部分頁。 */
+  private async loadKnownTotal(total: number): Promise<QAItem[]> {
+    const pageSize = SupabaseQAStore.PAGE_SIZE;
+    const pageCount = Math.ceil(total / pageSize);
+    const pages = await mapWithConcurrency(
+      Array.from({ length: pageCount }, (_, page) => page),
+      SupabaseQAStore.PAGE_CONCURRENCY,
+      (page) =>
+        supabaseSelect<QARow>(
+          "qa_items",
+          buildSelectQuery(SELECT_COLUMNS, pageSize, page * pageSize),
+          LOAD_TIMEOUT_MS,
+        ),
+    );
+    return pages.flat().map((row) => rowToQAItem(row, ""));
+  }
+
+  /**
+   * count 查詢失敗（HEAD 400/timeout，total <= 0）時的保守 fallback：
+   * 循序探頁直到拿到不足一頁的結果，避免在未知總筆數時平行猜頁數而漏資料。
+   */
+  private async loadUnknownTotal(): Promise<QAItem[]> {
+    const pageSize = SupabaseQAStore.PAGE_SIZE;
+    const MAX_PAGES = 100;
+    const allItems: QAItem[] = [];
+
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const rows = await supabaseSelect<QARow>(
+        "qa_items",
+        buildSelectQuery(SELECT_COLUMNS, pageSize, page * pageSize),
+        LOAD_TIMEOUT_MS,
+      );
+      if (rows.length === 0) break;
+      allItems.push(...rows.map((row) => rowToQAItem(row, "")));
+      if (rows.length < pageSize) break;
+    }
+    return allItems;
+  }
+
   getById(qaId: string): QAItem | undefined {
     return this.idIndex.get(qaId);
   }
 
   getBySeq(seq: number): QAItem | undefined {
     return this.seqIndex.get(seq);
+  }
+
+  /**
+   * 批次補撈缺漏的 answer（startup select 省流量拿掉了它）。
+   * 已在 memo cache 命中的直接用 cache；未命中的合併成一次 `id=in.(...)` 查詢。
+   */
+  private async fetchAnswers(
+    ids: readonly string[],
+  ): Promise<Map<string, string>> {
+    const uncached = [...new Set(ids)].filter(
+      (id) => !this.answerCache.has(id),
+    );
+    if (uncached.length > 0) {
+      const rows = await supabaseSelect<{ id: string; answer: string }>(
+        "qa_items",
+        `?select=id,answer&id=in.(${uncached.join(",")})`,
+      );
+      for (const row of rows) {
+        this.answerCache.set(row.id, row.answer ?? "");
+      }
+    }
+
+    const result = new Map<string, string>();
+    for (const id of ids) {
+      result.set(id, this.answerCache.get(id) ?? "");
+    }
+    return result;
+  }
+
+  /** 補撈單一 item 的 answer（回傳新物件，不 mutate 內部 store 狀態）。 */
+  async hydrateAnswer(item: QAItem): Promise<QAItem> {
+    const answers = await this.fetchAnswers([item.id]);
+    return { ...item, answer: answers.get(item.id) ?? "" };
+  }
+
+  /** 批次補撈一組搜尋結果（{item, score} 包裝）的 answer，用於命中後、回傳前。 */
+  async hydrateAnswers<T extends { item: QAItem }>(
+    hits: readonly T[],
+  ): Promise<T[]> {
+    const answers = await this.fetchAnswers(hits.map((hit) => hit.item.id));
+    return hits.map((hit) => ({
+      ...hit,
+      item: { ...hit.item, answer: answers.get(hit.item.id) ?? "" },
+    }));
+  }
+
+  /** 批次補撈一組 QAItem（不含 score 包裝）的 answer，用於 listQa 分頁結果。 */
+  async hydrateItemAnswers(items: readonly QAItem[]): Promise<QAItem[]> {
+    const answers = await this.fetchAnswers(items.map((item) => item.id));
+    return items.map((item) => ({
+      ...item,
+      answer: answers.get(item.id) ?? "",
+    }));
   }
 
   /**
@@ -446,7 +533,7 @@ export class SupabaseQAStore {
         KW_BOOST_CONFIG,
       );
       const synonymBonus = computeSynonymBonus(query, row.synonyms ?? []);
-      const item = rowToQAItem(row);
+      const item = rowToQAItem(row, row.answer);
       const base =
         row.similarity * SEMANTIC_WEIGHT +
         kwBoost +

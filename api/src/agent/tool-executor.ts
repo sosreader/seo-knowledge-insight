@@ -74,7 +74,7 @@ async function executeToolImpl(
     }
     case "get_qa_detail": {
       const args = getQaDetailSchema.parse(rawArgs);
-      const item = deps.getQaDetail(args.id);
+      const item = await deps.getQaDetail(args.id);
       if (!item) return JSON.stringify({ error: "QA item not found" });
       return JSON.stringify(item);
     }

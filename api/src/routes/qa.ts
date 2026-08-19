@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { qaIdPattern, qaListParamsSchema } from "../schemas/qa.js";
 import { ok, fail } from "../schemas/api-response.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
+import { SupabaseQAStore } from "../store/supabase-qa-store.js";
 
 export const qaRoute = new Hono();
 
@@ -44,7 +45,7 @@ qaRoute.get("/collections", (c) => {
   return c.json(ok({ collections: qaStore.collections() }));
 });
 
-qaRoute.get("/:item_id", (c) => {
+qaRoute.get("/:item_id", async (c) => {
   const itemId = c.req.param("item_id");
 
   // Support both hex stable_id and integer seq
@@ -61,10 +62,15 @@ qaRoute.get("/:item_id", (c) => {
   if (!item) {
     return c.json(fail(`QA id=${itemId} not found`), 404);
   }
+
+  // Supabase 後端的 startup select 沒帶 answer（省流量），單筆詳情這裡才補撈。
+  if (qaStore instanceof SupabaseQAStore) {
+    item = await qaStore.hydrateAnswer(item);
+  }
   return c.json(ok(toSchema(item)));
 });
 
-qaRoute.get("/", (c) => {
+qaRoute.get("/", async (c) => {
   const parsed = qaListParamsSchema.safeParse({
     category: c.req.query("category"),
     primary_category: c.req.query("primary_category"),
@@ -92,9 +98,15 @@ qaRoute.get("/", (c) => {
   const { limit, offset, ...filters } = parsed.data;
   const { items, total } = qaStore.listQa({ ...filters, limit, offset });
 
+  // 同上：這一頁的 items 才補撈 answer，不需要對全量 25,881 筆補撈。
+  const hydratedItems =
+    qaStore instanceof SupabaseQAStore
+      ? await qaStore.hydrateItemAnswers(items)
+      : items;
+
   return c.json(
     ok({
-      items: items.map(toSchema),
+      items: hydratedItems.map(toSchema),
       total,
       offset,
       limit,

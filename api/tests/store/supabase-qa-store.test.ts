@@ -7,10 +7,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FAKE_ITEMS } from "../setup.js";
 
 // vi.hoisted: variables available inside vi.mock factories (hoisted to top of file)
-const { mockSupabaseSelect, mockSupabaseRpc } = vi.hoisted(() => ({
-  mockSupabaseSelect: vi.fn(),
-  mockSupabaseRpc: vi.fn(),
-}));
+const { mockSupabaseSelect, mockSupabaseRpc, mockSupabaseCount } = vi.hoisted(
+  () => ({
+    mockSupabaseSelect: vi.fn(),
+    mockSupabaseRpc: vi.fn(),
+    mockSupabaseCount: vi.fn(),
+  }),
+);
 
 // Mock config — Supabase enabled
 vi.mock("../../src/config.js", () => ({
@@ -32,15 +35,17 @@ vi.mock("../../src/store/supabase-client.js", () => ({
   hasSupabase: () => true,
   supabaseSelect: (...args: unknown[]) => mockSupabaseSelect(...args),
   supabaseRpc: (...args: unknown[]) => mockSupabaseRpc(...args),
+  supabaseCount: (...args: unknown[]) => mockSupabaseCount(...args),
   supabaseHeaders: () => ({ apikey: "test", Authorization: "Bearer test" }),
 }));
 
-// Raw DB rows matching FAKE_ITEMS
+// Row shape returned by 直接 SELECT qa_items（load() 用）。
+// 不含 answer、不含 primary_category 等 extended retrieval 欄位——對應 live schema
+// 實測結果（qa_items 沒有這些欄位），見 supabase-qa-store.ts 的 QARow 註解。
 const FAKE_ROWS = FAKE_ITEMS.map((item) => ({
   id: item.id,
   seq: item.seq,
   question: item.question,
-  answer: item.answer,
   keywords: [...item.keywords],
   confidence: item.confidence,
   category: item.category,
@@ -53,21 +58,24 @@ const FAKE_ROWS = FAKE_ITEMS.map((item) => ({
   source_url: item.source_url,
   is_merged: item.is_merged,
   extraction_model: item.extraction_model ?? null,
-  primary_category: item.primary_category ?? item.category,
-  categories: [...(item.categories ?? [item.category])],
-  intent_labels: [...(item.intent_labels ?? [])],
-  scenario_tags: [...(item.scenario_tags ?? [])],
-  serving_tier: item.serving_tier ?? "canonical",
-  retrieval_phrases: [...(item.retrieval_phrases ?? item.keywords)],
-  retrieval_surface_text:
-    item.retrieval_surface_text ?? `${item.question}\n${item.answer}`,
-  content_granularity: item.content_granularity ?? null,
-  evidence_scope: [...(item.evidence_scope ?? [])],
-  booster_target_queries: [...(item.booster_target_queries ?? [])],
-  hard_negative_terms: [...(item.hard_negative_terms ?? [])],
+  maturity_relevance: item.maturity_relevance ?? null,
   synonyms: [...item.synonyms],
   freshness_score: item.freshness_score,
   search_hit_count: item.search_hit_count,
+}));
+
+// Row shape returned by 補撈 answer 的 `select=id,answer` 查詢。
+const FAKE_ANSWER_ROWS = FAKE_ITEMS.map((item) => ({
+  id: item.id,
+  answer: item.answer,
+}));
+
+// Row shape returned by match_qa_items() RPC — 本來就含 answer + similarity，不受
+// startup select 拿掉 answer 這件事影響。
+const FAKE_MATCH_ROWS = FAKE_ROWS.map((row, i) => ({
+  ...row,
+  answer: FAKE_ITEMS[i]!.answer,
+  similarity: 0.9,
 }));
 
 import { SupabaseQAStore } from "../../src/store/supabase-qa-store.js";
@@ -78,7 +86,8 @@ describe("SupabaseQAStore", () => {
   beforeEach(async () => {
     // resetAllMocks clears queued mockResolvedValueOnce values (clearAllMocks does not)
     vi.resetAllMocks();
-    // load() only makes ONE supabaseSelect call because FAKE_ROWS.length < PAGE_SIZE(500)
+    mockSupabaseCount.mockResolvedValueOnce(FAKE_ITEMS.length);
+    // load() 只發一次 supabaseSelect，因為 FAKE_ITEMS.length < PAGE_SIZE(2000)
     mockSupabaseSelect.mockResolvedValueOnce(FAKE_ROWS);
 
     store = new SupabaseQAStore();
@@ -90,43 +99,110 @@ describe("SupabaseQAStore", () => {
     expect(store.count).toBe(FAKE_ITEMS.length);
   });
 
-  it("falls back to base schema when extended retrieval columns are missing", async () => {
-    const legacyRows = FAKE_ROWS.map((row) => {
-      const {
-        primary_category,
-        categories,
-        intent_labels,
-        scenario_tags,
-        serving_tier,
-        retrieval_phrases,
-        retrieval_surface_text,
-        content_granularity,
-        evidence_scope,
-        booster_target_queries,
-        hard_negative_terms,
-        ...legacy
-      } = row;
-      return legacy;
-    });
+  it("load() 只選 base 欄位——不含 answer，不再發送必失敗的 extended columns 請求", () => {
+    // beforeEach 已驗證：整個 load() 只發一次 supabaseSelect（不會像舊版那樣
+    // 先打一次 42703 400 再 fallback 重打）。
+    expect(mockSupabaseCount).toHaveBeenCalledTimes(1);
+    expect(mockSupabaseSelect).toHaveBeenCalledTimes(1);
+
+    const [, queryString] = mockSupabaseSelect.mock.calls[0]!;
+    expect(queryString).not.toContain("primary_category");
+    expect(queryString).not.toContain("retrieval_surface_text");
+    expect(queryString).not.toContain("booster_target_queries");
+    expect(queryString).toMatch(/select=[^&]*question/);
+    // "answer" 不該出現在 select 欄位清單裡（用 &/? 邊界避免誤中其他子字串）
+    expect(queryString.split("&")[0]).not.toMatch(/\banswer\b/);
+  });
+
+  it("load() 前的 in-memory item 沒有 answer（placeholder，命中後才補撈）", () => {
+    const item = store.getById(FAKE_ITEMS[0]!.id);
+    expect(item).toBeDefined();
+    expect(item!.answer).toBe("");
+  });
+
+  it("load() 平行抓取多分頁，且組裝結果依 seq 正確、不受非同步回應順序影響", async () => {
+    mockSupabaseCount.mockReset();
     mockSupabaseSelect.mockReset();
+    const pageSize = 2000;
+    const total = pageSize * 2 + 500; // 3 頁
+    mockSupabaseCount.mockResolvedValueOnce(total);
+
+    const makeRow = (seq: number) => ({
+      ...FAKE_ROWS[0]!,
+      id: `row-${seq}`,
+      seq,
+    });
+
+    // 刻意讓 offset=2000 這頁比 offset=0 晚回應，驗證組裝結果仍照頁碼排序，
+    // 不是照到達順序。
+    mockSupabaseSelect.mockImplementation(
+      async (_table: string, queryString: string) => {
+        const offset = Number(queryString.match(/offset=(\d+)/)?.[1] ?? "0");
+        if (offset === pageSize) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        const size = Math.min(pageSize, total - offset);
+        return Array.from({ length: size }, (_, i) => makeRow(offset + i));
+      },
+    );
+
+    const parallelStore = new SupabaseQAStore();
+    await parallelStore.load();
+
+    expect(mockSupabaseSelect).toHaveBeenCalledTimes(3);
+    expect(parallelStore.count).toBe(total);
+    expect(parallelStore.getBySeq(0)?.seq).toBe(0);
+    expect(parallelStore.getBySeq(pageSize - 1)?.seq).toBe(pageSize - 1);
+    expect(parallelStore.getBySeq(pageSize)?.seq).toBe(pageSize);
+    expect(parallelStore.getBySeq(total - 1)?.seq).toBe(total - 1);
+  });
+
+  it("load() 的分頁並行度受限於 PAGE_CONCURRENCY(4)，不會一次把所有分頁打出去", async () => {
+    mockSupabaseCount.mockReset();
+    mockSupabaseSelect.mockReset();
+    const pageSize = 2000;
+    const total = pageSize * 6; // 6 頁，超過並行度上限
+    mockSupabaseCount.mockResolvedValueOnce(total);
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    mockSupabaseSelect.mockImplementation(
+      async (_table: string, queryString: string) => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        inFlight -= 1;
+        const offset = Number(queryString.match(/offset=(\d+)/)?.[1] ?? "0");
+        return Array.from({ length: pageSize }, (_, i) => ({
+          ...FAKE_ROWS[0]!,
+          id: `row-${offset + i}`,
+          seq: offset + i,
+        }));
+      },
+    );
+
+    const boundedStore = new SupabaseQAStore();
+    await boundedStore.load();
+
+    expect(mockSupabaseSelect).toHaveBeenCalledTimes(6);
+    expect(maxInFlight).toBeLessThanOrEqual(4);
+    expect(maxInFlight).toBeGreaterThan(1); // 確實有平行，不是退化成循序
+    expect(boundedStore.count).toBe(total);
+  });
+
+  it("load() 在 supabaseCount 失敗（回傳 -1）時，退回循序探頁而非平行猜頁數", async () => {
+    mockSupabaseCount.mockReset();
+    mockSupabaseSelect.mockReset();
+    mockSupabaseCount.mockResolvedValueOnce(-1);
     mockSupabaseSelect
-      .mockRejectedValueOnce(
-        new Error(
-          'Supabase SELECT qa_items failed (400): {"code":"42703","message":"column qa_items.primary_category does not exist"}',
-        ),
-      )
-      .mockResolvedValueOnce(legacyRows);
+      .mockResolvedValueOnce(FAKE_ROWS)
+      .mockResolvedValueOnce([]);
 
-    const legacyStore = new SupabaseQAStore();
-    await legacyStore.load();
+    const fallbackStore = new SupabaseQAStore();
+    await fallbackStore.load();
 
-    expect(mockSupabaseSelect).toHaveBeenCalledTimes(2);
-    expect(legacyStore.loaded).toBe(true);
-    expect(legacyStore.count).toBe(FAKE_ITEMS.length);
-    const first = legacyStore.getById(FAKE_ITEMS[0]!.id);
-    expect(first).toBeDefined();
-    expect(first!.primary_category).toBe(first!.category);
-    expect(first!.categories).toEqual([first!.category]);
+    expect(fallbackStore.loaded).toBe(true);
+    expect(fallbackStore.count).toBe(FAKE_ITEMS.length);
   });
 
   it("getById returns correct item", () => {
@@ -182,10 +258,11 @@ describe("SupabaseQAStore", () => {
   it("listQa filters by keyword", () => {
     const { items } = store.listQa({ keyword: "LCP" });
     expect(items.length).toBeGreaterThan(0);
+    // 注意：in-memory item 的 answer 是 placeholder("")，關鍵字比對只能靠
+    // question/keywords 命中（"LCP" 剛好兩者都有，見 tests/setup.ts）。
     for (const item of items) {
       const hasKw =
         item.question.toLowerCase().includes("lcp") ||
-        item.answer.toLowerCase().includes("lcp") ||
         item.keywords.some((k) => k.toLowerCase().includes("lcp"));
       expect(hasKw).toBe(true);
     }
@@ -223,7 +300,7 @@ describe("SupabaseQAStore", () => {
   });
 
   it("hybridSearch calls supabaseRpc and re-ranks", async () => {
-    const mockCandidates = FAKE_ROWS.slice(0, 3).map((row, i) => ({
+    const mockCandidates = FAKE_MATCH_ROWS.slice(0, 3).map((row, i) => ({
       ...row,
       similarity: 0.9 - i * 0.1,
     }));
@@ -246,56 +323,9 @@ describe("SupabaseQAStore", () => {
     expect(results.length).toBeGreaterThan(0);
     for (const r of results) {
       expect(r.score).toBeGreaterThanOrEqual(0);
+      // hybridSearch 走 RPC，answer 本來就在 row 裡，不受 startup select 影響。
+      expect(r.item.answer.length).toBeGreaterThan(0);
     }
-  });
-
-  it("keywordSearch prefers targeted booster for AI scenario query", () => {
-    const [first] = store.keywordSearch("AI SEO SGE", 3);
-    expect(first).toBeDefined();
-    expect(first!.item.serving_tier).toBe("booster");
-  });
-
-  it("keywordSearch prefers technical video metadata matches over generic indexing", async () => {
-    mockSupabaseSelect.mockReset();
-    mockSupabaseSelect.mockResolvedValueOnce([
-      {
-        ...FAKE_ROWS[0],
-        id: "video-metadata",
-        question: "How to implement VideoObject structured data?",
-        answer: "Add JSON-LD VideoObject and monitor Video Appearance.",
-        keywords: ["VideoObject", "structured data", "video"],
-        category: "索引與檢索",
-        primary_category: "索引與檢索",
-        categories: ["索引與檢索", "技術SEO"],
-        scenario_tags: ["video-seo"],
-        retrieval_phrases: ["videoobject structured data", "video appearance"],
-        retrieval_surface_text:
-          "videoobject structured data video appearance json-ld",
-      },
-      {
-        ...FAKE_ROWS[0],
-        id: "video-indexing",
-        question: "Why are videos not indexed?",
-        answer: "Check canonical and crawlability.",
-        keywords: ["video", "indexing"],
-        category: "索引與檢索",
-        primary_category: "索引與檢索",
-        categories: ["索引與檢索"],
-        scenario_tags: [],
-        retrieval_phrases: ["video indexing"],
-        retrieval_surface_text: "video indexing canonical crawlability",
-      },
-    ]);
-
-    const localStore = new SupabaseQAStore();
-    await localStore.load();
-
-    const [first] = localStore.keywordSearch(
-      "影片 SEO VideoObject 結構化資料 影片索引",
-      2,
-    );
-    expect(first).toBeDefined();
-    expect(first!.item.id).toBe("video-metadata");
   });
 
   it("hybridSearch passes category filter to RPC", async () => {
@@ -319,5 +349,72 @@ describe("SupabaseQAStore", () => {
 
   it("hasEmbeddings is always true for Supabase store", () => {
     expect(store.hasEmbeddings).toBe(true);
+  });
+
+  describe("answer hydration", () => {
+    it("hydrateAnswer 補撈單一 item 的 answer", async () => {
+      const target = FAKE_ITEMS[0]!;
+      const item = store.getById(target.id)!;
+      expect(item.answer).toBe("");
+
+      mockSupabaseSelect.mockResolvedValueOnce([
+        { id: target.id, answer: target.answer },
+      ]);
+      const hydrated = await store.hydrateAnswer(item);
+
+      expect(hydrated.answer).toBe(target.answer);
+      expect(mockSupabaseSelect).toHaveBeenCalledWith(
+        "qa_items",
+        expect.stringContaining(`id=in.(${target.id})`),
+      );
+      // hydrateAnswer 回傳新物件，不 mutate 原本的 store 狀態
+      expect(store.getById(target.id)!.answer).toBe("");
+    });
+
+    it("hydrateAnswer 的 memo cache 對同一 id 不重打 Supabase", async () => {
+      const target = FAKE_ITEMS[0]!;
+      const item = store.getById(target.id)!;
+
+      mockSupabaseSelect.mockResolvedValueOnce([
+        { id: target.id, answer: target.answer },
+      ]);
+      await store.hydrateAnswer(item);
+      mockSupabaseSelect.mockClear();
+
+      const hydratedAgain = await store.hydrateAnswer(item);
+      expect(hydratedAgain.answer).toBe(target.answer);
+      expect(mockSupabaseSelect).not.toHaveBeenCalled();
+    });
+
+    it("hydrateAnswers 把命中結果的多個 id 合併成一次批次請求", async () => {
+      const hits = FAKE_ITEMS.slice(0, 2).map((target) => ({
+        item: store.getById(target.id)!,
+        score: 1,
+      }));
+      mockSupabaseSelect.mockClear(); // 只看這次 hydrateAnswers 觸發的呼叫，排除 beforeEach 的 load()
+      mockSupabaseSelect.mockResolvedValueOnce(FAKE_ANSWER_ROWS.slice(0, 2));
+
+      const hydrated = await store.hydrateAnswers(hits);
+
+      expect(mockSupabaseSelect).toHaveBeenCalledTimes(1);
+      expect(hydrated[0]!.item.answer).toBe(FAKE_ITEMS[0]!.answer);
+      expect(hydrated[1]!.item.answer).toBe(FAKE_ITEMS[1]!.answer);
+      // score 等其餘欄位原樣保留
+      expect(hydrated[0]!.score).toBe(1);
+    });
+
+    it("hydrateItemAnswers 補撈 listQa 分頁結果（不含 score 包裝）的 answer", async () => {
+      const { items } = store.listQa({ limit: 2 });
+      mockSupabaseSelect.mockResolvedValueOnce(
+        items.map((i) => ({
+          id: i.id,
+          answer: FAKE_ITEMS.find((f) => f.id === i.id)!.answer,
+        })),
+      );
+
+      const hydrated = await store.hydrateItemAnswers(items);
+
+      expect(hydrated.every((i) => i.answer.length > 0)).toBe(true);
+    });
   });
 });

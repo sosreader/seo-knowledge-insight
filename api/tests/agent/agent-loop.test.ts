@@ -52,7 +52,7 @@ function mockDeps(): AgentDeps {
         score: 0.85,
       },
     ]),
-    getQaDetail: vi.fn().mockReturnValue({
+    getQaDetail: vi.fn().mockResolvedValue({
       id: "abc123",
       question: "What is SEO?",
       answer: "SEO is Search Engine Optimization",

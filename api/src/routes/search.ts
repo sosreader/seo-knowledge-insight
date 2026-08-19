@@ -212,8 +212,13 @@ searchRoute.post("/", async (c) => {
     0,
     top_k,
   );
-  trackHits(boostedHits);
-  const results = mapResults(boostedHits);
+  // Supabase 後端的 in-memory items 沒帶 answer（省流量），只對最終這 top_k 筆補撈。
+  const hydratedHits =
+    qaStore instanceof SupabaseQAStore
+      ? await qaStore.hydrateAnswers(boostedHits)
+      : boostedHits;
+  trackHits(hydratedHits);
+  const results = mapResults(hydratedHits);
   return c.json(
     ok({ results, total: results.length, mode: "keyword" as SearchMode }),
   );

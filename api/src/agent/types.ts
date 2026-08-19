@@ -30,7 +30,7 @@ export interface AgentResponse {
 
 export interface AgentDeps {
   readonly searchKnowledgeBase: (query: string, topK: number) => Promise<ReadonlyArray<{ item: Record<string, unknown>; score: number }>>;
-  readonly getQaDetail: (id: string) => Record<string, unknown> | null;
+  readonly getQaDetail: (id: string) => Promise<Record<string, unknown> | null>;
   readonly listCategories: () => readonly string[];
   readonly getStats: () => { readonly total: number; readonly categories: number };
 }
