@@ -345,7 +345,22 @@ function rerankResults(
 }
 
 export class SupabaseQAStore {
-  /** PostgREST `db-max-rows` 上限（實測 2026-08-19：limit 超過 1000 會靜默截斷回 1000 筆，不報錯）。 */
+  /**
+   * PostgREST `db-max-rows` 上限（實測 2026-08-19：limit 超過 1000 會靜默截斷
+   * 回 1000 筆，不報錯）。**不可調高於這個值**。
+   *
+   * 注意：total-count 驅動分頁（見 loadKnownTotal）不會偵測到這個值被調高。
+   * 它只解決「這頁筆數 < PAGE_SIZE」這種短頁終止條件的誤判，不會知道
+   * 「每個請求實際被伺服器截斷成多少筆」——若 PAGE_SIZE 被調成 2000，
+   * loadKnownTotal 依然會算出 ceil(total/2000) 頁、offset 間距 2000，
+   * 但每頁實際只回 1000 筆，中間整段 seq 永遠不會被任何 offset 抓到，
+   * 靜默漏掉約一半資料，且每個請求都是 HTTP 200。
+   * 真正擋住這件事的是 load() 裡「實際筆數 != 宣告總數」的 console.warn
+   * 自我檢查——那是唯一會在 PAGE_SIZE 被調高（或伺服器端上限日後變動）時
+   * 出聲的機制。已用 mutation test 驗證：見
+   * tests/store/supabase-qa-store.test.ts 的 `[MUTATION GUARD]`，
+   * 手動把這個常數改成 2000 會讓該測試變紅。
+   */
   private static readonly PAGE_SIZE = 1000;
 
   /**
@@ -409,7 +424,12 @@ export class SupabaseQAStore {
     );
   }
 
-  /** 已知總筆數：直接算出精確頁數，以 PAGE_CONCURRENCY 並行抓取全部分頁。 */
+  /**
+   * 已知總筆數：直接算出精確頁數，以 PAGE_CONCURRENCY 並行抓取全部分頁。
+   * 這裡只保護「短頁被誤判為結尾」的情況，不保護 PAGE_SIZE 本身被調高於
+   * 伺服器端上限——那個情況的防線在 load() 的筆數自我檢查，見 PAGE_SIZE
+   * 常數上的完整說明。
+   */
   private async loadKnownTotal(total: number): Promise<QAItem[]> {
     const pageSize = SupabaseQAStore.PAGE_SIZE;
     const pageCount = Math.ceil(total / pageSize);
