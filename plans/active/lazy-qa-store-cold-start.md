@@ -88,3 +88,41 @@ S3 → S4
 
 - Lambda 環境變數以明文存放 OpenAI / Supabase service key（應搬到 Secrets Manager）— 另案。
 - `qa_items` 補上 `primary_category` 等 extended retrieval 欄位的 migration — 另案。
+
+---
+
+## 最終 endpoint 閘門對照表（S1 完成後，S4 驗收依據）
+
+**cold start 零觸發**（報告頁 mount 時打的，就是這次撞 504 的當事人）：
+
+| Endpoint | 機制 |
+|---|---|
+| `GET /api/v1/reports` | 無 |
+| `GET /api/v1/reports/:date` | 無 |
+| `GET /api/v1/meeting-prep` | 無 |
+| `GET /api/v1/pipeline/metrics/snapshots` | 無 |
+| `GET /api/v1/sessions` | 無 |
+| `GET /api/v1/sessions/:id` | 無 |
+| `/api/v1/feedback` | 無 |
+
+**會等 QA store 載入**：
+
+| Endpoint | 機制 |
+|---|---|
+| `/api/v1/qa`、`/api/v1/qa/*` | mount 層 `qaStoreReady` |
+| `/api/v1/search` | mount 層 `qaStoreReady` |
+| `/api/v1/chat`、`/api/v1/chat/*` | mount 層 `qaStoreReady` |
+| `POST /api/v1/sessions/:session_id/messages` | mount 層 `qaStoreReady` |
+| `POST /api/v1/reports/generate` | handler 內 `await ensureQaStoreLoaded()` |
+| `GET /api/v1/pipeline/status` | handler 內 `await ensureQaStoreLoaded()` |
+| `GET /api/v1/pipeline/source-docs` | handler 內 `await ensureQaStoreLoaded()` |
+
+**會等 synonyms 載入**：`/api/v1/synonyms`、`/api/v1/synonyms/*`（mount 層 `synonymsReady`）
+
+兩套機制並存是刻意的：`/pipeline` prefix 底下混著必須零觸發的 `/metrics/snapshots`，
+掛 mount 層 prefix 會誤傷，所以那三個改在 handler 內 await。兩者共用同一個 memo，行為一致。
+
+### 不變式
+
+`initCore()` 不得觸發任何 store 載入。已由 `tests/lazy-store-init.test.ts` 的斷言測試守住，
+不是只靠註解。
