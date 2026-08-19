@@ -31,6 +31,8 @@ const metricsSnapshotsDir = join(outputDir, "metrics_snapshots");
 
 vi.mock("../../src/store/qa-store.js", () => ({
   qaStore: { loaded: false, count: 0 },
+  // /pipeline/status 與 /source-docs 會 await ensureQaStoreLoaded()
+  loadQaStore: vi.fn(async () => {}),
 }));
 
 vi.mock("../../src/config.js", () => ({

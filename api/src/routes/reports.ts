@@ -13,6 +13,7 @@ import { generateReportLlm } from "../services/report-llm.js";
 import { evaluateReportV2 } from "../services/report-evaluator.js";
 import { scoreEvent } from "../utils/laminar-scoring.js";
 import { qaStore } from "../store/qa-store.js";
+import { ensureQaStoreLoaded } from "../store/store-init.js";
 import { reportStore, snapshotStore } from "../store/store-registry.js";
 import { parseReportMeta, listReportFiles } from "../utils/report-file.js";
 
@@ -232,6 +233,10 @@ reportsRoute.post("/generate", async (c) => {
     let reportContent: string;
     let cacheHit = false;
     try {
+      // 產生報告要引用知識庫，count 會寫進報告 meta 的「知識庫版本」，
+      // 必須先等載入完成再取值。只掛在 generate handler 內——
+      // GET /reports 列表維持 cold start 零觸發。
+      await ensureQaStoreLoaded();
       const qaCount = qaStore.count;
       const snapshotWeeks = typeof snapshot.weeks === "number" ? snapshot.weeks : null;
       // Extract crawled-not-indexed data from snapshot (backward-compat: old snapshots stored as .indexing)
