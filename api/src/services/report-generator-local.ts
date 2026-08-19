@@ -11,6 +11,7 @@ import { writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
+import { ensureQaStoreLoaded } from "../store/store-init.js";
 import type { QAItem } from "../store/qa-store.js";
 import {
   buildMaturityCallout,
@@ -851,14 +852,8 @@ export async function generateReportLocal(
     .filter((a) => a.flag === "ALERT_UP")
     .sort((a, b) => (b.monthly ?? 0) - (a.monthly ?? 0));
 
-  // Ensure QA store is loaded (lazy init when called outside the full server startup)
-  if (!qaStore.loaded) {
-    try {
-      qaStore.load();
-    } catch {
-      // Continue without KB citations — graceful degradation
-    }
-  }
+  // 報告要引用知識庫，這裡明確等 QA store 載入（memoized；失敗則無引用地繼續）
+  await ensureQaStoreLoaded();
 
   // Keyword search for relevant Q&As
   const queries = buildSearchQueries(typedMetrics);

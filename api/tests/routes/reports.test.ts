@@ -17,6 +17,7 @@ vi.mock("../../src/store/qa-store.js", () => ({
     getAll: () => [],
     keywordSearch: () => [],
   },
+  loadQaStore: vi.fn(async () => {}),
 }));
 
 vi.mock("../../src/config.js", () => ({

@@ -9,6 +9,7 @@ vi.mock("../../src/store/qa-store.js", () => ({
     load: vi.fn(),
     keywordSearch: vi.fn().mockReturnValue([]),
   },
+  loadQaStore: vi.fn(async () => {}),
 }));
 
 // Mock config paths

@@ -81,6 +81,8 @@ vi.mock("../../src/store/qa-store.js", () => {
         },
       ],
     },
+    // qaStoreReady middleware 會呼叫；已載入的 fake store 不需要真的做事
+    loadQaStore: vi.fn(async () => {}),
   };
 });
 
