@@ -18,11 +18,20 @@ let _qaPromise: Promise<void> | null = null;
 let _synonymsPromise: Promise<void> | null = null;
 
 /**
+ * 上一輪 loadQaStore() 是否以失敗收場（重試後仍失敗）。
+ * 給 qa-ready.ts 的有界等待逾時後判斷要回「載入中」還是「載入失敗」——
+ * 兩者都是 `qaStore.loaded === false`，光看這個旗標分不出來。
+ * 新一輪 ensureQaStoreLoaded() 開始時重設，避免沿用上一輪的失敗狀態。
+ */
+let _qaLoadFailed = false;
+
+/**
  * 需要 QA 資料時才載入，且整個 process 只成功載入一次。
  * 失敗不拋出：維持「API will run without search」的降級語意。
  */
 export function ensureQaStoreLoaded(): Promise<void> {
   if (!_qaPromise) {
+    _qaLoadFailed = false;
     _qaPromise = loadQaStore()
       .then(() => {
         console.log(`QAStore loaded: ${qaStore.count} items`);
@@ -30,10 +39,16 @@ export function ensureQaStoreLoaded(): Promise<void> {
       .catch((err) => {
         // 清掉 memo，讓下一個請求可以重試（沿用舊有 _initPromise 的 reset 語意）
         _qaPromise = null;
+        _qaLoadFailed = true;
         console.warn("QAStore load failed (API will run without search):", err);
       });
   }
   return _qaPromise;
+}
+
+/** 供 qa-ready.ts 的有界等待逾時後判斷：載入中還是已經失敗，訊息要能分辨。 */
+export function qaStoreLoadFailed(): boolean {
+  return _qaLoadFailed;
 }
 
 /**
@@ -68,4 +83,5 @@ export function ensureSynonymsLoaded(): Promise<void> {
 export function _resetStoreInitForTest(): void {
   _qaPromise = null;
   _synonymsPromise = null;
+  _qaLoadFailed = false;
 }

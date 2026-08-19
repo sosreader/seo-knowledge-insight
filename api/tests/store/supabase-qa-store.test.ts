@@ -383,5 +383,47 @@ describe("SupabaseQAStore", () => {
       expect(fallbackStore.loaded).toBe(true);
       expect(fallbackStore.count).toBe(FAKE_ITEMS.length);
     });
+
+    it("[MUTATION GUARD] fake client 模擬 PostgREST db-max-rows=1000 上限時，load() 必須抓滿全部筆數，不得靜默少載", async () => {
+      // 這個測試的重點跟其他分頁測試不一樣：其他測試的假 client 會「乖乖」
+      // 回傳程式碼要求的 limit 筆數，不會抓到「PAGE_SIZE 被調大」這個 bug——
+      // 因為假 client 本身沒有模擬 db-max-rows 上限。這裡刻意讓假 client
+      // 不論 limit 要求多大，一律最多回 DB_MAX_ROWS 筆（對應 PostgREST 實測
+      // 行為），精確重現「PAGE_SIZE > 1000 時，中間整段 seq 永遠沒被抓到」
+      // 這個曾經發生過的 bug。若 PAGE_SIZE 被改回 2000，這裡會變紅。
+      mockSupabaseCount.mockReset();
+      mockSupabaseSelect.mockReset();
+      const DB_MAX_ROWS = 1000;
+      const total = 25_881; // 對應 live 實測筆數
+      mockSupabaseCount.mockResolvedValueOnce(total);
+
+      mockSupabaseSelect.mockImplementation(
+        async (_table: string, queryString: string) => {
+          const offset = Number(queryString.match(/offset=(\d+)/)?.[1] ?? "0");
+          const requestedLimit = Number(
+            queryString.match(/limit=(\d+)/)?.[1] ?? "0",
+          );
+          const size = Math.min(requestedLimit, DB_MAX_ROWS, total - offset);
+          if (size <= 0) return [];
+          return Array.from({ length: size }, (_, i) => ({
+            ...FAKE_ROWS[0]!,
+            id: `row-${offset + i}`,
+            seq: offset + i,
+          }));
+        },
+      );
+
+      const guardStore = new SupabaseQAStore();
+      await guardStore.load();
+
+      expect(guardStore.count).toBe(total);
+      // 不只看 count 剛好對上就以為沒事——直接查會被「PAGE_SIZE=2000」
+      // 那個 bug 漏掉的邊界 seq（第 1000-1999 筆整段消失）。
+      expect(guardStore.getBySeq(0)).toBeDefined();
+      expect(guardStore.getBySeq(999)).toBeDefined();
+      expect(guardStore.getBySeq(1000)).toBeDefined();
+      expect(guardStore.getBySeq(1999)).toBeDefined();
+      expect(guardStore.getBySeq(total - 1)).toBeDefined();
+    });
   });
 });

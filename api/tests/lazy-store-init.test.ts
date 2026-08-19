@@ -259,8 +259,11 @@ describe("POST /api/v1/reports/generate 先載入再讀 count", () => {
   });
 });
 
-describe("QA 載入失敗時降級而非 500", () => {
-  it("POST /api/v1/search 在載入失敗時仍回 200 與空結果", async () => {
+describe("QA 載入失敗時誠實回 503 而非靜默回空", () => {
+  // 「回 200 + 空結果」曾經是這裡的行為，但那是靜默的錯誤資料——前端會顯示
+  // 成「沒有資料」，但實際上知識庫有 25,881 筆，只是這次沒載入成功。
+  // 改成回 503 帶使用者看得懂的訊息，見 src/middleware/qa-ready.ts。
+  it("POST /api/v1/search 在載入失敗時回 503，帶『載入失敗』訊息", async () => {
     mocks.loadQaStore.mockRejectedValueOnce(
       new Error("Supabase SELECT qa_items failed (500): statement timeout"),
     );
@@ -271,9 +274,10 @@ describe("QA 載入失敗時降級而非 500", () => {
       body: JSON.stringify({ query: "SEO" }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
     const body = await res.json();
-    expect(body.data.results).toEqual([]);
+    expect(body.data).toBeNull();
+    expect(body.error).toContain("載入失敗");
   });
 
   it("載入失敗後下一個請求會重試", async () => {
