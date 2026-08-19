@@ -17,7 +17,7 @@ function mockDeps(overrides?: Partial<AgentDeps>): AgentDeps {
         score: 0.85,
       },
     ]),
-    getQaDetail: vi.fn().mockResolvedValue({
+    getQaDetail: vi.fn().mockReturnValue({
       id: "abc123def4560000",
       question: "What is SEO?",
       answer: "SEO is Search Engine Optimization",
@@ -80,7 +80,7 @@ describe("tool-executor", () => {
     });
 
     it("returns error for missing item", async () => {
-      const deps = mockDeps({ getQaDetail: vi.fn().mockResolvedValue(null) });
+      const deps = mockDeps({ getQaDetail: vi.fn().mockReturnValue(null) });
       const result = await executeTool("get_qa_detail", { id: "0000000000000000" }, deps);
 
       const parsed = JSON.parse(result.result);
