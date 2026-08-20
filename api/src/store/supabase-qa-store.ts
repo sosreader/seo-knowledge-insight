@@ -13,8 +13,9 @@
  *   - hybridSearch is async (Supabase RPC), other methods stay sync
  */
 
-import { supabaseRpc, supabaseSelect } from "./supabase-client.js";
+import { supabaseCount, supabaseRpc, supabaseSelect } from "./supabase-client.js";
 import { computeKeywordBoostSingle } from "../utils/keyword-boost.js";
+import { mapWithConcurrency } from "../utils/concurrency.js";
 import {
   filterAndPaginateQa,
   categoriesFromItems,
@@ -77,17 +78,45 @@ interface MatchRow {
   similarity: number;
 }
 
-/** Row returned by search_qa_items_keyword() RPC. */
-type KeywordRow = Omit<MatchRow, "similarity">;
-
-/** DB row (no embedding in TypeScript). */
-type QARow = KeywordRow;
+/**
+ * 直接 SELECT qa_items 撈到的 row（startup load / 分頁撈取）。
+ *
+ * 不含 primary_category 等 extended retrieval 欄位：live schema（2026-08-19 實測）
+ * 沒有這些欄位，選取它們一律 42703 column does not exist；日後補 migration 再加回。
+ * answer 仍在選取欄位內——實測含/不含 answer 對冷啟耗時沒有穩定差異（瓶頸是
+ * 往返次數與 deep-offset 成本，不是 payload 大小），拿掉它反而讓多個呼叫端的
+ * 型別從 sync 變 async，不划算，故保留。
+ */
+interface QARow {
+  id: string;
+  seq: number;
+  question: string;
+  answer: string;
+  keywords: string[];
+  confidence: number;
+  category: string;
+  difficulty: string;
+  evergreen: boolean;
+  source_title: string;
+  source_date: string;
+  source_type: string;
+  source_collection: string;
+  source_url: string;
+  is_merged: boolean;
+  extraction_model: string | null;
+  maturity_relevance: string | null;
+  synonyms: string[];
+  freshness_score: number;
+  search_hit_count: number;
+}
 
 const OVER_RETRIEVE_FACTOR = 3;
 const KW_BOOST_CONFIG = { boost: 0.1, maxHits: 3, partial: 0.05 } as const;
 const SEMANTIC_WEIGHT = 0.7;
 const SYNONYM_BOOST = 0.05;
-const BASE_SELECT_COLUMNS = [
+
+/** startup select 用的欄位；刻意不含 extended retrieval 欄位，理由見 QARow 註解。 */
+const SELECT_COLUMNS = [
   "id",
   "seq",
   "question",
@@ -109,20 +138,6 @@ const BASE_SELECT_COLUMNS = [
   "freshness_score",
   "search_hit_count",
 ] as const;
-const EXTENDED_SELECT_COLUMNS = [
-  ...BASE_SELECT_COLUMNS,
-  "primary_category",
-  "categories",
-  "intent_labels",
-  "scenario_tags",
-  "serving_tier",
-  "retrieval_phrases",
-  "retrieval_surface_text",
-  "content_granularity",
-  "evidence_scope",
-  "booster_target_queries",
-  "hard_negative_terms",
-] as const;
 
 function buildSelectQuery(
   columns: readonly string[],
@@ -132,11 +147,11 @@ function buildSelectQuery(
   return `?select=${columns.join(",")}&order=seq.asc&limit=${pageSize}&offset=${offset}`;
 }
 
-function isMissingColumnError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return /column\s+qa_items\.[a-z_]+\s+does not exist/i.test(error.message);
-}
-
+/**
+ * 建構 QAItem。extended retrieval 欄位（primary_category 等）在 live schema
+ * 不存在，一律用 category / keywords 推導預設值，不再假裝這些欄位可能存在。
+ * row 也接受 MatchRow（RPC 路徑）——MatchRow 是 QARow 的超集，結構相容。
+ */
 function rowToQAItem(row: QARow): QAItem {
   return {
     id: row.id,
@@ -161,19 +176,19 @@ function rowToQAItem(row: QARow): QAItem {
     extraction_model: row.extraction_model ?? undefined,
     maturity_relevance:
       (row.maturity_relevance as "L1" | "L2" | "L3" | "L4") ?? undefined,
-    primary_category: row.primary_category ?? row.category ?? "",
-    categories: row.categories ?? (row.category ? [row.category] : []),
-    intent_labels: row.intent_labels ?? [],
-    scenario_tags: row.scenario_tags ?? [],
-    serving_tier: row.serving_tier ?? "canonical",
-    retrieval_phrases: row.retrieval_phrases ?? row.keywords ?? [],
-    retrieval_surface_text:
-      row.retrieval_surface_text ??
-      [row.question, row.answer, ...(row.keywords ?? [])].join("\n"),
-    content_granularity: row.content_granularity ?? undefined,
-    evidence_scope: row.evidence_scope ?? [],
-    booster_target_queries: row.booster_target_queries ?? [],
-    hard_negative_terms: row.hard_negative_terms ?? [],
+    primary_category: row.category ?? "",
+    categories: row.category ? [row.category] : [],
+    intent_labels: [],
+    scenario_tags: [],
+    serving_tier: "canonical",
+    retrieval_phrases: row.keywords ?? [],
+    retrieval_surface_text: [row.question, row.answer, ...(row.keywords ?? [])]
+      .filter(Boolean)
+      .join("\n"),
+    content_granularity: undefined,
+    evidence_scope: [],
+    booster_target_queries: [],
+    hard_negative_terms: [],
   };
 }
 
@@ -330,6 +345,30 @@ function rerankResults(
 }
 
 export class SupabaseQAStore {
+  /**
+   * PostgREST `db-max-rows` 上限（實測 2026-08-19：limit 超過 1000 會靜默截斷
+   * 回 1000 筆，不報錯）。**不可調高於這個值**。
+   *
+   * 注意：total-count 驅動分頁（見 loadKnownTotal）不會偵測到這個值被調高。
+   * 它只解決「這頁筆數 < PAGE_SIZE」這種短頁終止條件的誤判，不會知道
+   * 「每個請求實際被伺服器截斷成多少筆」——若 PAGE_SIZE 被調成 2000，
+   * loadKnownTotal 依然會算出 ceil(total/2000) 頁、offset 間距 2000，
+   * 但每頁實際只回 1000 筆，中間整段 seq 永遠不會被任何 offset 抓到，
+   * 靜默漏掉約一半資料，且每個請求都是 HTTP 200。
+   * 真正擋住這件事的是 load() 裡「實際筆數 != 宣告總數」的 console.warn
+   * 自我檢查——那是唯一會在 PAGE_SIZE 被調高（或伺服器端上限日後變動）時
+   * 出聲的機制。已用 mutation test 驗證：見
+   * tests/store/supabase-qa-store.test.ts 的 `[MUTATION GUARD]`，
+   * 手動把這個常數改成 2000 會讓該測試變紅。
+   */
+  private static readonly PAGE_SIZE = 1000;
+
+  /**
+   * 分頁並行度；刻意保守，避免同時打爆 Supabase——併發 6 實測 13 頁裡有 8 頁失敗。
+   * 不要調高。
+   */
+  private static readonly PAGE_CONCURRENCY = 4;
+
   private items: QAItem[] = [];
   private idIndex: Map<string, QAItem> = new Map();
   private seqIndex: Map<number, QAItem> = new Map();
@@ -355,57 +394,85 @@ export class SupabaseQAStore {
 
   /**
    * Load QA metadata from Supabase at startup (no embeddings in memory).
-   * Uses pagination to handle large datasets.
+   *
+   * 先用 supabaseCount（HEAD + count=exact，不傳輸任何 row 資料）取得總筆數，
+   * 依總數算出精確頁數再以 PAGE_CONCURRENCY 並行抓取——不能用「這頁筆數 <
+   * PAGE_SIZE」當終止條件：PostgREST 的 db-max-rows 上限就是 PAGE_SIZE，
+   * 這個訊號在正常結尾與被截斷時長得一模一樣，會靜默漏資料。
+   * count 查詢失敗（total <= 0）才退回循序探頁（此時 PAGE_SIZE == db-max-rows
+   * 上限，短頁才是可信的結尾訊號，見 loadUnknownTotal 註解）。
    */
   async load(): Promise<void> {
-    const PAGE_SIZE = 500;
-    const MAX_PAGES = 100;
-    const allItems: QAItem[] = [];
-    let offset = 0;
-    let selectColumns: readonly string[] = EXTENDED_SELECT_COLUMNS;
-
-    for (let page = 0; page < MAX_PAGES; page++) {
-      let rows: QARow[];
-      try {
-        rows = await supabaseSelect<QARow>(
-          "qa_items",
-          buildSelectQuery(selectColumns, PAGE_SIZE, offset),
-          LOAD_TIMEOUT_MS,
-        );
-      } catch (error) {
-        if (
-          offset === 0 &&
-          selectColumns === EXTENDED_SELECT_COLUMNS &&
-          isMissingColumnError(error)
-        ) {
-          console.warn(
-            "SupabaseQAStore: qa_items is missing extended retrieval columns; falling back to base schema",
-          );
-          selectColumns = BASE_SELECT_COLUMNS;
-          rows = await supabaseSelect<QARow>(
-            "qa_items",
-            buildSelectQuery(selectColumns, PAGE_SIZE, offset),
-            LOAD_TIMEOUT_MS,
-          );
-        } else {
-          throw error;
-        }
-      }
-
-      if (rows.length === 0) break;
-      allItems.push(...rows.map(rowToQAItem));
-      if (rows.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
-    }
+    const total = await supabaseCount("qa_items", "", LOAD_TIMEOUT_MS);
+    const allItems =
+      total > 0 ? await this.loadKnownTotal(total) : await this.loadUnknownTotal();
 
     this.items = allItems;
     this.idIndex = new Map(allItems.map((item) => [item.id, item]));
     this.seqIndex = new Map(allItems.map((item) => [item.seq, item]));
     this._loaded = true;
 
+    // 「少載但看起來成功」不能靜默通過：實際筆數對不上宣告總數就要留下訊號。
+    if (total > 0 && allItems.length !== total) {
+      console.warn(
+        `SupabaseQAStore: 載入筆數與宣告總數不符 — 宣告 ${total} 筆，實際載入 ${allItems.length} 筆`,
+      );
+    }
+
     console.log(
       `SupabaseQAStore loaded: ${this.items.length} items from Supabase`,
     );
+  }
+
+  /**
+   * 已知總筆數：直接算出精確頁數，以 PAGE_CONCURRENCY 並行抓取全部分頁。
+   * 這裡只保護「短頁被誤判為結尾」的情況，不保護 PAGE_SIZE 本身被調高於
+   * 伺服器端上限——那個情況的防線在 load() 的筆數自我檢查，見 PAGE_SIZE
+   * 常數上的完整說明。
+   */
+  private async loadKnownTotal(total: number): Promise<QAItem[]> {
+    const pageSize = SupabaseQAStore.PAGE_SIZE;
+    const pageCount = Math.ceil(total / pageSize);
+    const pages = await mapWithConcurrency(
+      Array.from({ length: pageCount }, (_, page) => page),
+      SupabaseQAStore.PAGE_CONCURRENCY,
+      (page) => this.fetchPageWithRetry(page * pageSize),
+    );
+    return pages.flat().map(rowToQAItem);
+  }
+
+  /**
+   * count 查詢失敗（HEAD 400/timeout，total <= 0）時的保守 fallback：
+   * 循序探頁直到拿到不足一頁的結果。PAGE_SIZE 就是 db-max-rows 上限，
+   * 所以「這頁筆數 < PAGE_SIZE」在這裡是可信的結尾訊號（不會被上限截斷混淆）。
+   */
+  private async loadUnknownTotal(): Promise<QAItem[]> {
+    const pageSize = SupabaseQAStore.PAGE_SIZE;
+    const MAX_PAGES = 100;
+    const allItems: QAItem[] = [];
+
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const rows = await this.fetchPageWithRetry(page * pageSize);
+      if (rows.length === 0) break;
+      allItems.push(...rows.map(rowToQAItem));
+      if (rows.length < pageSize) break;
+    }
+    return allItems;
+  }
+
+  /** 抓單一分頁；失敗重試 1 次，重試後仍失敗就往外拋（由 ensureQaStoreLoaded() 接住降級）。 */
+  private async fetchPageWithRetry(offset: number): Promise<QARow[]> {
+    const pageSize = SupabaseQAStore.PAGE_SIZE;
+    const query = buildSelectQuery(SELECT_COLUMNS, pageSize, offset);
+    try {
+      return await supabaseSelect<QARow>("qa_items", query, LOAD_TIMEOUT_MS);
+    } catch (error) {
+      console.warn(
+        `SupabaseQAStore: 分頁請求失敗（offset=${offset}），重試一次:`,
+        error,
+      );
+      return supabaseSelect<QARow>("qa_items", query, LOAD_TIMEOUT_MS);
+    }
   }
 
   getById(qaId: string): QAItem | undefined {

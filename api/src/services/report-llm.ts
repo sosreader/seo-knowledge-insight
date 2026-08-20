@@ -8,6 +8,7 @@
 import OpenAI from "openai";
 import { config } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
+import { ensureQaStoreLoaded } from "../store/store-init.js";
 import type { QAItem } from "../store/qa-store.js";
 
 // ── System Prompt (same as Python REPORT_SYSTEM_PROMPT) ──
@@ -193,11 +194,8 @@ function buildMetricsSummary(metrics: Record<string, MetricData>): string {
   return lines.join("\n");
 }
 
+/** 呼叫端須先 await ensureQaStoreLoaded()；store 未載入時只是拿不到引用，不會中斷報告生成。 */
 function buildQaContext(metrics: Record<string, MetricData>): { context: string; qas: QAItem[] } {
-  if (!qaStore.loaded) {
-    try { qaStore.load(); } catch { /* graceful */ }
-  }
-
   const alerts = detectAlerts(metrics);
   const queries = new Set<string>();
   for (const m of alerts) {
@@ -296,7 +294,8 @@ export async function generateReportLlm(
   const model = config.REPORT_MODEL;
   const client = new OpenAI({ apiKey: config.OPENAI_API_KEY });
 
-  // Build context
+  // Build context — 報告要引用知識庫，這裡明確等 QA store 載入（失敗則降級為無引用）
+  await ensureQaStoreLoaded();
   const metricsSummary = buildMetricsSummary(typedMetrics);
   const { context: qaContext, qas } = buildQaContext(typedMetrics);
 

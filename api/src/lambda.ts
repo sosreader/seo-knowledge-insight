@@ -1,9 +1,12 @@
 import { handle } from "hono/aws-lambda";
-import { app, initStores } from "./index.js";
+import { app, initCore } from "./index.js";
 import { flushLaminar } from "./utils/observability.js";
 
-const ready = initStores().catch((err) => {
-  console.error("Lambda cold start initStores failed:", err);
+// Cold start 只做便宜的 initCore()（Laminar + capability log）。
+// QA store／synonyms 改由 route middleware 在需要時才載入，
+// 避免用不到 QA 的 route 被 25k 筆 qa_items 的分頁查詢擋住而超時。
+const ready = initCore().catch((err) => {
+  console.error("Lambda cold start initCore failed:", err);
 });
 
 // Use buffered Lambda responses for compatibility with the current

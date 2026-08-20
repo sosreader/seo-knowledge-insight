@@ -26,6 +26,7 @@ import { analyzeCrawledNotIndexed } from "../services/crawled-not-indexed-analyz
 import { scoreEvent } from "../utils/laminar-scoring.js";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
+import { ensureQaStoreLoaded } from "../store/store-init.js";
 import { hasSupabase, supabaseSelect } from "../store/supabase-client.js";
 import { snapshotStore } from "../store/store-registry.js";
 import type { SourceDocEntry } from "../schemas/pipeline.js";
@@ -83,7 +84,9 @@ function buildSourceDocsFromStore(): readonly SourceDocEntry[] {
 export const pipelineRoute = new Hono();
 
 // GET /status
-pipelineRoute.get("/status", (c) => {
+pipelineRoute.get("/status", async (c) => {
+  // Supabase 模式下的 step 數字由 qaStore 推導；未載入會靜默回檔案系統的空值
+  await ensureQaStoreLoaded();
   const status = buildPipelineStatus();
   return c.json(ok(status));
 });
@@ -131,7 +134,9 @@ pipelineRoute.get("/meetings/:id/preview", (c) => {
 });
 
 // GET /source-docs
-pipelineRoute.get("/source-docs", (c) => {
+pipelineRoute.get("/source-docs", async (c) => {
+  // Lambda 上沒有檔案系統資料，來源清單只能從 qaStore 反推（見下方 fallback）
+  await ensureQaStoreLoaded();
   const parsed = sourceDocsQuerySchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
   if (!parsed.success) {
     return c.json(fail("Invalid query parameters"), 400);

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { apiReference } from "@scalar/hono-api-reference";
-import { config, paths } from "./config.js";
+import { config } from "./config.js";
 import { corsMiddleware } from "./middleware/cors.js";
 import { securityHeaders } from "./middleware/security-headers.js";
 import { requestLogger } from "./middleware/request-logger.js";
@@ -19,8 +19,11 @@ import { pipelineRoute } from "./routes/pipeline.js";
 import { synonymsRoute } from "./routes/synonyms.js";
 import { meetingPrepRoute } from "./routes/meeting-prep.js";
 import { buildOpenAPISpec } from "./openapi.js";
-import { qaStore, loadQaStore } from "./store/qa-store.js";
-import { synonymsStore } from "./store/synonyms-store.js";
+import { qaStoreReady, synonymsReady } from "./middleware/qa-ready.js";
+import {
+  ensureQaStoreLoaded,
+  ensureSynonymsLoaded,
+} from "./store/store-init.js";
 import { initLaminar, flushLaminar } from "./utils/observability.js";
 import { resolveServerCapabilities, formatCapabilityTag } from "./utils/capabilities.js";
 
@@ -70,6 +73,19 @@ api.use("/synonyms/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/meeting-prep", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/meeting-prep/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 
+// Store-ready middleware — 只掛在真正需要該 store 的掛載點，
+// 其餘 route（/reports、/pipeline、/meeting-prep、/feedback、/sessions 列表）
+// 在 cold start 時完全不觸發 qa_items 查詢。
+api.use("/qa", qaStoreReady);
+api.use("/qa/*", qaStoreReady);
+api.use("/search", qaStoreReady);
+api.use("/chat", qaStoreReady);
+api.use("/chat/*", qaStoreReady);
+// GET /sessions 列表不需要 QA；只有送訊息會走 RAG／agent 檢索
+api.use("/sessions/:session_id/messages", qaStoreReady);
+api.use("/synonyms", synonymsReady);
+api.use("/synonyms/*", synonymsReady);
+
 // Mount routes
 api.route("/qa", qaRoute);
 api.route("/search", searchRoute);
@@ -86,44 +102,40 @@ app.route("/api/v1", api);
 // Server startup
 const port = config.PORT;
 
-/** Initialize stores (shared between Node.js server and Lambda cold start). Idempotent. */
-let _initPromise: Promise<void> | null = null;
+/**
+ * Cold start 必做的最小初始化（Node.js server 與 Lambda 共用）。冪等。
+ * 這裡不得加入任何會打 Supabase 資料表的動作——QA store 與 synonyms
+ * 一律交給 store/store-init.ts 的 ensureXxxLoaded() 在需要時才載入。
+ */
+let _corePromise: Promise<void> | null = null;
 
-export function initStores(): Promise<void> {
-  if (!_initPromise) {
-    _initPromise = _doInitStores().catch((err) => {
-      _initPromise = null;
+export function initCore(): Promise<void> {
+  if (!_corePromise) {
+    _corePromise = _doInitCore().catch((err) => {
+      _corePromise = null;
       throw err;
     });
   }
-  return _initPromise;
+  return _corePromise;
 }
 
-async function _doInitStores(): Promise<void> {
+/** 保留給既有呼叫端／測試的名稱；語意已改為只做 initCore()。 */
+export function initStores(): Promise<void> {
+  return initCore();
+}
+
+async function _doInitCore(): Promise<void> {
   await initLaminar();
-
-  try {
-    await loadQaStore();
-    console.log(`QAStore loaded: ${qaStore.count} items`);
-  } catch (err) {
-    console.warn("QAStore load failed (API will run without search):", err);
-  }
-
-  try {
-    if (synonymsStore.load) {
-      await synonymsStore.load();
-    } else if (synonymsStore.init) {
-      synonymsStore.init(paths.synonymCustomJsonPath);
-    }
-  } catch (err) {
-    console.warn("SynonymsStore load failed:", err);
-  }
-
   console.log(formatCapabilityTag(resolveServerCapabilities()));
 }
 
+export { ensureQaStoreLoaded, ensureSynonymsLoaded };
+
 if (process.env.NODE_ENV !== "test" && !isLambda) {
-  await initStores();
+  // 本機是長駐 process，啟動時預載仍然划算——但走的是同一組 lazy 函式，不另開一套邏輯。
+  await initCore();
+  await ensureQaStoreLoaded();
+  await ensureSynonymsLoaded();
 
   serve({ fetch: app.fetch, port }, (info) => {
     console.log(`Server running on http://localhost:${info.port}`);
