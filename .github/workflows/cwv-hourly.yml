@@ -1,0 +1,84 @@
+name: CWV Hourly Ingestion
+
+# 每小時把 Loki 的 web-vitals RUM 聚合寫進 Supabase cwv_hourly。
+#
+# 為什麼不能漏跑：來源 Loki 的 retention_period 只有 168h（7 天）。這個作業安靜停擺
+# 超過 7 天，那段 CWV 序列就永久遺失且事後無法回填——compactor 已經把來源刪掉了。
+# 所以下面有兩個 job：ingest 負責寫，freshness 負責在 ingest 完全沒被觸發時叫出來。
+
+on:
+  schedule:
+    - cron: '5 * * * *'   # 每小時第 5 分鐘，讓上一個小時確定收完
+  workflow_dispatch:
+    inputs:
+      backfill_hours:
+        description: '回填最近 N 個完整小時（上限 48）'
+        required: false
+        default: '2'
+
+# 同時只跑一個，避免排程與手動回填互相覆寫。不取消進行中的那個——
+# 它可能正在寫入，取消會留下 status='running' 的孤兒列。
+concurrency:
+  group: cwv-hourly
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      - name: Ingest CWV hourly
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # 經 env 傳遞而非直接內插進 run:——workflow_dispatch 的 input 是使用者輸入，
+          # 內插進 shell 等於命令注入面。腳本自己也會再驗一次上限 48。
+          BACKFILL_HOURS: ${{ github.event.inputs.backfill_hours || '2' }}
+        run: |
+          python scripts/ingest_cwv_hourly.py --execute --backfill-hours "$BACKFILL_HOURS"
+
+      - name: Verify last write
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/ingest_cwv_hourly.py --verify
+
+  # 資料新鮮度告警。
+  #
+  # 條件刻意是「cwv_hourly 最近一筆資料超過 3 小時」，不是「ingest job 有沒有失敗」——
+  # 排程根本沒被觸發時（cron 語法錯、GitHub 因 repo 閒置自動停用 schedule、有人手動
+  # 關掉忘了開回來）不會產生任何失敗事件，失敗型告警在那種情況下是靜音的。
+  # 只有資料本身的缺席能證明作業沒在跑。
+  #
+  # needs: 刻意不設——ingest 掛掉時這個 job 仍要跑；它本來就是為了涵蓋
+  # 「ingest 沒有回報任何東西」的情況。門檻取排程週期（1h）的 3 倍。
+  freshness:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      - name: Check cwv_hourly freshness
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/ingest_cwv_hourly.py --check-freshness

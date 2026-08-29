@@ -1,0 +1,91 @@
+name: CWV CrUX History Ingestion
+
+# 每週把 CrUX History API 的 vocus.cc 週序列（origin 級 + 代表 URL 級）寫進 Supabase
+# cwv_hourly（source='crux'）。CrUX 本身每週更新一次，排程週頻對齊；upsert 冪等，
+# 提早或延後跑都不會造成重複或遺漏——即使漏跑一整週，下次執行仍會用
+# collectionPeriodCount=40 把最近 40 週全部重新覆蓋一次。
+#
+# 與 cwv-hourly.yml（RUM，逐小時）刻意分成兩個 workflow：granularity 不同、
+# 排程週期不同、來源系統不同（Loki vs Google CrUX API），合併只會讓兩種失敗模式
+# 互相干擾判讀。
+
+on:
+  schedule:
+    - cron: '0 6 * * 2'   # 每週二 06:00 UTC；CrUX 資料集慣例於週初更新，實際發布日
+                          # 若飄移也不影響正確性——upsert 冪等，只是該週資料晚一點到位
+  workflow_dispatch:
+    inputs:
+      collection_period_count:
+        description: '回溯週數（1-40）'
+        required: false
+        default: '40'
+      origin_only:
+        description: '只抓 origin 級，跳過 URL 級（省配額）'
+        required: false
+        default: 'false'
+        type: boolean
+
+# 同時只跑一個，避免排程與手動回填互相覆寫。不取消進行中的那個——
+# 它可能正在寫入，取消會留下 status='running' 的孤兒列（同 cwv-hourly.yml 的理由）。
+concurrency:
+  group: cwv-crux-history
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      - name: Ingest CrUX history
+        env:
+          CRUX_API_KEY: ${{ secrets.CRUX_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # 經 env 傳遞而非直接內插進 run:——workflow_dispatch 的 input 是使用者輸入，
+          # 內插進 shell 等於命令注入面（同 cwv-hourly.yml 的理由）。腳本自己也會再驗一次上限。
+          COLLECTION_PERIOD_COUNT: ${{ github.event.inputs.collection_period_count || '40' }}
+          ORIGIN_ONLY: ${{ github.event.inputs.origin_only || 'false' }}
+        run: |
+          ARGS="--execute --collection-period-count $COLLECTION_PERIOD_COUNT"
+          if [ "$ORIGIN_ONLY" = "true" ]; then
+            ARGS="$ARGS --origin-only"
+          fi
+          python scripts/ingest_cwv_crux_history.py $ARGS
+
+      - name: Verify last write
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/ingest_cwv_crux_history.py --verify
+
+  # 資料新鮮度告警。條件是「cwv_hourly (source=crux) 最近一筆超過 10 天」，不是
+  # 「ingest job 有沒有失敗」——理由同 cwv-hourly.yml：排程根本沒被觸發時不會有
+  # 任何失敗事件，只有資料本身的缺席能證明作業沒在跑。
+  #
+  # needs: 刻意不設，理由同 cwv-hourly.yml。
+  freshness:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      - name: Check cwv_hourly (source=crux) freshness
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/ingest_cwv_crux_history.py --check-freshness
