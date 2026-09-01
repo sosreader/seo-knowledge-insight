@@ -113,12 +113,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dotenv import load_dotenv
 
 from crawl_taxonomy import (  # noqa: E402  （同目錄模組，路徑由上方 sys.path 保證）
-    UA_GROUP_HUMAN,
     build_crawler_ua_pattern,
     build_mobile_expr,
     build_path_prefix_expr,
     build_ua_token_expr,
-    classify_ua_group,
+    classify,
+    human_identity,
     normalize_path_prefix,
     parse_status_code,
 )
@@ -361,23 +361,25 @@ def _series_value(series: Mapping[str, Any]) -> float:
 # 聚合
 # ══════════════════════════════════════════════════════════════════════
 
-def fold_crawler(series: Sequence[Mapping[str, Any]]) -> dict[tuple[str, int, str], float]:
-    """crawler 查詢的 series → {(ua_group, status_code, path_prefix): value}。
+def fold_crawler(
+    series: Sequence[Mapping[str, Any]],
+) -> dict[tuple[str, str, int, str], float]:
+    """crawler 查詢的 series → {(ua_name, ua_group, status_code, path_prefix): value}。
 
-    多個 token 可能映射到同一個 ua_group（例如 AhrefsBot 與 AhrefsSiteAudit），
-    所以是累加不是覆寫。
+    ua_group 由 ua_name 唯一決定（classify 一次回傳兩者），所以把它放進 key
+    不會讓同一支 bot 裂成兩列；它在這裡只是順路帶著走到 payload。
+
+    多個 label 組合可能收斂到同一個 ua_name（例如同一支 bot 的不同 Chrome 版本
+    外殼），所以是累加不是覆寫。
     """
-    folded: dict[tuple[str, int, str], float] = {}
+    folded: dict[tuple[str, str, int, str], float] = {}
     for item in series:
         labels = item.get("metric", {})
         status_code = parse_status_code(labels.get("status", ""))
         if status_code is None:
             continue
-        key = (
-            classify_ua_group(labels.get("token", ""), labels.get("mob", "")),
-            status_code,
-            normalize_path_prefix(labels.get("pfx", "")),
-        )
+        ua_name, ua_group = classify(labels.get("token", ""), labels.get("mob", ""))
+        key = (ua_name, ua_group, status_code, normalize_path_prefix(labels.get("pfx", "")))
         folded[key] = folded.get(key, 0.0) + _series_value(item)
     return folded
 
@@ -406,7 +408,7 @@ def derive_human(
     crawl_daily_request_count_ck 也不收負數。
     """
     crawler_by_dim: dict[tuple[int, str], float] = {}
-    for (_, status_code, path_prefix), value in crawler.items():
+    for (_, _, status_code, path_prefix), value in crawler.items():
         dim = (status_code, path_prefix)
         crawler_by_dim[dim] = crawler_by_dim.get(dim, 0.0) + value
     return {
@@ -419,23 +421,26 @@ def build_rows(bucket_hour: datetime, counts: Mapping, byte_sums: Mapping, human
                human_bytes: Mapping) -> list[dict]:
     """組出 crawl_daily 的列。request_count == 0 的桶不落庫（CHECK 要求 > 0）。"""
     rows: list[dict] = []
-    for (ua_group, status_code, path_prefix), count in sorted(counts.items()):
-        rows.append(_row(bucket_hour, ua_group, status_code, path_prefix, count,
-                         byte_sums.get((ua_group, status_code, path_prefix), 0.0)))
+    for key, count in sorted(counts.items()):
+        ua_name, ua_group, status_code, path_prefix = key
+        rows.append(_row(bucket_hour, ua_name, ua_group, status_code, path_prefix,
+                         count, byte_sums.get(key, 0.0)))
+    human_name, human_group = human_identity()
     for (status_code, path_prefix), count in sorted(human_counts.items()):
-        rows.append(_row(bucket_hour, UA_GROUP_HUMAN, status_code, path_prefix, count,
-                         human_bytes.get((status_code, path_prefix), 0.0)))
+        rows.append(_row(bucket_hour, human_name, human_group, status_code, path_prefix,
+                         count, human_bytes.get((status_code, path_prefix), 0.0)))
     return [row for row in rows if row is not None]
 
 
-def _row(bucket_hour: datetime, ua_group: str, status_code: int, path_prefix: str,
-         count: float, byte_sum: float) -> dict | None:
+def _row(bucket_hour: datetime, ua_name: str, ua_group: str, status_code: int,
+         path_prefix: str, count: float, byte_sum: float) -> dict | None:
     request_count = int(count)
     if request_count <= 0:
         return None
     return {
         "date": bucket_hour.date().isoformat(),
         "hour": bucket_hour.hour,
+        "ua_name": ua_name,
         "ua_group": ua_group,
         "status_code": status_code,
         "path_prefix": path_prefix,
@@ -549,8 +554,8 @@ def run_verify() -> int:
     base = f"/rest/v1/{TABLE_CRAWL}?date=eq.{date_key}"
     exact = count_exact(f"{base}&select=date")
     rows = select_all(
-        f"{base}&select=hour,ua_group,status_code,path_prefix,request_count,bytes"
-        "&order=hour.asc,ua_group.asc"
+        f"{base}&select=hour,ua_name,ua_group,status_code,path_prefix,request_count,bytes"
+        "&order=hour.asc,ua_name.asc"
     )
     logger.info("crawl_daily %s：count=exact %d 列，分頁讀回 %d 列（相符=%s）",
                 date_key, exact, len(rows), exact == len(rows))
@@ -558,6 +563,7 @@ def run_verify() -> int:
     for row in rows:
         by_group[row["ua_group"]] = by_group.get(row["ua_group"], 0) + row["request_count"]
     logger.info("  涵蓋小時：%s", sorted({row["hour"] for row in rows}))
+    logger.info("  具名 bot 數（ua_name）：%d", len({row["ua_name"] for row in rows}))
     logger.info("  ua_group 分群數：%d", len(by_group))
     for group, count in sorted(by_group.items(), key=lambda item: -item[1]):
         logger.info("    %-20s %8d requests", group, count)

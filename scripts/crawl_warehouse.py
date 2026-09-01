@@ -45,7 +45,9 @@ logger = logging.getLogger(__name__)
 
 TABLE_CRAWL = "crawl_daily"
 TABLE_RUN = "ingestion_run"
-CONFLICT_KEY = "date,hour,ua_group,status_code,path_prefix"
+# 冪等鍵以 ua_name（原始事實）而非 ua_group（衍生標籤）為維度，見 migrations/017。
+# ua_group 仍在 payload 裡，衝突時會被覆蓋 —— 那正是「重新分類 = 一次 upsert」的機制。
+CONFLICT_KEY = "date,hour,ua_name,status_code,path_prefix"
 CONFLICT_FIELDS = tuple(CONFLICT_KEY.split(","))
 UPSERT_BATCH_SIZE = 500
 READ_PAGE_SIZE = 1000  # PostgREST 的 db-max-rows 預設就是 1000

@@ -96,14 +96,18 @@ TOKEN_TO_UA_GROUP: dict[str, str] = {
     "PerplexityBot": "ai-search-bot",
     "YouBot": "ai-search-bot",
     "ExaSearchBot": "ai-search-bot",
-    # 純語料抓取，不回連
+    # 純語料抓取，沒有面向使用者的搜尋介面
     "ClaudeBot": "ai-training-bot",
     "GPTBot": "ai-training-bot",
     "Bytespider": "ai-training-bot",
     "meta-webindexer": "ai-training-bot",
     "AIWebIndex": "ai-training-bot",
-    "Amazonbot": "ai-training-bot",
-    "Applebot": "ai-training-bot",
+    # 同時做語料抓取與面向使用者的搜尋／助理介面。
+    # 獨立成桶而不是併進 ai-training-bot：併進去會讓該桶的 SUM 靜默包含會回連的 bot，
+    # 而歧義寫在 COMMENT 裡不會參與加總。這兩支在本站佔 crawler 流量 33%，
+    # 等於那個桶會主要由歧義項組成。見 migrations/017 的論證。
+    "Applebot": "ai-mixed-bot",   # 餵 Siri / Spotlight 搜尋
+    "Amazonbot": "ai-mixed-bot",  # 餵 Alexa
     # 第三方 SEO 稽核爬蟲。算 crawl budget 時要能扣掉——它們不是搜尋引擎。
     "AhrefsSiteAudit": "seo-tool-bot",
     "AhrefsBot": "seo-tool-bot",
@@ -130,8 +134,17 @@ MOBILE_MARKERS = ("Android", "iPhone", "iPad", "Mobile")
 
 UA_GROUP_OTHER_BOT = "other-bot"
 UA_GROUP_HUMAN = "human"
+# ua_name 的殘餘值。與 ua_group 同名是刻意的：這兩種列沒有更細的身分可記，
+# 「這一列的具名身分就是它的分群」本身就是事實。
+UA_NAME_OTHER_BOT = "other-bot"
+UA_NAME_HUMAN = "human"
 GOOGLEBOT_TOKEN = "Googlebot"
+GOOGLEBOT_DESKTOP = "googlebot-desktop"
 GOOGLEBOT_SMARTPHONE = "googlebot-smartphone"
+
+# crawl_daily_ua_name_ck 的鏡像。ua_name 進了 unique 索引，格式與長度都要先擋。
+UA_NAME_PATTERN = "^[a-z0-9][a-z0-9._-]*$"
+UA_NAME_MAX_BYTES = 64
 
 # ── path 分桶 ───────────────────────────────────────────────────────────
 # 第一層路徑段的 allowlist。不在名單上者一律塌成 PATH_PREFIX_OTHER。
@@ -200,8 +213,12 @@ def build_crawler_ua_pattern() -> str:
 # 分類
 # ══════════════════════════════════════════════════════════════════════
 
-def classify_ua_group(token: str, mobile_marker: str) -> str:
-    """(token, mobile_marker) → crawl_daily.ua_group。
+def classify(token: str, mobile_marker: str) -> tuple[str, str]:
+    """(token, mobile_marker) → (ua_name, ua_group)。
+
+    **一次回傳兩個值是刻意的**：ua_group 是 ua_name 的函數，分開算就有分岔的可能，
+    而分岔之後 crawl_daily 會出現「同一支 bot 掛在兩個分群」的列——冪等鍵只看
+    ua_name，擋不住這件事。
 
     token 為空代表 UA 通過了過濾樣式但沒命中任何具名 token ⇒ 它是靠泛用標記
     （bot/crawler/spider/slurp）進來的 ⇒ other-bot。
@@ -209,18 +226,27 @@ def classify_ua_group(token: str, mobile_marker: str) -> str:
     「通過過濾但 token 為空」與「命中泛用標記」是等價的，不需要再傳旗標進來。
     """
     if not token:
-        return UA_GROUP_OTHER_BOT
+        return UA_NAME_OTHER_BOT, UA_GROUP_OTHER_BOT
     group = TOKEN_TO_UA_GROUP.get(token)
     if group is None:
         # 抽到分群表以外的 token：只可能是 label_format 的樣式與這張表分岔了。
-        # 不猜、不靜默塞進殘餘桶——那正是 015 的 CHECK 想擋掉的事。
+        # 不猜、不靜默塞進殘餘桶——那正是 017 的 CHECK 想擋掉的事。
         raise ValueError(
             f"UA token {token!r} 不在 TOKEN_TO_UA_GROUP 裡。"
             f"label_format 的樣式是由這張表產生的，出現這個錯誤代表兩者已經分岔。"
         )
-    if token == GOOGLEBOT_TOKEN and mobile_marker:
-        return GOOGLEBOT_SMARTPHONE
-    return group
+    if token == GOOGLEBOT_TOKEN:
+        # 泛用 Googlebot 的 desktop / smartphone 只差在外層有沒有行動裝置標記。
+        # ua_name 與 ua_group 在這裡剛好同值——Googlebot 的「具名身分」本來就
+        # 包含它用哪一種 crawler 在抓。
+        name = GOOGLEBOT_SMARTPHONE if mobile_marker else GOOGLEBOT_DESKTOP
+        return name, name
+    return token.lower(), group
+
+
+def human_identity() -> tuple[str, str]:
+    """human 列的 (ua_name, ua_group)。"""
+    return UA_NAME_HUMAN, UA_GROUP_HUMAN
 
 
 def normalize_path_prefix(raw: str) -> str:

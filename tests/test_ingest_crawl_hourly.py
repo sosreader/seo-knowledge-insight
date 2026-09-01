@@ -116,9 +116,13 @@ REAL_USER_AGENTS = {
         "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-SearchBot/1.0; "
         "+searchbot@anthropic.com)"
     ),
-    "ai-training-bot": (
+    "ai-mixed-bot": (
         "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amazonbot/0.1; "
         "+https://developer.amazon.com/support/amazonbot) Chrome/119.0.6045.214 Safari/537.36"
+    ),
+    "ai-training-bot": (
+        "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ClaudeBot/1.0; "
+        "+claudebot@anthropic.com)"
     ),
     "seo-tool-bot": (
         "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -203,35 +207,72 @@ class TestTokenExtractionOrdering:
 # ua_group 分類
 # ══════════════════════════════════════════════════════════════════════
 
-class TestClassifyUaGroup:
+class TestClassify:
     @pytest.mark.parametrize("group", sorted(REAL_USER_AGENTS))
     def test_real_user_agent_lands_in_expected_group(self, group: str) -> None:
         user_agent = REAL_USER_AGENTS[group]
         token = _extract_token(user_agent)
         mobile = _apply(_pattern_of(tax.build_mobile_expr()), user_agent)
-        assert tax.classify_ua_group(token, mobile) == group
+        assert tax.classify(token, mobile)[1] == group
 
     def test_googlebot_splits_on_mobile_marker(self) -> None:
-        assert tax.classify_ua_group("Googlebot", "") == "googlebot-desktop"
-        assert tax.classify_ua_group("Googlebot", "Android") == "googlebot-smartphone"
+        assert tax.classify("Googlebot", "") == ("googlebot-desktop", "googlebot-desktop")
+        assert tax.classify("Googlebot", "Android") == ("googlebot-smartphone", "googlebot-smartphone")
 
     def test_mobile_marker_does_not_affect_other_tokens(self) -> None:
-        assert tax.classify_ua_group("bingbot", "Mobile") == "bingbot"
+        assert tax.classify("bingbot", "Mobile") == ("bingbot", "bingbot")
 
     def test_empty_token_means_generic_bot_marker_matched(self) -> None:
-        assert tax.classify_ua_group("", "") == tax.UA_GROUP_OTHER_BOT
+        assert tax.classify("", "") == (tax.UA_NAME_OTHER_BOT, tax.UA_GROUP_OTHER_BOT)
 
     def test_unknown_token_raises_instead_of_silently_bucketing(self) -> None:
         """分群表與 label_format 樣式分岔時要當場失敗，不可靜默塞進殘餘桶。"""
         with pytest.raises(ValueError, match="TOKEN_TO_UA_GROUP"):
-            tax.classify_ua_group("SomeBotWeNeverDefined", "")
+            tax.classify("SomeBotWeNeverDefined", "")
+
+    def test_ua_name_is_the_lowercased_token(self) -> None:
+        assert tax.classify("Claude-SearchBot", "")[0] == "claude-searchbot"
+        assert tax.classify("OAI-SearchBot", "")[0] == "oai-searchbot"
+
+    def test_name_and_group_come_from_one_call_so_they_cannot_drift(self) -> None:
+        """ua_group 是 ua_name 的函數。分開算就可能分岔，而冪等鍵只看 ua_name，擋不住。"""
+        for token in tax.TOKEN_TO_UA_GROUP:
+            name, group = tax.classify(token, "")
+            assert (name, group) == tax.classify(token, "")
+            # 同一個 ua_name 在整張表裡只能對應一個 ua_group
+            assert group == tax.classify(token, "")[1]
+
+    def test_one_ua_name_maps_to_exactly_one_ua_group(self) -> None:
+        seen: dict[str, str] = {}
+        for token in tax.TOKEN_TO_UA_GROUP:
+            for mobile in ("", "Android"):
+                name, group = tax.classify(token, mobile)
+                assert seen.setdefault(name, group) == group, name
+
+    def test_applebot_and_amazonbot_are_mixed_not_training(self) -> None:
+        """兩者都有面向使用者的搜尋介面（Siri / Alexa）。併進 ai-training-bot 會讓
+        該桶的 SUM 靜默包含會回連的 bot，而歧義寫在 COMMENT 裡不會參與加總。"""
+        assert tax.classify("Applebot", "")[1] == "ai-mixed-bot"
+        assert tax.classify("Amazonbot", "")[1] == "ai-mixed-bot"
+
+    @pytest.mark.parametrize("group", ["ai-search-bot", "ai-training-bot", "ai-mixed-bot"])
+    def test_three_ai_buckets_are_all_populated(self, group: str) -> None:
+        assert group in set(tax.TOKEN_TO_UA_GROUP.values())
+
+    def test_every_ua_name_satisfies_the_db_check(self) -> None:
+        """crawl_daily_ua_name_ck：小寫 slug 且 <= 64 bytes（它在 unique 索引裡）。"""
+        names = {tax.classify(t, m)[0] for t in tax.TOKEN_TO_UA_GROUP for m in ("", "Android")}
+        names |= {tax.UA_NAME_OTHER_BOT, tax.UA_NAME_HUMAN}
+        for name in names:
+            assert re.fullmatch(tax.UA_NAME_PATTERN, name), name
+            assert len(name.encode()) <= tax.UA_NAME_MAX_BYTES, name
 
     def test_every_group_is_within_the_check_constraint_domain(self) -> None:
         """值域必須與 migration 017 的 crawl_daily_ua_group_ck 一致。"""
         allowed = {
             "googlebot-desktop", "googlebot-smartphone", "googlebot-image", "googlebot-other",
-            "bingbot", "ai-search-bot", "ai-training-bot", "seo-tool-bot", "social-bot",
-            "other-bot", "human", "other",
+            "bingbot", "ai-search-bot", "ai-training-bot", "ai-mixed-bot",
+            "seo-tool-bot", "social-bot", "other-bot", "human", "other",
         }
         assert set(tax.TOKEN_TO_UA_GROUP.values()) <= allowed
         assert {tax.GOOGLEBOT_SMARTPHONE, tax.UA_GROUP_OTHER_BOT, tax.UA_GROUP_HUMAN} <= allowed
@@ -503,19 +544,31 @@ def _series(labels: dict, value: float) -> dict:
 
 
 class TestFolding:
-    def test_crawler_series_folds_into_ua_group(self) -> None:
+    def test_crawler_series_folds_into_name_and_group(self) -> None:
         folded = fold_crawler([
             _series({"token": "Googlebot", "mob": "Android", "status": "200", "pfx": "/article"}, 10),
         ])
-        assert folded == {("googlebot-smartphone", 200, "/article"): 10.0}
+        assert folded == {("googlebot-smartphone", "googlebot-smartphone", 200, "/article"): 10.0}
 
-    def test_tokens_sharing_a_group_are_summed_not_overwritten(self) -> None:
-        """AhrefsBot 與 AhrefsSiteAudit 都是 seo-tool-bot，必須相加。"""
+    def test_same_bot_under_different_shells_is_summed(self) -> None:
+        """同一支 bot 的不同 Chrome 版本外殼是不同 series，必須收斂到同一個 ua_name。"""
+        folded = fold_crawler([
+            _series({"token": "AhrefsBot", "mob": "", "status": "200", "pfx": "/article"}, 7),
+            _series({"token": "AhrefsBot", "mob": "Android", "status": "200", "pfx": "/article"}, 5),
+        ])
+        assert folded == {("ahrefsbot", "seo-tool-bot", 200, "/article"): 12.0}
+
+    def test_two_bots_in_one_group_stay_separate_rows(self) -> None:
+        """AhrefsBot 與 AhrefsSiteAudit 同屬 seo-tool-bot，但 ua_name 不同 ⇒ 兩列。
+        這正是加 ua_name 的目的：分群可以事後重算，具名事實不能。"""
         folded = fold_crawler([
             _series({"token": "AhrefsBot", "mob": "", "status": "200", "pfx": "/article"}, 7),
             _series({"token": "AhrefsSiteAudit", "mob": "", "status": "200", "pfx": "/article"}, 5),
         ])
-        assert folded == {("seo-tool-bot", 200, "/article"): 12.0}
+        assert folded == {
+            ("ahrefsbot", "seo-tool-bot", 200, "/article"): 7.0,
+            ("ahrefssiteaudit", "seo-tool-bot", 200, "/article"): 5.0,
+        }
 
     def test_invalid_status_series_dropped(self) -> None:
         assert fold_crawler([
@@ -526,7 +579,9 @@ class TestFolding:
         folded = fold_crawler([
             _series({"token": "Googlebot", "mob": "", "status": "200", "pfx": ""}, 3),
         ])
-        assert folded == {("googlebot-desktop", 200, tax.PATH_PREFIX_OTHER): 3.0}
+        assert folded == {
+            ("googlebot-desktop", "googlebot-desktop", 200, tax.PATH_PREFIX_OTHER): 3.0
+        }
 
     def test_total_series_folds_on_status_and_prefix(self) -> None:
         assert fold_total([_series({"status": "404", "pfx": "/tags"}, 4)]) == {(404, "/tags"): 4.0}
@@ -539,14 +594,15 @@ class TestDeriveHuman:
     def test_human_is_total_minus_all_crawler_buckets(self) -> None:
         total = {(200, "/article"): 100.0}
         crawler = {
-            ("googlebot-smartphone", 200, "/article"): 30.0,
-            ("ai-search-bot", 200, "/article"): 20.0,
+            ("googlebot-smartphone", "googlebot-smartphone", 200, "/article"): 30.0,
+            ("claude-searchbot", "ai-search-bot", 200, "/article"): 20.0,
         }
         assert derive_human(total, crawler) == {(200, "/article"): 50.0}
 
     def test_negative_result_is_clamped_to_zero(self) -> None:
         """兩個查詢分開送，邊界上的行可能只被其中一個看到；負數過不了 CHECK。"""
-        assert derive_human({(200, "/"): 5.0}, {("bingbot", 200, "/"): 9.0}) == {(200, "/"): 0.0}
+        assert derive_human({(200, "/"): 5.0},
+                            {("bingbot", "bingbot", 200, "/"): 9.0}) == {(200, "/"): 0.0}
 
     def test_dimension_without_crawler_traffic_passes_through(self) -> None:
         assert derive_human({(302, "/pay"): 8.0}, {}) == {(302, "/pay"): 8.0}
@@ -554,38 +610,39 @@ class TestDeriveHuman:
 
 class TestBuildRows:
     def test_row_shape_matches_crawl_daily_columns(self) -> None:
-        rows = build_rows(HOUR, {("bingbot", 200, "/article"): 12.0},
-                          {("bingbot", 200, "/article"): 3456.0}, {}, {})
+        key = ("bingbot", "bingbot", 200, "/article")
+        rows = build_rows(HOUR, {key: 12.0}, {key: 3456.0}, {}, {})
         assert rows == [{
-            "date": "2026-09-01", "hour": 8, "ua_group": "bingbot", "status_code": 200,
-            "path_prefix": "/article", "request_count": 12, "bytes": 3456,
+            "date": "2026-09-01", "hour": 8, "ua_name": "bingbot", "ua_group": "bingbot",
+            "status_code": 200, "path_prefix": "/article", "request_count": 12, "bytes": 3456,
         }]
 
     def test_hour_is_the_bucket_hour_in_utc(self) -> None:
-        rows = build_rows(datetime(2026, 9, 1, 23, tzinfo=UTC), {("bingbot", 200, "/"): 1.0}, {}, {}, {})
+        rows = build_rows(datetime(2026, 9, 1, 23, tzinfo=UTC),
+                          {("bingbot", "bingbot", 200, "/"): 1.0}, {}, {}, {})
         assert rows[0]["hour"] == 23 and rows[0]["date"] == "2026-09-01"
 
     def test_zero_count_bucket_is_skipped(self) -> None:
         """crawl_daily_request_count_ck 要求 > 0；空桶通常代表聚合端出錯。"""
-        assert build_rows(HOUR, {("bingbot", 200, "/"): 0.0}, {}, {}, {}) == []
+        assert build_rows(HOUR, {("bingbot", "bingbot", 200, "/"): 0.0}, {}, {}, {}) == []
 
     def test_missing_bytes_defaults_to_zero_not_dropped(self) -> None:
         """304 沒有 body，bytes=0 是合法的觀測值。"""
-        rows = build_rows(HOUR, {("bingbot", 304, "/article"): 2.0}, {}, {}, {})
+        rows = build_rows(HOUR, {("bingbot", "bingbot", 304, "/article"): 2.0}, {}, {}, {})
         assert rows[0]["bytes"] == 0
 
     def test_human_rows_are_appended_with_the_human_group(self) -> None:
         rows = build_rows(HOUR, {}, {}, {(200, "/article"): 40.0}, {(200, "/article"): 900.0})
         assert rows == [{
-            "date": "2026-09-01", "hour": 8, "ua_group": "human", "status_code": 200,
-            "path_prefix": "/article", "request_count": 40, "bytes": 900,
+            "date": "2026-09-01", "hour": 8, "ua_name": "human", "ua_group": "human",
+            "status_code": 200, "path_prefix": "/article", "request_count": 40, "bytes": 900,
         }]
 
     def test_negative_bytes_clamped(self) -> None:
-        assert _row(HOUR, "human", 200, "/", 1.0, -5.0)["bytes"] == 0
+        assert _row(HOUR, "human", "human", 200, "/", 1.0, -5.0)["bytes"] == 0
 
     def test_row_returns_none_for_empty_bucket(self) -> None:
-        assert _row(HOUR, "human", 200, "/", 0.0, 0.0) is None
+        assert _row(HOUR, "human", "human", 200, "/", 0.0, 0.0) is None
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -638,8 +695,8 @@ class TestRunIngestion:
                           "crawler_requests": 1, "total_requests": 2, "rows": len(rows)}
         return patch("scripts.ingest_crawl_hourly.collect_hour", return_value=(rows, stats))
 
-    ROW = {"date": "2026-09-01", "hour": 8, "ua_group": "bingbot", "status_code": 200,
-           "path_prefix": "/article", "request_count": 1, "bytes": 2}
+    ROW = {"date": "2026-09-01", "hour": 8, "ua_name": "bingbot", "ua_group": "bingbot",
+           "status_code": 200, "path_prefix": "/article", "request_count": 1, "bytes": 2}
 
     def test_dry_run_never_writes(self) -> None:
         with self._patches([self.ROW]), \
@@ -716,7 +773,7 @@ class TestRunVerify:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         caplog.set_level(logging.INFO)
-        rows = [{"hour": 8, "ua_group": "bingbot", "status_code": 200,
+        rows = [{"hour": 8, "ua_name": "bingbot", "ua_group": "bingbot", "status_code": 200,
                  "path_prefix": "/article", "request_count": 5, "bytes": 1}]
         with patch("scripts.ingest_crawl_hourly.latest_bucket_hour", return_value=HOUR), \
              patch("scripts.ingest_crawl_hourly.count_exact", return_value=1), \
@@ -732,6 +789,23 @@ class TestRunVerify:
 # ══════════════════════════════════════════════════════════════════════
 # Supabase 存取層
 # ══════════════════════════════════════════════════════════════════════
+
+class TestConflictKeyShape:
+    """冪等鍵的維度是這張表最難改的決定，用測試把它釘住。"""
+
+    def test_key_is_keyed_on_ua_name_not_ua_group(self) -> None:
+        """ua_name 是原始事實、進鍵；ua_group 是衍生標籤、不進鍵——
+        因為分類法會改，而 Loki 168h 之後沒有原始資料可以重算。"""
+        assert "ua_name" in wh.CONFLICT_FIELDS
+        assert "ua_group" not in wh.CONFLICT_FIELDS
+
+    def test_key_matches_migration_017_unique_constraint(self) -> None:
+        assert wh.CONFLICT_FIELDS == ("date", "hour", "ua_name", "status_code", "path_prefix")
+
+    def test_ua_group_still_travels_in_the_payload(self) -> None:
+        """不在鍵裡但要在 payload 裡：衝突時被覆蓋，那就是「重新分類 = 一次 upsert」。"""
+        assert "ua_group" in TestRunIngestion.ROW
+
 
 class TestWarehouseIdempotency:
     def test_upsert_payload_carries_ingested_at(self) -> None:
@@ -859,6 +933,6 @@ class TestWarehouseRunBookkeeping:
 class TestCrawlDateSanity:
     def test_bucket_date_is_the_utc_date_of_the_hour(self) -> None:
         """crawl_daily.hour 的 catalog comment 明說是 UTC，schema 無法強制，只能靠 ingest。"""
-        row = _row(datetime(2026, 8, 31, 23, tzinfo=UTC), "human", 200, "/", 1.0, 0.0)
+        row = _row(datetime(2026, 8, 31, 23, tzinfo=UTC), "human", "human", 200, "/", 1.0, 0.0)
         assert row["date"] == date(2026, 8, 31).isoformat()
         assert row["hour"] == 23
