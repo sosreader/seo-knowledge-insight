@@ -60,9 +60,14 @@
   ```
   `migrations/` 有任何未追蹤或未 stage 的檔案就**停下來問**，不要 push——
   那些是別人的草稿，你會替他們部署。
-- 實例（2026-09-01）：一個 agent 的 016 草稿在它本機驗證跑完後的 36 秒內就已經在 prod，
-  而它從未執行過非 dry-run 的 push；是另一個 session 的 `db push` 帶上去的。
-  這次驗證恰好趕在 push 之前通過，**是時間上的僥倖不是機制上的保證**。
+- 實例（2026-09-01）：一個 agent 的 016 草稿**從建檔到進 prod 不到 83 秒**
+  （檔案 mtime `16:34:25` → 另一個 session 的 commit `3f191f8` 於 `16:35:48`，
+  而那次 `db push` 發生在該 commit 之前），而草稿作者**從未執行過非 dry-run 的 push**。
+  它的本機驗證恰好趕在那次 push 之前跑完，**是時間上的僥倖不是機制上的保證**——
+  順序反過來，語法錯的 migration 就已經在 prod 了。
+- 同版本號的兩份 migration 會撞 `schema_migrations_pkey`，**先套用者勝出、
+  後者的 DDL 隨交易靜默回滾**——執行 push 的人不一定會發現自己那份沒生效。
+  版本號若剛好不同，則兩份都會套用，同名物件誰最後生效**取決於檔名的字母序**。
   詳見 knowledge-base `wiki/learned/migrations-dir-is-a-deploy-queue-any-session-push-applies-your-draft.md`
 
 ---
