@@ -18,7 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.ingest_cwv_hourly import (  # noqa: E402
     DEFAULT_LOOKBACK_HOURS,
+    MAX_AGE_HOURS,
     MAX_BACKFILL_HOURS,
+    RETENTION_SAFETY_MARGIN_HOURS,
     OUTLIER_MAX_BY_METRIC,
     OUTLIER_MAX_DEFAULT,
     LokiQueryError,
@@ -31,6 +33,7 @@ from scripts.ingest_cwv_hourly import (  # noqa: E402
     complete_hours,
     compute_unknown_ratios,
     parse_matrix,
+    parse_iso_hour,
     resolve_hours,
     run_freshness_check,
     run_ingestion,
@@ -81,16 +84,49 @@ class TestBackfillGuard:
         assert len(resolve_hours(None)) == DEFAULT_LOOKBACK_HOURS
         assert DEFAULT_LOOKBACK_HOURS >= 2, "相鄰執行必須重疊才能自癒"
 
-    def test_max_backfill_is_far_below_loki_retention(self) -> None:
+    def test_span_cap_is_a_typo_guard_not_the_retention_defence(self) -> None:
+        # 跨度上限只防打錯字；保留期防線是 MAX_AGE_HOURS 的絕對時間檢查。
         assert MAX_BACKFILL_HOURS == 48
-        assert MAX_BACKFILL_HOURS < 168 - 48, "必須留足安全邊界，不頂著保留期門檻跑"
+        assert MAX_AGE_HOURS == 168 - RETENTION_SAFETY_MARGIN_HOURS
+        assert MAX_AGE_HOURS < 168, "必須留邊界，不頂著保留期門檻跑"
 
-    def test_over_limit_rejected_with_retention_reason(self) -> None:
+    def test_over_span_rejected_and_points_at_the_real_guard(self) -> None:
         with pytest.raises(ValueError) as excinfo:
             resolve_hours(200)
         message = str(excinfo.value)
-        assert "168h" in message and "200" in message
-        assert "全零" in message, "錯誤訊息要講清楚為什麼——靜默回空才是真正的危險"
+        assert "200" in message
+        assert "MAX_AGE_HOURS" in message, "錯誤訊息要把人導向真正的門檻，不要讓人以為放寬跨度就安全"
+
+    def test_narrow_but_old_window_is_reachable(self) -> None:
+        # 這是舊實作構不到的形狀：只有 34h 寬，但起點在 82h 前。
+        # 舊實作把視窗錨死在 now，只能靠加大跨度往回搆，而跨度上限正好禁止。
+        now = datetime(2026, 9, 1, 7, 49, tzinfo=timezone.utc)
+        hours = resolve_hours(34, until=datetime(2026, 8, 30, 7, 0, tzinfo=timezone.utc), now=now)
+        assert len(hours) == 34
+        assert hours[0] == datetime(2026, 8, 28, 21, 0, tzinfo=timezone.utc)
+        assert hours[-1] == datetime(2026, 8, 30, 6, 0, tzinfo=timezone.utc)
+
+    def test_window_beyond_retention_rejected_by_absolute_age(self) -> None:
+        # 跨度合格（2h）但整段已在保留期外——舊的跨度檢查會放行，這裡必須擋下。
+        now = datetime(2026, 9, 1, 7, 49, tzinfo=timezone.utc)
+        with pytest.raises(ValueError) as excinfo:
+            resolve_hours(2, until=datetime(2026, 8, 20, 0, 0, tzinfo=timezone.utc), now=now)
+        message = str(excinfo.value)
+        assert "全零" in message, "要講清楚危險在於靜默回空，不是查詢會失敗"
+        assert "救不回來" in message
+
+    def test_future_anchor_rejected(self) -> None:
+        now = datetime(2026, 9, 1, 7, 49, tzinfo=timezone.utc)
+        with pytest.raises(ValueError) as excinfo:
+            resolve_hours(2, until=datetime(2026, 9, 2, 0, 0, tzinfo=timezone.utc), now=now)
+        assert "未來" in str(excinfo.value)
+
+    def test_naive_anchor_treated_as_utc(self) -> None:
+        assert parse_iso_hour("2026-08-30T07:00:00") == parse_iso_hour("2026-08-30T07:00:00Z")
+
+    def test_malformed_anchor_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            parse_iso_hour("30/08/2026")
 
     def test_limit_boundary_accepted(self) -> None:
         assert len(resolve_hours(MAX_BACKFILL_HOURS)) == MAX_BACKFILL_HOURS

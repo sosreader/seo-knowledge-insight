@@ -133,7 +133,15 @@ SOURCE = "rum"
 BUCKET = "1h"
 STEP_SECONDS = 3600
 DEFAULT_LOOKBACK_HOURS = 2
-MAX_BACKFILL_HOURS = 48  # 硬性 < 168h retention，留 120h 安全邊界
+MAX_BACKFILL_HOURS = 48  # 單次跨度上限，防打錯字（例如多打一個 0）
+
+# 【真正的安全門檻 — 絕對時間，不是跨度】
+# 超出 retention 的查詢會回 HTTP 200 + 全零而不是報錯，所以必須在送查之前擋。
+# 跨度上限擋不住這件事：一段只有 34h 寬、但起點在 82h 前的視窗，跨度合格卻可能
+# 整段落在保留期外。真正該檢查的是「最舊的那一小時距今多久」。
+# 留 24h 邊界，不頂著 168h 門檻跑（Loki 的實際刪除有延遲，且排程本身可能晚跑）。
+RETENTION_SAFETY_MARGIN_HOURS = 24
+MAX_AGE_HOURS = LOKI_RETENTION_HOURS - RETENTION_SAFETY_MARGIN_HOURS  # 144
 UNKNOWN = "unknown"
 
 # Loki stream label → cwv_hourly 欄位。這五個都是真正的 stream label（非 JSON 欄位），
@@ -185,6 +193,18 @@ def complete_hours(now: datetime, count: int) -> list[datetime]:
     """
     current = truncate_to_hour(now)
     return [current - timedelta(hours=offset) for offset in range(count, 0, -1)]
+
+
+def parse_iso_hour(raw: str) -> datetime:
+    """解析 CLI 傳入的 ISO 時間。無時區者視為 UTC，避免跟著本機時區漂移。"""
+    text = raw.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError(f"--backfill-until 不是合法 ISO 時間：{raw!r}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return truncate_to_hour(parsed)
 
 
 def to_nanoseconds(moment: datetime) -> int:
@@ -639,18 +659,45 @@ def run_freshness_check() -> int:
     return 0
 
 
-def resolve_hours(backfill_hours: int | None) -> list[datetime]:
+def resolve_hours(
+    backfill_hours: int | None,
+    until: datetime | None = None,
+    now: datetime | None = None,
+) -> list[datetime]:
+    """算出要處理的整點小時清單。
+
+    `until` 是視窗的**新端**（預設 = 現在），讓回填可以錨定到過去補洞，
+    而不是只能從現在往回加大跨度——後者遇到「窄但舊」的缺口會構不到。
+    """
+    now = now or datetime.now(timezone.utc)
     lookback = backfill_hours if backfill_hours is not None else DEFAULT_LOOKBACK_HOURS
     if lookback < 1:
         raise ValueError("--backfill-hours 必須 >= 1")
     if lookback > MAX_BACKFILL_HOURS:
         raise ValueError(
-            f"--backfill-hours {lookback} 超過上限 {MAX_BACKFILL_HOURS}。"
-            f"Loki retention_period 只有 {LOKI_RETENTION_HOURS}h，且超出保留期的查詢"
-            f"會回 HTTP 200 + 全零而不是報錯——回填太舊會靜默寫入空資料污染歷史。"
-            f"上限刻意壓在 {MAX_BACKFILL_HOURS}h 留足安全邊界，不頂著門檻跑。"
+            f"--backfill-hours {lookback} 超過單次跨度上限 {MAX_BACKFILL_HOURS}。"
+            f"這道門檻只防打錯字；真正的保留期防線是 MAX_AGE_HOURS={MAX_AGE_HOURS}h 的絕對時間檢查。"
+            f"要補更寬的缺口請分批，並用 --backfill-until 錨定每一批的新端。"
         )
-    return complete_hours(datetime.now(timezone.utc), lookback)
+
+    anchor = truncate_to_hour(until) if until else now
+    if until and anchor > truncate_to_hour(now):
+        raise ValueError(
+            f"--backfill-until {anchor.isoformat()} 在未來。"
+            f"未結束的小時是半滿的桶，寫進去無法與完整小時區分（見設計決定 1）。"
+        )
+    hours = complete_hours(anchor, lookback)
+
+    age_hours = (truncate_to_hour(now) - hours[0]).total_seconds() / 3600
+    if age_hours > MAX_AGE_HOURS:
+        raise ValueError(
+            f"最舊的目標小時 {hours[0].isoformat()} 距今 {age_hours:.0f}h，"
+            f"超過 MAX_AGE_HOURS={MAX_AGE_HOURS}h（retention {LOKI_RETENTION_HOURS}h "
+            f"減 {RETENTION_SAFETY_MARGIN_HOURS}h 安全邊界）。"
+            f"超出保留期的查詢會回 HTTP 200 + 全零而不是報錯——這一段已經救不回來，"
+            f"硬跑只會把空資料寫進歷史。"
+        )
+    return hours
 
 
 def main() -> None:
@@ -661,7 +708,11 @@ def main() -> None:
     parser.add_argument("--check-freshness", action="store_true",
                         help=f"新鮮度告警：cwv_hourly 最新資料超過 {FRESHNESS_MAX_AGE_HOURS}h 則 exit 1")
     parser.add_argument("--backfill-hours", type=int, default=None,
-                        help=f"回填最近 N 個完整小時（預設 {DEFAULT_LOOKBACK_HOURS}，上限 {MAX_BACKFILL_HOURS}）")
+                        help=f"回填 N 個完整小時（預設 {DEFAULT_LOOKBACK_HOURS}，單次跨度上限 {MAX_BACKFILL_HOURS}）")
+    parser.add_argument("--backfill-until", type=str, default=None,
+                        help="視窗新端的 ISO 時間（預設為現在）。補歷史缺口時錨定用，"
+                             f"例如 --backfill-until 2026-08-30T07:00:00Z --backfill-hours 34。"
+                             f"最舊的目標小時距今不得超過 {MAX_AGE_HOURS}h。")
     args = parser.parse_args()
 
     if args.verify:
@@ -670,7 +721,8 @@ def main() -> None:
         sys.exit(run_freshness_check())
 
     try:
-        hours = resolve_hours(args.backfill_hours)
+        until = parse_iso_hour(args.backfill_until) if args.backfill_until else None
+        hours = resolve_hours(args.backfill_hours, until=until)
     except ValueError as exc:
         logger.error("%s", exc)
         sys.exit(2)
