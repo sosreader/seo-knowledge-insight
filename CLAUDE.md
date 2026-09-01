@@ -43,6 +43,28 @@
 - 寫入檔案前驗證路徑，防止 path traversal
 - LLM 回傳內容當作不可信輸入，必須驗證 schema 後才使用
 
+### 5. Database Migrations
+
+**`supabase/migrations/` 不是原始碼目錄，是部署佇列。** 檔案放進去就等於排隊上 prod。
+
+- `supabase db push` 掃的是**整個目錄的待套用檔案，不看 git 狀態**——一個 `??` 未追蹤
+  的草稿，在它眼裡跟已 review 已 merge 的檔完全一樣。這代表 **DDL 可以在沒經過
+  stage / commit / review 任何一道關卡的情況下進 production**，而且不是被作者推的：
+  任何一個併行 session 或使用者跑一次 `db push` 都會帶上去。
+- **因此：沒有驗完的 migration 不要放進 `supabase/migrations/`。** 草稿寫在別處
+  （scratchpad 或 `/tmp`），本機驗過再 `mv` 進來。放進來 = 宣告可以上線。
+- **執行 `supabase db push` 之前，先跑：**
+  ```bash
+  git status --short supabase/migrations/     # 必須是空的
+  supabase migration list                     # 看 pending 是不是只有你預期的那些
+  ```
+  `migrations/` 有任何未追蹤或未 stage 的檔案就**停下來問**，不要 push——
+  那些是別人的草稿，你會替他們部署。
+- 實例（2026-09-01）：一個 agent 的 016 草稿在它本機驗證跑完後的 36 秒內就已經在 prod，
+  而它從未執行過非 dry-run 的 push；是另一個 session 的 `db push` 帶上去的。
+  這次驗證恰好趕在 push 之前通過，**是時間上的僥倖不是機制上的保證**。
+  詳見 knowledge-base `wiki/learned/migrations-dir-is-a-deploy-queue-any-session-push-applies-your-draft.md`
+
 ---
 
 ## Key Patterns
