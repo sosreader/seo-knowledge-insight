@@ -1,0 +1,95 @@
+name: Crawl Hourly Ingestion
+
+# 每小時把 Loki 的 envoy access log 聚合成 crawler 流量分佈寫進 Supabase crawl_daily。
+#
+# 為什麼不能漏跑：來源 Loki 的 retention_period 只有 168h（7 天）。這個作業安靜停擺
+# 超過 7 天，那段 crawler 序列就永久遺失且事後無法回填——compactor 已經把來源刪掉了。
+# 而且這份資料**沒有第二個來源**：Search Console API v1 沒有 Crawl Stats resource，
+# GSC 介面上那份「檢索統計」抓不下來，而且它只涵蓋 Googlebot，
+# AI crawler（實測佔 crawler 流量的 54%）在 GSC 裡完全看不到。
+#
+# 所以下面有兩個 job：ingest 負責寫，freshness 負責在 ingest 完全沒被觸發時叫出來。
+
+on:
+  schedule:
+    # 每小時第 15 分鐘。刻意與 cwv-hourly（第 5 分）錯開：
+    # 兩者查的是同一個 Loki，envoy 這條 stream 單小時要掃 113MB，
+    # 疊在同一分鐘會讓兩邊都更接近 proxy 的 30s wall clock 上限。
+    - cron: '15 * * * *'
+  workflow_dispatch:
+    inputs:
+      backfill_hours:
+        description: '回填最近 N 個完整小時（上限 24；每小時約 37 秒）'
+        required: false
+        default: '2'
+
+# 同時只跑一個，避免排程與手動回填互相覆寫。不取消進行中的那個——
+# 它可能正在 upsert，取消會留下 status='running' 的孤兒列，
+# 而且中斷在 upsert 與 sweep_stale 之間會留下該小時的過期殘列。
+concurrency:
+  group: crawl-hourly
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      - name: Ingest crawl hourly
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # 經 env 傳遞而非直接內插進 run:——workflow_dispatch 的 input 是使用者輸入，
+          # 內插進 shell 等於命令注入面。腳本自己也會再驗一次上限 24。
+          BACKFILL_HOURS: ${{ github.event.inputs.backfill_hours || '2' }}
+        run: |
+          python scripts/ingest_crawl_hourly.py --execute --backfill-hours "$BACKFILL_HOURS"
+
+      - name: Verify last write
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/ingest_crawl_hourly.py --verify
+
+  # 資料新鮮度告警。
+  #
+  # 條件刻意是「crawl_daily 最近一筆資料超過 3 小時」，不是「ingest job 有沒有失敗」——
+  # 排程根本沒被觸發時（cron 語法錯、GitHub 因 repo 閒置自動停用 schedule、有人手動
+  # 關掉忘了開回來）不會產生任何失敗事件，失敗型告警在那種情況下是靜音的。
+  # 只有資料本身的缺席能證明作業沒在跑。
+  #
+  # 健康時這個條件不成立（正常每小時都有新資料），所以它是告警不是指標——
+  # 每次都會成立的條件屬於儀表板，放在這裡只會訓練大家忽略它。
+  #
+  # needs: 刻意不設——ingest 掛掉時這個 job 仍要跑；它本來就是為了涵蓋
+  # 「ingest 沒有回報任何東西」的情況。門檻取排程週期（1h）的 3 倍。
+  freshness:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      - name: Check crawl_daily freshness
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/ingest_crawl_hourly.py --check-freshness

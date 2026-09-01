@@ -1,0 +1,320 @@
+{
+  "uid": "frontend-crawler-budget",
+  "title": "Frontend — Crawler & AI Bot Budget (Loki)",
+  "tags": [
+    "frontend",
+    "loki",
+    "crawler",
+    "seo",
+    "ai-bot"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "editable": true,
+  "refresh": "",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "先讀這裡",
+      "type": "text",
+      "datasource": {
+        "type": "loki",
+        "uid": "ffhwhnr95ygaof"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "description": "",
+      "targets": [],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### 這個 dashboard 看什麼、不看什麼\n\n**看**：最近幾小時 crawler 的即時細節（哪支在抓、抓哪裡、拿到什麼狀態碼、拉走多大的內容）。\n\n**不看長期趨勢**——Loki 的 retention 只有 **168h（7 天）**，再往前查會回 HTTP 200 + 全零、\n不報錯，看起來跟「那時候沒有 crawler」一模一樣。長期趨勢請查 Supabase 的 `crawl_daily`\n（由 `scripts/ingest_crawl_hourly.py` 每小時落庫，資料不隨 Loki 過期）。\n\n**預設時間範圍刻意只有 3 小時。** 這條 stream 單小時約 15 萬行 / 113MB，\n而 Grafana 走的 proxy 有 **約 30 秒的 wall clock 上限**（超過回 HTTP 502，不是 Loki 的門檻）。\n實測：3h 約 14.5s、6h 就會逼近上限。拉長時間範圍前先有心理準備。\n\n**這裡的 GSC 看不到**：Search Console API 沒有 Crawl Stats resource，\n而且 GSC 的檢索統計**只涵蓋 Googlebot**。實測 AI crawler 佔本站 crawler 流量的一半以上，\n那一整塊只有這裡與 `crawl_daily` 看得到。"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Crawler 請求數（依 bot 分群）",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "ffhwhnr95ygaof"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 7
+      },
+      "description": "token 為空的序列 = UA 含 bot/crawler/spider/slurp 但不屬任何具名 crawler，對應 crawl_daily 的 other-bot 桶。",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "ffhwhnr95ygaof"
+          },
+          "expr": "sum by (token) (count_over_time({job=\"loki.source.kubernetes.envoy_proxy\"} | json | user_agent =~ `.*(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot|[Bb]ot|[Cc]rawler|[Ss]pider|[Ss]lurp).*` | label_format token=`{{ regexReplaceAll \"^.*?(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot).*$|^.*$\" .user_agent \"${1}\" }}` [$__interval]))",
+          "refId": "A",
+          "legendFormat": "{{token}}",
+          "queryType": "range",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "Crawler vs 全站請求數",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "ffhwhnr95ygaof"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "description": "兩條線的比值就是 crawl budget 佔比。實測 2026-09-01 約 5.2%。",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "ffhwhnr95ygaof"
+          },
+          "expr": "sum(count_over_time({job=\"loki.source.kubernetes.envoy_proxy\"} | json | user_agent =~ `.*(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot|[Bb]ot|[Cc]rawler|[Ss]pider|[Ss]lurp).*` | label_format token=`{{ regexReplaceAll \"^.*?(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot).*$|^.*$\" .user_agent \"${1}\" }}` [$__interval]))",
+          "refId": "A",
+          "legendFormat": "crawler",
+          "queryType": "range",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "ffhwhnr95ygaof"
+          },
+          "expr": "sum(count_over_time({job=\"loki.source.kubernetes.envoy_proxy\"} | json [$__interval]))",
+          "refId": "B",
+          "legendFormat": "全站",
+          "queryType": "range",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "狀態碼分佈（依 bot 分群，最近 1 小時）",
+      "type": "table",
+      "datasource": {
+        "type": "loki",
+        "uid": "ffhwhnr95ygaof"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "description": "crawler 拿到 4xx/5xx 代表 crawl budget 被浪費在打不開的頁上。",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "ffhwhnr95ygaof"
+          },
+          "expr": "sum by (token, status) (count_over_time({job=\"loki.source.kubernetes.envoy_proxy\"} | json | user_agent =~ `.*(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot|[Bb]ot|[Cc]rawler|[Ss]pider|[Ss]lurp).*` | label_format token=`{{ regexReplaceAll \"^.*?(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot).*$|^.*$\" .user_agent \"${1}\" }}` [1h]))",
+          "refId": "A",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "抓取路徑分佈（依 bot 分群，最近 1 小時）",
+      "type": "table",
+      "datasource": {
+        "type": "loki",
+        "uid": "ffhwhnr95ygaof"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "description": "pfx 為空 = 不在 allowlist 的第一層路徑（多數是掛在根路徑的使用者頁），對應 crawl_daily 的 /__other__ 殘餘桶。",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "ffhwhnr95ygaof"
+          },
+          "expr": "sum by (token, pfx) (count_over_time({job=\"loki.source.kubernetes.envoy_proxy\"} | json | user_agent =~ `.*(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot|[Bb]ot|[Cc]rawler|[Ss]pider|[Ss]lurp).*` | label_format token=`{{ regexReplaceAll \"^.*?(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot).*$|^.*$\" .user_agent \"${1}\" }}`, pfx=`{{ regexReplaceAll \"^(/(?:article|salon|tags|user|post|search|api|_next|static|not-found|robots[.]txt|sitemap[.]xml|feed|rss|pay|become_creator|[.]well-known|favicon[.]ico)?)(?:[/?#].*)?$|^.*$\" .path \"${1}\" }}` [1h]))",
+          "refId": "A",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "crawler 4xx/5xx 請求數",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "ffhwhnr95ygaof"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "description": "狀態碼是 json 解出來的欄位，這裡用 label filter 比較數值。",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "ffhwhnr95ygaof"
+          },
+          "expr": "sum by (token) (count_over_time({job=\"loki.source.kubernetes.envoy_proxy\"} | json | user_agent =~ `.*(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot|[Bb]ot|[Cc]rawler|[Ss]pider|[Ss]lurp).*` | status >= 400 | label_format token=`{{ regexReplaceAll \"^.*?(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot).*$|^.*$\" .user_agent \"${1}\" }}` [$__interval]))",
+          "refId": "A",
+          "legendFormat": "{{token}}",
+          "queryType": "range",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "送出位元組（bytes_sent，依 bot 分群）",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "ffhwhnr95ygaof"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "description": "實際送出的 wire bytes，與 crawl_daily 的 bytes 欄同一個定義。",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "ffhwhnr95ygaof"
+          },
+          "expr": "sum by (token) (sum_over_time({job=\"loki.source.kubernetes.envoy_proxy\"} | json | user_agent =~ `.*(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot|[Bb]ot|[Cc]rawler|[Ss]pider|[Ss]lurp).*` | label_format token=`{{ regexReplaceAll \"^.*?(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot).*$|^.*$\" .user_agent \"${1}\" }}` | unwrap bytes_sent [$__interval]))",
+          "refId": "A",
+          "legendFormat": "{{token}}",
+          "queryType": "range",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "bytes"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "title": "origin_content_length p95（依 bot 分群）",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "ffhwhnr95ygaof"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "description": "原站回應的內容大小（未壓縮），回答「crawler 每次拉走多大的內容」。⚠ 這一欄只在 status 200 的行有值，3xx/4xx 是 null 會被 unwrap 丟掉——所以它是「成功抓到的內容有多大」，不是「傳輸成本」。傳輸成本看上面的 bytes_sent。正因為這個 null 行為，crawl_daily 的 bytes 欄存的是 bytes_sent 而不是這一欄。",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "ffhwhnr95ygaof"
+          },
+          "expr": "quantile_over_time(0.95, {job=\"loki.source.kubernetes.envoy_proxy\"} | json | user_agent =~ `.*(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot|[Bb]ot|[Cc]rawler|[Ss]pider|[Ss]lurp).*` | label_format token=`{{ regexReplaceAll \"^.*?(Googlebot-Image|Googlebot-Video|Googlebot-News|AdsBot-Google-Mobile|AdsBot-Google|Google-AMPHTML|Google-InspectionTool|Google-Safety|GoogleOther|Googlebot|bingbot|Claude-SearchBot|Claude-User|OAI-SearchBot|ChatGPT-User|PerplexityBot|YouBot|ExaSearchBot|ClaudeBot|GPTBot|Bytespider|meta-webindexer|AIWebIndex|Amazonbot|Applebot|AhrefsSiteAudit|AhrefsBot|SemrushBot|DataForSeoBot|SERankingBacklinksBot|facebookexternalhit|meta-externalads|Dcard-link-preview-bot|YandexBot|Baiduspider|DuckDuckBot|PetalBot).*$|^.*$\" .user_agent \"${1}\" }}` | unwrap origin_content_length [$__interval]) by (token)",
+          "refId": "A",
+          "legendFormat": "{{token}}",
+          "queryType": "range",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "bytes"
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": []
+  }
+}
