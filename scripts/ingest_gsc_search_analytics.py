@@ -4,88 +4,67 @@
 CWV 那條線（Loki RUM / CrUX History → cwv_hourly）由 ingest_cwv_hourly.py 與
 ingest_cwv_crux_history.py 負責，與本腳本無關。
 
-用法：
-  python scripts/ingest_gsc_search_analytics.py --dry-run              # 查 API、算完、印摘要，不寫庫（預設）
-  python scripts/ingest_gsc_search_analytics.py --execute              # 實際 upsert
-  python scripts/ingest_gsc_search_analytics.py --execute --backfill-days 3
-  python scripts/ingest_gsc_search_analytics.py --verify               # 唯讀檢查最近寫入狀態
-  python scripts/ingest_gsc_search_analytics.py --check-freshness      # 新鮮度告警：stale 則 exit 1
+用法（旗標細節見 --help）：--dry-run（預設）／--execute [--backfill-days N]／
+--verify（唯讀檢查）／--check-freshness（新鮮度告警，stale 則 exit 1）
 
-環境變數：
-  GSC_READONLY_KEY            service account 的 JSON **字串**（不是檔案路徑）
-  SUPABASE_URL / SUPABASE_SERVICE_KEY
+環境變數：GSC_READONLY_KEY（service account 的 JSON **字串**，不是檔案路徑）、
+SUPABASE_URL / SUPABASE_SERVICE_KEY
 
 
 ═══ 資料完整性的硬前提 —— 這裡的數字是抽樣，不是全量 ═══
 
-Search Analytics API 官方明講「only returns top rows, does not guarantee to return
-all data rows」，且每天每 property 每 search type 最多 50,000 列。因此：
-
-    SUM(clicks) FROM gsc_daily_metrics  ≠  GSC UI 上那天的總點擊
-
-落差必然存在且大小不可知。任何拿本表數字宣稱「站台總流量」的說法都是錯的；
+官方明講「only returns top rows, does not guarantee to return all data rows」，且每天
+每 property 每 search type 最多 50,000 列。因此 `SUM(clicks) FROM gsc_daily_metrics`
+**不等於** GSC UI 上那天的總點擊，落差必然存在且大小不可知。首次 live 執行實測：
+query 組每天回 47.8k-48.0k 列，**貼著 50K 天花板**，代表該組確實被 top-N 截斷。
 本表能回答的是「這些 page / query 的相對趨勢」，不是「總量」。
 （同一句話也寫在 migration 015 的 COMMENT ON TABLE，兩邊要一致。）
 
 
 ═══ 兩套維度組合怎麼塞進單一 unique key 空間 —— 本腳本最重要的設計決定 ═══
 
-需求是兩套組合：`date+page+device` 與 `date+query+device`。
-但 gsc_daily_metrics_dim_uniq 是 (property, search_type, date, page, query, device, country)
-七欄全部 NOT NULL，兩套組合都缺欄位：page 組沒有 query 與 country，
-query 組沒有 page 與 country。而 schema 不能改。
+需求是兩套組合：`date+page+device` 與 `date+query+device`。但 dim_uniq 是
+(property, search_type, date, page, query, device, country) 七欄全 NOT NULL，
+兩套組合都缺欄位（page 組缺 query 與 country，query 組缺 page 與 country），schema 不能改。
 
 缺欄位只能填哨兵值，於是踩進 KB learned skill
-`rollup-sentinel-in-shared-key-space-has-no-check-guard-against-double-count`
-講的那個坑：兩套組合是**同一批底層資料的兩個邊際聚合**，共用同一個 key 空間，
-任何沒帶判別條件的 `SUM(clicks)` 都會把同一筆點擊算兩次。CHECK 表達不了
-「這兩類列不可同時進入一次 SUM」這種跨列語意，DB 層擋不住。
+`rollup-sentinel-in-shared-key-space-has-no-check-guard-against-double-count`：
+兩套組合是**同一批底層資料的兩個邊際聚合**，共用同一個 key 空間，任何沒帶判別條件的
+`SUM(clicks)` 都會把同一筆點擊算兩次，而 CHECK 表達不了這種跨列語意，DB 層擋不住。
 
 【選定的哨兵值與理由】
-
-  country = 'zzz'（COUNTRY_NOT_REQUESTED）
-    兩套組合都不查 country。'zzz' 同時也是 GSC 對「無法判定地區」的真實回傳值，
-    看似撞名——但**只要本腳本永遠不請求 country 維度，GSC 的 'zzz' 就永遠不會
-    進到本表**，於是表內 'zzz' 的語意單一。這個前提由 _assert_no_country_dimension()
+  country = 'zzz'（COUNTRY_NOT_REQUESTED）—— 'zzz' 同時是 GSC 對「無法判定地區」的
+    真實回傳值，看似撞名，但**只要本腳本永遠不請求 country 維度，GSC 的 'zzz' 就
+    永遠進不到本表**，於是表內語意單一。這個前提由 _assert_no_country_dimension()
     在啟動時斷言，未來有人加 country 組合會當場失敗，不會靜默污染語意。
 
-  query = ''（QUERY_NOT_REQUESTED），用於 page 組
-    Search Analytics API 對匿名化查詢是**整列不回**（不像 BQ 回空字串），
-    所以 '' 這個值從本資料源永遠不會自然出現，拿來當哨兵不會與真實資料撞。
+  query = ''（QUERY_NOT_REQUESTED），用於 page 組 —— API 對匿名化查詢是**整列不回**
+    （不像 BQ 回空字串），所以 '' 從本資料源永遠不會自然出現，當哨兵不會撞。
 
   page = 'https://__dimension_not_requested__/'（PAGE_NOT_REQUESTED），用於 query 組
-    page 欄有 CHECK `page ~ '^https?://' AND octet_length BETWEEN 8 AND 1024`，
-    所以哨兵**必須長得像 URL**，不能用空字串。選這個值的理由是它通得過 CHECK
-    （實測 36 bytes、regex 通過）卻不可能是真實 page：`__dimension_not_requested__`
-    含底線，不是合法的 DNS hostname，GSC 不可能回傳這個網域的頁面。
-    刻意不用 'https://vocus.cc/' 之類的真實 URL 當哨兵——那會與首頁這筆真實資料撞鍵。
+    —— page 欄有 CHECK `page ~ '^https?://' AND octet_length BETWEEN 8 AND 1024`，
+    哨兵**必須長得像 URL**。這個值通得過 CHECK（實測 36 bytes）卻不可能是真實 page：
+    底線不是合法 DNS hostname 字元。刻意不用 'https://vocus.cc/' 當哨兵——那會與
+    首頁這筆真實資料撞鍵。
 
 【判別式 —— 下游查詢必須帶，這是唯一的防線】
 
-  query 組（date+query+device）：  WHERE page = PAGE_NOT_REQUESTED
-  page  組（date+page+device）：   WHERE page <> PAGE_NOT_REQUESTED
-
-  判別式一律以 **page** 為準，不以 query 為準。理由：若哪天 API 真的回了空字串
-  query，那筆列仍屬 query 組（page 是哨兵），用 `query = ''` 判別會把它誤分到
-  page 組；用 page 判別則兩組互斥且窮盡，沒有第三種狀態。
-
-  不帶判別式直接 SUM 會得到約兩倍的假數字，而且**不會有任何錯誤訊號**。
-  --verify 因此固定分組印出兩邊的列數與 clicks 總和，讓這件事持續可見。
+  query 組：WHERE page = PAGE_NOT_REQUESTED ／ page 組：WHERE page <> PAGE_NOT_REQUESTED
+  一律以 **page** 為準，不以 query 為準：若哪天 API 真的回了空字串 query，那筆列仍屬
+  query 組（page 是哨兵），用 `query = ''` 判別會誤分；用 page 判別則互斥且窮盡。
+  不帶判別式直接 SUM 會得到約兩倍的假數字，**不會有任何錯誤訊號**——
+  --verify 因此固定分組印出兩邊列數，讓這件事持續可見。
 
 
 ═══ 2-3 天資料延遲怎麼處理 —— 用探測，不用寫死的 lag ═══
 
-官方說延遲「通常 2-3 天」，但那是「通常」。寫死 lag=3 有兩個失敗方向：
-設太短 → 查到還沒有資料的日期，回 0 列，被 (e) 的 0-row 規則判成失敗（誤報）；
-設太長 → 每天都少拿最新的資料。
+官方說延遲「通常 2-3 天」，但那是「通常」。寫死 lag=3 兩邊都會錯：設太短會查到還
+沒有資料的日期、回 0 列、被 (e) 的 0-row 規則判成失敗（誤報）；設太長則每天少拿資料。
 
 改用官方 how-to 建議的做法：先用 `dimensions=["date"]` 對最近 PROBE_DAYS 天打一次
-**便宜的探測查詢**（回傳列數 = 天數，十幾列），拿到「Google 目前實際有資料的日期集合」，
-再從中取最近 backfill_days 天去抓。於是：
-
-  - 延遲飄到 4-5 天也不會誤報，因為我們只查探測說有資料的日期
-  - 探測本身回 0 列 = 最近兩週完全沒資料 = 真的壞了（權限、property、quota），
-    這是硬失敗，不是延遲問題
+**便宜的探測查詢**（回傳列數 = 天數），拿到「Google 目前實際有資料的日期集合」，
+再從中取最近 backfill_days 天去抓。於是延遲飄到 4-5 天也不會誤報（只查探測說有的日期），
+而探測本身回 0 列 = 最近兩週完全沒資料 = 真的壞了（權限、property、配額），是硬失敗。
 
 每次回補最近 N 天（預設 7）而非只抓昨天，是為了吃下 GSC 的**回溯修訂**：
 同一個日期的數字在後續幾天內會被 Google 修正，只抓一次會定格在最早的版本。
@@ -94,26 +73,26 @@ query 組沒有 page 與 country。而 schema 不能改。
 ═══ 冪等：upsert 不夠，要補收尾（reaping）═══
 
 KB learned skill `upsert-idempotency-only-holds-while-the-bucket-set-does-not-shrink`：
-upsert 只新增與覆蓋，**不刪除**。GSC 是 top-N 抽樣，門檻附近的 page/query 會在
-相鄰兩次抓取之間進進出出——這次沒回來的列會留在表裡繼續被 SUM 計入，**靜默高估**。
+upsert 只新增與覆蓋、**不刪除**。GSC 是 top-N 抽樣，門檻附近的 page/query 會在相鄰
+兩次抓取之間進出——這次沒回來的列會留在表裡繼續被 SUM 計入，**靜默高估**。
 
-採用該 skill 的策略 (b)：payload 顯式帶 `ingested_at`（不能靠 DEFAULT now()，
-PostgREST 的 merge-duplicates 只更新 payload 裡有的欄位，衝突時 ingested_at 會
-沿用第一次寫入的值），寫完後對「本次涵蓋的 (date, combo) 切片」刪掉
-`ingested_at < run_started_at` 的孤兒列。安全閥：**只有該切片 upsert 零失敗才 reap**，
-部分失敗還去刪會把上一輪的好資料刪掉換來這一輪的殘缺資料。
+採用該 skill 的策略 (b)：payload 顯式帶 `ingested_at`（不能靠 DEFAULT now()——
+PostgREST 的 merge-duplicates 只更新 payload 裡有的欄位，衝突時會沿用首次寫入的值），
+寫完後對本次涵蓋的 (date, combo) 切片刪掉 `ingested_at < run_started_at` 的孤兒列。
+安全閥：**只有該切片 upsert 零失敗才 reap**，部分失敗還去刪會把上一輪的好資料刪掉。
 
 另：同一批次內不可有重複 key，否則 PostgreSQL 回
-`ON CONFLICT DO UPDATE command cannot affect row a second time`，而且**死的是整批**。
-分頁在兩次 request 之間底層資料若變動，相鄰頁可能回重疊列，dedupe_by_key() 因此必跑。
+`ON CONFLICT DO UPDATE command cannot affect row a second time`，且**死的是整批**。
+分頁時相鄰頁可能回重疊列，dedupe_by_key() 因此必跑。
 
 
 ═══ 0 rows 一律是失敗 ═══
+背景作業最危險的失敗是「什麼都沒發生但回報成功」。本腳本三道，都 exit 1：探測回 0 個
+日期、任一 (date, combo) 切片回 0 列、總寫入列數為 0。vocus.cc 每天都有搜尋流量。
 
-背景作業最危險的失敗是「什麼都沒發生但回報成功」。本腳本三道：
-探測回 0 個日期 → 硬失敗；任一 (date, combo) 切片回 0 列 → 記為 error 並降級 status；
-全部切片加總可寫入列數為 0 → status='failed'。三者都 exit 1。
-vocus.cc 每天都有搜尋流量，這三種情況都不是正常狀態。
+**但「個別列被丟棄」不算在內**——那是 warning 不是 error，理由見 collect_day_combo()
+的 docstring（首次 live 執行校準：533,314 列裡 2 列 query 超長，天天紅燈只會讓人
+學會忽略 status）。
 """
 from __future__ import annotations
 
@@ -197,11 +176,9 @@ UPSERT_BATCH_SIZE = 500
 
 # 【門檻公式】KB learned skill
 # `freshness-threshold-schedule-period-formula-ignores-source-inherent-lag`：
-# 門檻 = 來源固有延遲上限 + 排程週期緩衝，**不是**排程週期 × N。
-#   來源固有延遲上限：官方稱 2-3 天，取 4 天（96h）留飄移空間
-#   排程週期緩衝：每日排程 24h × 2 = 48h（容忍單次漏跑，不容忍連續兩次）
-# 合計 144h。用「排程週期 × 3 = 72h」會在資料完全健康時就誤報，
-# 因為 max(date) 天生就落後現在 2-4 天。
+# 門檻 = 來源固有延遲上限（官方稱 2-3 天，取 4 天 = 96h 留飄移空間）+ 排程週期緩衝
+# （每日 24h × 2 = 48h，容忍單次漏跑不容忍連續兩次），**不是**排程週期 × N。
+# 用「排程週期 × 3 = 72h」會在資料完全健康時就誤報——max(date) 天生落後現在 2-4 天。
 FRESHNESS_MAX_AGE_HOURS = 96 + 48
 
 
@@ -587,9 +564,20 @@ def latest_date() -> date | None:
 
 def collect_day_combo(
     token: str, day: date, combo: str, search_type: str, ingested_at: str,
-    errors: list[str],
+    errors: list[str], warnings: list[str],
 ) -> list[dict]:
-    """抓一個 (date, combo) 切片並轉成可寫入的列。0 列一律記為 error。"""
+    """抓一個 (date, combo) 切片並轉成可寫入的列。
+
+    【errors 與 warnings 的分界 —— 首次 live 執行校準出來的】
+    首版把「有列被丟棄」也算進 errors，於是 533,314 列裡 2 列 query 超過 512 bytes
+    就讓整個 run 變 partial 並 exit 1。那是誤判：超長 query 是這份資料的**永久性質**，
+    天天紅燈只會讓人學會忽略 status（同族：恆常誤報磨掉信任）。
+
+      errors（硬失敗，降級 status + exit 1）：0 列。探測已說該日有資料，回 0 只可能是
+        權限、配額或查詢壞掉，不是資料的性質。
+      warnings（記錄但不改 status）：個別列不合 schema 被丟棄。數量仍逐項印出來，
+        異常放大時看得見，只是不再天天染紅。
+    """
     raw_rows = paginate_query(token, day, COMBO_DIMENSIONS[combo], search_type)
     rejects: dict[str, int] = {}
     records = [
@@ -604,7 +592,7 @@ def collect_day_combo(
                 day.isoformat(), combo, len(raw_rows), len(records),
                 f"（丟棄 {rejects}）" if rejects else "")
     if rejects:
-        errors.append(f"{day.isoformat()}/{combo} 丟棄不合法列：{rejects}")
+        warnings.append(f"{day.isoformat()}/{combo} 丟棄不合法列：{rejects}")
     if not records:
         # (e)：0 rows 不得靜默通過。vocus.cc 每天都有搜尋流量。
         errors.append(f"{day.isoformat()}/{combo} 回傳 0 列（探測說該日有資料，這是異常）")
@@ -625,31 +613,45 @@ def _write_slice(
     return succeeded, failed
 
 
+def resolve_targets(token: str, search_type: str, today: date, backfill_days: int) -> list[date]:
+    """探測出實際有資料的日期，取最近 backfill_days 天。空清單代表硬失敗。"""
+    available = probe_available_dates(token, search_type, today)
+    if not available:
+        return []
+    targets = sorted(available[:backfill_days])
+    logger.info("本次目標日期 %d 天：%s .. %s",
+                len(targets), targets[0].isoformat(), targets[-1].isoformat())
+    return targets
+
+
+def run_window(targets: Sequence[date]) -> tuple[datetime, datetime]:
+    """ingestion_run 記錄用的半開區間 [window_start, window_end)。"""
+    start = datetime.combine(targets[0], datetime.min.time(), tzinfo=timezone.utc)
+    end = datetime.combine(targets[-1], datetime.min.time(), tzinfo=timezone.utc) + timedelta(days=1)
+    return start, end
+
+
 def run_ingestion(*, execute: bool, backfill_days: int, search_type: str) -> int:
     _assert_no_country_dimension()
     now = datetime.now(timezone.utc)
     run_started_at = now.isoformat().replace("+00:00", "Z")
     token = gsc_access_token()
 
-    available = probe_available_dates(token, search_type, now.date())
-    if not available:
+    targets = resolve_targets(token, search_type, now.date(), backfill_days)
+    if not targets:
         logger.error("FAIL: 探測最近 %d 天完全沒有資料 —— 權限、property 或配額有問題，"
                      "不是資料延遲。", PROBE_DAYS)
         return 1
-    targets = sorted(available[:backfill_days])
-    logger.info("本次目標日期 %d 天：%s .. %s",
-                len(targets), targets[0].isoformat(), targets[-1].isoformat())
-
-    window_start = datetime.combine(targets[0], datetime.min.time(), tzinfo=timezone.utc)
-    window_end = datetime.combine(targets[-1], datetime.min.time(), tzinfo=timezone.utc) + timedelta(days=1)
-    run_id = start_run(window_start, window_end) if execute else None
+    run_id = start_run(*run_window(targets)) if execute else None
 
     errors: list[str] = []
+    warnings: list[str] = []
     total_written = total_failed = 0
     try:
         for day in targets:
             for combo in COMBO_DIMENSIONS:
-                records = collect_day_combo(token, day, combo, search_type, run_started_at, errors)
+                records = collect_day_combo(token, day, combo, search_type,
+                                            run_started_at, errors, warnings)
                 if not execute or not records:
                     continue
                 succeeded, failed = _write_slice(day, combo, search_type, run_started_at, records)
@@ -660,17 +662,23 @@ def run_ingestion(*, execute: bool, backfill_days: int, search_type: str) -> int
         finish_run(run_id, "failed", total_written)
         return 1
 
+    for message in warnings:
+        logger.warning("  資料品質：%s", message)
+    for message in errors:
+        logger.error("  問題：%s", message)
+
     if not execute:
-        logger.info("[DRY RUN] 不寫入。加 --execute 才會 upsert。（%d 個問題待留意）", len(errors))
+        logger.info("[DRY RUN] 不寫入。加 --execute 才會 upsert。（%d 個硬問題 / %d 個資料品質提醒）",
+                    len(errors), len(warnings))
         return 1 if errors else 0
 
+    # warnings 刻意不參與 status —— 理由見 collect_day_combo docstring。
     run_status = "success" if not errors and not total_failed and total_written else (
         "failed" if not total_written else "partial"
     )
     finish_run(run_id, run_status, total_written)
-    for message in errors:
-        logger.error("  問題：%s", message)
-    logger.info("寫入完成：%d 列成功 / %d 列失敗，run status=%s", total_written, total_failed, run_status)
+    logger.info("寫入完成：%d 列成功 / %d 列失敗，run status=%s（%d 個資料品質提醒）",
+                total_written, total_failed, run_status, len(warnings))
     return 0 if run_status == "success" else 1
 
 

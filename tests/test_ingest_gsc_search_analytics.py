@@ -635,33 +635,42 @@ class TestLatestDate:
 # ══════════════════════════════════════════════════════════════════════
 
 class TestCollectDayCombo:
-    def test_happy_path_records_no_error(self) -> None:
-        rows = [_api_row(DAY.isoformat(), "https://vocus.cc/a", "MOBILE")]
+    @staticmethod
+    def _collect(rows: list[dict], combo: str = COMBO_PAGE) -> tuple[list[dict], list[str], list[str]]:
         errors: list[str] = []
+        warnings: list[str] = []
         with patch(f"{MODULE}.paginate_query", return_value=rows):
-            records = collect_day_combo("t", DAY, COMBO_PAGE, "web", INGESTED_AT, errors)
-        assert len(records) == 1 and errors == []
+            records = collect_day_combo("t", DAY, combo, "web", INGESTED_AT, errors, warnings)
+        return records, errors, warnings
+
+    def test_happy_path_records_no_error(self) -> None:
+        records, errors, warnings = self._collect([_api_row(DAY.isoformat(), "https://vocus.cc/a", "MOBILE")])
+        assert len(records) == 1 and errors == [] and warnings == []
 
     def test_zero_rows_is_recorded_as_error(self, caplog: pytest.LogCaptureFixture) -> None:
         """(e)：0 rows 不得靜默通過。探測已說該日有資料，這裡回 0 就是異常。"""
-        errors: list[str] = []
-        with patch(f"{MODULE}.paginate_query", return_value=[]):
-            assert collect_day_combo("t", DAY, COMBO_PAGE, "web", INGESTED_AT, errors) == []
-        assert len(errors) == 1 and "0 列" in errors[0]
+        records, errors, _ = self._collect([])
+        assert records == [] and len(errors) == 1 and "0 列" in errors[0]
         assert "視為失敗" in caplog.text
 
-    def test_all_rows_rejected_also_counts_as_zero(self) -> None:
-        errors: list[str] = []
-        bad = [_api_row(DAY.isoformat(), "https://vocus.cc/a", "WATCH")]
-        with patch(f"{MODULE}.paginate_query", return_value=bad):
-            assert collect_day_combo("t", DAY, COMBO_PAGE, "web", INGESTED_AT, errors) == []
-        assert len(errors) == 2  # 丟棄紀錄 + 0 列
+    def test_rejected_rows_are_warnings_not_errors(self) -> None:
+        """首次 live 執行的校準：533,314 列裡 2 列 query 超長，不該讓整個 run 紅燈。
+        超長 query 是資料的永久性質，天天染紅只會讓人學會忽略 status。"""
+        rows = [_api_row(DAY.isoformat(), "https://vocus.cc/a", "MOBILE"),
+                _api_row(DAY.isoformat(), "https://vocus.cc/b", "WATCH")]
+        records, errors, warnings = self._collect(rows)
+        assert len(records) == 1
+        assert errors == []
+        assert len(warnings) == 1 and "丟棄不合法列" in warnings[0]
+
+    def test_all_rows_rejected_still_errors_because_slice_is_empty(self) -> None:
+        records, errors, warnings = self._collect([_api_row(DAY.isoformat(), "https://vocus.cc/a", "WATCH")])
+        assert records == [] and len(errors) == 1 and len(warnings) == 1
 
     def test_duplicate_pages_are_deduped(self) -> None:
         rows = [_api_row(DAY.isoformat(), "https://vocus.cc/a", "MOBILE")] * 2
-        errors: list[str] = []
-        with patch(f"{MODULE}.paginate_query", return_value=rows):
-            assert len(collect_day_combo("t", DAY, COMBO_PAGE, "web", INGESTED_AT, errors)) == 1
+        records, _, _ = self._collect(rows)
+        assert len(records) == 1
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -731,6 +740,21 @@ class TestRunIngestion:
             assert run_ingestion(execute=True, backfill_days=7, search_type="web") == 1
         assert finish.call_args.args[1] == "partial"
 
+    def test_warnings_alone_do_not_degrade_status(self) -> None:
+        """回歸：首次 live 執行時 2 列超長 query 讓 status 變 partial 並 exit 1，那是誤判。"""
+        def _with_warning(_token, day, combo, _search_type, _ingested_at, _errors, warnings):
+            warnings.append(f"{day}/{combo} 丟棄不合法列：{{'query 超過 512 bytes': 1}}")
+            return [dict(TestUpsert.ROW)]
+
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_available_dates", return_value=[DAY]), \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_with_warning), \
+             patch(f"{MODULE}.start_run", return_value="run-1"), \
+             patch(f"{MODULE}.finish_run") as finish, \
+             patch(f"{MODULE}._write_slice", return_value=(1, 0)):
+            assert run_ingestion(execute=True, backfill_days=7, search_type="web") == 0
+        assert finish.call_args.args[1] == "success"
+
     def test_systemic_api_error_aborts_the_run(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
              patch(f"{MODULE}.probe_available_dates", return_value=[DAY]), \
@@ -741,7 +765,7 @@ class TestRunIngestion:
         assert finish.call_args.args[1] == "failed"
 
     def test_dry_run_with_errors_exits_nonzero(self) -> None:
-        def _zero_rows(_token, day, combo, _search_type, _ingested_at, errors):
+        def _zero_rows(_token, day, combo, _search_type, _ingested_at, errors, _warnings):
             errors.append(f"{day}/{combo} 回傳 0 列")
             return []
 
