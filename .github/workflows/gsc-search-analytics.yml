@@ -1,0 +1,97 @@
+name: GSC Search Analytics Ingestion
+
+# 每日把 GSC Search Analytics API 的逐日資料（date+page+device 與 date+query+device
+# 兩套維度組合）寫進 Supabase gsc_daily_metrics。
+#
+# 為什麼要每次回補最近 7 天而不是只抓昨天：
+#   1. GSC 資料延遲通常 2-3 天，只抓昨天大多會抓到空的
+#   2. 同一個日期的數字在後續幾天會被 Google 回溯修訂，只抓一次會定格在最早的版本
+# 腳本會先用一次便宜的 dimensions=["date"] 探測查詢，問出「目前實際有資料的日期」，
+# 再從中取最近 N 天——所以延遲飄到 4-5 天也不會誤報。
+#
+# 與 cwv-*.yml 刻意分開：來源系統、排程週期、失敗模式都不同，合併只會讓判讀互相干擾。
+
+on:
+  schedule:
+    - cron: '20 7 * * *'   # 每日 07:20 UTC。GSC 沒有固定發布時刻，排程時間不影響
+                           # 正確性——upsert 冪等，且探測會自己決定抓哪幾天。
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: '回補最近 N 天（1-30）'
+        required: false
+        default: '7'
+      search_type:
+        description: 'search type（web/image/video/news/googleNews）'
+        required: false
+        default: 'web'
+
+# 同時只跑一個，避免排程與手動回填互相覆寫。不取消進行中的那個——
+# 它可能正在寫入，取消會留下 status='running' 的孤兒列（同 cwv-hourly.yml 的理由）。
+concurrency:
+  group: gsc-search-analytics
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        # google-auth 負責 service account 的 RS256 JWT 簽章與 token 交換；
+        # 它的 transport.requests 需要 requests。API 呼叫本身仍走 stdlib urllib。
+        run: pip install python-dotenv google-auth requests
+
+      - name: Ingest GSC search analytics
+        env:
+          # service account 的 JSON **字串**，不是檔案路徑——金鑰不落磁碟。
+          GSC_READONLY_KEY: ${{ secrets.GSC_READONLY_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # 經 env 傳遞而非直接內插進 run:——workflow_dispatch 的 input 是使用者輸入，
+          # 內插進 shell 等於命令注入面（同 cwv-hourly.yml 的理由）。腳本自己也會再驗一次值域。
+          BACKFILL_DAYS: ${{ github.event.inputs.backfill_days || '7' }}
+          SEARCH_TYPE: ${{ github.event.inputs.search_type || 'web' }}
+        run: |
+          python scripts/ingest_gsc_search_analytics.py \
+            --execute --backfill-days "$BACKFILL_DAYS" --search-type "$SEARCH_TYPE"
+
+      - name: Verify last write
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/ingest_gsc_search_analytics.py --verify
+
+  # 資料新鮮度告警。條件是「gsc_daily_metrics 最新資料日期太舊」，不是「ingest job
+  # 有沒有失敗」——排程根本沒被觸發時（cron 語法錯、GitHub 因 repo 閒置自動停用
+  # schedule、有人手動關掉忘了開回來）不會產生任何失敗事件，失敗型告警在那種情況下
+  # 是靜音的。只有資料本身的缺席能證明作業沒在跑。
+  #
+  # needs: 刻意不設——ingest 掛掉時這個 job 仍要跑；它本來就是為了涵蓋
+  # 「ingest 沒有回報任何東西」的情況。
+  #
+  # 門檻 144h = GSC 固有延遲上限 96h + 排程週期緩衝 48h，**不是**「排程週期 × N」。
+  # GSC 的 max(date) 天生就落後現在 2-4 天，用 24h × 3 = 72h 會對健康資料誤報。
+  freshness:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      - name: Check gsc_daily_metrics freshness
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/ingest_gsc_search_analytics.py --check-freshness

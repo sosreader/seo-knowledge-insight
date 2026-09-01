@@ -9,3 +9,4 @@ opentelemetry-semantic-conventions-ai>=0.4.13,<0.4.14  # 0.4.14 removes SpanAttr
 markdownify>=0.13.0
 feedparser>=6.0.0
 scrapling[fetchers]>=0.3.0
+google-auth>=2.35.0  # GSC Search Analytics 的 service account JWT 簽章與 token 交換
