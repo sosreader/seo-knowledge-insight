@@ -102,14 +102,13 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-import defusedxml.ElementTree as DefusedET  # 抓 vocus.cc 的 sitemap（遠端內容），
-# 用 defusedxml 擋 XXE／billion-laughs（stdlib xml.etree 預設不擋）。Element/ParseError
-# 型別仍從 stdlib 取（defusedxml 不重新匯出型別，只包裝解析函式）。
+# defusedxml 延遲 import 進 _http_get_xml()（同範本 gsc_access_token() 對 google-auth
+# 的處理）：--verify／--check-freshness 不碰 sitemap，模組層 import 會逼它們也要裝這個
+# 套件——CI 上真的踩過（freshness job 只裝 python-dotenv）。型別仍從 stdlib 取。
 from xml.etree.ElementTree import Element, ParseError
 
 # 直接重用 ingest_gsc_search_analytics.py 的認證／傳輸層。直接執行本檔時 Python 只會
-# 把 scripts/ 本身放進 sys.path，找不到 `scripts.` 套件層級，故先插入 repo 根目錄
-# （與 tests/ 測試檔解法一致）。
+# 把 scripts/ 本身放進 sys.path，找不到 `scripts.` 套件層級，故先插入 repo 根目錄。
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.ingest_gsc_search_analytics import (
@@ -252,6 +251,7 @@ class SitemapFetchError(RuntimeError):
 
 
 def _http_get_xml(url: str) -> Element:
+    import defusedxml.ElementTree as DefusedET  # 延遲 import，理由見模組頂部註解
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT}, method="GET")
     try:
         with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
