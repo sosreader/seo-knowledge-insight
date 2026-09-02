@@ -10,3 +10,4 @@ markdownify>=0.13.0
 feedparser>=6.0.0
 scrapling[fetchers]>=0.3.0
 google-auth>=2.35.0  # GSC Search Analytics 的 service account JWT 簽章與 token 交換
+defusedxml>=0.7.1  # URL Inspection 抽樣讀 vocus.cc sitemap（遠端 XML），擋 XXE／billion-laughs
