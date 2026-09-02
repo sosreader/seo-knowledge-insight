@@ -1,30 +1,35 @@
 name: GSC URL Inspection Sampling
 
-# 每日用 URL Inspection API 對抽樣 URL 查索引狀態，寫進 Supabase gsc_url_inspection。
+# 用 URL Inspection API 對抽樣 URL 查索引狀態，寫進 Supabase gsc_url_inspection。
 # 抽樣三層優先序（對照組固定不變／零曝光舊頁／零曝光新頁）與配額守門的設計理由，
 # 見 scripts/ingest_gsc_url_inspection.py 的模組 docstring。
 #
-# 與 gsc-search-analytics.yml 刻意分開：來源 API、配額模型（2,000 QPD 而非 50,000
-# rows/day）、抽樣邏輯完全不同，合併只會讓判讀互相干擾（同 gsc-search-analytics.yml
-# 對 cwv-*.yml 的理由）。
+# 與 gsc-search-analytics.yml 刻意分開：來源 API、配額模型（2,000 QPD／property 共用桶，
+# 而非 50,000 rows/day）、抽樣邏輯完全不同，合併只會讓判讀互相干擾。
+#
+# 【本檔目前刻意只有 workflow_dispatch，沒有 schedule——這是驗證階段，不是最終形狀】
+# 這支管線與它的 quota guard 尚未在真實環境（含 secret 接線）驗證過。先用手動觸發
+# 跑過 dry-run 與小量 --execute、確認 quota guard／freshness 都正確，才會在後續
+# commit 補上 schedule:。順序反過來（先給自動執行能力再驗證）等於讓一支沒驗證過、
+# 可能撞 quota 的作業自己在 production 跑起來。
 
 on:
-  schedule:
-    - cron: '40 7 * * *'   # 每日 07:40 UTC，錯開 gsc-search-analytics（07:20）避免同時
-                           # 打 Supabase；兩者查詢的是不同 property 配額（Search Analytics
-                           # 與 URL Inspection 各自獨立計數），不互搶 GSC 端配額。
   workflow_dispatch:
     inputs:
-      sample_size:
-        description: '本次最多查幾個 URL（1-500）'
+      dry_run:
+        description: 'true=只驗證認證與回應格式，不寫庫；false=實際 --execute 寫入'
         required: false
-        default: '100'
+        default: 'true'
+      limit:
+        description: '本次最多查幾個 URL（1-500，即 --sample-size）'
+        required: false
+        default: '20'
       quota_budget:
         description: '24 小時滾動配額自我上限（1-2000）'
         required: false
         default: '500'
 
-# 同時只跑一個，避免排程與手動觸發互相覆寫配額分類帳的計算基準。不取消進行中的那個
+# 同時只跑一個，避免多次手動觸發互相覆寫配額分類帳的計算基準。不取消進行中的那個
 # ——它可能正在寫入，取消會留下 status='running' 的孤兒列（同 gsc-search-analytics.yml
 # 的理由）。
 concurrency:
@@ -56,13 +61,20 @@ jobs:
           # 經 env 傳遞而非直接內插進 run:——workflow_dispatch 的 input 是使用者輸入，
           # 內插進 shell 等於命令注入面（同 gsc-search-analytics.yml 的理由）。
           # 腳本自己也會再驗一次值域（resolve_sample_size / resolve_quota_budget）。
-          SAMPLE_SIZE: ${{ github.event.inputs.sample_size || '100' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+          SAMPLE_SIZE: ${{ github.event.inputs.limit || '20' }}
           QUOTA_BUDGET: ${{ github.event.inputs.quota_budget || '500' }}
         run: |
-          python scripts/ingest_gsc_url_inspection.py \
-            --execute --sample-size "$SAMPLE_SIZE" --quota-budget "$QUOTA_BUDGET"
+          if [ "$DRY_RUN" = "true" ]; then
+            python scripts/ingest_gsc_url_inspection.py \
+              --dry-run --sample-size "$SAMPLE_SIZE" --quota-budget "$QUOTA_BUDGET"
+          else
+            python scripts/ingest_gsc_url_inspection.py \
+              --execute --sample-size "$SAMPLE_SIZE" --quota-budget "$QUOTA_BUDGET"
+          fi
 
       - name: Verify last write
+        if: github.event.inputs.dry_run != 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -70,11 +82,13 @@ jobs:
 
   # 資料新鮮度告警。條件是「gsc_url_inspection 最新 inspected_at 太舊」，不是「ingest
   # job 有沒有失敗」——理由同 gsc-search-analytics.yml：排程根本沒被觸發時不會產生任何
-  # 失敗事件。needs: 刻意不設——ingest 掛掉時這個 job 仍要跑，它本來就是為了涵蓋
-  # 「ingest 沒有回報任何東西」的情況。
+  # 失敗事件。needs: 刻意不設——ingest 掛掉時這個 job 仍要跑（GitHub Actions 預設
+  # 平行執行、互不依賴），它本來就是為了涵蓋「ingest 沒有回報任何東西」的情況，
+  # 若靠 needs: 串接、ingest 失敗會讓這個 job 被 skip，就會複製 S2.2 事故的病灶
+  # （新鮮度告警住在它要監控的作業裡，看不到自己的缺席）。
   #
   # 門檻見腳本 FRESHNESS_MAX_AGE_HOURS（96h）：inspect 沒有 search analytics 那種
-  # 固有延遲，但配額可能被 gsc-sitemap-ops 或其他呼叫方擠占導致連續數天零寫入
+  # 固有延遲，但配額可能被同 property 上看不到的其他呼叫方擠占導致連續數天零寫入
   # （仍是「成功」的 run），門檻因此抓得比單純「排程週期 × 2」更寬。
   freshness:
     runs-on: ubuntu-latest
