@@ -33,11 +33,13 @@ from scripts import crawl_taxonomy as tax  # noqa: E402
 from scripts import crawl_warehouse as wh  # noqa: E402
 from scripts.ingest_crawl_hourly import (  # noqa: E402
     DEFAULT_LOOKBACK_HOURS,
+    DROPPED_LINE_WARN_RATIO,
     LOKI_MAX_SERIES,
     MAX_AGE_HOURS,
     MAX_BACKFILL_HOURS,
     RETENTION_SAFETY_MARGIN_HOURS,
     LokiQueryError,
+    _dropped_line_query,
     _row,
     build_crawler_bytes_query,
     build_crawler_count_query,
@@ -47,6 +49,7 @@ from scripts.ingest_crawl_hourly import (  # noqa: E402
     classify_loki_error,
     collect_hour,
     complete_hours,
+    count_dropped_lines,
     derive_human,
     fold_crawler,
     fold_total,
@@ -372,8 +375,26 @@ class TestQueryConstruction:
     def test_crawler_queries_filter_on_parsed_field_not_raw_line(self) -> None:
         """line filter 會把 referer 含 google 的真人流量誤標成 Googlebot。"""
         query = build_crawler_count_query()
-        assert "| json | user_agent =~" in query
+        assert '| json | __error__="" | user_agent =~' in query
         assert "|~" not in query
+
+    def test_every_query_drops_json_parse_errors_right_after_json(self) -> None:
+        """job label 混著非 JSON 的 sidecar 行（shutdown-manager），不濾掉整條查詢 400 死。
+
+        2026-09-02 實測：{job="...envoy_proxy"} 撞到 gateway pod 的 shutdown-manager
+        container，吐純文字 log、不是 JSON，`| json` 標成 __error__="JSONParserErr"，
+        metric 查詢對未過濾的 pipeline error 是硬失敗（HTTP 400），不是單行跳過。
+        """
+        for query in (build_crawler_count_query(), build_crawler_bytes_query(),
+                      build_total_count_query(), build_total_bytes_query()):
+            assert '| json | __error__=""' in query
+
+    def test_dropped_line_query_counts_json_parse_errors_only(self) -> None:
+        query = _dropped_line_query()
+        assert query == (
+            'sum(count_over_time({job="loki.source.kubernetes.envoy_proxy"} '
+            '| json | __error__="JSONParserErr" [1h]))'
+        )
 
     def test_bytes_queries_unwrap_bytes_sent_not_origin_content_length(self) -> None:
         """origin_content_length 只在 200 有值，unwrap 它會讓 3xx/4xx 靜默變 0。"""
@@ -428,6 +449,16 @@ class TestLokiErrorClassification:
         error = classify_loki_error(400, "maximum number of series reached; too many bytes")
         assert error.kind == "series-limit"
 
+    def test_json_parse_pipeline_error_is_classified_not_unknown(self) -> None:
+        """撞到這個代表 __error__="" 濾網被改掉，或冒出新的非 JSON 來源。"""
+        error = classify_loki_error(
+            400,
+            'pipeline error: \'JSONParserErr\' for series: '
+            '{__error__="JSONParserErr", __error_details__="..."}',
+        )
+        assert error.kind == "json-parse-pipeline-error"
+        assert "__error__" in error.remedy
+
     def test_unknown_error_mentions_cloudflare_user_agent_trap(self) -> None:
         error = classify_loki_error(403, "<html>error code: 1010</html>")
         assert error.kind == "unknown"
@@ -462,6 +493,12 @@ class TestSeriesLimitWarning:
 
     def test_threshold_leaves_room_before_the_hard_limit(self) -> None:
         assert LOKI_MAX_SERIES == 500
+
+
+class TestDroppedLineWarnRatio:
+    def test_warn_ratio_is_one_percent(self) -> None:
+        """實測零星值是 0.03%；1% 抓的是「已經不像 sidecar 雜訊」的量級。"""
+        assert DROPPED_LINE_WARN_RATIO == 0.01
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -649,8 +686,9 @@ class TestBuildRows:
 # collect_hour / run_ingestion
 # ══════════════════════════════════════════════════════════════════════
 
-def _instant_side_effect(crawler_counts, crawler_bytes, total_counts, total_bytes):
-    responses = iter([crawler_counts, crawler_bytes, total_counts, total_bytes])
+def _instant_side_effect(crawler_counts, crawler_bytes, total_counts, total_bytes, dropped=()):
+    """五次呼叫依序對應四個聚合查詢 + count_dropped_lines() 的診斷查詢。"""
+    responses = iter([crawler_counts, crawler_bytes, total_counts, total_bytes, dropped])
 
     def _side_effect(query: str, moment: datetime) -> list[dict]:
         return next(responses)
@@ -659,11 +697,12 @@ def _instant_side_effect(crawler_counts, crawler_bytes, total_counts, total_byte
 
 
 class TestCollectHour:
-    def test_four_queries_are_issued_per_hour(self) -> None:
+    def test_five_queries_are_issued_per_hour(self) -> None:
+        """4 個聚合查詢 + 1 個 count_dropped_lines() 診斷查詢。"""
         with patch("scripts.ingest_crawl_hourly.loki_index_stats", return_value={"entries": 1, "bytes": 2}), \
              patch("scripts.ingest_crawl_hourly.loki_instant", return_value=[]) as instant:
             collect_hour(HOUR)
-        assert instant.call_count == 4
+        assert instant.call_count == 5
 
     def test_rows_combine_crawler_and_derived_human(self) -> None:
         crawler = [_series({"token": "bingbot", "mob": "", "status": "200", "pfx": "/article"}, 10)]
@@ -679,6 +718,7 @@ class TestCollectHour:
         assert by_group["human"]["request_count"] == 20
         assert by_group["human"]["bytes"] == 1000
         assert stats["crawler_requests"] == 10 and stats["total_requests"] == 30
+        assert stats["dropped_lines"] == 0
 
     def test_empty_index_stats_warns_about_silent_retention_gap(
         self, caplog: pytest.LogCaptureFixture
@@ -687,6 +727,69 @@ class TestCollectHour:
              patch("scripts.ingest_crawl_hourly.loki_instant", return_value=[]):
             collect_hour(HOUR)
         assert "保留期" in caplog.text
+
+    def test_dropped_lines_are_counted_into_stats_not_silently_swallowed(self) -> None:
+        """被 __error__="" 濾掉的行數要能在 stats 裡看到，不能悄悄消失。"""
+        dropped = [_series({}, 23)]
+        with patch("scripts.ingest_crawl_hourly.loki_index_stats", return_value={"entries": 30, "bytes": 9}), \
+             patch("scripts.ingest_crawl_hourly.loki_instant",
+                   side_effect=_instant_side_effect([], [], [], [], dropped=dropped)):
+            _, stats = collect_hour(HOUR)
+        assert stats["dropped_lines"] == 23
+
+    def test_low_dropped_share_logs_info_not_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        """0.03% 這種零星比例（shutdown-manager sidecar 雜訊）不該吵到 WARNING。"""
+        dropped = [_series({}, 2)]
+        total = [_series({"status": "200", "pfx": "/"}, 10_000)]
+        with caplog.at_level(logging.INFO), \
+             patch("scripts.ingest_crawl_hourly.loki_index_stats", return_value={"entries": 1}), \
+             patch("scripts.ingest_crawl_hourly.loki_instant",
+                   side_effect=_instant_side_effect([], [], total, [], dropped=dropped)):
+            collect_hour(HOUR)
+        records = [r for r in caplog.records if "濾掉" in r.message]
+        assert records and records[0].levelname == "INFO"
+
+    def test_high_dropped_share_escalates_to_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        """比例一旦超過 DROPPED_LINE_WARN_RATIO，代表壞的不是雜訊而是 access log 本身。"""
+        dropped = [_series({}, 200)]
+        total = [_series({"status": "200", "pfx": "/"}, 1_000)]
+        with caplog.at_level(logging.INFO), \
+             patch("scripts.ingest_crawl_hourly.loki_index_stats", return_value={"entries": 1}), \
+             patch("scripts.ingest_crawl_hourly.loki_instant",
+                   side_effect=_instant_side_effect([], [], total, [], dropped=dropped)):
+            collect_hour(HOUR)
+        records = [r for r in caplog.records if "濾掉" in r.message]
+        assert records and records[0].levelname == "WARNING"
+
+    def test_dropped_line_query_failure_does_not_break_ingestion(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """診斷查詢是可見度用的，不是資料正確性所需——它失敗不該讓整小時失敗。"""
+        error = LokiQueryError("proxy-timeout", "boom", "重試")
+
+        def _side_effect(query: str, moment: datetime) -> list[dict]:
+            if query == _dropped_line_query():
+                raise error
+            return []
+
+        with patch("scripts.ingest_crawl_hourly.loki_index_stats", return_value={"entries": 1}), \
+             patch("scripts.ingest_crawl_hourly.loki_instant", side_effect=_side_effect):
+            rows, stats = collect_hour(HOUR)
+        assert stats["dropped_lines"] == 0
+        assert "無法回報濾掉多少行" in caplog.text
+
+
+class TestCountDroppedLines:
+    def test_sums_series_values(self) -> None:
+        with patch("scripts.ingest_crawl_hourly.loki_instant",
+                   return_value=[_series({}, 5), _series({}, 3)]):
+            assert count_dropped_lines(HOUR) == 8
+
+    def test_query_failure_returns_zero(self, caplog: pytest.LogCaptureFixture) -> None:
+        error = LokiQueryError("bytes-limit", "boom", "縮小 BUCKET")
+        with patch("scripts.ingest_crawl_hourly.loki_instant", side_effect=error):
+            assert count_dropped_lines(HOUR) == 0
+        assert "無法回報濾掉多少行" in caplog.text
 
 
 class TestRunIngestion:

@@ -71,6 +71,21 @@ unwrap 會直接把那些行丟掉。存它會讓 bytes 欄在狀態碼之間不
 真正該檢查的是「最舊的目標小時距今多久」= MAX_AGE_HOURS。
 MAX_BACKFILL_HOURS 只是防打錯字的第二道，不要拿它當保留期防線。
 
+【5. | json 後一定接 __error__=""，否則整條查詢 400 死】
+`{job="loki.source.kubernetes.envoy_proxy"}` 這個 job label 不是只有 envoy access log——
+gateway pod 裡的 shutdown-manager sidecar（滾動部署時的 drain 流程）也共用同一個 job，
+但吐的是純文字行（`2026-09-01T19:54:44Z\tINFO\tshutdown-manager\t...`），不是 JSON。
+`| json` 遇到這種行會標成 `__error__="JSONParserErr"`；Loki 的 metric 查詢
+（count_over_time / sum_over_time 這類）對未過濾的 pipeline error 是硬失敗、回 HTTP 400，
+不是「這行跳過、其他行照算」。實測（2026-09-02，2026-09-01T19:00Z 那小時）：
+60,652 行 access log 對 18 行 shutdown-manager（0.03%），集中在該小時剛好有 gateway
+滾動部署、pod 收到 SIGTERM 開始 drain 的時間點——查詢語法沒錯，是同 job 混進了另一個
+container 的非 JSON 流，而且只要那小時發生過部署，重跑幾次都會撞同一批行，长得像
+「特定小時必死」而非 flaky。修法：`_crawler_pipeline()` / `_total_pipeline()` 都在
+`| json` 後緊接 `| __error__=""`；被濾掉的行數另外查一次、記警告（見
+`count_dropped_lines()`），不能靜默丟棄——這個比例哪天從 0.03% 漲到兩位數，
+代表壞的不是 sidecar 雜訊而是 access log 本身，要停下來查，不能繼續濾。
+
 
 ═══ Loki 硬約束（四種失敗長得不一樣，status code 分不出來）═══
 
@@ -163,6 +178,10 @@ MAX_AGE_HOURS = LOKI_RETENTION_HOURS - RETENTION_SAFETY_MARGIN_HOURS  # 144
 
 FRESHNESS_MAX_AGE_HOURS = 3  # 排程週期 1h 的 3 倍
 
+# 被 __error__="" 濾掉的行數 ÷ 全流量請求數 的警戒線。超過就代表壞行不是零星
+# sidecar 雜訊、該停下來查，不能繼續濾。見設計決定 5。
+DROPPED_LINE_WARN_RATIO = 0.01
+
 class LokiQueryError(RuntimeError):
     """Loki 查詢失敗，且已分類成可行動的類別。"""
 
@@ -212,16 +231,26 @@ def to_nanoseconds(moment: datetime) -> int:
 # ══════════════════════════════════════════════════════════════════════
 
 def _crawler_pipeline() -> str:
+    """`| json` 後緊接 `__error__=""`：job 裡混著非 JSON 的 sidecar 行，見設計決定 5。"""
     return (
-        f'{{job="{LOKI_JOB}"}} | json | user_agent =~ `{build_crawler_ua_pattern()}` '
+        f'{{job="{LOKI_JOB}"}} | json | __error__="" '
+        f"| user_agent =~ `{build_crawler_ua_pattern()}` "
         f"| label_format {build_ua_token_expr()}, {build_mobile_expr()}, "
         f"{build_path_prefix_expr()}"
     )
 
 
 def _total_pipeline() -> str:
-    """全流量只抽 path，不碰 UA —— 對 157k 行跑 UA regex 會貼上 30s 的 proxy 上限。"""
-    return f'{{job="{LOKI_JOB}"}} | json | label_format {build_path_prefix_expr()}'
+    """全流量只抽 path，不碰 UA —— 對 157k 行跑 UA regex 會貼上 30s 的 proxy 上限。
+
+    `| json` 後緊接 `__error__=""`：job 裡混著非 JSON 的 sidecar 行，見設計決定 5。
+    """
+    return f'{{job="{LOKI_JOB}"}} | json | __error__="" | label_format {build_path_prefix_expr()}'
+
+
+def _dropped_line_query() -> str:
+    """統計因 JSON 解析失敗被 __error__="" 濾掉的行數，純診斷用，不影響落庫的統計值。"""
+    return f'sum(count_over_time({{job="{LOKI_JOB}"}} | json | __error__="JSONParserErr" [{BUCKET}]))'
 
 
 def build_crawler_count_query() -> str:
@@ -274,6 +303,15 @@ def classify_loki_error(status: int, body: str) -> LokiQueryError:
             f"HTTP {status}: 查詢被 max_query_length (170h) 拒絕。{body[:300]}",
             f"length 的算法是「時間窗 + range selector」加總。本腳本用 instant query + "
             f"[{BUCKET}]，正常不可能撞到；出現代表 BUCKET 常數被改壞。",
+        )
+    if "jsonparsererr" in lowered or "pipeline error" in lowered:
+        return LokiQueryError(
+            "json-parse-pipeline-error",
+            f"HTTP {status}: | json 遇到非 JSON 行，metric 查詢對未過濾的 pipeline error "
+            f"是硬失敗。{body[:300]}",
+            "正常情況下 _crawler_pipeline() / _total_pipeline() 已經在 | json 後接了 "
+            "__error__=\"\"，不該再撞到這個。出現代表濾網被改掉，或新的非 JSON 來源用了 "
+            "跟 __error__=\"JSONParserErr\" 不同的錯誤類別（見設計決定 5）。",
         )
     if status in (502, 503, 504) or "error code: 502" in lowered:
         return LokiQueryError(
@@ -355,6 +393,20 @@ def _series_value(series: Mapping[str, Any]) -> float:
         return float(raw[1])
     except (TypeError, ValueError):
         return 0.0
+
+
+def count_dropped_lines(moment: datetime) -> int:
+    """回傳這個小時被 __error__="JSONParserErr" 濾掉的行數（見設計決定 5）。
+
+    這條查詢本身失敗不該拖垮主流程——它是可見度用的，不是資料正確性所需——
+    所以失敗時記警告、回 0，讓 ingestion 照跑。
+    """
+    try:
+        result = loki_instant(_dropped_line_query(), moment)
+    except LokiQueryError as exc:
+        logger.warning("被過濾行數查詢失敗，這小時無法回報濾掉多少行：%s", exc)
+        return 0
+    return int(sum(_series_value(item) for item in result))
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -464,17 +516,39 @@ def collect_hour(bucket_hour: datetime) -> tuple[list[dict], dict]:
     crawler_bytes = fold_crawler(loki_instant(build_crawler_bytes_query(), window_end))
     total_counts = fold_total(loki_instant(build_total_count_query(), window_end))
     total_bytes = fold_total(loki_instant(build_total_bytes_query(), window_end))
+    dropped_lines = count_dropped_lines(window_end)
 
     human_counts = derive_human(total_counts, crawler_counts)
     human_bytes = derive_human(total_bytes, crawler_bytes)
     rows = build_rows(bucket_hour, crawler_counts, crawler_bytes, human_counts, human_bytes)
+    total_requests = int(sum(total_counts.values()))
+    _warn_if_dropped_share_high(bucket_hour, dropped_lines, total_requests)
     return rows, {
         "scanned_bytes": int(stats.get("bytes") or 0),
         "scanned_entries": int(stats.get("entries") or 0),
         "crawler_requests": int(sum(crawler_counts.values())),
-        "total_requests": int(sum(total_counts.values())),
+        "total_requests": total_requests,
+        "dropped_lines": dropped_lines,
         "rows": len(rows),
     }
+
+
+def _warn_if_dropped_share_high(bucket_hour: datetime, dropped_lines: int, total_requests: int) -> None:
+    """被 __error__="" 濾掉的行不能靜默——固定記一筆；比例一旦偏高才升級成警告。
+
+    0.03% 這個實測值是 gateway 滾動部署時 shutdown-manager sidecar 混進同一個 job 的
+    雜訊（見設計決定 5）。DROPPED_LINE_WARN_RATIO 抓 1% 當警戒線：一旦被濾行數量級
+    從「零星 sidecar 行」變成「一整類請求」，代表 access log 本身壞了，要停下來查，
+    不能繼續濾掉了事。
+    """
+    if dropped_lines <= 0:
+        return
+    share = dropped_lines / total_requests if total_requests else 1.0
+    log = logger.warning if share >= DROPPED_LINE_WARN_RATIO else logger.info
+    log(
+        "%s 有 %d 行因 JSON 解析失敗被 __error__=\"\" 濾掉（佔全流量 %.3f%%）。",
+        iso_z(bucket_hour), dropped_lines, 100 * share,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════
