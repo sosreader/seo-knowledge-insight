@@ -7,13 +7,16 @@ name: GSC URL Inspection Sampling
 # 與 gsc-search-analytics.yml 刻意分開：來源 API、配額模型（2,000 QPD／property 共用桶，
 # 而非 50,000 rows/day）、抽樣邏輯完全不同，合併只會讓判讀互相干擾。
 #
-# 【本檔目前刻意只有 workflow_dispatch，沒有 schedule——這是驗證階段，不是最終形狀】
-# 這支管線與它的 quota guard 尚未在真實環境（含 secret 接線）驗證過。先用手動觸發
-# 跑過 dry-run 與小量 --execute、確認 quota guard／freshness 都正確，才會在後續
-# commit 補上 schedule:。順序反過來（先給自動執行能力再驗證）等於讓一支沒驗證過、
-# 可能撞 quota 的作業自己在 production 跑起來。
+# 【schedule: 是驗證通過後另開的 commit 補上的，不是最初就有】
+# 這支管線與它的 quota guard 先用 workflow_dispatch 手動驗證過 dry-run 與小量
+# --execute，確認 quota guard／freshness／權限雙向驗證都正確後才補上排程——
+# 順序反過來（先給自動執行能力再驗證）等於讓一支沒驗證過、可能撞 quota 的作業
+# 自己在 production 跑起來。
 
 on:
+  schedule:
+    - cron: '40 7 * * *'   # 每日 07:40 UTC，錯開 gsc-search-analytics（07:20）
+                           # 避免同時打 Supabase；兩者各自獨立配額桶，不互搶。
   workflow_dispatch:
     inputs:
       dry_run:
