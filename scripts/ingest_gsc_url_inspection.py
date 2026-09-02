@@ -6,33 +6,37 @@ urlInspection.index.inspect API（Google）→ Supabase upsert。取代 CrawledN
 
 用法（旗標細節見 --help）：--dry-run（預設，仍會打真的 API，只是不寫庫）／
 --execute [--sample-size N] [--quota-budget N]／--verify（唯讀檢查）／
---check-freshness（新鮮度告警，stale 則 exit 1）。環境變數：GSC_READONLY_KEY
-（service account 的 JSON **字串**，與 ingest_gsc_search_analytics.py 共用同一把唯讀
-SA）、SUPABASE_URL / SUPABASE_SERVICE_KEY。
+--check-freshness（新鮮度告警，stale 則 exit 1）。環境變數：GSC_READONLY_KEY（service
+account 的 JSON **字串**，與 ingest_gsc_search_analytics.py 共用同一把唯讀 SA）、
+SUPABASE_URL / SUPABASE_SERVICE_KEY。
 
 倉儲只知道每頁拿到多少曝光，不知道零曝光的頁是「沒人搜」還是「Google 根本沒收錄」——
 兩者處置相反（內容/關鍵字問題 vs 技術 SEO 問題）。本管線補的是這個判別力，抽樣策略
 因此要服務這個目的，不是「隨機抽一些」，見下方「抽樣優先序」。
 
-═══ 配額：2,000 QPD／property 硬限制，重置機制未經證實 ═══
+═══ 配額：2,000 QPD 綁在 property 本身（不是我們的 GCP 專案），重置機制未經證實 ═══
 
-來源：knowledge-base `.verification/2026-08-29-seo-capability/S1.2-gsc-api-facts.md` 第 3
-節。官方頁只列數字，**沒有明文寫重置機制**（該檔第 94 行標記為未查證項）。
+來源：`.verification/2026-08-29-seo-capability/S1.2-gsc-api-facts.md` 第 3 節 + team-lead
+對官方 limits 頁的複驗（原文「calls querying the same site」）。**這 2,000
+是 property 級共用桶，任何呼叫這個 property 的人都共用它**（不同 SA／專案皆算），
+API 不回傳剩餘額度，只在超限回 429。因此「本地計數 < 上限」**不等於**「還打得動」
+——本地計數只是我們對自己的自我克制，真正剩多少取決於看不到的其他呼叫方。429 是
+一等公民：立刻停止、記錄、回報「因外部配額壓力停止」，**不重試**
+（`QuotaExhaustedError`）。`sitemaps.*`（gsc-sitemap-ops 用的）是不同 resource、獨立
+配額桶，**不吃這 2,000**——先前草稿「撞爆會連帶打爆 sitemap 提交」不準確，已更正；
+真正共用這桶的是「誰在呼叫這個 property 的 URL Inspection」，程式端無法得知，需人
+去 GSC 後台「設定→使用者和權限」查。
 
-因此不假設 UTC 午夜歸零，改用「本地滾動視窗」：每次呼叫 API 的次數持久化進
-ingestion_run 的一個獨立分類帳列（table_name='gsc_url_inspection_quota'，非真實資料表，
-借用既有「一次作業一列」結構），過去 24 小時分類帳列加總＝保守估計的已用量。不論
-Google 端實際怎麼重置都安全：更寬鬆時我們只是保守，更嚴格時我們一樣不會超推薦值；
-反過來寫死「午夜歸零」猜錯，會在配額表面「還沒用完」時其實已在上個真實週期用光，
-直接打爆 gsc-sitemap-ops 的 sitemap 提交（同 property 共用配額）。
-
-DEFAULT_QUOTA_BUDGET=500 遠低於硬限制 2,000，留給 gsc-sitemap-ops 與其他呼叫方的安全
-邊界；QUOTA_HARD_CEILING=2000 是 CLI 也蓋不過的天花板（resolve_quota_budget）。
-
-配額是「打 API 就算數」不是「寫庫才算數」——連 --dry-run 都會打真的 inspect API（下方
-「dry-run 也是真的呼叫」），分類帳紀錄因此**不因 execute 與否而跳過**，否則連續 dry-run
-會讓本地帳本低估真實用量，守門失效。達到上限時停止是**成功結束**：回報「因配額上限
-停止，已處理 N 筆」，exit 0——本檔唯一被明文交代、且有具體事故理由的硬性要求。
+重置機制官方**沒有明文寫**（S1.2 第 94 行標記未查證），因此不假設 UTC 午夜歸零，
+改用「本地滾動視窗」：每次呼叫的次數持久化進 ingestion_run 的獨立分類帳列
+（table_name='gsc_url_inspection_quota'，非真實資料表，借用既有「一次作業一列」
+結構），過去 24 小時加總＝保守估計已用量。兩種真實情況都安全：真是午夜歸零，滾動
+視窗只是保守；真是滾動窗，寫死午夜歸零會在錯的時間點放行——**程式裡沒有任何「今天
+過了就重置」的邏輯**。DEFAULT_QUOTA_BUDGET=500 遠低於硬限制 2,000，留給看不到的
+其他呼叫方安全邊界；QUOTA_HARD_CEILING=2000 是 CLI 也蓋不過的天花板。配額是「打
+API 就算數」不是「寫庫才算數」——連 --dry-run 都會打真的 inspect API，分類帳紀錄
+因此不因 execute 與否而跳過。達到本地自我設限或撞到即時 429 都是**成功結束**：
+回報「因配額上限停止，已處理 N 筆」，exit 0。
 
 ═══ 抽樣優先序 —— 為什麼這樣抽 ═══
 
@@ -40,39 +44,33 @@ DEFAULT_QUOTA_BUDGET=500 遠低於硬限制 2,000，留給 gsc-sitemap-ops 與�
 
   ① 對照組（固定不變）：從 sitemap-0.xml（vocus.cc 站台結構頁，實測 180 筆，見 KB
      S1.7 內鏈基線 00-sampling-plan.md）取固定子集，**每次都查同一批**——沒有它就
-     無法區分「這頁狀態變了」與「抽樣抽到不同頁」，是三層裡最容易被忽略但最關鍵的
-     一層。子集用 URL 的 sha256 排序取前 N，不用字母序／抓取順序：字母序在 sitemap
-     增刪項目時會整批位移，hash 排序只有少數邊界值會變動，「同一批」更穩固。
+     無法區分「這頁狀態變了」與「抽樣抽到不同頁」。子集用 URL 的 sha256 排序取前 N，
+     不用字母序／抓取順序：字母序在 sitemap 增刪項目時會整批位移，hash 排序更穩固。
 
   ② 零曝光舊頁：sitemap-articles-*.xml / article-news.xml（真實內容頁）裡 lastmod
      超過 RECENT_THRESHOLD_DAYS 天、但 gsc_daily_metrics 從未出現過（page 組合）的
      URL——頁面存在夠久理應被爬過卻零曝光，是本管線要解答的核心問題。
 
   ③ 零曝光新頁：同上頁池但 lastmod 在門檻天數內。獨立分層是因為「剛發布還沒曝光」
-     本來就正常，優先序排在②之後，仍值得追蹤發布後多久被收錄。lastmod 缺失視為
-     「無法確認是最近的」，保守歸進②。
+     本來就正常，優先序排在②之後。lastmod 缺失視為「無法確認是最近的」，保守歸進②。
 
   tags/sitemap.xml **刻意排除**：KB S1.7 實測死鏈率 50%，對「內容有沒有被索引」沒有
   診斷價值，只會浪費配額。
 
-═══ vocus.cc sitemap 結構與站台影響 —— 引用既有實測，不重新探測 ═══
+═══ vocus.cc sitemap 結構與站台影響／dry-run 也是真的呼叫 ═══
 
 來源：KB S1.7 00-sampling-plan.md（2026-08-29 實測）。`/sitemap.xml` 404，正解是
-`/sitemap-index.xml`（200，15 個子 sitemap，合計 12,630 筆 URL）。sitemap 是「近期滾動
-視窗」非全站清單，但不影響本管線——我們只要「sitemap 有列、但零曝光」的子集，不是全站
-索引普查（2,000 QPD 也做不到）。不寫死 15 個子 sitemap 檔名：先抓 index 拿 `<loc>`
-清單再逐一抓（MAX_SUB_SITEMAPS 安全上限），較耐未來結構變動。
+`/sitemap-index.xml`（200，15 個子 sitemap，合計 12,630 筆 URL，「近期滾動視窗」非
+全站清單，但不影響本管線——只要「sitemap 有列、但零曝光」的子集）。不寫死 15 個
+子 sitemap 檔名：先抓 index 拿 `<loc>` 清單再逐一抓（MAX_SUB_SITEMAPS 安全上限）。
+**唯一**會直接打 vocus.cc 的是這段抓 sitemap 樹（每次至多 1+MAX_SUB_SITEMAPS 次
+請求，對比 KB S1.7 實測 Envoy 24h 平均 98.44 RPS 不構成站台負擔，證據見 KB
+`.verification/2026-08-29-seo-capability/S3.4-url-inspection/`）——URL Inspection
+本身打的是 Google 的 API，Google 代替我們看 vocus.cc。
 
-URL Inspection 本身打的是 Google 的 API（Google 代替我們看 vocus.cc）；**唯一**會直接
-打 vocus.cc 的是抓 sitemap 樹，每次執行至多 1+MAX_SUB_SITEMAPS 次請求，對比正常流量
-（KB S1.7 實測 Envoy 24h 平均 98.44 RPS）完全不構成站台負擔，證據見 knowledge-base
-`.verification/2026-08-29-seo-capability/S3.4-url-inspection/`。
-
-═══ dry-run 也是真的呼叫 ═══
-
-沿用 search analytics 那支腳本的慣例：--dry-run 一樣走完配額檢查、抓 sitemap、算候選、
-打 urlInspection API，只最後一步不寫 Supabase——這樣才是對「認證通過、API 可解析、
-抽樣清單合理」的真實驗證，配額分類帳的紀錄因此不能因 --dry-run 而跳過（見配額章節）。
+沿用 search analytics 那支腳本的慣例：--dry-run 一樣走完配額檢查、抓 sitemap、算
+候選、打 urlInspection API，只最後一步不寫 Supabase，這樣才是對「認證通過、API
+可解析、抽樣清單合理」的真實驗證，配額分類帳紀錄因此不能因 --dry-run 而跳過。
 
 ═══ 索引狀態的值域處理 —— 未知值是錯誤，不是警告 ═══
 
@@ -80,19 +78,15 @@ indexing_state 綁死 migration 015 定義的官方 enum（5 個值）。Google 
 **拒絕該筆並記進 errors**（不是 warnings，也不讓它直接撞 DB 的 CHECK）——migration 015
 原文：「新的索引狀態需要人看一眼決定怎麼歸類，不該靠 'unknown' 桶藏起來」。用 client
 端擋而非讓 CHECK 擋在 DB 層，是因為 PostgREST 批次 INSERT 一筆 CHECK 違規會讓整批一起死
-（同範本 dedupe_by_key 踩過的教訓），client 端先擋才能精準指出「哪一筆、為什麼」。
-
-coverage_state 刻意不綁 enum（migration 015 原文：「給人看的敘述字串，會隨介面文案改
-動」），只驗長度 1-200，超界算 warnings（資料品質問題，非需要人工分類的新事件）。
+（同範本 dedupe_by_key 踩過的教訓）。coverage_state 刻意不綁 enum（給人看的敘述字串，
+會隨介面文案改動），只驗長度 1-200，超界算 warnings（資料品質問題，非新事件）。
 
 ═══ 0 筆的三種樣貌 —— 只有一種是真的失敗 ═══
 
-  (1) sitemap 母體整批是空的（含對照組）→ 硬失敗（vocus.cc 有 12,630 筆 sitemap URL，
-      三層抽樣池同時掛零不合理，多半是抓取或曝光比對邏輯本身壞了）。
+  (1) sitemap 母體整批是空的（含對照組）→ 硬失敗（三層抽樣池同時掛零不合理，多半抓取或曝光比對邏輯本身壞了）。
   (2) 配額一開始就不夠（本地帳本已用滿）→ 不查任何 URL，**成功**。
   (3) 配額在查詢途中被打光（即時 429）→ 提前停止，已處理的部分照常寫入，**成功**。
-  (2)(3) 與 (1) 不可混為一談：前者是「該有的資料生不出來」，後兩者是「配額守門正常
-  運作」，判別式見 run_ingestion / _finalize_run。
+  (2)(3) 與 (1) 不可混為一談：前者是「該有的資料生不出來」，後兩者是「配額守門正常運作」，判別式見 run_ingestion / _finalize_run。
 """
 from __future__ import annotations
 
@@ -138,6 +132,9 @@ logger = logging.getLogger("ingest_gsc_url_inspection")
 
 GSC_INSPECT_URL = "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect"
 USER_AGENT = "seo-knowledge-insight-gsc-url-inspection/1.0"
+# property 是參數不是寫死的事實（vocus.cc 有兩個已驗證 property，若配額各自獨立可能是
+# 槓桿，未證實）；下游函式一律吃 property 參數不直接引用模組層常數，多一呼叫端就能分流。
+DEFAULT_PROPERTY = PROPERTY
 
 # 官方文件確認的 indexingState 值域（migration 015 同步照抄，兩邊必須一致）。
 INDEXING_STATE_ALLOWED = frozenset({
@@ -157,10 +154,10 @@ class QuotaExhaustedError(GscQueryError):
     估計，即時 429 是最終真相（可能是同 property 的其他呼叫方先用掉了配額）。"""
 
 
-def _inspect_post(token: str, url: str) -> dict:
+def _inspect_post(token: str, url: str, *, property: str = DEFAULT_PROPERTY) -> dict:
     request = urllib.request.Request(
         GSC_INSPECT_URL,
-        data=json.dumps({"inspectionUrl": url, "siteUrl": PROPERTY}).encode(),
+        data=json.dumps({"inspectionUrl": url, "siteUrl": property}).encode(),
         headers={
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -180,9 +177,9 @@ def _inspect_post(token: str, url: str) -> dict:
         raise GscQueryError(f"連線失敗：{exc.reason}") from exc
 
 
-def inspect_url(token: str, url: str) -> dict:
+def inspect_url(token: str, url: str, *, property: str = DEFAULT_PROPERTY) -> dict:
     """呼叫一次 inspect，回傳 indexStatusResult（可能是空 dict——Google 從未見過該 URL 時）。"""
-    payload = _inspect_post(token, url)
+    payload = _inspect_post(token, url, property=property)
     return payload.get("inspectionResult", {}).get("indexStatusResult", {})
 
 
@@ -192,7 +189,7 @@ def _parse_gsc_timestamp(value: str) -> datetime:
 
 def result_to_record(
     url: str, index_status: Mapping[str, Any], *, inspected_at: str,
-    errors: list[str], warnings: list[str],
+    errors: list[str], warnings: list[str], property: str = DEFAULT_PROPERTY,
 ) -> dict | None:
     """indexStatusResult → gsc_url_inspection 的一列。不合法回 None。理由見模組 docstring
     「索引狀態的值域處理」：indexing_state 未知值進 errors，其餘資料形狀問題進 warnings。
@@ -214,7 +211,7 @@ def result_to_record(
         return None
 
     record: dict = {
-        "property": PROPERTY, "url": url, "inspected_at": inspected_at,
+        "property": property, "url": url, "inspected_at": inspected_at,
         "coverage_state": coverage_state, "indexing_state": indexing_state,
         "ingested_at": inspected_at,
     }
@@ -433,14 +430,16 @@ TABLE_URL_INSPECTION = "gsc_url_inspection"
 QUOTA_LEDGER_TABLE_NAME = "gsc_url_inspection_quota"
 
 QUOTA_HARD_CEILING = 2000    # Google 官方 2,000 QPD／property，CLI 不可蓋過
-DEFAULT_QUOTA_BUDGET = 500   # 自我設限，留給 gsc-sitemap-ops 與其他呼叫方的安全邊界
+DEFAULT_QUOTA_BUDGET = 500   # 自我設限，留給同 property 上看不到的其他呼叫方安全邊界
 MIN_QUOTA_BUDGET = 1
 QUOTA_ROLLING_WINDOW_HOURS = 24
 
 
 def quota_used_last_24h() -> int:
     """過去 24 小時（以我們自己 ledger 的 started_at 為準的滾動視窗，非 UTC 午夜）
-    已消耗的配額。理由見模組 docstring「配額」。"""
+    已消耗的配額。理由見模組 docstring「配額」。分類帳目前是單一全域桶，未依 property
+    分——預設只用一個 property；未來若真啟用第二個，這裡要先改成依 property 分桶，
+    否則兩個 property 的用量會被誤算成同一份。"""
     since = datetime.now(timezone.utc) - timedelta(hours=QUOTA_ROLLING_WINDOW_HOURS)
     since_str = urllib.parse.quote(since.isoformat().replace("+00:00", "Z"), safe="")
     status, body = _supabase_request(
@@ -478,24 +477,24 @@ def record_quota_usage(calls_made: int, window_start: datetime, window_end: date
 
 def collect_inspections(
     token: str, urls: Sequence[str], inspected_at: str, calls_counter: list[int],
-    errors: list[str], warnings: list[str],
+    errors: list[str], warnings: list[str], *, property: str = DEFAULT_PROPERTY,
 ) -> tuple[list[dict], bool]:
     """逐一 inspect，回傳 (可寫入的列, 是否因配額提前停止)。calls_counter[0] 由呼叫端
-    在 finally 讀出，即使中途丟例外也能記到配額分類帳——配額不是這個函式順利跑完才算數。
-    429（QuotaExhaustedError）→ 停止但不算錯誤（規則 (a)）；其他 GscQueryError 直接
-    往外拋，交給呼叫端中止整個 run（同範本對系統性錯誤的處理）。"""
+    在 finally 讀出，即使中途丟例外也能記到配額分類帳。429（QuotaExhaustedError）→
+    停止但不算錯誤、不重試（規則 (a)，見模組 docstring「配額」）；其他 GscQueryError
+    直接往外拋，交給呼叫端中止整個 run（同範本對系統性錯誤的處理）。"""
     records: list[dict] = []
     quota_stopped = False
     for url in urls:
         calls_counter[0] += 1
         try:
-            index_status = inspect_url(token, url)
+            index_status = inspect_url(token, url, property=property)
         except QuotaExhaustedError:
-            logger.warning("即時撞到 Google 端配額（429），提前停止（已打 %d 次）", calls_counter[0])
+            logger.warning("即時撞到 Google 端配額（429，因外部配額壓力停止，不重試，已打 %d 次）", calls_counter[0])
             quota_stopped = True
             break
         record = result_to_record(url, index_status, inspected_at=inspected_at,
-                                   errors=errors, warnings=warnings)
+                                   errors=errors, warnings=warnings, property=property)
         if record is not None:
             records.append(record)
     return records, quota_stopped
@@ -642,7 +641,9 @@ def _finalize_run(
     return 0 if run_status == "success" else 1
 
 
-def run_ingestion(*, execute: bool, sample_size: int, quota_budget: int) -> int:
+def run_ingestion(
+    *, execute: bool, sample_size: int, quota_budget: int, property: str = DEFAULT_PROPERTY,
+) -> int:
     now = datetime.now(timezone.utc)
     run_started_at = now.isoformat().replace("+00:00", "Z")
     token = gsc_access_token()
@@ -669,7 +670,7 @@ def run_ingestion(*, execute: bool, sample_size: int, quota_budget: int) -> int:
     try:
         try:
             records, quota_stopped = collect_inspections(
-                token, sample, run_started_at, calls_counter, errors, warnings)
+                token, sample, run_started_at, calls_counter, errors, warnings, property=property)
         finally:
             record_quota_usage(calls_counter[0], now, now + timedelta(seconds=1))
     except GscQueryError as exc:
@@ -715,10 +716,9 @@ def run_verify() -> int:
     return 0 if total else 1
 
 
-# 見模組 docstring：inspect 是即時查詢，沒有 search analytics 那種 2-3 天固有延遲，
-# 但配額可能被 gsc-sitemap-ops 或其他呼叫方擠占，導致本管線連續數天寫入 0 筆
-# （仍是「成功」的 run，見規則 (a)）。24h×2 的緩衝在那種情況下會誤報；抓寬到 24h×4，
-# 留給「連續幾天配額緊繃」的正常情境，仍能在真的停擺（例如排程被關掉）時抓到。
+# 見模組 docstring：inspect 是即時查詢，沒有 search analytics 那種 2-3 天固有延遲，但
+# 配額可能被同 property 上看不到的其他呼叫方擠占，導致連續數天寫入 0 筆（仍是「成功」
+# 的 run，見規則 (a)）。24h×2 的緩衝會誤報，抓寬到 24h×4，仍能在真的停擺時抓到。
 FRESHNESS_MAX_AGE_HOURS = 24 * 4
 
 
@@ -789,7 +789,7 @@ def main() -> None:
         sys.exit(2)
 
     logger.info("sample-size=%d quota-budget=%d（硬上限 %d，property=%s）",
-               sample_size, quota_budget, QUOTA_HARD_CEILING, PROPERTY)
+               sample_size, quota_budget, QUOTA_HARD_CEILING, DEFAULT_PROPERTY)
     if not args.execute:
         logger.info("預設為 dry-run（仍會打真的 API），加 --execute 才會寫入。")
     sys.exit(run_ingestion(execute=args.execute, sample_size=sample_size, quota_budget=quota_budget))
