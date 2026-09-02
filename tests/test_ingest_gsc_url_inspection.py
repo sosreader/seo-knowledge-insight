@@ -187,7 +187,7 @@ class TestResultToRecord:
         assert record == {
             "property": PROPERTY, "url": "https://vocus.cc/a", "inspected_at": INSPECTED_AT,
             "coverage_state": "Crawled - currently not indexed", "indexing_state": "INDEXING_ALLOWED",
-            "ingested_at": INSPECTED_AT,
+            "ingested_at": INSPECTED_AT, "last_crawl": None,
         }
         assert not errors and not warnings
 
@@ -233,30 +233,74 @@ class TestResultToRecord:
 
 
 class TestAttachLastCrawl:
+    """live 事故（run 33609190700）：省略 last_crawl 鍵導致同批物件鍵集合不一致，
+    PostgREST 回 PGRST102 "All object keys must match"，20 筆全滅。修法是缺席時
+    明確填 None，鍵永遠存在——以下測試釘住「鍵永遠在」這件事，不只測值。"""
+
     def test_valid_last_crawl_is_attached(self) -> None:
         record: dict = {}
         _attach_last_crawl(record, "2026-08-20T10:00:00Z", INSPECTED_AT, "https://vocus.cc/a", [])
         assert record["last_crawl"] == "2026-08-20T10:00:00Z"
 
-    def test_missing_last_crawl_is_a_noop(self) -> None:
+    def test_missing_last_crawl_key_is_still_present_as_none(self) -> None:
         record: dict = {}
         _attach_last_crawl(record, None, INSPECTED_AT, "https://vocus.cc/a", [])
-        assert "last_crawl" not in record
+        assert "last_crawl" in record
+        assert record["last_crawl"] is None
 
-    def test_last_crawl_after_inspection_is_dropped_not_written(self) -> None:
+    def test_last_crawl_after_inspection_is_dropped_to_none_not_omitted(self) -> None:
         """CHECK last_crawl <= inspected_at：Google 不可能在查詢之後才抓取。"""
         record: dict = {}
         warnings: list[str] = []
         _attach_last_crawl(record, "2099-01-01T00:00:00Z", INSPECTED_AT, "https://vocus.cc/a", warnings)
-        assert "last_crawl" not in record
+        assert "last_crawl" in record
+        assert record["last_crawl"] is None
         assert warnings
 
-    def test_unparseable_last_crawl_is_dropped_not_written(self) -> None:
+    def test_unparseable_last_crawl_is_dropped_to_none_not_omitted(self) -> None:
         record: dict = {}
         warnings: list[str] = []
         _attach_last_crawl(record, "not-a-timestamp", INSPECTED_AT, "https://vocus.cc/a", warnings)
-        assert "last_crawl" not in record
+        assert "last_crawl" in record
+        assert record["last_crawl"] is None
         assert warnings
+
+
+class TestBatchKeyConsistency:
+    """regression test for PGRST102（run 33609190700 的實際成因）：一個 batch 裡
+    混合「Google 爬過」與「Google 從沒爬過」兩種 URL，upsert 送出的每筆物件鍵集合
+    必須完全一致，否則 PostgREST 批次 upsert 整批 400。這個測試在修正前會失敗
+    （crawled 那筆多一個 last_crawl 鍵）。"""
+
+    def test_mixed_crawled_and_never_crawled_urls_produce_identical_key_sets(self) -> None:
+        errors: list[str] = []
+        warnings: list[str] = []
+        crawled = result_to_record(
+            "https://vocus.cc/crawled", _index_status(last_crawl="2026-08-20T10:00:00Z"),
+            inspected_at=INSPECTED_AT, errors=errors, warnings=warnings,
+        )
+        never_crawled = result_to_record(
+            "https://vocus.cc/never-crawled", _index_status(last_crawl=None),
+            inspected_at=INSPECTED_AT, errors=errors, warnings=warnings,
+        )
+        assert crawled is not None and never_crawled is not None
+        assert set(crawled.keys()) == set(never_crawled.keys())
+        assert not errors and not warnings
+
+    def test_batch_of_records_all_share_one_key_set(self) -> None:
+        """模擬真實抽樣批次：部分 URL 有 lastCrawlTime、部分沒有。"""
+        errors: list[str] = []
+        warnings: list[str] = []
+        records = [
+            result_to_record(
+                f"https://vocus.cc/{i}",
+                _index_status(last_crawl="2026-08-20T10:00:00Z" if i % 2 == 0 else None),
+                inspected_at=INSPECTED_AT, errors=errors, warnings=warnings,
+            )
+            for i in range(10)
+        ]
+        key_sets = {frozenset(r.keys()) for r in records if r is not None}
+        assert len(key_sets) == 1, f"批次內鍵集合不一致，會觸發 PGRST102：{key_sets}"
 
 
 # ══════════════════════════════════════════════════════════════════════

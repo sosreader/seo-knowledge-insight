@@ -23,9 +23,8 @@ API 不回傳剩餘額度，只在超限回 429。因此「本地計數 < 上限
 ——本地計數只是我們對自己的自我克制，真正剩多少取決於看不到的其他呼叫方。429 是
 一等公民：立刻停止、記錄、回報「因外部配額壓力停止」，**不重試**
 （`QuotaExhaustedError`）。`sitemaps.*`（gsc-sitemap-ops 用的）是不同 resource、獨立
-配額桶，**不吃這 2,000**——先前草稿「撞爆會連帶打爆 sitemap 提交」不準確，已更正；
-真正共用這桶的是「誰在呼叫這個 property 的 URL Inspection」，程式端無法得知，需人
-去 GSC 後台「設定→使用者和權限」查。
+配額桶，**不吃這 2,000**；真正共用這桶的是「誰在呼叫這個 property 的 URL
+Inspection」，程式端無法得知，需人去 GSC 後台「設定→使用者和權限」查。
 
 重置機制官方**沒有明文寫**（S1.2 第 94 行標記未查證），因此不假設 UTC 午夜歸零，
 改用「本地滾動視窗」：每次呼叫的次數持久化進 ingestion_run 的獨立分類帳列
@@ -43,43 +42,41 @@ API 就算數」不是「寫庫才算數」——連 --dry-run 都會打真的 i
 三層，依序遞補到 sample-size 或配額用完為止（① 保留優先席次，不被配額排擠掉）：
 
   ① 對照組（固定不變）：從 sitemap-0.xml（vocus.cc 站台結構頁，實測 180 筆，見 KB
-     S1.7 內鏈基線 00-sampling-plan.md）取固定子集，**每次都查同一批**——沒有它就
-     無法區分「這頁狀態變了」與「抽樣抽到不同頁」。子集用 URL 的 sha256 排序取前 N，
-     不用字母序／抓取順序：字母序在 sitemap 增刪項目時會整批位移，hash 排序更穩固。
+     S1.7 內鏈基線）取固定子集，**每次都查同一批**——沒有它就無法區分「這頁狀態
+     變了」與「抽樣抽到不同頁」。子集用 URL 的 sha256 排序取前 N，不用字母序／
+     抓取順序：字母序在 sitemap 增刪項目時會整批位移，hash 排序更穩固。
 
   ② 零曝光舊頁：sitemap-articles-*.xml / article-news.xml（真實內容頁）裡 lastmod
-     超過 RECENT_THRESHOLD_DAYS 天、但 gsc_daily_metrics 從未出現過（page 組合）的
-     URL——頁面存在夠久理應被爬過卻零曝光，是本管線要解答的核心問題。
+     超過 RECENT_THRESHOLD_DAYS 天、但 gsc_daily_metrics 從未出現過的 URL——頁面
+     存在夠久理應被爬過卻零曝光，是本管線要解答的核心問題。
 
-  ③ 零曝光新頁：同上頁池但 lastmod 在門檻天數內。獨立分層是因為「剛發布還沒曝光」
-     本來就正常，優先序排在②之後。lastmod 缺失視為「無法確認是最近的」，保守歸進②。
+  ③ 零曝光新頁：同上頁池但 lastmod 在門檻天數內，優先序排在②之後（剛發布還沒曝光
+     本來就正常）。lastmod 缺失視為「無法確認是最近的」，保守歸進②。
 
-  tags/sitemap.xml **刻意排除**：KB S1.7 實測死鏈率 50%，對「內容有沒有被索引」沒有
-  診斷價值，只會浪費配額。
+  tags/sitemap.xml **刻意排除**：KB S1.7 實測死鏈率 50%，對診斷沒有價值，只會浪費配額。
 
 ═══ vocus.cc sitemap 結構與站台影響／dry-run 也是真的呼叫 ═══
 
 來源：KB S1.7 00-sampling-plan.md（2026-08-29 實測）。`/sitemap.xml` 404，正解是
 `/sitemap-index.xml`（200，15 個子 sitemap，合計 12,630 筆 URL，「近期滾動視窗」非
-全站清單，但不影響本管線——只要「sitemap 有列、但零曝光」的子集）。不寫死 15 個
-子 sitemap 檔名：先抓 index 拿 `<loc>` 清單再逐一抓（MAX_SUB_SITEMAPS 安全上限）。
-**唯一**會直接打 vocus.cc 的是這段抓 sitemap 樹（每次至多 1+MAX_SUB_SITEMAPS 次
-請求，對比 KB S1.7 實測 Envoy 24h 平均 98.44 RPS 不構成站台負擔，證據見 KB
-`.verification/2026-08-29-seo-capability/S3.4-url-inspection/`）——URL Inspection
-本身打的是 Google 的 API，Google 代替我們看 vocus.cc。
+全站清單，不影響本管線——只要「sitemap 有列、但零曝光」的子集）。不寫死 15 個子
+sitemap 檔名：先抓 index 拿 `<loc>` 清單再逐一抓（MAX_SUB_SITEMAPS 安全上限）。
+**唯一**會直接打 vocus.cc 的是這段抓 sitemap 樹（至多 1+MAX_SUB_SITEMAPS 次請求，
+對比 KB S1.7 實測 Envoy 24h 平均 98.44 RPS 不構成站台負擔）——URL Inspection 本身
+打的是 Google 的 API，Google 代替我們看 vocus.cc。
 
-沿用 search analytics 那支腳本的慣例：--dry-run 一樣走完配額檢查、抓 sitemap、算
-候選、打 urlInspection API，只最後一步不寫 Supabase，這樣才是對「認證通過、API
-可解析、抽樣清單合理」的真實驗證，配額分類帳紀錄因此不能因 --dry-run 而跳過。
+沿用 search analytics 那支腳本的慣例：--dry-run 一樣走完配額檢查、抓 sitemap、算候選、
+打 urlInspection API，只最後一步不寫 Supabase，這樣才是對「認證通過、API 可解析、
+抽樣清單合理」的真實驗證，配額分類帳紀錄因此不能因 --dry-run 而跳過。
 
 ═══ 索引狀態的值域處理 —— 未知值是錯誤，不是警告 ═══
 
 indexing_state 綁死 migration 015 定義的官方 enum（5 個值）。Google 新增新值時本檔
-**拒絕該筆並記進 errors**（不是 warnings，也不讓它直接撞 DB 的 CHECK）——migration 015
-原文：「新的索引狀態需要人看一眼決定怎麼歸類，不該靠 'unknown' 桶藏起來」。用 client
-端擋而非讓 CHECK 擋在 DB 層，是因為 PostgREST 批次 INSERT 一筆 CHECK 違規會讓整批一起死
-（同範本 dedupe_by_key 踩過的教訓）。coverage_state 刻意不綁 enum（給人看的敘述字串，
-會隨介面文案改動），只驗長度 1-200，超界算 warnings（資料品質問題，非新事件）。
+**拒絕該筆並記進 errors**（不是 warnings，也不讓它直接撞 DB 的 CHECK，PostgREST
+批次一筆違規會讓整批一起死）——migration 015 原文：「新分類需要人看一眼，不該靠
+'unknown' 桶藏起來」。coverage_state 刻意不綁 enum（會隨介面文案改動），只驗長度
+1-200，超界算 warnings。可選欄位（如 last_crawl）一律補 None 而非省略鍵，理由同上：
+省略鍵在批次 upsert 時會讓 PostgREST 因鍵集合不一致整批 400（見 _attach_last_crawl）。
 
 ═══ 0 筆的三種樣貌 —— 只有一種是真的失敗 ═══
 
@@ -157,11 +154,7 @@ def _inspect_post(token: str, url: str, *, property: str = DEFAULT_PROPERTY) -> 
     request = urllib.request.Request(
         GSC_INSPECT_URL,
         data=json.dumps({"inspectionUrl": url, "siteUrl": property}).encode(),
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "User-Agent": USER_AGENT,
-        },
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": USER_AGENT},
         method="POST",
     )
     try:
@@ -221,8 +214,13 @@ def result_to_record(
 def _attach_last_crawl(
     record: dict, last_crawl: str | None, inspected_at: str, url: str, warnings: list[str],
 ) -> None:
-    """last_crawl 的 CHECK 是 `last_crawl <= inspected_at`（Google 不可能在我們查詢之後
-    才抓取）。違反代表時區處理寫錯，丟棄該欄位而非讓它撞 DB CHECK 拖垮整批。"""
+    """last_crawl 一律寫進 record（缺席或不合法時明確填 None），絕不省略這個鍵：
+    upsert 整批送出，PostgREST 要求同批每個物件鍵集合完全一致（PGRST102 "All
+    object keys must match"），省略鍵讓「Google 從未爬過」（本管線最想找到的那類）
+    整批 400（live 事故：run 33609190700，20 筆全滅）。last_crawl 的 CHECK 是
+    `last_crawl <= inspected_at`，違反代表時區處理寫錯，丟棄值（設 None）而非
+    讓它撞 CHECK 拖垮整批。"""
+    record["last_crawl"] = None
     if not last_crawl:
         return
     try:
