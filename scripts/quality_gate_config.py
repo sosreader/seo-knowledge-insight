@@ -124,7 +124,7 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         cadence_hours=1,
         cadence_label="hourly",
         gap_window_hours=24,
-        lag_buffer_hours=1.25,  # 見「排程本身的 cron offset」註解（本檔尾端），避免剛跨過整點就誤報
+        lag_buffer_hours=1.5,  # 桶關閉後的容忍期（見本檔尾端「lag_buffer_hours 的語意」註解），非「桶起點」算起
         ingestion_run_table_name="cwv_hourly",
         degradation=DegradationConfig(
             column="unknown_ratio", mode="ratio_column",
@@ -166,7 +166,7 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         cadence_hours=1,
         cadence_label="hourly",
         gap_window_hours=24,
-        lag_buffer_hours=1.25,  # 同 cwv_hourly_rum，見本檔尾端「排程本身的 cron offset」註解
+        lag_buffer_hours=1.5,  # 同 cwv_hourly_rum，見本檔尾端「lag_buffer_hours 的語意」註解
         ingestion_run_table_name="crawl_daily",
         degradation=DegradationConfig(
             column="ua_group", mode="fallback_value", fallback_value="other-bot",
@@ -253,18 +253,40 @@ for _p in PIPELINES:
 DEFAULT_STALE_RUNNING_THRESHOLD_HOURS = 24.0  # 落在上面字典以外的 table_name（例如 quota 分類帳）
 
 # ══════════════════════════════════════════════════════════════════════
-# 為什麼 hourly 管線也要有 lag_buffer_hours（不是只有 GSC 這種有「來源固有延遲」的才需要）
+# 為什麼 hourly 管線也要有 lag_buffer_hours，以及 lag_buffer_hours 的語意
 # ══════════════════════════════════════════════════════════════════════
 #
-# S3.5 實測撞到：對 crawl_daily 在 UTC 17:06 跑 check_gaps()，把剛跨過整點、
-# 還沒被排程對象寫入的 16:00 那一桶也算進「應該有」，回報成一個空段——但那不是
-# 真的空段，只是排程本身有 cron offset：crawl-hourly.yml 排在整點後第 15 分鐘
-# 才觸發（`15 * * * *`），加上 freshness/gap job 刻意不設 needs:（見
-# freshness-alert-shipped-inside-the-thing-it-monitors-cannot-see-its-own-absence
-# 的教訓，ingest 沒被觸發時這個 job 仍要跑），兩個 job 在同一次排程觸發下是並行
-# 起跑，不保證 ingest 已經寫完最新那一小時。
+# S3.5 實測撞到兩層問題，兩層都修過，記錄下來避免下一個人重蹈：
 #
-# RUM/crawler 這類「時間戳跟著壁鐘走」的來源雖然沒有 GSC 那種資料源頭延遲，
-# 仍然有這個排程本身的延遲——lag_buffer_hours=1.25h 給 cron offset(<=15min)
-# 與執行時間留足夠餘裕，同時遠短於 max_age_hours=3h 的新鮮度門檻（空段檢查
-# 理應比「整條管線死了」的新鮮度告警更早注意到單一桶缺失，門檻不能反而更寬鬆）。
+# 【第一層：為什麼需要 buffer】對 crawl_daily 在 UTC 17:06 跑 check_gaps()，
+# 把剛跨過整點、還沒被排程對象寫入的 16:00 那一桶也算進「應該有」，回報成一個
+# 空段——但那不是真的空段，是排程本身有延遲：crawl-hourly.yml 排 `15 * * * *`，
+# 但 GitHub Actions 排程觸發本身有可觀漂移（實測連續 6 次分別在整點後
+# 22/26/23/28/23/28 分觸發，不是準時的 15 分），加上 freshness/gap job 刻意
+# 不設 needs:（見 freshness-alert-shipped-inside-the-thing-it-monitors-cannot-see-its-own-absence
+# 的教訓，ingest 沒被觸發時這個 job 仍要跑），兩個 job 在同一次排程觸發下是並行
+# 起跑，不保證 gap 檢查執行時 ingest 已經寫完最新那一小時。
+#
+# 【第二層：buffer 的語意曾經算錯】`expected_timestamps()` 列舉的時間點 `t`
+# 是桶的**起點**（例如 16:00 桶代表 [16:00,17:00)），第一版拿 `t` 直接跟
+# `now - lag_buffer_hours` 比，這讓 `lag_buffer_hours` 裡有整整一段
+# （等於 cadence_hours）被「桶本身的寬度」吃掉——buffer=1.25h、cadence=1h 時，
+# 桶關閉後**實際容忍的排程延遲只剩 15 分鐘**，而 production 實測（見下）正常
+# 延遲是 24–38 分鐘，於是每小時都有一段時間會誤報。這個問題不是「數字沒調對」，
+# 是比較的基準點本身選錯了；已在 `expected_timestamps()` 改成比較桶的**關閉
+# 時間**（`t + step`），`lag_buffer_hours` 現在字面上就是「桶關閉後容忍多久
+# 沒資料」，不再隱含跟 cadence_hours 的換算。
+#
+# 【實測數據，供之後調整參考】用 ingestion_run 交叉比對（不要直接讀目的表的
+# ingested_at 當「首次寫入時間」——crawl_daily 的 upsert 每次都會刷新
+# ingested_at，見 KB postgrest-querystring-limit-silently-capped-by-db-max-rows
+# 同一輪撞到的姊妹坑；cwv_hourly 因為 ingest_cwv_hourly.py 刻意不把 ingested_at
+# 放進 payload 才可信，見該腳本【設計決定 5】）：crawl-hourly.yml 在
+# 2026-09-02T09:07 UTC 修掉一個 56% 失敗率的 bug（commit 36bdf59）之後，
+# 穩態下「桶關閉 → 第一次成功寫入完成」延遲 7 個樣本落在 0.40–0.63h；
+# cwv_hourly（RUM）同期 15 個樣本落在 0.33–0.68h。lag_buffer_hours=1.5h
+# 給了約 2.4 倍安全邊際，仍遠短於 max_age_hours=3h 的新鮮度門檻。
+#
+# 這個 buffer 不是用來蓋掉真正的管線故障——2026-09-01T19:00–20:00 那次真實
+# 中斷（修復前，見 crawl_daily 的 09-01T20:00 空段）延遲一度到 13h，那種等級
+# 的中斷本來就該被空段檢查抓到，不該靠加大 buffer 藏起來。

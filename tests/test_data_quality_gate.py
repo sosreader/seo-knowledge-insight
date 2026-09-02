@@ -205,6 +205,88 @@ class TestExpectedTimestamps:
         points = gate.expected_timestamps(now, 1, window_start, lag_cutoff)
         assert max(points) <= lag_cutoff
 
+    def test_lag_cutoff_compares_bucket_close_time_not_bucket_start(self) -> None:
+        """Regression（S3.5 驗收退回）：`t` 是桶的起點，比較基準必須是桶的
+        關閉時間（t + cadence），不是起點本身——否則 lag_buffer_hours 裡有
+        一段等於 cadence_hours 被「桶寬度」吃掉，對 hourly 管線（cadence=1h）
+        幾乎等於沒有緩衝。用 1 小時 cadence、剛好卡在起點與關閉時間中間的
+        lag_cutoff 直接驗證：只看關閉時間才會排除最新那一桶。"""
+        # 16:00 桶代表 [16:00,17:00)，起點 16:00、關閉 17:00。
+        # lag_cutoff=16:30 嚴格介於兩者之間：若比較起點（16:00<=16:30）會被
+        # 誤判成「已經可以檢查」；只有比較關閉時間（17:00<=16:30 為 False）
+        # 才會正確排除它。
+        now = datetime(2026, 9, 2, 17, 40, tzinfo=UTC)
+        window_start = now - timedelta(hours=3)
+        lag_cutoff = datetime(2026, 9, 2, 16, 30, tzinfo=UTC)
+        points = gate.expected_timestamps(now, 1, window_start, lag_cutoff)
+        assert datetime(2026, 9, 2, 16, 0, tzinfo=UTC) not in points
+
+    def test_bucket_included_exactly_when_close_time_reaches_lag_cutoff(self) -> None:
+        """關閉時間等於 lag_cutoff 時應該被納入（邊界含頭），驗證比較基準
+        確實是 t + step 而非 t。"""
+        now = datetime(2026, 9, 2, 20, 0, tzinfo=UTC)
+        window_start = now - timedelta(hours=5)
+        lag_cutoff = datetime(2026, 9, 2, 17, 0, tzinfo=UTC)  # 恰好等於 16:00 桶的關閉時間
+        points = gate.expected_timestamps(now, 1, window_start, lag_cutoff)
+        assert datetime(2026, 9, 2, 16, 0, tzinfo=UTC) in points
+        assert datetime(2026, 9, 2, 17, 0, tzinfo=UTC) not in points  # 這桶關閉時間 18:00 > lag_cutoff
+
+    def test_production_lag_buffer_covers_measured_real_world_delay(self) -> None:
+        """Regression：鎖住 production 設定值與實測延遲分布的關係，不要只靠
+        程式碼審查記得這件事。
+
+        實測（.verification/2026-08-29-seo-capability/S3.5-freshness-negative-tests/）：
+        crawl-hourly.yml 2026-09-02T09:07 UTC 修掉 56% 失敗率的 bug 後，穩態下
+        「桶關閉→第一次成功寫入完成」延遲：crawl_daily 7 個樣本 0.40–0.63h、
+        cwv_hourly(RUM) 15 個樣本 0.33–0.68h。production 設定 lag_buffer_hours
+        =1.5h，任何一個樣本都必須落在緩衝內（bucket 在關閉 delay 小時後已有
+        資料時，若 delay < lag_buffer_hours，那一桶就不該被空段檢查誤判）。
+        """
+        measured_delays_hours = {
+            "crawl_daily": [0.40, 0.63, 0.46, 0.45, 0.49, 0.49, 0.42],
+            "cwv_hourly_rum": [0.43, 0.45, 0.41, 0.68, 0.43, 0.50, 0.41, 0.39, 0.34, 0.55, 0.38, 0.38, 0.40, 0.42, 0.33],
+        }
+        for key, delays in measured_delays_hours.items():
+            pipeline = PIPELINES_BY_KEY[key]
+            worst = max(delays)
+            assert worst < pipeline.lag_buffer_hours, (
+                f"{key}: 實測最差延遲 {worst}h 已經逼近或超過 lag_buffer_hours="
+                f"{pipeline.lag_buffer_hours}h，緩衝不夠安全"
+            )
+            margin = pipeline.lag_buffer_hours - worst
+            assert margin >= 0.5, f"{key}: 安全邊際只剩 {margin:.2f}h，過窄"
+
+    def test_old_buggy_semantics_would_have_flagged_the_measured_delays(self) -> None:
+        """反向鎖定：證明「比較桶起點」這個舊語意，用同一組實測延遲與同一個
+        production buffer 值，確實會誤報——這是這條 regression test 存在的
+        理由本身，不是憑空存在的斷言。"""
+        def old_buggy_expected_timestamps(now, cadence_hours, window_start, lag_cutoff):
+            step = timedelta(hours=cadence_hours)
+            anchor = gate._floor_to_cadence(now, cadence_hours) - step
+            points, t = [], anchor
+            while t >= window_start:
+                if t <= lag_cutoff:  # 舊版：比較桶起點
+                    points.append(t)
+                t -= step
+            return sorted(points)
+
+        cadence_hours = 1.0
+        lag_buffer_hours = 1.5
+        bucket_close = datetime(2026, 9, 2, 17, 0, tzinfo=UTC)
+        bucket_start = bucket_close - timedelta(hours=cadence_hours)
+        # 舊語意的實際容忍只有 lag_buffer_hours - cadence_hours = 0.5h；
+        # 用兩個明顯超過 0.5h、但仍在 production 實測正常範圍（0.4–0.63h 上緣附近
+        # 到略高）內的延遲，證明舊語意會在「資料其實已經寫完」時仍然誤報。
+        for delay_hours in (0.63, 0.9):
+            now = bucket_close + timedelta(hours=delay_hours)
+            lag_cutoff = now - timedelta(hours=lag_buffer_hours)
+            old_points = old_buggy_expected_timestamps(
+                now, cadence_hours, now - timedelta(hours=3), lag_cutoff)
+            new_points = gate.expected_timestamps(
+                now, cadence_hours, now - timedelta(hours=3), lag_cutoff)
+            assert bucket_start in old_points, "舊語意應該（錯誤地）已經開始檢查這一桶"
+            assert bucket_start not in new_points, "新語意應該仍在容忍期內，不檢查這一桶"
+
     def test_weekly_cadence_steps_by_seven_days(self) -> None:
         now = datetime(2026, 9, 2, tzinfo=UTC)  # 週三；最近一個「已完整結束」的週從 08-24 開始
         window_start = now - timedelta(days=28)

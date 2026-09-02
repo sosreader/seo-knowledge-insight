@@ -235,18 +235,27 @@ def _floor_to_cadence(moment: datetime, cadence_hours: float) -> datetime:
 def expected_timestamps(
     now: datetime, cadence_hours: float, window_start: datetime, lag_cutoff: datetime,
 ) -> list[datetime]:
-    """列舉 [window_start, now) 之間、依 cadence 對齊、且早於 lag_cutoff 的時間點。
+    """列舉 [window_start, now) 之間、依 cadence 對齊、且**關閉時間**早於 lag_cutoff 的時間點。
 
     純函式，不碰網路——這是空段檢查唯一需要的「業務邏輯」，其餘都是資料存取。
-    lag_cutoff 讓「來源本身有發布延遲」的最近幾筆不被誤判成空段（同一份容忍窗
-    直接沿用新鮮度門檻，見 quality_gate_config.py 的 lag_buffer_hours 註解）。
+    lag_cutoff 讓「來源本身有發布延遲」或「排程本身的觸發/執行延遲」的最近幾筆
+    不被誤判成空段（見 quality_gate_config.py 的 lag_buffer_hours 註解）。
+
+    **比較的是桶的關閉時間（t + step），不是桶的起點（t）**——這是 S3.5 驗收時
+    修正過的一個坑：`t` 代表桶的起點（例如 16:00 桶代表 [16:00, 17:00)），
+    若直接拿 `t` 去跟 `now - lag_buffer_hours` 比，`lag_buffer_hours` 這個數字
+    有一段（等於 cadence_hours）被「桶本身的寬度」吃掉，實際能容忍的排程延遲
+    只剩 `lag_buffer_hours - cadence_hours`——對 hourly 管線幾乎等於沒有緩衝
+    （buffer=1.25h、cadence=1h 時，實際容忍只有 15 分鐘，遠小於實測的正常延遲
+    0.4–0.65h，導致剛跨過整點後有一段時間會誤報）。改成比較關閉時間後，
+    `lag_buffer_hours` 才是它字面上的意思：「桶關閉後容忍多久沒資料」。
     """
     step = timedelta(hours=cadence_hours)
     anchor = _floor_to_cadence(now, cadence_hours) - step
     points: list[datetime] = []
     t = anchor
     while t >= window_start:
-        if t <= lag_cutoff:
+        if (t + step) <= lag_cutoff:
             points.append(t)
         t -= step
     return sorted(points)
