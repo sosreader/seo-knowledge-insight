@@ -57,13 +57,15 @@ jobs:
 
   # 資料新鮮度告警。
   #
-  # 條件刻意是「cwv_hourly 最近一筆資料超過 3 小時」，不是「ingest job 有沒有失敗」——
-  # 排程根本沒被觸發時（cron 語法錯、GitHub 因 repo 閒置自動停用 schedule、有人手動
-  # 關掉忘了開回來）不會產生任何失敗事件，失敗型告警在那種情況下是靜音的。
-  # 只有資料本身的缺席能證明作業沒在跑。
+  # S3.5：統一資料品質 gate（scripts/data_quality_gate.py），涵蓋新鮮度／空段／
+  # 靜默降級三類，取代原本只做新鮮度的 ingest_cwv_hourly.py --check-freshness。
+  # 條件刻意是「cwv_hourly（source=rum）最近一筆資料超過門檻」，不是「ingest job
+  # 有沒有失敗」——排程根本沒被觸發時（cron 語法錯、GitHub 因 repo 閒置自動停用
+  # schedule、有人手動關掉忘了開回來）不會產生任何失敗事件，失敗型告警在那種情況
+  # 下是靜音的。只有資料本身的缺席能證明作業沒在跑。
   #
   # needs: 刻意不設——ingest 掛掉時這個 job 仍要跑；它本來就是為了涵蓋
-  # 「ingest 沒有回報任何東西」的情況。門檻取排程週期（1h）的 3 倍。
+  # 「ingest 沒有回報任何東西」的情況。
   freshness:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -77,8 +79,17 @@ jobs:
       - name: Install dependencies
         run: pip install python-dotenv
 
-      - name: Check cwv_hourly freshness
+      - name: Check cwv_hourly_rum quality (freshness / gap / degradation)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python scripts/ingest_cwv_hourly.py --check-freshness
+        run: python scripts/data_quality_gate.py --pipeline cwv_hourly_rum
+
+      # 全域檢查（跨管線共用同一張 ingestion_run），刻意獨立成一個 step 且 if: always()——
+      # 上一步失敗時這步仍要跑，job 才不會因為單一 pipeline 的問題而漏查殘留 running。
+      - name: Check for stale running ingestion_run rows (global)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --check stale-running

@@ -74,7 +74,10 @@ jobs:
   # 每次都會成立的條件屬於儀表板，放在這裡只會訓練大家忽略它。
   #
   # needs: 刻意不設——ingest 掛掉時這個 job 仍要跑；它本來就是為了涵蓋
-  # 「ingest 沒有回報任何東西」的情況。門檻取排程週期（1h）的 3 倍。
+  # 「ingest 沒有回報任何東西」的情況。
+  #
+  # S3.5：統一資料品質 gate（scripts/data_quality_gate.py），涵蓋新鮮度／空段／
+  # 靜默降級三類，取代原本只做新鮮度的 ingest_crawl_hourly.py --check-freshness。
   freshness:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -88,8 +91,15 @@ jobs:
       - name: Install dependencies
         run: pip install python-dotenv
 
-      - name: Check crawl_daily freshness
+      - name: Check crawl_daily quality (freshness / gap / degradation)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python scripts/ingest_crawl_hourly.py --check-freshness
+        run: python scripts/data_quality_gate.py --pipeline crawl_daily
+
+      - name: Check for stale running ingestion_run rows (global)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --check stale-running

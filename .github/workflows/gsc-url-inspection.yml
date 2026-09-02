@@ -90,9 +90,14 @@ jobs:
   # 若靠 needs: 串接、ingest 失敗會讓這個 job 被 skip，就會複製 S2.2 事故的病灶
   # （新鮮度告警住在它要監控的作業裡，看不到自己的缺席）。
   #
-  # 門檻見腳本 FRESHNESS_MAX_AGE_HOURS（96h）：inspect 沒有 search analytics 那種
+  # 門檻見 quality_gate_config.py（96h）：inspect 沒有 search analytics 那種
   # 固有延遲，但配額可能被同 property 上看不到的其他呼叫方擠占導致連續數天零寫入
   # （仍是「成功」的 run），門檻因此抓得比單純「排程週期 × 2」更寬。
+  #
+  # S3.5：統一資料品質 gate（scripts/data_quality_gate.py），涵蓋新鮮度／靜默降級
+  # 兩類（空段為刻意設計決定跳過，見 quality_gate_config.py 的 gap_skip_reason——
+  # 配額不足時「當天 0 筆」是文件化的合法成功狀態，逐日掃描會誤報），取代原本
+  # 只做新鮮度的 ingest_gsc_url_inspection.py --check-freshness。
   freshness:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -106,8 +111,15 @@ jobs:
       - name: Install dependencies
         run: pip install python-dotenv
 
-      - name: Check gsc_url_inspection freshness
+      - name: Check gsc_url_inspection quality (freshness / degradation)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python scripts/ingest_gsc_url_inspection.py --check-freshness
+        run: python scripts/data_quality_gate.py --pipeline gsc_url_inspection
+
+      - name: Check for stale running ingestion_run rows (global)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --check stale-running

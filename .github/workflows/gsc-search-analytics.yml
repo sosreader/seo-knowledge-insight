@@ -77,6 +77,11 @@ jobs:
   #
   # 門檻 144h = GSC 固有延遲上限 96h + 排程週期緩衝 48h，**不是**「排程週期 × N」。
   # GSC 的 max(date) 天生就落後現在 2-4 天，用 24h × 3 = 72h 會對健康資料誤報。
+  #
+  # S3.5：統一資料品質 gate（scripts/data_quality_gate.py），涵蓋新鮮度／空段兩類
+  # （靜默降級為已知缺口，見 quality_gate_config.py 的 degradation_skip_reason），
+  # 取代原本只做新鮮度的 ingest_gsc_search_analytics.py --check-freshness。
+  # 查詢一律走視圖 gsc_page_daily（見 quality_gate_config.py 註解），不查底表。
   freshness:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -90,8 +95,15 @@ jobs:
       - name: Install dependencies
         run: pip install python-dotenv
 
-      - name: Check gsc_daily_metrics freshness
+      - name: Check gsc_daily_metrics quality (freshness / gap)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python scripts/ingest_gsc_search_analytics.py --check-freshness
+        run: python scripts/data_quality_gate.py --pipeline gsc_daily_metrics
+
+      - name: Check for stale running ingestion_run rows (global)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --check stale-running

@@ -66,11 +66,19 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/ingest_cwv_crux_history.py --verify
 
-  # 資料新鮮度告警。條件是「cwv_hourly (source=crux) 最近一筆超過 10 天」，不是
+  # 資料新鮮度告警。條件是「cwv_hourly (source=crux) 最近一筆超過門檻」，不是
   # 「ingest job 有沒有失敗」——理由同 cwv-hourly.yml：排程根本沒被觸發時不會有
   # 任何失敗事件，只有資料本身的缺席能證明作業沒在跑。
   #
   # needs: 刻意不設，理由同 cwv-hourly.yml。
+  #
+  # S3.5：改走統一資料品質 gate（scripts/data_quality_gate.py --pipeline
+  # cwv_hourly_crux），取代原本的 ingest_cwv_crux_history.py --check-freshness。
+  # 這是 S3.5 修的缺陷 1 本身——cwv_hourly 這張表同時裝著 RUM 與 CrUX 兩條管線，
+  # 舊的逐腳本檢查各自查各自的 source 篩選，看起來沒錯，但 ingestion_run 裡兩者
+  # 共用 table_name='cwv_hourly' 無法單獨查詢；統一 gate 額外補上空段檢查
+  # （逐週掃描，見 quality_gate_config.py），能在新鮮度門檻（480h）觸發前就先
+  # 抓到「這一週該有資料卻沒有」。
   freshness:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -84,8 +92,15 @@ jobs:
       - name: Install dependencies
         run: pip install python-dotenv
 
-      - name: Check cwv_hourly (source=crux) freshness
+      - name: Check cwv_hourly_crux quality (freshness / gap / degradation)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python scripts/ingest_cwv_crux_history.py --check-freshness
+        run: python scripts/data_quality_gate.py --pipeline cwv_hourly_crux
+
+      - name: Check for stale running ingestion_run rows (global)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --check stale-running
