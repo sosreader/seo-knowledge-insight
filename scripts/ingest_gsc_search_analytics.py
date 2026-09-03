@@ -21,39 +21,21 @@ query 組每天回 47.8k-48.0k 列，**貼著 50K 天花板**，代表該組確�
 （同一句話也寫在 migration 015 的 COMMENT ON TABLE，兩邊要一致。）
 
 
-═══ 兩套維度組合怎麼塞進單一 unique key 空間 —— 本腳本最重要的設計決定 ═══
+═══ 維度組合、哨兵值、surface 規則都在 scripts/gsc_surfaces.py ═══
 
-需求是兩套組合：`date+page+device` 與 `date+query+device`。但 dim_uniq 是
-(property, search_type, date, page, query, device, country) 七欄全 NOT NULL，
-兩套組合都缺欄位（page 組缺 query 與 country，query 組缺 page 與 country），schema 不能改。
+兩套維度組合（page 組 / query 組）怎麼共用同一個七欄 unique key 空間、三個哨兵值
+為什麼選成那樣、判別式為什麼一律以 page 為準、googleNews 與 discover 為什麼只跑
+page 組且 position 存 0 —— 全部搬到 `scripts/gsc_surfaces.py` 的 docstring，
+因為那些常數與驗證函式都定義在那裡。**不帶判別式直接 SUM 會得到約兩倍的假數字且
+不會有任何錯誤訊號**，--verify 因此固定按 surface 分組印出兩邊列數。
 
-缺欄位只能填哨兵值，於是踩進 KB learned skill
-`rollup-sentinel-in-shared-key-space-has-no-check-guard-against-double-count`：
-兩套組合是**同一批底層資料的兩個邊際聚合**，共用同一個 key 空間，任何沒帶判別條件的
-`SUM(clicks)` 都會把同一筆點擊算兩次，而 CHECK 表達不了這種跨列語意，DB 層擋不住。
 
-【選定的哨兵值與理由】
-  country = 'zzz'（COUNTRY_NOT_REQUESTED）—— 'zzz' 同時是 GSC 對「無法判定地區」的
-    真實回傳值，看似撞名，但**只要本腳本永遠不請求 country 維度，GSC 的 'zzz' 就
-    永遠進不到本表**，於是表內語意單一。這個前提由 _assert_no_country_dimension()
-    在啟動時斷言，未來有人加 country 組合會當場失敗，不會靜默污染語意。
+═══ 全站總數（gsc_daily_totals）—— 探測查詢的副產品，不是另一次 API 呼叫 ═══
 
-  query = ''（QUERY_NOT_REQUESTED），用於 page 組 —— API 對匿名化查詢是**整列不回**
-    （不像 BQ 回空字串），所以 '' 從本資料源永遠不會自然出現，當哨兵不會撞。
-
-  page = 'https://__dimension_not_requested__/'（PAGE_NOT_REQUESTED），用於 query 組
-    —— page 欄有 CHECK `page ~ '^https?://' AND octet_length BETWEEN 8 AND 1024`，
-    哨兵**必須長得像 URL**。這個值通得過 CHECK（實測 36 bytes）卻不可能是真實 page：
-    底線不是合法 DNS hostname 字元。刻意不用 'https://vocus.cc/' 當哨兵——那會與
-    首頁這筆真實資料撞鍵。
-
-【判別式 —— 下游查詢必須帶，這是唯一的防線】
-
-  query 組：WHERE page = PAGE_NOT_REQUESTED ／ page 組：WHERE page <> PAGE_NOT_REQUESTED
-  一律以 **page** 為準，不以 query 為準：若哪天 API 真的回了空字串 query，那筆列仍屬
-  query 組（page 是哨兵），用 `query = ''` 判別會誤分；用 page 判別則互斥且窮盡。
-  不帶判別式直接 SUM 會得到約兩倍的假數字，**不會有任何錯誤訊號**——
-  --verify 因此固定分組印出兩邊列數，讓這件事持續可見。
+本表是 top-N 抽樣，答不出「那天總共幾次點擊」。而下面那個 `dimensions=["date"]` 的探測
+查詢，API 回的每一列本來就帶 clicks/impressions/ctr/position，**那就是與 GSC UI 一致的
+全站總數**——把原本丟掉的四個 metric 欄位寫進 gsc_daily_totals 即可，不必多打任何一次 API。
+兩張表母體不同（全量 vs 抽樣）不可相加，故不同表；totals 每鍵恰一列，冪等且不需要 reap。
 
 
 ═══ 2-3 天資料延遲怎麼處理 —— 用探測，不用寫死的 lag ═══
@@ -61,13 +43,13 @@ query 組每天回 47.8k-48.0k 列，**貼著 50K 天花板**，代表該組確�
 官方說延遲「通常 2-3 天」，但那是「通常」。寫死 lag=3 兩邊都會錯：設太短會查到還
 沒有資料的日期、回 0 列、被 (e) 的 0-row 規則判成失敗（誤報）；設太長則每天少拿資料。
 
-改用官方 how-to 建議的做法：先用 `dimensions=["date"]` 對最近 PROBE_DAYS 天打一次
-**便宜的探測查詢**（回傳列數 = 天數），拿到「Google 目前實際有資料的日期集合」，
-再從中取最近 backfill_days 天去抓。於是延遲飄到 4-5 天也不會誤報（只查探測說有的日期），
-而探測本身回 0 列 = 最近兩週完全沒資料 = 真的壞了（權限、property、配額），是硬失敗。
+改用官方 how-to 建議的做法：先用 `dimensions=["date"]` 對最近 `--probe-days` 天打一次
+**便宜的探測查詢**（回傳列數 = 天數），拿到「Google 目前實際有資料的日期集合」，再從中取
+最近 backfill_days 天去抓。於是延遲飄到 4-5 天也不會誤報，而探測回 0 列 = 真的壞了
+（權限、property、配額），是硬失敗。探測窗因此也是 backfill 的硬上限，見 resolve_backfill_days。
 
-每次回補最近 N 天（預設 7）而非只抓昨天，是為了吃下 GSC 的**回溯修訂**：
-同一個日期的數字在後續幾天內會被 Google 修正，只抓一次會定格在最早的版本。
+每次回補最近 N 天（預設 7）而非只抓昨天，是為了吃下 GSC 的**回溯修訂**——同一個日期的數字
+在後續幾天內會被 Google 修正，只抓一次會定格在最早的版本。
 
 
 ═══ 冪等：upsert 不夠，要補收尾（reaping）═══
@@ -111,6 +93,35 @@ from typing import Any, Iterable, Mapping, Sequence
 from dotenv import load_dotenv
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+# 本檔以 `python scripts/x.py` 直接執行時 sys.path[0] 是 scripts/ 而非 repo root，下面的
+# `from scripts.gsc_surfaces import ...` 會噴 ModuleNotFoundError；pytest 不會踩到（測試檔自己有這行）。
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from scripts.gsc_surfaces import (  # noqa: E402
+    ALLOWED_SEARCH_TYPES,
+    COMBO_DIMENSIONS,
+    COMBO_PAGE,
+    COMBO_QUERY,
+    CONFLICT_KEY,
+    COUNTRY_NOT_REQUESTED,  # noqa: F401 —— 對外仍從本模組取用（哨兵值的單一出處）
+    DEFAULT_SEARCH_TYPE,
+    PAGE_NOT_REQUESTED,
+    PROPERTY,
+    QUERY_NOT_REQUESTED,  # noqa: F401 —— 同上
+    SURFACE_COMBOS,
+    TABLE_GSC,
+    TABLE_TOTALS,
+    TOTALS_CONFLICT_KEY,
+    _assert_no_country_dimension,
+    _validate_metrics,
+    build_totals_records,
+    combo_filter,
+    dedupe_by_key,
+    row_to_record,
+    totals_record,
+)
+
 load_dotenv(ROOT_DIR / ".env")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -123,55 +134,27 @@ logger = logging.getLogger("ingest_gsc_search_analytics")
 GSC_QUERY_URL = "https://searchconsole.googleapis.com/webmasters/v3/sites/{site}/searchAnalytics/query"
 GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly"
 
-# 唯讀 SA（gsc-readonly@vocus-seo-ops）只被加進這個 URL 前綴 property，
-# 權限層級 siteRestrictedUser。sc-domain:vocus.cc 沒有存取權，不要改成它。
-# 這個值同時是 gsc_property DOMAIN 的唯一合法值，改了會被 DB 擋下。
-PROPERTY = "https://vocus.cc/"
-
 ROW_LIMIT = 25000       # 單次請求上限（API 規格 1..25,000）
 DAILY_ROW_CAP = 50000   # 每天每 property 每 search type 的總天花板，分頁到此為止
-PROBE_DAYS = 14         # 探測「哪些日期已有資料」的回看範圍
-PROBE_ROW_LIMIT = 100
 
 HTTP_TIMEOUT_SECONDS = 120
 USER_AGENT = "seo-knowledge-insight-gsc-ingest/1.0"
 
 DEFAULT_BACKFILL_DAYS = 7
 MIN_BACKFILL_DAYS = 1
-MAX_BACKFILL_DAYS = 30  # 超過就該用一次性回填腳本，不要讓每日排程扛大範圍
+# 上限 500 天（GSC 保留 16 個月）；實際可用上限是 min(這個值, --probe-days)，見 resolve_backfill_days。
+MAX_BACKFILL_DAYS = 500
 
-DEFAULT_SEARCH_TYPE = "web"
-# 與 gsc_daily_metrics_search_type_ck 一致，刻意不含 'discover'
-# （Discover 無排名概念、position 回 0 會被 position_ck 擋下，且不支援 query 維度）。
-ALLOWED_SEARCH_TYPES = ("web", "image", "video", "news", "googleNews")
-
-DEVICE_MAP = {"MOBILE": "mobile", "TABLET": "tablet", "DESKTOP": "desktop"}
-
-# 兩套維度組合。key 是組合代號，value 是送給 API 的 dimensions 陣列。
-COMBO_PAGE = "page"
-COMBO_QUERY = "query"
-COMBO_DIMENSIONS: dict[str, tuple[str, ...]] = {
-    COMBO_PAGE: ("date", "page", "device"),
-    COMBO_QUERY: ("date", "query", "device"),
-}
-
-# 哨兵值，理由見模組 docstring
-PAGE_NOT_REQUESTED = "https://__dimension_not_requested__/"
-QUERY_NOT_REQUESTED = ""
-COUNTRY_NOT_REQUESTED = "zzz"
-
-# 與 schema CHECK 一致的欄位上限
-MAX_PAGE_OCTETS = 1024
-MAX_QUERY_OCTETS = 512
-CTR_TOLERANCE = 1e-4  # 與 gsc_daily_metrics_ctr_consistency_ck 一致
+# 探測「哪些日期已有資料」的回看範圍。它同時是 backfill 的硬上限，因此可調。
+DEFAULT_PROBE_DAYS = 14
+MIN_PROBE_DAYS, MAX_PROBE_DAYS = 1, 500
+PROBE_ROW_LIMIT_MARGIN = 7  # rowLimit = probe_days + 這個緩衝（探測每天恰一列）
 
 # ══════════════════════════════════════════════════════════════════════
 # Supabase
 # ══════════════════════════════════════════════════════════════════════
 
-TABLE_GSC = "gsc_daily_metrics"
 TABLE_RUN = "ingestion_run"
-CONFLICT_KEY = "property,search_type,date,page,query,device,country"
 UPSERT_BATCH_SIZE = 500
 
 # 【門檻公式】KB learned skill
@@ -229,7 +212,8 @@ def classify_gsc_error(status: int, body: str) -> GscQueryError:
     if status == 429:
         return GscQueryError(f"HTTP 429：超出 QPS/QPD 配額。{body[:200]}")
     if status == 400:
-        return GscQueryError(f"HTTP 400：請求參數不合法（維度組合或日期範圍）。{body[:300]}")
+        return GscQueryError("HTTP 400：請求參數不合法（維度組合或日期範圍）；googleNews 與 discover "
+                             f"不支援 query 維度，先檢查 SURFACE_COMBOS。{body[:300]}")
     return GscQueryError(f"HTTP {status}：{body[:300]}")
 
 
@@ -258,25 +242,43 @@ def _gsc_post(token: str, body: Mapping[str, Any]) -> dict:
         raise GscQueryError(f"連線失敗：{exc.reason}") from exc
 
 
-def probe_available_dates(token: str, search_type: str, today: date) -> list[date]:
-    """回傳最近 PROBE_DAYS 天內「GSC 實際已有資料」的日期，由新到舊。
+def probe_row_limit(probe_days: int) -> int:
+    """探測每天恰回一列，rowLimit 只需略大於天數；仍受 API 的 25,000 上限。"""
+    return min(probe_days + PROBE_ROW_LIMIT_MARGIN, ROW_LIMIT)
 
-    理由見模組 docstring：資料延遲是浮動的，寫死 lag 不是誤報就是漏抓。
+
+def probe_totals(token: str, search_type: str, today: date, probe_days: int) -> list[dict]:
+    """`dimensions=["date"]` 的探測查詢，回傳 API 原始列（每列一天，含四個 metric）。
+
+    這一次呼叫同時服務兩件事：哪些日期已有資料（見 dates_from_totals），以及
+    那些日期的**全站總數**（見 build_totals_records）。不要為了 totals 再打一次。
     """
     payload = _gsc_post(token, {
-        "startDate": (today - timedelta(days=PROBE_DAYS)).isoformat(),
+        "startDate": (today - timedelta(days=probe_days)).isoformat(),
         "endDate": today.isoformat(),
         "dimensions": ["date"],
         "type": search_type,
-        "rowLimit": PROBE_ROW_LIMIT,
+        "rowLimit": probe_row_limit(probe_days),
     })
-    days = sorted(
-        {date.fromisoformat(row["keys"][0]) for row in payload.get("rows", [])},
+    rows = payload.get("rows", [])
+    logger.info("探測（%s）：最近 %d 天回 %d 列", search_type, probe_days, len(rows))
+    return rows
+
+
+def dates_from_totals(rows: Iterable[Mapping[str, Any]]) -> list[date]:
+    """探測列 → 已有資料的日期，由新到舊。"""
+    return sorted(
+        {date.fromisoformat(row["keys"][0]) for row in rows if row.get("keys")},
         reverse=True,
     )
-    logger.info("探測：最近 %d 天中有 %d 天已有資料，最新 %s",
-                PROBE_DAYS, len(days), days[0].isoformat() if days else "（無）")
-    return days
+
+
+def probe_available_dates(
+    token: str, search_type: str, today: date, probe_days: int = DEFAULT_PROBE_DAYS,
+) -> list[date]:
+    """只要日期不要 metrics 時用。理由見模組 docstring：資料延遲是浮動的，
+    寫死 lag 不是誤報就是漏抓。"""
+    return dates_from_totals(probe_totals(token, search_type, today, probe_days))
 
 
 def paginate_query(token: str, day: date, dimensions: Sequence[str], search_type: str) -> list[dict]:
@@ -304,108 +306,6 @@ def paginate_query(token: str, day: date, dimensions: Sequence[str], search_type
         logger.warning("%s %s 撞到 %d 列天花板，該日資料被截斷（API 抽樣性質，非 bug）",
                        day.isoformat(), "/".join(dimensions), DAILY_ROW_CAP)
     return collected
-
-
-# ══════════════════════════════════════════════════════════════════════
-# 列轉換與驗證
-# ══════════════════════════════════════════════════════════════════════
-
-def _reject(reason: str, rejects: dict[str, int]) -> None:
-    rejects[reason] = rejects.get(reason, 0) + 1
-
-
-def _validate_metrics(row: Mapping[str, Any], rejects: dict[str, int]) -> tuple[int, int, float, float] | None:
-    """檢查四個量測欄位。這些條件與 schema CHECK 一一對應——
-    在這裡擋掉，錯誤訊息才會指向「哪一筆、為什麼」，而不是整批 400。"""
-    clicks = int(row.get("clicks", 0))
-    impressions = int(row.get("impressions", 0))
-    ctr = float(row.get("ctr", 0.0))
-    position = float(row.get("position", 0.0))
-    if impressions <= 0:
-        _reject("impressions<=0", rejects)
-        return None
-    if clicks < 0 or clicks > impressions:
-        _reject("clicks 越界", rejects)
-        return None
-    if position < 1:
-        _reject("position<1", rejects)
-        return None
-    if abs(ctr - clicks / impressions) >= CTR_TOLERANCE:
-        # 不靜默改寫成算出來的值：ctr 對不上代表 API 回的欄位語意變了，
-        # 那是要人看的訊號，改寫會把它藏起來。
-        _reject("ctr 與 clicks/impressions 不一致", rejects)
-        return None
-    return clicks, impressions, ctr, position
-
-
-def row_to_record(
-    row: Mapping[str, Any], *, combo: str, day: date, search_type: str,
-    ingested_at: str, rejects: dict[str, int],
-) -> dict | None:
-    """API 的一列 → gsc_daily_metrics 的一列。不合法回 None 並記到 rejects。"""
-    keys = row.get("keys") or []
-    if len(keys) != len(COMBO_DIMENSIONS[combo]):
-        _reject("keys 長度與 dimensions 不符", rejects)
-        return None
-    row_date, dimension_value, raw_device = keys[0], keys[1], keys[2]
-    if row_date != day.isoformat():
-        _reject("date 與查詢日期不符", rejects)
-        return None
-    device = DEVICE_MAP.get(str(raw_device).upper())
-    if device is None:
-        _reject(f"未知 device {raw_device!r}", rejects)
-        return None
-
-    page = dimension_value if combo == COMBO_PAGE else PAGE_NOT_REQUESTED
-    query = dimension_value if combo == COMBO_QUERY else QUERY_NOT_REQUESTED
-    if not page.startswith(("http://", "https://")) or len(page.encode()) > MAX_PAGE_OCTETS:
-        _reject("page 不合法或過長", rejects)
-        return None
-    if len(query.encode()) > MAX_QUERY_OCTETS:
-        # 截斷會改變 unique key 的語意，讓兩個不同 query 撞成一列，所以丟棄不截斷。
-        _reject("query 超過 512 bytes", rejects)
-        return None
-
-    metrics = _validate_metrics(row, rejects)
-    if metrics is None:
-        return None
-    clicks, impressions, ctr, position = metrics
-    return {
-        "date": day.isoformat(), "property": PROPERTY, "search_type": search_type,
-        "page": page, "query": query, "device": device, "country": COUNTRY_NOT_REQUESTED,
-        "clicks": clicks, "impressions": impressions, "ctr": ctr, "position": position,
-        # 顯式帶 ingested_at 是 reaping 策略 (b) 的前提，見模組 docstring。
-        "ingested_at": ingested_at,
-    }
-
-
-def dedupe_by_key(rows: Iterable[Mapping[str, Any]]) -> list[dict]:
-    """以 unique key 去重，保留最後出現的一筆。
-
-    分頁在兩次 request 之間底層資料若變動，相鄰頁可能回重疊列；同批送出時
-    PostgreSQL 會回 `ON CONFLICT DO UPDATE command cannot affect row a second time`，
-    而且死的是整批 500 列不是那一列。
-    """
-    unique: dict[tuple, dict] = {}
-    for row in rows:
-        key = (row["property"], row["search_type"], row["date"],
-               row["page"], row["query"], row["device"], row["country"])
-        unique[key] = dict(row)
-    return list(unique.values())
-
-
-def _assert_no_country_dimension() -> None:
-    """country='zzz' 當哨兵的前提：本腳本永遠不請求 country 維度。
-
-    未來有人加了 country 組合，'zzz' 會同時代表「未請求」與 GSC 的「無法判定地區」，
-    語意靜默分岔。讓它在啟動時就失敗，而不是等到報表數字怪掉。
-    """
-    for combo, dimensions in COMBO_DIMENSIONS.items():
-        if "country" in dimensions:
-            raise RuntimeError(
-                f"組合 {combo} 請求了 country 維度，與 COUNTRY_NOT_REQUESTED 哨兵語意衝突；"
-                "要支援 country 必須改用真實值並重新設計判別式（見模組 docstring）"
-            )
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -440,12 +340,14 @@ def _supabase_request(
         return exc.code, exc.read().decode(errors="replace")
 
 
-def start_run(window_start: datetime, window_end: datetime) -> str | None:
+def start_run(
+    window_start: datetime, window_end: datetime, table_name: str = TABLE_GSC,
+) -> str | None:
     status, body = _supabase_request(
         "POST",
         f"/rest/v1/{TABLE_RUN}",
         body=[{
-            "table_name": TABLE_GSC,
+            "table_name": table_name,
             "window_start": window_start.isoformat().replace("+00:00", "Z"),
             "window_end": window_end.isoformat().replace("+00:00", "Z"),
             "row_count": 0,
@@ -476,14 +378,16 @@ def finish_run(run_id: str | None, run_status: str, row_count: int) -> None:
         logger.error("收尾 ingestion_run 失敗：%s %s", status, body[:300])
 
 
-def upsert_rows(rows: Sequence[dict]) -> tuple[int, int]:
+def upsert_rows(
+    rows: Sequence[dict], table: str = TABLE_GSC, conflict_key: str = CONFLICT_KEY,
+) -> tuple[int, int]:
     """冪等 upsert。回傳 (成功列數, 失敗列數)。"""
     succeeded = failed = 0
     for offset in range(0, len(rows), UPSERT_BATCH_SIZE):
         batch = rows[offset : offset + UPSERT_BATCH_SIZE]
         status, body = _supabase_request(
             "POST",
-            f"/rest/v1/{TABLE_GSC}?on_conflict={urllib.parse.quote(CONFLICT_KEY)}",
+            f"/rest/v1/{table}?on_conflict={urllib.parse.quote(conflict_key)}",
             body=list(batch),
             extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
         )
@@ -495,10 +399,21 @@ def upsert_rows(rows: Sequence[dict]) -> tuple[int, int]:
     return succeeded, failed
 
 
-def combo_filter(combo: str) -> str:
-    """PostgREST 的組合判別式。以 page 為準，理由見模組 docstring。"""
-    encoded = urllib.parse.quote(PAGE_NOT_REQUESTED, safe="")
-    return f"page=eq.{encoded}" if combo == COMBO_QUERY else f"page=neq.{encoded}"
+def write_totals(
+    records: Sequence[dict], window: tuple[datetime, datetime], search_type: str,
+) -> tuple[int, int]:
+    """把全站總數寫進 gsc_daily_totals，並在 ingestion_run 另記一列。
+
+    每個 (property, search_type, date) 恰一列，upsert 冪等，**不 reap**——
+    totals 沒有 top-N 桶集合縮小的問題，這裡沒有孤兒列可收。
+    """
+    run_id = start_run(*window, table_name=TABLE_TOTALS)
+    succeeded, failed = upsert_rows(records, TABLE_TOTALS, TOTALS_CONFLICT_KEY)
+    run_status = "success" if succeeded and not failed else ("partial" if succeeded else "failed")
+    finish_run(run_id, run_status, succeeded)
+    logger.info("totals（%s）寫入 %d 列成功 / %d 列失敗，run status=%s",
+                search_type, succeeded, failed, run_status)
+    return succeeded, failed
 
 
 def reap_orphans(day: date, combo: str, search_type: str, run_started_at: str) -> int:
@@ -524,7 +439,7 @@ def reap_orphans(day: date, combo: str, search_type: str, run_started_at: str) -
     return removed
 
 
-def count_rows(extra_query: str = "") -> int:
+def count_rows(extra_query: str = "", table: str = TABLE_GSC) -> int:
     """精確列數。用 Prefer: count=exact + Range 讀 Content-Range，
     不用 `limit` —— PostgREST 的 db-max-rows（預設 1000）會靜默覆蓋 limit 且仍回 200。"""
     url, key = supabase_config()
@@ -533,7 +448,7 @@ def count_rows(extra_query: str = "") -> int:
         "Prefer": "count=exact", "Range-Unit": "items", "Range": "0-0",
     }
     request = urllib.request.Request(
-        url + f"/rest/v1/{TABLE_GSC}?select=date{extra_query}", headers=headers, method="GET"
+        url + f"/rest/v1/{table}?select=date{extra_query}", headers=headers, method="GET"
     )
     try:
         with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
@@ -579,7 +494,7 @@ def collect_day_combo(
         異常放大時看得見，只是不再天天染紅。
     """
     raw_rows = paginate_query(token, day, COMBO_DIMENSIONS[combo], search_type)
-    rejects: dict[str, int] = {}
+    rejects: dict[str, int] = {}  # 標籤與 surface 一起印，position 規則是 surface-aware 的
     records = [
         record for record in (
             row_to_record(row, combo=combo, day=day, search_type=search_type,
@@ -588,11 +503,11 @@ def collect_day_combo(
         ) if record is not None
     ]
     records = dedupe_by_key(records)
-    logger.info("  %s / %s：API %d 列 → 可寫入 %d 列%s",
-                day.isoformat(), combo, len(raw_rows), len(records),
+    logger.info("  %s / %s（%s）：API %d 列 → 可寫入 %d 列%s",
+                day.isoformat(), combo, search_type, len(raw_rows), len(records),
                 f"（丟棄 {rejects}）" if rejects else "")
     if rejects:
-        warnings.append(f"{day.isoformat()}/{combo} 丟棄不合法列：{rejects}")
+        warnings.append(f"{day.isoformat()}/{combo}/{search_type} 丟棄不合法列：{rejects}")
     if not records:
         # (e)：0 rows 不得靜默通過。vocus.cc 每天都有搜尋流量。
         errors.append(f"{day.isoformat()}/{combo} 回傳 0 列（探測說該日有資料，這是異常）")
@@ -613,15 +528,23 @@ def _write_slice(
     return succeeded, failed
 
 
-def resolve_targets(token: str, search_type: str, today: date, backfill_days: int) -> list[date]:
-    """探測出實際有資料的日期，取最近 backfill_days 天。空清單代表硬失敗。"""
-    available = probe_available_dates(token, search_type, today)
+def resolve_targets(
+    token: str, search_type: str, today: date, backfill_days: int, probe_days: int,
+) -> tuple[list[date], list[dict]]:
+    """探測一次，同時得到目標日期與全站總數列。
+
+    回傳 (取最近 backfill_days 天的目標日期, 探測回應原始列)。目標日期空清單代表硬失敗。
+    探測列涵蓋整個 probe_days 窗（不只 targets），totals 因此能一次呼叫補滿長區間。
+    """
+    probe_rows = probe_totals(token, search_type, today, probe_days)
+    available = dates_from_totals(probe_rows)
     if not available:
-        return []
+        return [], probe_rows
     targets = sorted(available[:backfill_days])
-    logger.info("本次目標日期 %d 天：%s .. %s",
-                len(targets), targets[0].isoformat(), targets[-1].isoformat())
-    return targets
+    logger.info("本次目標日期 %d 天：%s .. %s（探測窗 %d 天回 %d 天）",
+                len(targets), targets[0].isoformat(), targets[-1].isoformat(),
+                probe_days, len(available))
+    return targets, probe_rows
 
 
 def run_window(targets: Sequence[date]) -> tuple[datetime, datetime]:
@@ -631,25 +554,72 @@ def run_window(targets: Sequence[date]) -> tuple[datetime, datetime]:
     return start, end
 
 
-def run_ingestion(*, execute: bool, backfill_days: int, search_type: str) -> int:
+def _ingest_totals(
+    probe_rows: Sequence[Mapping[str, Any]], *, search_type: str, execute: bool,
+    errors: list[str], warnings: list[str],
+) -> int:
+    """探測回應 → gsc_daily_totals。回傳寫入列數。0 列是硬失敗（探測已說有資料）。"""
+    records = build_totals_records(probe_rows, search_type=search_type, warnings=warnings)
+    if not records:
+        errors.append(f"totals/{search_type} 沒有可寫入的全站總數列"
+                      "（探測已回日期，這是異常：API 回應可能不含 metric 欄位）")
+        return 0
+    if not execute:
+        return 0
+    days = sorted(date.fromisoformat(record["date"]) for record in records)
+    succeeded, failed = write_totals(records, run_window(days), search_type)
+    if failed or not succeeded:
+        errors.append(f"totals/{search_type} 有 {failed} 列寫入失敗")
+    return succeeded
+
+
+def _finalize_run(
+    run_id: str | None, *, execute: bool, errors: list[str], warnings: list[str],
+    written: int, failed: int,
+) -> int:
+    """印出本次的提醒與硬問題、決定 run status、收尾 ingestion_run，回傳 exit code。"""
+    for message in warnings:
+        logger.warning("  資料品質：%s", message)
+    for message in errors:
+        logger.error("  問題：%s", message)
+    if not execute:
+        logger.info("[DRY RUN] 不寫入。加 --execute 才會 upsert。（%d 個硬問題 / %d 個資料品質提醒）",
+                    len(errors), len(warnings))
+        return 1 if errors else 0
+    # warnings 刻意不參與 status —— 理由見 collect_day_combo docstring。
+    run_status = "success" if not errors and not failed and written else (
+        "failed" if not written else "partial"
+    )
+    finish_run(run_id, run_status, written)
+    logger.info("寫入完成：%d 列成功 / %d 列失敗，run status=%s（%d 個資料品質提醒）",
+                written, failed, run_status, len(warnings))
+    return 0 if run_status == "success" else 1
+
+
+def run_ingestion(
+    *, execute: bool, backfill_days: int, search_type: str,
+    probe_days: int = DEFAULT_PROBE_DAYS,
+) -> int:
     _assert_no_country_dimension()
     now = datetime.now(timezone.utc)
     run_started_at = now.isoformat().replace("+00:00", "Z")
     token = gsc_access_token()
 
-    targets = resolve_targets(token, search_type, now.date(), backfill_days)
+    targets, probe_rows = resolve_targets(token, search_type, now.date(), backfill_days, probe_days)
     if not targets:
         logger.error("FAIL: 探測最近 %d 天完全沒有資料 —— 權限、property 或配額有問題，"
-                     "不是資料延遲。", PROBE_DAYS)
+                     "不是資料延遲。", probe_days)
         return 1
     run_id = start_run(*run_window(targets)) if execute else None
 
     errors: list[str] = []
     warnings: list[str] = []
     total_written = total_failed = 0
+    _ingest_totals(probe_rows, search_type=search_type, execute=execute,
+                   errors=errors, warnings=warnings)
     try:
         for day in targets:
-            for combo in COMBO_DIMENSIONS:
+            for combo in SURFACE_COMBOS[search_type]:
                 records = collect_day_combo(token, day, combo, search_type,
                                             run_started_at, errors, warnings)
                 if not execute or not records:
@@ -662,39 +632,44 @@ def run_ingestion(*, execute: bool, backfill_days: int, search_type: str) -> int
         finish_run(run_id, "failed", total_written)
         return 1
 
-    for message in warnings:
-        logger.warning("  資料品質：%s", message)
-    for message in errors:
-        logger.error("  問題：%s", message)
-
-    if not execute:
-        logger.info("[DRY RUN] 不寫入。加 --execute 才會 upsert。（%d 個硬問題 / %d 個資料品質提醒）",
-                    len(errors), len(warnings))
-        return 1 if errors else 0
-
-    # warnings 刻意不參與 status —— 理由見 collect_day_combo docstring。
-    run_status = "success" if not errors and not total_failed and total_written else (
-        "failed" if not total_written else "partial"
-    )
-    finish_run(run_id, run_status, total_written)
-    logger.info("寫入完成：%d 列成功 / %d 列失敗，run status=%s（%d 個資料品質提醒）",
-                total_written, total_failed, run_status, len(warnings))
-    return 0 if run_status == "success" else 1
+    return _finalize_run(run_id, execute=execute, errors=errors, warnings=warnings,
+                         written=total_written, failed=total_failed)
 
 
-def run_verify() -> int:
-    """唯讀檢查。刻意分組印出兩套組合的列數 —— 這是「不可相加」這件事的持續可見性。"""
-    page_rows = count_rows(f"&{combo_filter(COMBO_PAGE)}")
-    query_rows = count_rows(f"&{combo_filter(COMBO_QUERY)}")
-    logger.info("組合列數：page 組 %d 列 / query 組 %d 列（合計 %d）",
-                page_rows, query_rows, page_rows + query_rows)
+def _verify_surface(search_type: str) -> bool:
+    """印出單一 surface 的各組列數，並斷言它該有的組別都不是 0。
+
+    全表計數看不出單一 surface 寫入失敗（web 有資料就會 PASS），所以按 surface 分組；
+    只有 page 組的 surface（googleNews / discover）不要求 query 組。
+    """
+    counts = {
+        combo: count_rows(f"&search_type=eq.{search_type}&{combo_filter(combo)}")
+        for combo in SURFACE_COMBOS[search_type]
+    }
+    if COMBO_QUERY in counts:
+        logger.info("%s：page 組 %d 列 / query 組 %d 列（合計 %d）", search_type,
+                    counts[COMBO_PAGE], counts[COMBO_QUERY], sum(counts.values()))
+    else:
+        logger.info("%s：page 組 %d 列（此 surface 不支援 query 維度）",
+                    search_type, counts[COMBO_PAGE])
+    empty = [combo for combo, rows in counts.items() if not rows]
+    if empty:
+        logger.error("%s：%s 組 0 列 —— 該 surface 沒有資料，視為失敗",
+                     search_type, "／".join(empty))
+    return not empty
+
+
+def run_verify(search_types: Sequence[str] = (DEFAULT_SEARCH_TYPE,)) -> int:
+    """唯讀檢查。按 surface 分組印出各組列數 —— 這是「不可相加」與
+    「單一 surface 寫入失敗」兩件事的持續可見性。"""
+    healthy = all([_verify_surface(search_type) for search_type in search_types])
     logger.info("⚠ 兩組是同一批底層資料的兩個邊際聚合，SUM 前必須帶判別式，"
-                "否則點擊數會被算兩次。")
+                "否則點擊數會被算兩次。gsc_daily_totals 是另一個母體（全量），更不可相加。")
 
     status, body = _supabase_request(
         "GET",
         f"/rest/v1/{TABLE_GSC}?select=date,page,query,device,clicks,impressions,ctr,position"
-        "&order=date.desc,clicks.desc&limit=8",
+        f"&search_type=in.({','.join(search_types)})&order=date.desc,clicks.desc&limit=8",
     )
     if status != 200:
         logger.error("讀取 %s 失敗：%s %s", TABLE_GSC, status, body[:300])
@@ -718,7 +693,7 @@ def run_verify() -> int:
         logger.info("  run %s %s..%s status=%s rows=%d finished=%s",
                     run["id"][:8], run["window_start"], run["window_end"],
                     run["status"], run["row_count"], run["finished_at"])
-    return 0 if page_rows and query_rows else 1
+    return 0 if healthy else 1
 
 
 def run_freshness_check() -> int:
@@ -743,22 +718,39 @@ def run_freshness_check() -> int:
     return 0
 
 
-def resolve_backfill_days(value: int | None) -> int:
-    days = value if value is not None else DEFAULT_BACKFILL_DAYS
-    if not (MIN_BACKFILL_DAYS <= days <= MAX_BACKFILL_DAYS):
+def resolve_probe_days(value: int | None) -> int:
+    """探測回看天數。env PROBE_DAYS 仍相容（workflow 舊寫法），旗標優先。"""
+    raw = os.environ.get("PROBE_DAYS", "").strip()
+    days = value if value is not None else (int(raw) if raw.isdigit() else DEFAULT_PROBE_DAYS)
+    if not (MIN_PROBE_DAYS <= days <= MAX_PROBE_DAYS):
         raise ValueError(
-            f"--backfill-days {days} 超出範圍 [{MIN_BACKFILL_DAYS}, {MAX_BACKFILL_DAYS}]"
-            "（更大範圍請用一次性回填，不要讓每日排程扛）"
+            f"--probe-days {days} 超出範圍 [{MIN_PROBE_DAYS}, {MAX_PROBE_DAYS}]"
+            "（GSC 只保留 16 個月，再大也拿不到資料）"
+        )
+    return days
+
+
+def resolve_backfill_days(value: int | None, probe_days: int = MAX_BACKFILL_DAYS) -> int:
+    """回補天數。上限是 min(MAX_BACKFILL_DAYS, probe_days)。
+
+    探測窗只回看 probe_days 天，resolve_targets 又只從探測結果取日期，所以
+    backfill 超過探測窗會**靜默**被截成探測窗大小（`--backfill-days 30` 實際只回 14 天，
+    這個坑真的發生過）。這裡明確報錯而不是截斷。呼叫端請務必傳入實際的 probe_days。
+    """
+    days = value if value is not None else DEFAULT_BACKFILL_DAYS
+    limit = min(MAX_BACKFILL_DAYS, probe_days)
+    if not (MIN_BACKFILL_DAYS <= days <= limit):
+        raise ValueError(
+            f"--backfill-days {days} 超出範圍 [{MIN_BACKFILL_DAYS}, {limit}]"
+            f"（上限 = min({MAX_BACKFILL_DAYS}, --probe-days={probe_days})；"
+            "要回補更多天請同時放大 --probe-days）"
         )
     return days
 
 
 def resolve_search_type(value: str) -> str:
     if value not in ALLOWED_SEARCH_TYPES:
-        raise ValueError(
-            f"--search-type {value!r} 不在 {ALLOWED_SEARCH_TYPES}"
-            "（'discover' 刻意排除：無排名概念且不支援 query 維度，schema 裝不下）"
-        )
+        raise ValueError(f"--search-type {value!r} 不在 {ALLOWED_SEARCH_TYPES}")
     return value
 
 
@@ -772,27 +764,34 @@ def main() -> None:
     parser.add_argument("--check-freshness", action="store_true",
                         help=f"新鮮度告警：最新資料超過 {FRESHNESS_MAX_AGE_HOURS}h 則 exit 1")
     parser.add_argument("--backfill-days", type=int, default=None,
-                        help=f"回補最近 N 天（預設 {DEFAULT_BACKFILL_DAYS}，上限 {MAX_BACKFILL_DAYS}）")
+                        help=f"回補最近 N 天（預設 {DEFAULT_BACKFILL_DAYS}，"
+                             f"上限 min({MAX_BACKFILL_DAYS}, --probe-days)）")
+    parser.add_argument("--probe-days", type=int, default=None,
+                        help=f"探測回看 N 天（預設 {DEFAULT_PROBE_DAYS}，{MIN_PROBE_DAYS}..{MAX_PROBE_DAYS}）；"
+                             "同時是 --backfill-days 的上限，也決定 gsc_daily_totals 這次補幾天")
     parser.add_argument("--search-type", default=DEFAULT_SEARCH_TYPE,
                         help=f"search type（預設 {DEFAULT_SEARCH_TYPE}，可選 {ALLOWED_SEARCH_TYPES}）")
     args = parser.parse_args()
 
-    if args.verify:
-        sys.exit(run_verify())
-    if args.check_freshness:
-        sys.exit(run_freshness_check())
-
     try:
-        backfill_days = resolve_backfill_days(args.backfill_days)
+        probe_days = resolve_probe_days(args.probe_days)
+        backfill_days = resolve_backfill_days(args.backfill_days, probe_days)
         search_type = resolve_search_type(args.search_type)
     except ValueError as exc:
         logger.error("%s", exc)
         sys.exit(2)
 
-    logger.info("回補最近 %d 天（search_type=%s，property=%s）。", backfill_days, search_type, PROPERTY)
+    if args.verify:
+        sys.exit(run_verify([search_type]))
+    if args.check_freshness:
+        sys.exit(run_freshness_check())
+
+    logger.info("回補最近 %d 天（search_type=%s，探測窗 %d 天，property=%s）。",
+                backfill_days, search_type, probe_days, PROPERTY)
     if not args.execute:
         logger.info("預設為 dry-run，加 --execute 才會寫入。")
-    sys.exit(run_ingestion(execute=args.execute, backfill_days=backfill_days, search_type=search_type))
+    sys.exit(run_ingestion(execute=args.execute, backfill_days=backfill_days,
+                           search_type=search_type, probe_days=probe_days))
 
 
 if __name__ == "__main__":

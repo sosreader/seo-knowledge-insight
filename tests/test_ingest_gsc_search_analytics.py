@@ -34,6 +34,7 @@ from scripts.ingest_gsc_search_analytics import (  # noqa: E402
     COUNTRY_NOT_REQUESTED,
     DAILY_ROW_CAP,
     DEFAULT_BACKFILL_DAYS,
+    DEFAULT_PROBE_DAYS,
     FRESHNESS_MAX_AGE_HOURS,
     MAX_BACKFILL_DAYS,
     PAGE_NOT_REQUESTED,
@@ -101,6 +102,11 @@ class _FakeResponse:
 def _api_row(*keys: str, clicks: int = 3, impressions: int = 10, position: float = 4.5) -> dict:
     return {"keys": list(keys), "clicks": clicks, "impressions": impressions,
             "ctr": clicks / impressions, "position": position}
+
+
+def _probe_rows(days: list[date]) -> list[dict]:
+    """探測（dimensions=["date"]）的回應：每天一列，且本來就帶四個 metric。"""
+    return [_api_row(day.isoformat()) for day in days]
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -685,13 +691,14 @@ class TestRunIngestion:
     def test_empty_probe_is_a_hard_failure(self, caplog: pytest.LogCaptureFixture) -> None:
         """探測回空 = 權限/property/配額壞了，不是資料延遲——這個分流是本腳本的核心。"""
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_available_dates", return_value=[]):
+             patch(f"{MODULE}.probe_totals", return_value=[]):
             assert run_ingestion(execute=True, backfill_days=7, search_type="web") == 1
         assert "不是資料延遲" in caplog.text
 
     def test_dry_run_does_not_write(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_available_dates", return_value=[DAY]), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
              patch(f"{MODULE}.collect_day_combo", side_effect=_one_record), \
              patch(f"{MODULE}.start_run") as start, \
              patch(f"{MODULE}._write_slice") as write:
@@ -701,7 +708,8 @@ class TestRunIngestion:
 
     def test_execute_writes_both_combos_for_each_day(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_available_dates", return_value=[DAY, DAY - timedelta(days=1)]), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY, DAY - timedelta(days=1)])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
              patch(f"{MODULE}.collect_day_combo", side_effect=_one_record), \
              patch(f"{MODULE}.start_run", return_value="run-1"), \
              patch(f"{MODULE}.finish_run") as finish, \
@@ -713,7 +721,8 @@ class TestRunIngestion:
     def test_backfill_days_limits_the_target_dates(self) -> None:
         days = [DAY - timedelta(days=offset) for offset in range(10)]
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_available_dates", return_value=days), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows(days)), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
              patch(f"{MODULE}.collect_day_combo", side_effect=_one_record) as collect, \
              patch(f"{MODULE}.start_run", return_value=None), \
              patch(f"{MODULE}.finish_run"), \
@@ -723,7 +732,8 @@ class TestRunIngestion:
 
     def test_zero_written_rows_is_status_failed(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_available_dates", return_value=[DAY]), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
              patch(f"{MODULE}.collect_day_combo", return_value=[]), \
              patch(f"{MODULE}.start_run", return_value="run-1"), \
              patch(f"{MODULE}.finish_run") as finish:
@@ -732,7 +742,8 @@ class TestRunIngestion:
 
     def test_partial_write_failure_is_status_partial(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_available_dates", return_value=[DAY]), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
              patch(f"{MODULE}.collect_day_combo", side_effect=_one_record), \
              patch(f"{MODULE}.start_run", return_value="run-1"), \
              patch(f"{MODULE}.finish_run") as finish, \
@@ -747,7 +758,8 @@ class TestRunIngestion:
             return [dict(TestUpsert.ROW)]
 
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_available_dates", return_value=[DAY]), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
              patch(f"{MODULE}.collect_day_combo", side_effect=_with_warning), \
              patch(f"{MODULE}.start_run", return_value="run-1"), \
              patch(f"{MODULE}.finish_run") as finish, \
@@ -757,7 +769,8 @@ class TestRunIngestion:
 
     def test_systemic_api_error_aborts_the_run(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_available_dates", return_value=[DAY]), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
              patch(f"{MODULE}.collect_day_combo", side_effect=GscQueryError("403")), \
              patch(f"{MODULE}.start_run", return_value="run-1"), \
              patch(f"{MODULE}.finish_run") as finish:
@@ -770,13 +783,15 @@ class TestRunIngestion:
             return []
 
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_available_dates", return_value=[DAY]), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
              patch(f"{MODULE}.collect_day_combo", side_effect=_zero_rows):
             assert run_ingestion(execute=False, backfill_days=7, search_type="web") == 1
 
     def test_run_window_is_half_open_over_target_dates(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_available_dates", return_value=[DAY, DAY - timedelta(days=1)]), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY, DAY - timedelta(days=1)])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
              patch(f"{MODULE}.collect_day_combo", side_effect=_one_record), \
              patch(f"{MODULE}.start_run", return_value="r") as start, \
              patch(f"{MODULE}.finish_run"), \
@@ -889,10 +904,13 @@ class TestArgumentResolution:
     def test_allowed_search_types(self, value: str) -> None:
         assert resolve_search_type(value) == value
 
-    def test_discover_is_rejected(self) -> None:
-        """schema 的 search_type CHECK 刻意不收 discover（position 回 0、不支援 query 維度）。"""
-        with pytest.raises(ValueError, match="discover"):
-            resolve_search_type("discover")
+    def test_discover_is_accepted(self) -> None:
+        """022 之後 search_type_ck 收 discover、position_ck 對它放行 0，腳本跟著收。"""
+        assert resolve_search_type("discover") == "discover"
+
+    def test_unknown_search_type_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="sitemap"):
+            resolve_search_type("sitemap")
 
 
 class TestCli:
@@ -920,10 +938,11 @@ class TestCli:
     def test_execute_flag_is_passed_through(self) -> None:
         with patch(f"{MODULE}.run_ingestion", return_value=0) as ingest:
             self._run(["--execute", "--backfill-days", "2"])
-        assert ingest.call_args.kwargs == {"execute": True, "backfill_days": 2, "search_type": "web"}
+        assert ingest.call_args.kwargs == {"execute": True, "backfill_days": 2,
+                                           "search_type": "web", "probe_days": DEFAULT_PROBE_DAYS}
 
     def test_invalid_backfill_days_exits_two(self) -> None:
         assert self._run(["--backfill-days", "999"]) == 2
 
     def test_invalid_search_type_exits_two(self) -> None:
-        assert self._run(["--search-type", "discover"]) == 2
+        assert self._run(["--search-type", "sitemap"]) == 2
