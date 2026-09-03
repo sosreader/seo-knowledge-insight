@@ -59,6 +59,7 @@ from scripts.ingest_gsc_search_analytics import (  # noqa: E402
     collect_day_combo,
     combo_filter,
     count_rows,
+    has_rows,
     dedupe_by_key,
     finish_run,
     gsc_access_token,
@@ -717,13 +718,23 @@ class TestWriteSlice:
 
 
 class TestCountRows:
-    def test_reads_exact_count_from_content_range(self) -> None:
+    def test_reads_count_from_content_range(self) -> None:
         """不用 query-string 的 limit：PostgREST 的 db-max-rows（預設 1000）
         會靜默覆蓋它且仍回 200。"""
         response = _FakeResponse("[]", status=206, headers={"Content-Range": "0-0/48210"})
         with patch.dict("os.environ", SUPABASE_ENV), \
              patch("urllib.request.urlopen", return_value=response):
             assert count_rows() == 48210
+
+    def test_sends_count_planned_not_exact(self) -> None:
+        """(e) count=exact 要 PG 掃過整個結果集，news 480 天回填的 run 33772038727
+        就在 Verify last write 這步撞 statement_timeout（57014）；planned 走 planner
+        估計、不掃表。驗證用途只需要量級，精確的空/非空判定由 has_rows() 負責。"""
+        response = _FakeResponse("[]", status=206, headers={"Content-Range": "0-0/48210"})
+        with patch.dict("os.environ", SUPABASE_ENV), \
+             patch("urllib.request.urlopen", return_value=response) as opener:
+            count_rows()
+        assert opener.call_args.args[0].headers["Prefer"] == "count=planned"
 
     def test_extra_query_is_appended(self) -> None:
         response = _FakeResponse("[]", status=206, headers={"Content-Range": "0-0/7"})
@@ -750,6 +761,30 @@ class TestCountRows:
         with patch.dict("os.environ", SUPABASE_ENV), \
              patch("urllib.request.urlopen", return_value=response):
             assert count_rows() == 0
+
+
+class TestHasRows:
+    """count_rows() 換成 planned 之後補回來的保證：planner 的列數估計有下限 1，
+    拿它判斷「0 列」會讓那條檢查永遠通過，所以空/非空一律實際取 1 列來問。"""
+
+    def test_returns_true_when_a_row_comes_back(self) -> None:
+        with patch(f"{MODULE}._supabase_request", return_value=(200, '[{"date": "2026-08-25"}]')):
+            assert has_rows() is True
+
+    def test_returns_false_on_empty_result(self) -> None:
+        with patch(f"{MODULE}._supabase_request", return_value=(200, "[]")):
+            assert has_rows() is False
+
+    def test_raises_on_query_failure_instead_of_reporting_zero(self) -> None:
+        with patch(f"{MODULE}._supabase_request", return_value=(500, "boom")):
+            with pytest.raises(RuntimeError):
+                has_rows()
+
+    def test_extra_query_and_table_are_used(self) -> None:
+        with patch(f"{MODULE}._supabase_request", return_value=(200, "[]")) as request:
+            has_rows("&search_type=eq.web", "gsc_daily_totals")
+        path = request.call_args.args[1]
+        assert "gsc_daily_totals" in path and "search_type=eq.web" in path
 
 
 class TestLatestDate:
@@ -1081,16 +1116,18 @@ class TestRunVerify:
     ) -> None:
         with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
              patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
+             patch(f"{MODULE}.has_rows", return_value=True), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify() == 0
         assert "page 組 900 列 / query 組 100 列" in caplog.text
         assert "算兩次" in caplog.text
-        assert "totals(web)：30 列，最新日期 2026-08-25" in caplog.text
+        assert "totals(web)：30 列（planner 估計），最新日期 2026-08-25" in caplog.text
 
     def test_labels_each_row_by_the_page_discriminator(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
              patch(f"{MODULE}.count_rows", side_effect=[1, 1, 1]), \
+             patch(f"{MODULE}.has_rows", return_value=True), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             run_verify()
@@ -1098,18 +1135,22 @@ class TestRunVerify:
         assert f"[{COMBO_PAGE}] https://vocus.cc/a" in caplog.text
 
     def test_missing_one_combo_fails(self) -> None:
-        with patch(f"{MODULE}.count_rows", side_effect=[900, 0, 30]), \
+        """query 組實際沒有列（has_rows=False）就要失敗——即使 planner 把它估成 100。"""
+        with patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
+             patch(f"{MODULE}.has_rows", side_effect=[True, False]), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify() == 1
 
     def test_read_failure_returns_one(self) -> None:
         with patch(f"{MODULE}.count_rows", side_effect=[1, 1, 1]), \
+             patch(f"{MODULE}.has_rows", return_value=True), \
              patch(f"{MODULE}._supabase_request", return_value=(500, "boom")):
             assert run_verify() == 1
 
     def test_run_table_read_failure_returns_one(self) -> None:
         with patch(f"{MODULE}.count_rows", side_effect=[1, 1, 1]), \
+             patch(f"{MODULE}.has_rows", return_value=True), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (500, "boom")]):
             assert run_verify() == 1
@@ -1118,6 +1159,7 @@ class TestRunVerify:
         """totals 查詢失敗不該讓 run_verify 整個中止——沿用 latest_date() 對
         非 200 的處理方式，記 N/A 後繼續看 TABLE_GSC／TABLE_RUN 那兩段。"""
         with patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
+             patch(f"{MODULE}.has_rows", return_value=True), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(500, "boom"), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify() == 0
@@ -1129,17 +1171,21 @@ class TestVerifySurfaceNoRankingBranch:
 
     def test_page_only_surface_logs_without_query_count(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
-             patch(f"{MODULE}.count_rows", return_value=42):
+             patch(f"{MODULE}.count_rows", return_value=42), \
+             patch(f"{MODULE}.has_rows", return_value=True):
             assert _verify_surface("googleNews") is True
         assert "此 surface 不支援 query 維度" in caplog.text
 
     def test_page_only_surface_empty_is_unhealthy(self) -> None:
-        with patch(f"{MODULE}.count_rows", return_value=0):
+        """判定看 has_rows，不看 count_rows——planner 估計 1 也不能救一個真的空的 surface。"""
+        with patch(f"{MODULE}.count_rows", return_value=1), \
+             patch(f"{MODULE}.has_rows", return_value=False):
             assert _verify_surface("googleNews") is False
 
     def test_ranking_surface_still_reports_both_combos(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
-             patch(f"{MODULE}.count_rows", side_effect=[900, 100]):
+             patch(f"{MODULE}.count_rows", side_effect=[900, 100]), \
+             patch(f"{MODULE}.has_rows", return_value=True):
             assert _verify_surface("web") is True
         assert "page 組 900 列 / query 組 100 列" in caplog.text
 
@@ -1154,19 +1200,22 @@ class TestRunVerifySurfaceScoped:
     TOTALS_LATEST = TestRunVerify.TOTALS_LATEST
 
     def test_google_news_zero_page_rows_fails(self) -> None:
-        with patch(f"{MODULE}.count_rows", return_value=0), \
+        with patch(f"{MODULE}.count_rows", return_value=1), \
+             patch(f"{MODULE}.has_rows", return_value=False), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["googleNews"]) == 1
 
     def test_google_news_nonzero_page_rows_passes(self) -> None:
         with patch(f"{MODULE}.count_rows", return_value=10), \
+             patch(f"{MODULE}.has_rows", return_value=True), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["googleNews"]) == 0
 
     def test_web_with_both_combos_present_passes(self) -> None:
         with patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
+             patch(f"{MODULE}.has_rows", return_value=True), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["web"]) == 0
@@ -1191,7 +1240,9 @@ class TestRunVerifyDiscoverSurface:
         verify_surface.assert_not_called()
 
     def test_zero_totals_rows_fails(self) -> None:
-        with patch(f"{MODULE}.count_rows", return_value=0), \
+        """只收 totals 的 surface：健康度看「有沒有列」，來源是 order=date.desc&limit=1
+        那次查詢本身（一次精確的存在性探測），不看 planner 估計。"""
+        with patch(f"{MODULE}.count_rows", return_value=17), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, json.dumps([])), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["discover"]) == 1

@@ -452,12 +452,23 @@ def reap_orphans(day: date, combo: str, search_type: str, run_started_at: str) -
 
 
 def count_rows(extra_query: str = "", table: str = TABLE_GSC) -> int:
-    """精確列數。用 Prefer: count=exact + Range 讀 Content-Range，
-    不用 `limit` —— PostgREST 的 db-max-rows（預設 1000）會靜默覆蓋 limit 且仍回 200。"""
+    """列數的**量級估計**。用 Prefer: count=planned + Range 讀 Content-Range，
+    不用 `limit` —— PostgREST 的 db-max-rows（預設 1000）會靜默覆蓋 limit 且仍回 200。
+
+    為什麼是 planned 不是 exact：count=exact 會要求 PG 實際掃過整個結果集算列數，
+    gsc_daily_metrics 已近百萬列，2026-09-03 news 480 天回填的 run 33772038727 就在
+    Verify last write 這一步撞 statement_timeout（57014）——資料本身是完整的，只是
+    「數給你看」這件事比寫入還貴。planned 走 planner 的 EXPLAIN 估計、不掃表，
+    對「有沒有寫進去、量級對不對」這個驗證用途已經足夠。
+
+    代價要講清楚：planner 估計不能用來判定「這個 surface 是不是 0 列」——PG 的列數
+    估計會被夾在下限 1，篩選後真的空掉的結果集也會估成 1。空/非空的判定改由
+    has_rows() 用「實際取 1 列」回答，本函式的回傳值只進 log，不進判定。
+    """
     url, key = supabase_config()
     headers = {
         "apikey": key, "Authorization": f"Bearer {key}", "User-Agent": USER_AGENT,
-        "Prefer": "count=exact", "Range-Unit": "items", "Range": "0-0",
+        "Prefer": "count=planned", "Range-Unit": "items", "Range": "0-0",
     }
     request = urllib.request.Request(
         url + f"/rest/v1/{table}?select=date{extra_query}", headers=headers, method="GET"
@@ -473,6 +484,20 @@ def count_rows(extra_query: str = "", table: str = TABLE_GSC) -> int:
     if not total.isdigit():
         raise RuntimeError(f"count 查詢的 Content-Range 格式異常：{content_range!r}")
     return int(total)
+
+
+def has_rows(extra_query: str = "", table: str = TABLE_GSC) -> bool:
+    """有沒有至少一列——實際取 1 列來判斷，不看任何 count。
+
+    這是 count_rows() 換成 planned 之後補回來的那個保證：planner 估計有下限 1，
+    拿它去判斷「0 列」等於讓那條檢查永遠通過。取 1 列的成本與表多大無關。
+    """
+    status, body = _supabase_request(
+        "GET", f"/rest/v1/{table}?select=date{extra_query}&limit=1"
+    )
+    if status != 200:
+        raise RuntimeError(f"存在性查詢失敗：{status} {body[:200]}")
+    return bool(json.loads(body))
 
 
 def latest_date() -> date | None:
@@ -665,12 +690,14 @@ def _verify_surface(search_type: str) -> bool:
         for combo in SURFACE_COMBOS[search_type]
     }
     if COMBO_QUERY in counts:
-        logger.info("%s：page 組 %d 列 / query 組 %d 列（合計 %d）", search_type,
+        logger.info("%s：page 組 %d 列 / query 組 %d 列（合計 %d，planner 估計）", search_type,
                     counts[COMBO_PAGE], counts[COMBO_QUERY], sum(counts.values()))
     else:
-        logger.info("%s：page 組 %d 列（此 surface 不支援 query 維度）",
+        logger.info("%s：page 組 %d 列（planner 估計；此 surface 不支援 query 維度）",
                     search_type, counts[COMBO_PAGE])
-    empty = [combo for combo, rows in counts.items() if not rows]
+    # 空/非空一律用 has_rows() 實際取 1 列判定，不看上面那些估計值（見 count_rows docstring）。
+    empty = [combo for combo in counts
+             if not has_rows(f"&search_type=eq.{search_type}&{combo_filter(combo)}")]
     if empty:
         logger.error("%s：%s 組 0 列 —— 該 surface 沒有資料，視為失敗",
                      search_type, "／".join(empty))
@@ -692,9 +719,14 @@ def run_verify(search_types: Sequence[str] = (DEFAULT_SEARCH_TYPE,)) -> int:
         )
         latest_rows = json.loads(body) if status == 200 else []
         latest = latest_rows[0]["date"] if latest_rows else "N/A"
-        logger.info("  totals(%s)：%d 列，最新日期 %s", search_type, totals_rows, latest)
-        if not SURFACE_COMBOS[search_type] and not totals_rows:
-            logger.error("%s：只收 totals 且 0 列 —— 視為失敗", search_type)
+        logger.info("  totals(%s)：%d 列（planner 估計），最新日期 %s",
+                    search_type, totals_rows, latest)
+        # 只收 totals 的 surface（discover）健康度看「有沒有列」，而且直接沿用上面那次
+        # order=date.desc&limit=1 的結果——它本身就是一次精確的存在性探測，不必再問一次。
+        # 查詢失敗（status != 200）同樣落在這裡：查不到就是失敗，不在報表層以 0 呈現。
+        if not SURFACE_COMBOS[search_type] and not latest_rows:
+            logger.error("%s：只收 totals 但查不到任何列（status=%s）—— 視為失敗",
+                         search_type, status)
             healthy = False
 
     status, body = _supabase_request(
