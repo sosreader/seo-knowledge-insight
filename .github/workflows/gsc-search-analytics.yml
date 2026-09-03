@@ -85,7 +85,8 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python scripts/ingest_gsc_search_analytics.py --verify
+          SEARCH_TYPE: ${{ matrix.search_type }}
+        run: python scripts/ingest_gsc_search_analytics.py --verify --search-type "$SEARCH_TYPE"
 
   # 資料新鮮度告警。條件是「gsc_daily_metrics 最新資料日期太舊」，不是「ingest job
   # 有沒有失敗」——排程根本沒被觸發時（cron 語法錯、GitHub 因 repo 閒置自動停用

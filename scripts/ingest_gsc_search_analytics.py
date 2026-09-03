@@ -105,7 +105,13 @@ from scripts.gsc_surfaces import (  # noqa: E402
     COMBO_QUERY,
     CONFLICT_KEY,
     COUNTRY_NOT_REQUESTED,  # noqa: F401 —— 對外仍從本模組取用（哨兵值的單一出處）
+    DEFAULT_BACKFILL_DAYS,
+    DEFAULT_PROBE_DAYS,
     DEFAULT_SEARCH_TYPE,
+    MAX_BACKFILL_DAYS,
+    MAX_PROBE_DAYS,
+    MIN_BACKFILL_DAYS,  # noqa: F401 —— 對外仍從本模組取用
+    MIN_PROBE_DAYS,
     PAGE_NOT_REQUESTED,
     PROPERTY,
     QUERY_NOT_REQUESTED,  # noqa: F401 —— 同上
@@ -118,6 +124,9 @@ from scripts.gsc_surfaces import (  # noqa: E402
     build_totals_records,
     combo_filter,
     dedupe_by_key,
+    resolve_backfill_days,
+    resolve_probe_days,
+    resolve_search_type,
     row_to_record,
     totals_record,
 )
@@ -140,15 +149,11 @@ DAILY_ROW_CAP = 50000   # 每天每 property 每 search type 的總天花板，�
 HTTP_TIMEOUT_SECONDS = 120
 USER_AGENT = "seo-knowledge-insight-gsc-ingest/1.0"
 
-DEFAULT_BACKFILL_DAYS = 7
-MIN_BACKFILL_DAYS = 1
-# 上限 500 天（GSC 保留 16 個月）；實際可用上限是 min(這個值, --probe-days)，見 resolve_backfill_days。
-MAX_BACKFILL_DAYS = 500
-
-# 探測「哪些日期已有資料」的回看範圍。它同時是 backfill 的硬上限，因此可調。
-DEFAULT_PROBE_DAYS = 14
-MIN_PROBE_DAYS, MAX_PROBE_DAYS = 1, 500
-PROBE_ROW_LIMIT_MARGIN = 7  # rowLimit = probe_days + 這個緩衝（探測每天恰一列）
+# DEFAULT_BACKFILL_DAYS／MIN_BACKFILL_DAYS／MAX_BACKFILL_DAYS／DEFAULT_PROBE_DAYS／
+# MIN_PROBE_DAYS／MAX_PROBE_DAYS 搬進 gsc_surfaces.py 了（review S4.1 #9，
+# 跟同樣搬過去的 resolve_probe_days／resolve_backfill_days 放一起），上面 import 區塊取用。
+PROBE_ROW_LIMIT_MARGIN = 7  # rowLimit = probe_days + 這個緩衝（探測每天恰一列）；
+                            # 這是 API rowLimit 算式的一部分，不是使用者輸入值域，留在本檔。
 
 # ══════════════════════════════════════════════════════════════════════
 # Supabase
@@ -408,7 +413,14 @@ def write_totals(
     totals 沒有 top-N 桶集合縮小的問題，這裡沒有孤兒列可收。
     """
     run_id = start_run(*window, table_name=TABLE_TOTALS)
-    succeeded, failed = upsert_rows(records, TABLE_TOTALS, TOTALS_CONFLICT_KEY)
+    try:
+        succeeded, failed = upsert_rows(records, TABLE_TOTALS, TOTALS_CONFLICT_KEY)
+    except urllib.error.URLError:
+        # review S4.1 SF-3：upsert_rows 內的 _supabase_request 只擋 HTTPError，
+        # 網路層例外（DNS／連線重置／TLS）會穿出來——這裡的 run_id 已經是
+        # "running"，不收尾就會永遠卡住，讓上層 stale-run 告警去抓才發現。
+        finish_run(run_id, "failed", 0)
+        raise
     run_status = "success" if succeeded and not failed else ("partial" if succeeded else "failed")
     finish_run(run_id, run_status, succeeded)
     logger.info("totals（%s）寫入 %d 列成功 / %d 列失敗，run status=%s",
@@ -615,9 +627,13 @@ def run_ingestion(
     errors: list[str] = []
     warnings: list[str] = []
     total_written = total_failed = 0
-    _ingest_totals(probe_rows, search_type=search_type, execute=execute,
-                   errors=errors, warnings=warnings)
     try:
+        # review S4.1 SF-3：_ingest_totals 原本在 try 之外——它會發真實 HTTP
+        # 請求（write_totals → upsert_rows），URLError（DNS／連線重置／TLS）
+        # 不是 GscQueryError，會直接穿出 run_ingestion，讓主 run 的 run_id
+        # 留在 "running" 收不了尾。挪進 try、except 一併擴大即可堵住。
+        _ingest_totals(probe_rows, search_type=search_type, execute=execute,
+                       errors=errors, warnings=warnings)
         for day in targets:
             for combo in SURFACE_COMBOS[search_type]:
                 records = collect_day_combo(token, day, combo, search_type,
@@ -627,7 +643,7 @@ def run_ingestion(
                 succeeded, failed = _write_slice(day, combo, search_type, run_started_at, records)
                 total_written += succeeded
                 total_failed += failed
-    except GscQueryError as exc:
+    except (GscQueryError, urllib.error.URLError) as exc:
         logger.error("Search Analytics 查詢失敗（系統性，中止整個 run）：%s", exc)
         finish_run(run_id, "failed", total_written)
         return 1
@@ -660,11 +676,23 @@ def _verify_surface(search_type: str) -> bool:
 
 
 def run_verify(search_types: Sequence[str] = (DEFAULT_SEARCH_TYPE,)) -> int:
-    """唯讀檢查。按 surface 分組印出各組列數 —— 這是「不可相加」與
-    「單一 surface 寫入失敗」兩件事的持續可見性。"""
+    """唯讀檢查。按 surface 分組印出各組列數，以及 gsc_daily_totals（對本次 surface
+    過濾）的列數與最新日期 —— 這是「不可相加」與「單一 surface 寫入失敗」兩件事的
+    持續可見性（review S4.1 #9：S2.3 當時跳過的 totals 輸出，補在這裡）。"""
     healthy = all([_verify_surface(search_type) for search_type in search_types])
     logger.info("⚠ 兩組是同一批底層資料的兩個邊際聚合，SUM 前必須帶判別式，"
                 "否則點擊數會被算兩次。gsc_daily_totals 是另一個母體（全量），更不可相加。")
+
+    for search_type in search_types:
+        totals_rows = count_rows(f"&search_type=eq.{search_type}", TABLE_TOTALS)
+        status, body = _supabase_request(
+            "GET",
+            f"/rest/v1/{TABLE_TOTALS}?select=date&search_type=eq.{search_type}"
+            "&order=date.desc&limit=1",
+        )
+        latest_rows = json.loads(body) if status == 200 else []
+        latest = latest_rows[0]["date"] if latest_rows else "N/A"
+        logger.info("  totals(%s)：%d 列，最新日期 %s", search_type, totals_rows, latest)
 
     status, body = _supabase_request(
         "GET",
@@ -718,40 +746,8 @@ def run_freshness_check() -> int:
     return 0
 
 
-def resolve_probe_days(value: int | None) -> int:
-    """探測回看天數。env PROBE_DAYS 仍相容（workflow 舊寫法），旗標優先。"""
-    raw = os.environ.get("PROBE_DAYS", "").strip()
-    days = value if value is not None else (int(raw) if raw.isdigit() else DEFAULT_PROBE_DAYS)
-    if not (MIN_PROBE_DAYS <= days <= MAX_PROBE_DAYS):
-        raise ValueError(
-            f"--probe-days {days} 超出範圍 [{MIN_PROBE_DAYS}, {MAX_PROBE_DAYS}]"
-            "（GSC 只保留 16 個月，再大也拿不到資料）"
-        )
-    return days
-
-
-def resolve_backfill_days(value: int | None, probe_days: int = MAX_BACKFILL_DAYS) -> int:
-    """回補天數。上限是 min(MAX_BACKFILL_DAYS, probe_days)。
-
-    探測窗只回看 probe_days 天，resolve_targets 又只從探測結果取日期，所以
-    backfill 超過探測窗會**靜默**被截成探測窗大小（`--backfill-days 30` 實際只回 14 天，
-    這個坑真的發生過）。這裡明確報錯而不是截斷。呼叫端請務必傳入實際的 probe_days。
-    """
-    days = value if value is not None else DEFAULT_BACKFILL_DAYS
-    limit = min(MAX_BACKFILL_DAYS, probe_days)
-    if not (MIN_BACKFILL_DAYS <= days <= limit):
-        raise ValueError(
-            f"--backfill-days {days} 超出範圍 [{MIN_BACKFILL_DAYS}, {limit}]"
-            f"（上限 = min({MAX_BACKFILL_DAYS}, --probe-days={probe_days})；"
-            "要回補更多天請同時放大 --probe-days）"
-        )
-    return days
-
-
-def resolve_search_type(value: str) -> str:
-    if value not in ALLOWED_SEARCH_TYPES:
-        raise ValueError(f"--search-type {value!r} 不在 {ALLOWED_SEARCH_TYPES}")
-    return value
+# resolve_probe_days／resolve_backfill_days／resolve_search_type 搬進 gsc_surfaces.py 了
+# （review S4.1 #9：純值域函式，跟同樣搬過去的值域常數放同一檔更合理），上面 import 區塊取用。
 
 
 def main() -> None:

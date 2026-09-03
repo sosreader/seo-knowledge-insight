@@ -106,11 +106,26 @@ class TestPipelineConfigResolution:
         assert pipeline.filters == (("search_type", "googleNews"),)
         assert pipeline.ingestion_run_table_name == "gsc_daily_metrics"
 
+    def test_gsc_googlenews_gap_check_is_skipped(self) -> None:
+        """Regression（review S4.1 SF-2，2026-09-03）：googleNews 曝光本質斷續，
+        沿用 web 的 30 天 gap 窗會把『本來就沒曝光的日子』誤判成空段、連紅 30 天。
+        改成 gap_window_hours=None 只留新鮮度檢查。"""
+        pipeline = PIPELINES_BY_KEY["gsc_googlenews"]
+        assert pipeline.gap_window_hours is None
+        assert pipeline.gap_skip_reason
+
     def test_gsc_discover_pipeline_filters_and_ingestion_run_table(self) -> None:
         pipeline = PIPELINES_BY_KEY["gsc_discover"]
         assert pipeline.table == "gsc_page_daily"
         assert pipeline.filters == (("search_type", "discover"),)
         assert pipeline.ingestion_run_table_name == "gsc_daily_metrics"
+
+    def test_gsc_discover_gap_check_is_skipped(self) -> None:
+        """Regression（review S4.1 SF-2，2026-09-03）：discover 曝光本質斷續，
+        理由同 gsc_googlenews。"""
+        pipeline = PIPELINES_BY_KEY["gsc_discover"]
+        assert pipeline.gap_window_hours is None
+        assert pipeline.gap_skip_reason
 
     def test_gsc_daily_totals_pipeline_filters_and_ingestion_run_table(self) -> None:
         """totals 查自己的表（全量母體，與 gsc_page_daily 抽樣母體不同）、

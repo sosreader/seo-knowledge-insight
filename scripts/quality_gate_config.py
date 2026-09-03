@@ -274,8 +274,21 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         max_age_hours=96 + 48,  # 沿用 gsc_daily_metrics：同一支腳本、同一次 run 內完成，來源延遲同構
         cadence_hours=24,
         cadence_label="daily",
-        gap_window_hours=24 * 30,
-        lag_buffer_hours=96 + 48,
+        # lag_buffer_hours 用不到：gap_window_hours=None 讓整個第二類檢查（空段）SKIP，
+        # 這個值只有 check_gaps() 會讀，填 0.0 是滿足型別要求（見上方欄位註解），
+        # 不是「這條管線剛好緩衝需求是 0」——理由見下方 gap_skip_reason。
+        lag_buffer_hours=0.0,
+        gap_window_hours=None,
+        gap_skip_reason=(
+            "review S4.1 SF-2（2026-09-03）：googleNews 是無排名 surface，曝光本質斷續——"
+            "ingest 端只抓探測到有資料的日期（resolve_targets → dates_from_totals），某天"
+            "vocus.cc 沒有 googleNews 曝光時，那天在 gsc_page_daily 就是合法的『沒有列』，"
+            "不是管線故障。gap_window_hours 掃 30 天窗內『是否每天都有列』會把這種本來就"
+            "沒曝光的日子當成空段，連紅 30 天直到滑出窗外——這不是機率事件，是曝光模式的"
+            "必然結果。web 每天都有搜尋流量、不會遇到這個誤判，沿用它的 gap 設定在此不成立。"
+            "新鮮度檢查（max_age_hours=144h）已涵蓋『作業真的停擺』，此處不重複用一個"
+            "會誤報的規則去涵蓋同一件事；is_position_valid()/022 CHECK 仍保證單列品質。"
+        ),
         # 補充決策（ingestion_run 登記方式）：surface 資訊不進 table_name，維持既有分組相容；
         # googleNews/discover 與 web 共用同一個 ingestion_run_table_name，新鮮度靠 filters
         # 讀資料本身區分（比 run 紀錄可靠，CrUX 前例正是 run 紀錄缺席才看不到停擺）。
@@ -300,8 +313,19 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         max_age_hours=96 + 48,
         cadence_hours=24,
         cadence_label="daily",
-        gap_window_hours=24 * 30,
-        lag_buffer_hours=96 + 48,
+        # lag_buffer_hours 用不到：gap_window_hours=None 讓整個第二類檢查（空段）SKIP，
+        # 這個值只有 check_gaps() 會讀，填 0.0 是滿足型別要求，理由見下方 gap_skip_reason。
+        lag_buffer_hours=0.0,
+        gap_window_hours=None,
+        gap_skip_reason=(
+            "review S4.1 SF-2（2026-09-03）：discover 是無排名 surface，曝光本質斷續——"
+            "一篇文章進 Discover 才有曝光，ingest 端只抓探測到有資料的日期，某天沒有"
+            "Discover 曝光時那天沒有列是合法狀態，不是管線故障。gap_window_hours 掃 30 天窗"
+            "會把沒曝光的日子當空段、連紅 30 天直到滑出窗外，不是機率事件，是曝光模式的"
+            "必然結果。web 每天都有搜尋流量不會遇到，沿用它的 gap 設定在此不成立。"
+            "新鮮度檢查（max_age_hours=144h）已涵蓋『作業真的停擺』，此處不重複用一個"
+            "會誤報的規則去涵蓋同一件事；is_position_valid()/022 CHECK 仍保證單列品質。"
+        ),
         ingestion_run_table_name="gsc_daily_metrics",
         degradation=None,
         degradation_skip_reason=(

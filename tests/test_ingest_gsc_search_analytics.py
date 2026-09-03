@@ -592,6 +592,17 @@ class TestWriteTotals:
             write_totals([self.RECORD], self.WINDOW, "googleNews")
         assert finish.call_args.args[1] == "failed"
 
+    def test_url_error_during_upsert_finishes_run_as_failed_and_reraises(self) -> None:
+        """Regression（review S4.1 SF-3，2026-09-03）：upsert_rows 內的
+        _supabase_request 只擋 HTTPError，URLError（DNS／連線重置／TLS）會穿出來——
+        這裡已經 start_run 過，不收尾就會永遠卡在 status='running'。"""
+        with patch(f"{MODULE}.start_run", return_value="run-totals"), \
+             patch(f"{MODULE}.upsert_rows", side_effect=urllib.error.URLError("network gone")), \
+             patch(f"{MODULE}.finish_run") as finish:
+            with pytest.raises(urllib.error.URLError):
+                write_totals([self.RECORD], self.WINDOW, "googleNews")
+        assert finish.call_args.args == ("run-totals", "failed", 0)
+
 
 class TestIngestTotals:
     """_ingest_totals：探測回應 → gsc_daily_totals，0 列可寫入是硬失敗。"""
@@ -908,6 +919,27 @@ class TestRunIngestion:
              patch(f"{MODULE}.collect_day_combo", side_effect=_zero_rows):
             assert run_ingestion(execute=False, backfill_days=7, search_type="web") == 1
 
+    def test_url_error_during_totals_finishes_both_runs_as_failed(self) -> None:
+        """Regression（review S4.1 SF-3，2026-09-03）：totals 路徑本來在 try 之外，
+        URLError 會讓主 run（run_ingestion 開的）與 totals run（write_totals 內
+        開的）兩列 ingestion_run 都卡在 status='running'。挪進 try 並擴大 except
+        之後，兩列都要被 finish_run 收尾成 'failed'，不能只收主 run 那一列。"""
+        totals_records = [{"date": DAY.isoformat(), "property": PROPERTY,
+                           "search_type": "web", "clicks": 1, "impressions": 2,
+                           "ctr": 0.5, "position": 3.0}]
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.build_totals_records", return_value=totals_records), \
+             patch(f"{MODULE}.start_run", side_effect=["run-main", "run-totals"]) as start, \
+             patch(f"{MODULE}.upsert_rows", side_effect=urllib.error.URLError("network gone")), \
+             patch(f"{MODULE}.finish_run") as finish, \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_one_record):
+            assert run_ingestion(execute=True, backfill_days=7, search_type="web") == 1
+        assert start.call_count == 2  # 主 run + totals run
+        assert finish.call_count == 2  # 兩列都被收尾，不是只有一列
+        finished = [(call.args[0], call.args[1]) for call in finish.call_args_list]
+        assert finished == [("run-totals", "failed"), ("run-main", "failed")]
+
     def test_run_window_is_half_open_over_target_dates(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
              patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY, DAY - timedelta(days=1)])), \
@@ -985,39 +1017,55 @@ class TestRunVerify:
     RUNS = json.dumps([{"id": "abcdef12", "window_start": "2026-08-19T00:00:00Z",
                         "window_end": "2026-08-26T00:00:00Z", "row_count": 10,
                         "status": "success", "finished_at": "2026-08-29T00:00:00Z"}])
+    # review S4.1 #9：run_verify 現在每個 search_type 多印一段 totals 列數／最新日期，
+    # 多一次 count_rows 呼叫、多一次 _supabase_request 呼叫（排在 TABLE_GSC 那次之前）。
+    TOTALS_LATEST = json.dumps([{"date": "2026-08-25"}])
 
     def test_reports_both_combo_counts_and_the_double_count_warning(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
-             patch(f"{MODULE}.count_rows", side_effect=[900, 100]), \
-             patch(f"{MODULE}._supabase_request", side_effect=[(200, self.RECENT), (200, self.RUNS)]):
+             patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify() == 0
         assert "page 組 900 列 / query 組 100 列" in caplog.text
         assert "算兩次" in caplog.text
+        assert "totals(web)：30 列，最新日期 2026-08-25" in caplog.text
 
     def test_labels_each_row_by_the_page_discriminator(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
-             patch(f"{MODULE}.count_rows", side_effect=[1, 1]), \
-             patch(f"{MODULE}._supabase_request", side_effect=[(200, self.RECENT), (200, self.RUNS)]):
+             patch(f"{MODULE}.count_rows", side_effect=[1, 1, 1]), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             run_verify()
         assert f"[{COMBO_QUERY}] 方格子" in caplog.text
         assert f"[{COMBO_PAGE}] https://vocus.cc/a" in caplog.text
 
     def test_missing_one_combo_fails(self) -> None:
-        with patch(f"{MODULE}.count_rows", side_effect=[900, 0]), \
-             patch(f"{MODULE}._supabase_request", side_effect=[(200, self.RECENT), (200, self.RUNS)]):
+        with patch(f"{MODULE}.count_rows", side_effect=[900, 0, 30]), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify() == 1
 
     def test_read_failure_returns_one(self) -> None:
-        with patch(f"{MODULE}.count_rows", side_effect=[1, 1]), \
+        with patch(f"{MODULE}.count_rows", side_effect=[1, 1, 1]), \
              patch(f"{MODULE}._supabase_request", return_value=(500, "boom")):
             assert run_verify() == 1
 
     def test_run_table_read_failure_returns_one(self) -> None:
-        with patch(f"{MODULE}.count_rows", side_effect=[1, 1]), \
-             patch(f"{MODULE}._supabase_request", side_effect=[(200, self.RECENT), (500, "boom")]):
+        with patch(f"{MODULE}.count_rows", side_effect=[1, 1, 1]), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (500, "boom")]):
             assert run_verify() == 1
+
+    def test_totals_read_failure_still_lets_run_verify_continue(self) -> None:
+        """totals 查詢失敗不該讓 run_verify 整個中止——沿用 latest_date() 對
+        非 200 的處理方式，記 N/A 後繼續看 TABLE_GSC／TABLE_RUN 那兩段。"""
+        with patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(500, "boom"), (200, self.RECENT), (200, self.RUNS)]):
+            assert run_verify() == 0
 
 
 class TestVerifySurfaceNoRankingBranch:
@@ -1048,22 +1096,24 @@ class TestRunVerifySurfaceScoped:
     RECENT = TestRunVerify.RECENT
     RUNS = TestRunVerify.RUNS
 
+    TOTALS_LATEST = TestRunVerify.TOTALS_LATEST
+
     def test_google_news_zero_page_rows_fails(self) -> None:
         with patch(f"{MODULE}.count_rows", return_value=0), \
              patch(f"{MODULE}._supabase_request",
-                   side_effect=[(200, self.RECENT), (200, self.RUNS)]):
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["googleNews"]) == 1
 
     def test_google_news_nonzero_page_rows_passes(self) -> None:
         with patch(f"{MODULE}.count_rows", return_value=10), \
              patch(f"{MODULE}._supabase_request",
-                   side_effect=[(200, self.RECENT), (200, self.RUNS)]):
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["googleNews"]) == 0
 
     def test_web_with_both_combos_present_passes(self) -> None:
-        with patch(f"{MODULE}.count_rows", side_effect=[900, 100]), \
+        with patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
              patch(f"{MODULE}._supabase_request",
-                   side_effect=[(200, self.RECENT), (200, self.RUNS)]):
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["web"]) == 0
 
 

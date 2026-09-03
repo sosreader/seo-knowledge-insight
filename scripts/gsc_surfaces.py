@@ -69,6 +69,7 @@ totals 的 unique key 只有三欄（property, search_type, date），沒有哨�
 from __future__ import annotations
 
 import logging
+import os
 import urllib.parse
 from datetime import date
 from typing import Any, Iterable, Mapping, Sequence
@@ -105,6 +106,20 @@ ALLOWED_SEARCH_TYPES = tuple(SURFACE_COMBOS)
 DEFAULT_SEARCH_TYPE = "web"
 
 DEVICE_MAP = {"MOBILE": "mobile", "TABLET": "tablet", "DESKTOP": "desktop"}
+
+# ── --probe-days / --backfill-days 值域（搬自主腳本，見 review S4.1 #9）───
+# 這些是純粹的參數值域常數，跟 resolve_probe_days／resolve_backfill_days／
+# resolve_search_type 三個值域函式放同一檔，主腳本 798 行貼著 800 行門檻，
+# 搬走騰出空間。PROBE_ROW_LIMIT_MARGIN 留在主腳本——那是 API rowLimit
+# 算式的一部分，跟這裡的「使用者輸入值域」不是同一件事。
+DEFAULT_BACKFILL_DAYS = 7
+MIN_BACKFILL_DAYS = 1
+# 上限 500 天（GSC 保留 16 個月）；實際可用上限是 min(這個值, --probe-days)，見 resolve_backfill_days。
+MAX_BACKFILL_DAYS = 500
+
+# 探測「哪些日期已有資料」的回看範圍。它同時是 backfill 的硬上限，因此可調。
+DEFAULT_PROBE_DAYS = 14
+MIN_PROBE_DAYS, MAX_PROBE_DAYS = 1, 500
 
 # ══════════════════════════════════════════════════════════════════════
 # property 與哨兵值（理由見模組 docstring）
@@ -330,3 +345,43 @@ def build_totals_records(
     if rejects:
         warnings.append(f"totals/{search_type} 丟棄不合法探測列：{rejects}")
     return records
+
+
+# ══════════════════════════════════════════════════════════════════════
+# CLI 參數值域（搬自主腳本，見 review S4.1 #9）
+# ══════════════════════════════════════════════════════════════════════
+
+def resolve_probe_days(value: int | None) -> int:
+    """探測回看天數。env PROBE_DAYS 仍相容（workflow 舊寫法），旗標優先。"""
+    raw = os.environ.get("PROBE_DAYS", "").strip()
+    days = value if value is not None else (int(raw) if raw.isdigit() else DEFAULT_PROBE_DAYS)
+    if not (MIN_PROBE_DAYS <= days <= MAX_PROBE_DAYS):
+        raise ValueError(
+            f"--probe-days {days} 超出範圍 [{MIN_PROBE_DAYS}, {MAX_PROBE_DAYS}]"
+            "（GSC 只保留 16 個月，再大也拿不到資料）"
+        )
+    return days
+
+
+def resolve_backfill_days(value: int | None, probe_days: int = MAX_BACKFILL_DAYS) -> int:
+    """回補天數。上限是 min(MAX_BACKFILL_DAYS, probe_days)。
+
+    探測窗只回看 probe_days 天，resolve_targets 又只從探測結果取日期，所以
+    backfill 超過探測窗會**靜默**被截成探測窗大小（`--backfill-days 30` 實際只回 14 天，
+    這個坑真的發生過）。這裡明確報錯而不是截斷。呼叫端請務必傳入實際的 probe_days。
+    """
+    days = value if value is not None else DEFAULT_BACKFILL_DAYS
+    limit = min(MAX_BACKFILL_DAYS, probe_days)
+    if not (MIN_BACKFILL_DAYS <= days <= limit):
+        raise ValueError(
+            f"--backfill-days {days} 超出範圍 [{MIN_BACKFILL_DAYS}, {limit}]"
+            f"（上限 = min({MAX_BACKFILL_DAYS}, --probe-days={probe_days})；"
+            "要回補更多天請同時放大 --probe-days）"
+        )
+    return days
+
+
+def resolve_search_type(value: str) -> str:
+    if value not in ALLOWED_SEARCH_TYPES:
+        raise ValueError(f"--search-type {value!r} 不在 {ALLOWED_SEARCH_TYPES}")
+    return value
