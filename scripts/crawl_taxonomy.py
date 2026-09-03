@@ -61,6 +61,26 @@ Loki 的 `max_series` 是 500，而且是**回應層的硬門檻**，不是截�
 所以多抽一個 `mob` label。它只在已被 UA filter 篩過的 ~8k 行上求值，成本可忽略。
 注意**不能用 "Nexus 5X" 當判別式**：同一個外殼底下還有 AdsBot-Google-Mobile /
 Google-AMPHTML / GoogleOther / Google-Safety。
+
+【6. sitemap 家族用獨立捕捉組收成單一桶，不是塞進 PATH_SEGMENTS】
+2026-09-03 發現：原本 PATH_SEGMENTS 只有 `sitemap[.]xml`，沒有 `sitemap-index.xml`、
+`sitemap-articles-*.xml` 的桶，三者全部落進 `/__other__`。查「Googlebot 抓 sitemap
+幾次」回 0，被誤讀成「Google 沒在抓 sitemap」——**那不是沒有流量，是這張表沒有這個
+問題的答案**，Loki 原始 log 同一 7 天視窗其實有 5 次（詳見
+wiki/learned/pre-aggregated-bucket-allowlist-turns-unlisted-paths-into-a-silent-zero.md）。
+
+修法不是把 `sitemap-index[.]xml`、`sitemap-articles-[0-9]+[.]xml` 逐一列進
+PATH_SEGMENTS：PATH_SEGMENTS 的每個 alternative 是「捕捉到什麼字元就吐什麼」，
+而 sitemap-articles-N.xml 的 N 會隨文章成長持續往上加，逐一列舉只會讓桶數跟著
+檔名數量一起長，等於把「擋 max_series=500」的機制自己拆掉（違反設計決定 3）。
+
+改成 build_path_prefix_expr() 用**第二個獨立捕捉組**：只把 `/sitemap` 這五個字元
+寫死進捕捉組，字尾（`-index`、`-articles-4` 之類）用同一個 alternative 裡、
+捕捉組**外面**的 `(?:[A-Za-z0-9_.-]*)?` 吃掉但不進捕捉組。於是不管字尾是什麼，
+捕捉到的永遠是常數字串 PATH_PREFIX_SITEMAP，series 成本固定是 +1，
+不會隨檔名數量成長。label_format 的輸出也從 `"${1}"` 改成 `"${1}${2}"`——
+兩個捕捉組互斥（同一次比對只有一個 alternative 會命中），沒命中的那個是空字串，
+串接後等於「哪一個命中就是哪一個的值」。
 """
 from __future__ import annotations
 
@@ -153,11 +173,16 @@ UA_NAME_MAX_BYTES = 64
 # （沒更新的後果是該路由靜默併進 /__other__，不是壞掉）。
 PATH_SEGMENTS = (
     "article", "salon", "tags", "user", "post", "search", "api",
-    "_next", "static", "not-found", "robots[.]txt", "sitemap[.]xml",
+    "_next", "static", "not-found", "robots[.]txt",
     "feed", "rss", "pay", "become_creator", "[.]well-known", "favicon[.]ico",
 )
 PATH_PREFIX_ROOT = "/"
 PATH_PREFIX_OTHER = "/__other__"
+# sitemap 家族（sitemap.xml / sitemap-index.xml / sitemap-articles-N.xml…）的收斂桶。
+# 不在 PATH_SEGMENTS 裡——理由見設計決定 6：那份清單是「捕捉到什麼吐什麼」，
+# 塞進去只會讓桶數跟著檔名數量一起長。build_path_prefix_expr() 用獨立捕捉組
+# 把這個常數字串寫死當輸出，字尾一律被吃掉、不進捕捉組。
+PATH_PREFIX_SITEMAP = "/sitemap"
 # crawl_daily_path_prefix_ck 的鏡像：單層、字元集受限、octet_length <= 64。
 # 這裡先擋一次，讓不合格的桶名在送出前就歸入殘餘桶——015 的註解特別提醒
 # 「ingest 端漏做映射時死的是整批，不是那一列」。
@@ -195,13 +220,21 @@ def build_mobile_expr() -> str:
 def build_path_prefix_expr() -> str:
     """第一層路徑段，且只認 allowlist；其餘塌成空字串（Python 端映射成殘餘桶）。
 
-    形狀：^(/(?:article|tags|...)?)(?:[/?#].*)?$|^.*$
+    形狀：^(/(?:article|tags|...)?)(?:[/?#].*)?$|^(/sitemap)(?:[A-Za-z0-9_.-]*)?(?:[/?#].*)?$|^.*$
     第一個 alternative 讓 `/article/123?x=1` → `/article`、`/` → `/`；
+    第二個 alternative 把 sitemap.xml / sitemap-index.xml / sitemap-articles-4.xml
+    等全部塌成常數 PATH_PREFIX_SITEMAP（見設計決定 6：字尾被吃掉但不進捕捉組，
+    所以不管字尾是什麼，捕捉到的永遠是同一個字串）；
     不在名單上的路徑（例如根路徑下的使用者 handle）落到 `^.*$` ⇒ 空字串。
     這一步不可省略，見設計決定 3：全流量自由抽取會撞 max_series=500。
+
+    兩個捕捉組彼此互斥（一次比對只有一個 alternative 會命中），輸出用
+    `"${1}${2}"` 串接：沒命中的那組是空字串，串接後就是「命中的那組的值」。
     """
-    pattern = "^(/(?:" + "|".join(PATH_SEGMENTS) + ")?)(?:[/?#].*)?$|^.*$"
-    return "pfx=`" + '{{ regexReplaceAll "' + pattern + '" .path "${1}" }}' + "`"
+    named = "^(/(?:" + "|".join(PATH_SEGMENTS) + ")?)(?:[/?#].*)?$"
+    sitemap = "^(" + PATH_PREFIX_SITEMAP + ")(?:[A-Za-z0-9_.-]*)?(?:[/?#].*)?$"
+    pattern = named + "|" + sitemap + "|^.*$"
+    return "pfx=`" + '{{ regexReplaceAll "' + pattern + '" .path "${1}${2}" }}' + "`"
 
 
 def build_crawler_ua_pattern() -> str:

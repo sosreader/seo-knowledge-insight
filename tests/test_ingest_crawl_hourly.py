@@ -84,9 +84,17 @@ def _pattern_of(expr: str) -> str:
 
 
 def _apply(pattern: str, value: str) -> str:
-    """重現 regexReplaceAll 的「命中回捕捉組、沒命中回空字串」。"""
+    """重現 regexReplaceAll 的「命中回捕捉組、沒命中回空字串」。
+
+    path_prefix 的樣式有兩個互斥的捕捉組（見 build_path_prefix_expr 設計決定 6），
+    label_format 的輸出是 `"${1}${2}"`——串接所有捕捉組，沒命中的那組是 None。
+    UA token / mobile 只有一個捕捉組，`match.groups()` 回傳長度 1 的 tuple，
+    行為與原本的 `match.group(1) or ""` 相同。
+    """
     match = re.match(pattern, value)
-    return (match.group(1) or "") if match else ""
+    if not match:
+        return ""
+    return "".join(group or "" for group in match.groups())
 
 
 def _extract_token(user_agent: str) -> str:
@@ -319,6 +327,40 @@ class TestPathPrefixBucketing:
 
     def test_generated_expression_carries_no_backslash(self) -> None:
         assert "\\" not in tax.build_path_prefix_expr()
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/sitemap.xml",
+            "/sitemap-index.xml",
+            "/sitemap-articles-4.xml",
+            "/sitemap-articles-5.xml",
+            "/sitemap-articles-123.xml",
+            "/sitemap-index.xml?v=2",
+        ],
+    )
+    def test_sitemap_family_collapses_to_one_constant_bucket(self, path: str) -> None:
+        """2026-09-03 修復：這些檔名先前全部落進 /__other__，查 Googlebot 抓 sitemap
+
+        回 0，被誤讀成「沒有流量」——實際 Loki 7 天內有 5 次抓取。見
+        wiki/learned/pre-aggregated-bucket-allowlist-turns-unlisted-paths-into-a-silent-zero.md。
+        不管字尾（-index、-articles-4…）是什麼，捕捉到的必須是同一個常數字串，
+        否則每個檔名各自成桶，series 成本會隨檔名數量一起長。
+        """
+        assert _extract_prefix(path) == tax.PATH_PREFIX_SITEMAP
+
+    def test_sitemap_bucket_is_not_in_path_segments(self) -> None:
+        """sitemap 不能塞進 PATH_SEGMENTS——那份清單是「捕捉到什麼吐什麼」，
+
+        sitemap-articles-N.xml 的 N 會隨內容成長，逐一列舉等於拆掉 max_series 護欄。
+        """
+        assert not any("sitemap" in segment for segment in tax.PATH_SEGMENTS)
+
+    def test_sitemap_bucket_name_satisfies_the_db_check(self) -> None:
+        """PATH_PREFIX_SITEMAP 進的是同一張表，要能通過 crawl_daily_path_prefix_ck。"""
+        assert re.fullmatch(r"^/[A-Za-z0-9_.-]*$", tax.PATH_PREFIX_SITEMAP)
+        assert len(tax.PATH_PREFIX_SITEMAP.encode()) <= tax.PATH_PREFIX_MAX_BYTES
+        assert tax.normalize_path_prefix(tax.PATH_PREFIX_SITEMAP) == tax.PATH_PREFIX_SITEMAP
 
 
 class TestNormalizePathPrefix:
