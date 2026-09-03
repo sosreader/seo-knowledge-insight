@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import data_quality_gate as gate  # noqa: E402
 from quality_gate_config import (  # noqa: E402
+    CRUX_PUBLISH_CADENCE_CEILING_HOURS,
     DegradationConfig,
     PipelineConfig,
     PIPELINES_BY_KEY,
@@ -255,6 +256,69 @@ class TestExpectedTimestamps:
             )
             margin = pipeline.lag_buffer_hours - worst
             assert margin >= 0.5, f"{key}: 安全邊際只剩 {margin:.2f}h，過窄"
+
+    def test_crux_lag_buffer_covers_documented_publish_cadence_ceiling(self) -> None:
+        """Regression（2026-09-03，team-lead 覆核 CrUX 手動觸發時發現）：鎖語意
+        不鎖魔術數字——`cwv_hourly_crux.lag_buffer_hours` 必須 >=
+        `CRUX_PUBLISH_CADENCE_CEILING_HOURS`（CrUX 自己的發布週期落差上限，
+        168h，實測依據見 quality_gate_config.py 該常數旁的註解）。
+
+        原本這個欄位漏設、吃 default 0.0——等於要求「週一結束、資料立刻要在」，
+        對一個有 7 天發布週期落差的來源必然誤報：run 33710475866 實測撞到，
+        gate 在 ingest 把當週資料寫完前讀了資料庫，把這次 run 自己正在寫的
+        那一週誤判成 gap FAIL。
+
+        故意不寫 `== 192.0`：未來若有更多實測資料要調整安全邊際（目前的 +24h
+        只是「沒有分布可取樣，只能加一點餘裕」的權宜），數字可以變，但**不能
+        低於已經寫進 KB、有實測依據的 168h 下限**——低於下限就是重新製造
+        同一種誤報，而測試不會知道数字變了背後的理由是不是還站得住腳，
+        所以鎖的是「不低於下限」這個語意，不是某一個具體數字。
+        """
+        pipeline = PIPELINES_BY_KEY["cwv_hourly_crux"]
+        assert pipeline.lag_buffer_hours >= CRUX_PUBLISH_CADENCE_CEILING_HOURS, (
+            f"cwv_hourly_crux.lag_buffer_hours={pipeline.lag_buffer_hours}h 低於"
+            f"CrUX 自己的發布週期落差上限 {CRUX_PUBLISH_CADENCE_CEILING_HOURS}h——"
+            "這會重新製造『資料還沒發布就被判成 gap』的誤報。"
+        )
+
+    def test_crux_gap_check_would_not_have_false_flagged_the_actual_incident(self) -> None:
+        """行為級 regression：重播 run 33710475866 的真實時間軸，證明新設定下
+        `expected_timestamps()` 不會再把那一週判成應該存在（也就不會誤報 gap）。
+
+        真實時間軸：hour=2026-08-24（桶關閉 2026-08-31T00:00Z），gate 讀資料庫
+        的時間是 2026-09-03T03:11:52Z（team-lead 覆核那次；本檔頂端 CI 修法後
+        的第二次驗證 run 33712455934 已經用 needs+always() 讓 gate 排到 ingest
+        完成之後才讀，這裡驗證的是另一層防線：即使兩者又意外撞在一起，
+        lag_buffer_hours 本身也該擋下這個誤報，不只靠 job 排序單一防線）。
+        """
+        bucket_hour = datetime(2026, 8, 24, tzinfo=UTC)
+        bucket_close = bucket_hour + timedelta(hours=24 * 7)  # 2026-08-31
+        now = datetime(2026, 9, 3, 3, 11, 52, tzinfo=UTC)
+        pipeline = PIPELINES_BY_KEY["cwv_hourly_crux"]
+        lag_cutoff = now - timedelta(hours=pipeline.lag_buffer_hours)
+
+        assert bucket_close > lag_cutoff, (
+            "測試前提不成立：這個情境下桶關閉時間已經早於 lag_cutoff，"
+            "不足以重現『資料還沒發布』的誤報場景，請調整測試時間軸"
+        )
+        points = gate.expected_timestamps(
+            now, pipeline.cadence_hours, now - timedelta(hours=pipeline.gap_window_hours), lag_cutoff,
+        )
+        assert bucket_hour not in points, (
+            "新設定下這一週仍然被列入『應該有資料』的候選——"
+            "lag_buffer_hours 不足以覆蓋真實發生過的這次延遲"
+        )
+
+        # 對照組：漏設前的 default 0.0 buffer，同一個時間軸，證明會誤報——
+        # 這個測試存在的理由本身，不是憑空斷言。
+        old_lag_cutoff = now  # lag_buffer_hours=0.0
+        old_points = gate.expected_timestamps(
+            now, pipeline.cadence_hours, now - timedelta(hours=pipeline.gap_window_hours), old_lag_cutoff,
+        )
+        assert bucket_hour in old_points, (
+            "對照組應該（錯誤地）已經把這一週列入候選——如果沒有，代表這個測試"
+            "情境本身沒有重現到 run 33710475866 實際撞到的誤報，測試前提有誤"
+        )
 
     def test_old_buggy_semantics_would_have_flagged_the_measured_delays(self) -> None:
         """反向鎖定：證明「比較桶起點」這個舊語意，用同一組實測延遲與同一個
