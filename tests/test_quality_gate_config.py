@@ -98,6 +98,29 @@ class TestPipelineConfigResolution:
         assert pipeline.table in ("gsc_page_daily", "gsc_query_daily")
         assert pipeline.table != "gsc_daily_metrics"
 
+    def test_gsc_googlenews_pipeline_filters_and_ingestion_run_table(self) -> None:
+        """googleNews 查視圖、以 search_type 篩選；ingestion_run_table_name 沿用
+        gsc_daily_metrics（補充決策：surface 資訊不進 table_name，維持分組相容）。"""
+        pipeline = PIPELINES_BY_KEY["gsc_googlenews"]
+        assert pipeline.table == "gsc_page_daily"
+        assert pipeline.filters == (("search_type", "googleNews"),)
+        assert pipeline.ingestion_run_table_name == "gsc_daily_metrics"
+
+    def test_gsc_discover_pipeline_filters_and_ingestion_run_table(self) -> None:
+        pipeline = PIPELINES_BY_KEY["gsc_discover"]
+        assert pipeline.table == "gsc_page_daily"
+        assert pipeline.filters == (("search_type", "discover"),)
+        assert pipeline.ingestion_run_table_name == "gsc_daily_metrics"
+
+    def test_gsc_daily_totals_pipeline_filters_and_ingestion_run_table(self) -> None:
+        """totals 查自己的表（全量母體，與 gsc_page_daily 抽樣母體不同）、
+        filters 取 web 當代表；ingestion_run_table_name 是新的
+        'gsc_daily_totals'（write_totals() 另記一列，見補充決策）。"""
+        pipeline = PIPELINES_BY_KEY["gsc_daily_totals"]
+        assert pipeline.table == "gsc_daily_totals"
+        assert pipeline.filters == (("search_type", "web"),)
+        assert pipeline.ingestion_run_table_name == "gsc_daily_totals"
+
 
 class TestDegradationOrGapMustExplainWhySkipped:
     """degradation=None 或 gap_window_hours=None 時必須附一句非空理由——

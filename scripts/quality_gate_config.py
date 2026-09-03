@@ -45,6 +45,21 @@ def _standard_extractor(timestamp_column: str) -> Callable[[Mapping], datetime]:
     return _extract
 
 
+CRUX_PUBLISH_CADENCE_CEILING_HOURS = 168.0  # 7 天
+# CrUX History API 自己的發布週期落差上限（不是我們的排程週期、也不是 max_age_hours
+# 裡疊加的排程緩衝）。實測基礎：
+#   1. KB freshness-threshold-schedule-period-formula-ignores-source-inherent-lag
+#      （2026-08-29 首測）：lastDate 相對「現在」的落差在一個發布週期內於 0~7 天間浮動。
+#   2. 2026-09-03 現場重測（S4「crux never ran」故障排查）：直接打 CrUX History API
+#      （queryHistoryRecord，origin 級，LCP），最新 collectionPeriod 的原始
+#      lastDate=2026-08-29；當時對齊後最新桶 hour=2026-08-24（bucket 關閉時間
+#      2026-08-31），距離重測當下（2026-09-03）約 75h——與 0~7 天的區間一致，
+#      沒有推翻既有測值。
+# lag_buffer_hours 只需要覆蓋「CrUX 自己多久才會把某一週的資料放進 API 回應」
+# 這一件事（從桶關閉時間算起，桶關閉時間本身已經是該週最晚可能的 lastDate 之後，
+# 見下面 cwv_hourly_crux 的 lag_buffer_hours 註解）——不需要疊加排程緩衝，
+# 那是 max_age_hours 的責任；兩者疊加會讓 gap 檢查遲鈍到失去意義
+# （20 天才開始檢查一條週頻管線，真的漏跑要快一個月才被抓到）。
 def _crawl_daily_extractor(row: Mapping) -> datetime:
     """crawl_daily 沒有單一時間戳欄位，是 date（DATE）+ hour（0-23 整數）兩欄合成。
 
@@ -144,15 +159,25 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         cadence_hours=24 * 7,
         cadence_label="weekly",
         gap_window_hours=24 * 56,  # 掃 8 週；若管線上線不滿 8 週，掃描下限會被目前資料的最早時間戳墊高
+        # 2026-09-03 修正：原本漏設，吃 default 0.0——等於要求「週一結束、資料立刻要在」，
+        # 對一個有 7 天發布週期落差的來源必然誤報（2026-09-03 run 33710475866 實測撞到：
+        # gate 在 ingest 把當週資料寫完前 15 秒讀了資料庫，把這次 run 自己正在寫的那一週
+        # 誤判成 gap FAIL）。取值 = CRUX_PUBLISH_CADENCE_CEILING_HOURS(168h，見上方常數的
+        # 實測依據) + 24h 量測不確定度緩衝（沒有連續多次觀測可取分布，只有兩個時間點的
+        # 快照，用常數本身當下限、另加一點餘裕而非直接沿用測到的數字）。**不是**沿用
+        # max_age_hours(480h)：那個數字疊加了排程緩衝(~7d)，兩者服務不同目的，
+        # 疊加會讓 gap 檢查 20 天才開始檢查一條週頻管線，真的漏跑要快一個月才被抓到。
+        lag_buffer_hours=CRUX_PUBLISH_CADENCE_CEILING_HOURS + 24.0,  # 192h
         ingestion_run_table_name="cwv_hourly",  # 與 RUM 共用同一個 table_name（見模組 docstring 缺陷 1）
         degradation=DegradationConfig(
             column="unknown_ratio", mode="ratio_column",
             max_ratio=0.05, min_sample=1, sample_limit=200,
         ),
-        schedule_note="門檻＝來源固有延遲上限(~13d) + 排程緩衝(~7d)，不是排程週期×N——"
+        schedule_note="max_age_hours 門檻＝來源固有延遲上限(~13d) + 排程緩衝(~7d)，不是排程週期×N——"
                       "CrUX 的 lastDate 相對『現在』本身就有發布延遲，套用『週期×N』公式會對"
                       "健康資料誤報（KB freshness-threshold-schedule-period-formula-ignores-source-inherent-lag，"
-                      "2026-08-29 首次實測 240h 門檻在健康資料上 FAIL，校準到 480h 後 PASS）。",
+                      "2026-08-29 首次實測 240h 門檻在健康資料上 FAIL，校準到 480h 後 PASS）。"
+                      "lag_buffer_hours 是另一個獨立的數字，見上方欄位註解，不要混為一談。",
     ),
 
     # ── 3. Crawler 逐小時聚合（Loki）─────────────────────────────────
@@ -204,6 +229,79 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         schedule_note="門檻沿用既有腳本 96+48h；來源延遲 2-3 天為官方 typically 用語，"
                       "見 KB probe-source-for-available-dates-instead-of-hardcoding-publication-lag——"
                       "本檔不重新硬編延遲天數，直接沿用既有腳本已校準過的門檻常數。",
+    ),
+
+    # ── 4b. GSC Search Analytics — Google 新聞（無排名，page 組）──────
+    PipelineConfig(
+        key="gsc_googlenews",
+        table="gsc_page_daily",  # 一律查視圖，同 gsc_daily_metrics 的理由
+        filters=(("search_type", "googleNews"),),
+        timestamp_column="date",
+        max_age_hours=96 + 48,  # 沿用 gsc_daily_metrics：同一支腳本、同一次 run 內完成，來源延遲同構
+        cadence_hours=24,
+        cadence_label="daily",
+        gap_window_hours=24 * 30,
+        lag_buffer_hours=96 + 48,
+        # 補充決策（ingestion_run 登記方式）：surface 資訊不進 table_name，維持既有分組相容；
+        # googleNews/discover 與 web 共用同一個 ingestion_run_table_name，新鮮度靠 filters
+        # 讀資料本身區分（比 run 紀錄可靠，CrUX 前例正是 run 紀錄缺席才看不到停擺）。
+        ingestion_run_table_name="gsc_daily_metrics",
+        degradation=None,
+        degradation_skip_reason=(
+            "沿用 gsc_daily_metrics 的判定：device 值域在 ingest 端直接 reject 非法值，"
+            "不合法列不會落表，reject 數量未持久化到可查詢欄位。googleNews 只有 page 組"
+            "（見 SURFACE_COMBOS，無排名 surface 不送 query 維度），母體比 web 更窄，"
+            "沒有額外的降級維度可查，記為已知缺口，理由與 gsc_daily_metrics 相同。"
+        ),
+        schedule_note="門檻沿用 gsc_daily_metrics：googleNews 與 web 是同一支腳本、"
+                      "同一次探測查詢的不同 search_type 分支，來源延遲特性相同。",
+    ),
+
+    # ── 4c. GSC Search Analytics — Discover（無排名，page 組）────────
+    PipelineConfig(
+        key="gsc_discover",
+        table="gsc_page_daily",
+        filters=(("search_type", "discover"),),
+        timestamp_column="date",
+        max_age_hours=96 + 48,
+        cadence_hours=24,
+        cadence_label="daily",
+        gap_window_hours=24 * 30,
+        lag_buffer_hours=96 + 48,
+        ingestion_run_table_name="gsc_daily_metrics",
+        degradation=None,
+        degradation_skip_reason=(
+            "沿用 gsc_daily_metrics 的判定：device 值域在 ingest 端直接 reject 非法值，"
+            "不合法列不會落表，reject 數量未持久化到可查詢欄位。discover 只有 page 組"
+            "（見 SURFACE_COMBOS，無排名 surface 不送 query 維度），母體比 web 更窄，"
+            "沒有額外的降級維度可查，記為已知缺口，理由與 gsc_daily_metrics 相同。"
+        ),
+        schedule_note="門檻沿用 gsc_daily_metrics：discover 與 web 是同一支腳本、"
+                      "同一次探測查詢的不同 search_type 分支，來源延遲特性相同。",
+    ),
+
+    # ── 4d. GSC 全站總數（date-only 探測查詢的副產品，非抽樣）────────
+    PipelineConfig(
+        key="gsc_daily_totals",
+        table="gsc_daily_totals",  # 全量母體，與 gsc_page_daily 的抽樣母體不同，不可相加
+        filters=(("search_type", "web"),),  # 三個 search_type 共用同一支腳本、同一次 run 寫入，
+                                             # 取 web 當代表即可反映「探測查詢本身有沒有在跑」
+        timestamp_column="date",
+        max_age_hours=96 + 48,  # 與 gsc_daily_metrics 同一個數字：totals 是探測查詢的副產品，
+                                  # 探測本身就是 gsc_daily_metrics 每次 run 都會做的第一步
+        cadence_hours=24,
+        cadence_label="daily",
+        gap_window_hours=24 * 30,
+        lag_buffer_hours=96 + 48,
+        ingestion_run_table_name="gsc_daily_totals",  # write_totals() 另記一列，見補充決策
+        degradation=None,
+        degradation_skip_reason=(
+            "gsc_daily_totals 本身就是全站彙總（date-only 探測查詢的四個 metric 欄位直接落表），"
+            "沒有 page/query/device 之類的維度可拆，因此沒有『某個子集被靜默丟棄』這種降級可查——"
+            "唯一可能的資料品質問題是整批 0 列，那屬於新鮮度／空段檢查的範圍，不重複用降級規則。"
+        ),
+        schedule_note="門檻沿用 gsc_daily_metrics：totals 與抽樣列在同一次 run、同一次探測查詢"
+                      "內一起寫入（見 ingest_gsc_search_analytics.py write_totals()），延遲特性相同。",
     ),
 
     # ── 5. GSC URL Inspection（配額守門抽樣）─────────────────────────
