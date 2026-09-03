@@ -22,6 +22,13 @@ on:
         description: '回填最近 N 個完整小時（上限 24；每小時約 37 秒）'
         required: false
         default: '2'
+      backfill_until:
+        description: >-
+          選填。視窗新端的 ISO 時間（例如 2026-09-01T21:00:00Z），
+          用來錨定補一個已知的舊缺口——backfill_hours 永遠錨定在「現在」，
+          單靠它構不到超過 24h 前的洞。留空則沿用現有行為（錨定在現在）。
+        required: false
+        default: ''
 
 # 同時只跑一個，避免排程與手動回填互相覆寫。不取消進行中的那個——
 # 它可能正在 upsert，取消會留下 status='running' 的孤兒列，
@@ -54,8 +61,14 @@ jobs:
           # 經 env 傳遞而非直接內插進 run:——workflow_dispatch 的 input 是使用者輸入，
           # 內插進 shell 等於命令注入面。腳本自己也會再驗一次上限 24。
           BACKFILL_HOURS: ${{ github.event.inputs.backfill_hours || '2' }}
+          BACKFILL_UNTIL: ${{ github.event.inputs.backfill_until || '' }}
         run: |
-          python scripts/ingest_crawl_hourly.py --execute --backfill-hours "$BACKFILL_HOURS"
+          if [ -n "$BACKFILL_UNTIL" ]; then
+            python scripts/ingest_crawl_hourly.py --execute \
+              --backfill-hours "$BACKFILL_HOURS" --backfill-until "$BACKFILL_UNTIL"
+          else
+            python scripts/ingest_crawl_hourly.py --execute --backfill-hours "$BACKFILL_HOURS"
+          fi
 
       - name: Verify last write
         env:
