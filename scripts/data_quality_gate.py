@@ -533,7 +533,12 @@ def _run_reap(execute: bool) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="五條 warehouse 管線統一資料品質 gate")
     parser.add_argument("--pipeline", choices=[p.key for p in PIPELINES], default=None,
-                        help="只檢查指定管線（預設全部 5 條）")
+                        # 已知 drift：這裡曾寫死「5 條」，GSC Search Analytics 陸續拆出
+                        # gsc_googlenews／gsc_discover／gsc_daily_totals／gsc_image／gsc_video
+                        # 五個子管線後，PIPELINES 實際筆數已經跟「五條 warehouse 管線」
+                        # （模組 docstring 講的是 5 個來源系統／workflow，不是這個數字）脫鉤，
+                        # 改用 len(PIPELINES) 動態算，不再手動維護一個會過期的數字。
+                        help=f"只檢查指定管線（預設全部 {len(PIPELINES)} 條）")
     parser.add_argument("--check", choices=["all", "freshness", "gaps", "degradation", "stale-running"],
                         default="all")
     parser.add_argument("--reap-stale-running", action="store_true",

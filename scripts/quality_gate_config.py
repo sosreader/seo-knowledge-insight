@@ -326,6 +326,89 @@ PIPELINES: tuple[PipelineConfig, ...] = (
                       "同一次探測查詢的不同 search_type 分支，來源延遲特性相同。",
     ),
 
+    # ── 4b-2/4b-3. GSC Search Analytics — 圖片／影片（有排名，page＋query 組）──
+    # 2026-09-04 補：S3.6 一致性驗證發現 image／video 從未進 warehouse——
+    # SURFACE_COMBOS 早就支援（見 gsc_surfaces.py，兩者都是 (COMBO_PAGE, COMBO_QUERY)，
+    # 與 web／news 同構，不是 NO_RANKING_SURFACES），只差排程沒排進去，兩格因此不可比。
+    # 併入排程後補這兩條獨立 gate，理由與 gsc_googlenews 相同：gsc_daily_metrics
+    # 不帶 filter，web 每天在寫會蓋掉 image／video 自己停擺的訊號。
+    PipelineConfig(
+        key="gsc_image",
+        table="gsc_page_daily",  # 一律查視圖，同 gsc_daily_metrics 的理由
+        filters=(("search_type", "image"),),
+        timestamp_column="date",
+        max_age_hours=96 + 48,  # 沿用 gsc_daily_metrics：同一支腳本、同一次 run 內完成，來源延遲同構
+        cadence_hours=24,
+        cadence_label="daily",
+        # lag_buffer_hours 用不到：gap_window_hours=None 讓整個第二類檢查（空段）SKIP，
+        # 這個值只有 check_gaps() 會讀，填 0.0 是滿足型別要求（見上方欄位註解），
+        # 不是「這條管線剛好緩衝需求是 0」——理由見下方 gap_skip_reason。
+        lag_buffer_hours=0.0,
+        gap_window_hours=None,
+        gap_skip_reason=(
+            "跟 googleNews/discover 的『不支援排名維度』不是同一個成因——image 是有排名的"
+            "surface（SURFACE_COMBOS 給了 page＋query 兩組，與 web 同構），不放寬排名檢查。"
+            "改採保守預設是因為 image 在 2026-09-04 之前 warehouse 從未 ingest 過"
+            "（S3.6 一致性驗證，`.verification/2026-08-29-seo-capability/S3.6-parallel-comparison.md`"
+            " G38），沒有任何 live 資料能確認它每天是否連續有曝光——舊 GSC UI 報告只有"
+            "08-13~08-19 一週總點擊 20,767（量級上其實高於 news 的 934，並非『流量遠小於"
+            "web／news』，這點不能假設），但那是週彙總，看不出逐日是否連續。ingest 端只抓"
+            "探測到有資料的日期（resolve_targets → dates_from_totals），若哪天真的沒有 image"
+            "曝光，那天在 gsc_page_daily 合法地『沒有列』，不是管線故障；gap_window_hours 掃"
+            "30 天窗內『是否每天都有列』一旦命中這種日子就會連紅 30 天直到滑出窗外，且在"
+            "資料還沒開始累積的頭幾週最容易誤報。在有實測的逐日分佈之前，比照 googleNews／"
+            "discover 的保守做法先跳過空段檢查；新鮮度檢查（max_age_hours=144h）已涵蓋"
+            "『作業真的停擺』。待累積數週資料後應回頭用實測分佈重新評估是否該開回 gap 檢查"
+            "（而非放著永遠 SKIP）——這是本次沒做、留給下一輪的 follow-up。"
+        ),
+        # 補充決策同 gsc_googlenews：surface 資訊不進 table_name，維持既有分組相容；
+        # 新鮮度靠 filters 讀資料本身區分。
+        ingestion_run_table_name="gsc_daily_metrics",
+        degradation=None,
+        degradation_skip_reason=(
+            "沿用 gsc_daily_metrics 的判定：device 值域在 ingest 端直接 reject 非法值，"
+            "不合法列不會落表，reject 數量未持久化到可查詢欄位。image 兩套維度組合都有"
+            "（page 與 query，見 SURFACE_COMBOS），母體結構與 web 相同，沒有額外的降級維度"
+            "可查，記為已知缺口，理由與 gsc_daily_metrics 相同。"
+        ),
+        schedule_note="門檻沿用 gsc_daily_metrics：image 與 web 是同一支腳本、"
+                      "同一次探測查詢的不同 search_type 分支，來源延遲特性相同。",
+    ),
+
+    PipelineConfig(
+        key="gsc_video",
+        table="gsc_page_daily",  # 一律查視圖，同 gsc_daily_metrics 的理由
+        filters=(("search_type", "video"),),
+        timestamp_column="date",
+        max_age_hours=96 + 48,  # 沿用 gsc_daily_metrics：同一支腳本、同一次 run 內完成，來源延遲同構
+        cadence_hours=24,
+        cadence_label="daily",
+        lag_buffer_hours=0.0,  # 見 gsc_image 同欄位註解，gap 檢查整個 SKIP
+        gap_window_hours=None,
+        gap_skip_reason=(
+            "理由結構與 gsc_image 相同（video 也是有排名的 surface，SURFACE_COMBOS 給了"
+            "page＋query 兩組，與 web 同構，不放寬排名檢查）：video 在 2026-09-04 之前"
+            "warehouse 從未 ingest 過（S3.6 一致性驗證 G39），沒有 live 資料能確認逐日是否"
+            "連續有曝光——舊 GSC UI 報告 08-13~08-19 一週總點擊只有 1,280（量級上與 news 的"
+            "934 相近，遠低於 image 的 20,767），但同樣只是週彙總，看不出逐日分佈。ingest"
+            "端只抓探測到有資料的日期，若某天真的沒有 video 曝光，那天在 gsc_page_daily 合法"
+            "地『沒有列』，不是管線故障；gap_window_hours 掃 30 天窗一旦命中就會連紅 30 天，"
+            "資料還沒開始累積的頭幾週最容易誤報。在有實測的逐日分佈之前，比照 googleNews／"
+            "discover 的保守做法先跳過空段檢查；新鮮度檢查（max_age_hours=144h）已涵蓋"
+            "『作業真的停擺』。待累積數週資料後應回頭用實測分佈重新評估，留給下一輪的 follow-up。"
+        ),
+        ingestion_run_table_name="gsc_daily_metrics",
+        degradation=None,
+        degradation_skip_reason=(
+            "沿用 gsc_daily_metrics 的判定：device 值域在 ingest 端直接 reject 非法值，"
+            "不合法列不會落表，reject 數量未持久化到可查詢欄位。video 兩套維度組合都有"
+            "（page 與 query，見 SURFACE_COMBOS），母體結構與 web 相同，沒有額外的降級維度"
+            "可查，記為已知缺口，理由與 gsc_daily_metrics 相同。"
+        ),
+        schedule_note="門檻沿用 gsc_daily_metrics：video 與 web 是同一支腳本、"
+                      "同一次探測查詢的不同 search_type 分支，來源延遲特性相同。",
+    ),
+
     # ── 4c. GSC Search Analytics — Discover（無排名，page 組）────────
     PipelineConfig(
         key="gsc_discover",

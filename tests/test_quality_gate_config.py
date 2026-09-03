@@ -114,6 +114,36 @@ class TestPipelineConfigResolution:
         assert pipeline.gap_window_hours is None
         assert pipeline.gap_skip_reason
 
+    @pytest.mark.parametrize("search_type", ["image", "video"])
+    def test_gsc_image_video_pipeline_filters_and_ingestion_run_table(self, search_type: str) -> None:
+        """2026-09-04：image／video 併入排程後補的兩條 gate。與 gsc_googlenews 不同——
+        image／video 是有排名的 surface（SURFACE_COMBOS 給 page＋query 兩組，與 web 同構），
+        不屬於 NO_RANKING_SURFACES；查視圖、以 search_type 篩選，ingestion_run_table_name
+        沿用 gsc_daily_metrics（補充決策：surface 資訊不進 table_name）。"""
+        pipeline = PIPELINES_BY_KEY[f"gsc_{search_type}"]
+        assert pipeline.table == "gsc_page_daily"
+        assert pipeline.filters == (("search_type", search_type),)
+        assert pipeline.ingestion_run_table_name == "gsc_daily_metrics"
+
+    @pytest.mark.parametrize("search_type", ["image", "video"])
+    def test_gsc_image_video_gap_check_is_skipped(self, search_type: str) -> None:
+        """image／video 在 2026-09-04 之前 warehouse 從未 ingest 過（S3.6 一致性驗證
+        G38/G39），沒有 live 資料能確認逐日是否連續有曝光——舊 GSC UI 週彙總看不出逐日
+        分佈，且 image 的量級（20,767/週）其實高於 news（934/週），不能假設『流量稀疏』。
+        在有實測分佈之前比照 googleNews／discover 保守跳過空段檢查，改成
+        gap_window_hours=None 只留新鮮度檢查，同時仍保留排名檢查（不在 NO_RANKING_SURFACES 裡）。
+        待累積數週資料後應回頭用實測分佈重新評估，非永久性判斷。"""
+        pipeline = PIPELINES_BY_KEY[f"gsc_{search_type}"]
+        assert pipeline.gap_window_hours is None
+        assert pipeline.gap_skip_reason
+
+    def test_gsc_image_video_not_in_no_ranking_surfaces(self) -> None:
+        """回歸鎖：image／video 有排名，不可誤加進 NO_RANKING_SURFACES——
+        那會讓 is_position_valid() 對 image／video 放行 position=0 的列。"""
+        from gsc_surfaces import NO_RANKING_SURFACES
+        assert "image" not in NO_RANKING_SURFACES
+        assert "video" not in NO_RANKING_SURFACES
+
     def test_gsc_discover_pipeline_points_to_totals_table(self) -> None:
         """S2.5 discover-fix（2026-09-03）：live run 證實 discover 連 page 組
         （date+page+device）都回 400，SURFACE_COMBOS["discover"] 改空 tuple，

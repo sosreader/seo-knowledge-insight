@@ -1,12 +1,18 @@
 name: GSC Search Analytics Ingestion
 
 # 每日把 GSC Search Analytics API 的逐日資料寫進 Supabase gsc_daily_metrics（無排名的
-# googleNews／discover 只有 date+page+device 一套維度組合；有排名的 web 另加
-# date+query+device）；同一次探測查詢的副產品（全站總數）另寫進 gsc_daily_totals。
+# googleNews／discover 只有 date+page+device 一套維度組合；有排名的 web／image／video／
+# news 另加 date+query+device）；同一次探測查詢的副產品（全站總數）另寫進 gsc_daily_totals。
 #
-# ingest job 用 matrix 依序（max-parallel: 1）跑四個 surface：web／news／googleNews／
-# discover。排程（schedule）事件固定跑全部四個；手動觸發（workflow_dispatch）只跑
-# input 指定的那一個。
+# ingest job 用 matrix 依序（max-parallel: 1）跑六個 surface：web／news／googleNews／
+# discover／image／video。排程（schedule）事件固定跑全部六個；手動觸發
+# （workflow_dispatch）只跑 input 指定的那一個。
+#
+# image／video 是 2026-09-04 起加入——S3.6 一致性驗證發現這兩個 surface 從未進
+# warehouse（scripts/gsc_surfaces.py 的 SURFACE_COMBOS 早就支援，只差排程沒排進去），
+# 兩格因此不可比。加入後兩者維度組合與 web 相同（page＋query 都有），走既有的
+# gsc_daily_metrics 品質門檻（見 scripts/quality_gate_config.py 新增的 gsc_image／
+# gsc_video 條目）。
 #
 # 為什麼要每次回補最近 7 天而不是只抓昨天：
 #   1. GSC 資料延遲通常 2-3 天，只抓昨天大多會抓到空的
@@ -46,13 +52,13 @@ jobs:
   ingest:
     runs-on: ubuntu-latest
     strategy:
-      # schedule 事件跑全部四個 surface；workflow_dispatch 只跑 input 指定的那一個
+      # schedule 事件跑全部六個 surface；workflow_dispatch 只跑 input 指定的那一個
       # （fromJSON 依事件切換，見下方 matrix.search_type 表達式）。max-parallel: 1——
-      # 四個 surface 共用同一個 Supabase 連線與同一張 ingestion_run 表，序列執行
+      # 六個 surface 共用同一個 Supabase 連線與同一張 ingestion_run 表，序列執行
       # 讓每個 surface 的 run 紀錄與 log 互不交錯，也避免對 GSC API 同時發出多筆請求。
       max-parallel: 1
       matrix:
-        search_type: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', github.event.inputs.search_type || 'web')) || fromJSON('["web", "news", "googleNews", "discover"]') }}
+        search_type: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', github.event.inputs.search_type || 'web')) || fromJSON('["web", "news", "googleNews", "discover", "image", "video"]') }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -128,8 +134,8 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/data_quality_gate.py --pipeline gsc_daily_metrics
 
-      # 三條各自獨立跑（if: always()）——四個 surface pipeline 互不依賴，
-      # 一個 FAIL 不該蓋掉其他三個的結果，同 stale-running 步驟的理由。
+      # 各條各自獨立跑（if: always()）——六個 surface pipeline 互不依賴，
+      # 一個 FAIL 不該蓋掉其他幾個的結果，同 stale-running 步驟的理由。
       - name: Check gsc_googlenews quality (freshness / gap)
         if: always()
         env:
@@ -143,6 +149,23 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/data_quality_gate.py --pipeline gsc_discover
+
+      # 2026-09-04 新增：image／video 併入排程後補的兩條 gate，理由同 gsc_googlenews——
+      # gsc_daily_metrics（不帶 filter）新鮮/空段檢查看到 web 每天在寫就會綠燈，
+      # 蓋掉 image／video 自己停擺的訊號，必須各自獨立檢查。
+      - name: Check gsc_image quality (freshness / gap)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --pipeline gsc_image
+
+      - name: Check gsc_video quality (freshness / gap)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --pipeline gsc_video
 
       - name: Check gsc_daily_totals quality (freshness / gap)
         if: always()
