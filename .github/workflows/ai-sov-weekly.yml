@@ -1,0 +1,139 @@
+name: AI SoV Weekly
+
+# 每週對固定 prompt panel（data/ai_sov_prompts.json）問一次 LLM，記錄回應裡的
+# citation 有沒有引用 vocus.cc，寫進 ai_sov_response（migration 024）。
+#
+# ⚠ 這是**低成熟度指標**：單次回應、單週單點都不可解讀，需要 ≥4 週序列才談趨勢。
+#   完整的判讀規則寫在 scripts/ingest_ai_sov.py 的模組 docstring 與 migration 024
+#   的 catalog 註解裡（後者是查資料的人真的會看到的地方）。
+#
+# ═══ 為什麼是週跑 ═══
+#
+# 日跑成本是 7 倍、換到的解析度是零：這個指標的雜訊尺度大於它的日間變化尺度
+# （36 prompt × 3 次 = 108 樣本，整體比例的解析度約 1 個百分點）。更實際的理由是
+# 日跑會誘使人去讀單日數字，而單日數字在這裡沒有意義——頻率本身就是判讀紀律。
+#
+# ═══ ⚠ 排程在分支上不會生效 ═══
+#
+# GitHub Actions 的 `on: schedule` 只認**預設分支（main）**上的 workflow 檔。
+# 這個檔在 feat/ai-sov-monitor 分支上時，排程一次都不會觸發；合併到 main 之後
+# 才會被登記。而且登記本身也可能延遲：cwv-crux-history.yml 實測過 schedule
+# 進 main 後三天都沒觸發，直到下一次 push 觸碰 `.github/workflows/` 才被重新
+# 同步（見 data-quality-watchdog.yml 的註解）。合併後請手動 workflow_dispatch
+# 跑一次確認，不要假設排程已生效。
+#
+# ═══ ⚠ 合併順序：migration 要先套用 ═══
+#
+# scripts/quality_gate_config.py 已新增 ai_sov 這條管線，而每日獨立排程的
+# data-quality-watchdog.yml 不帶 --pipeline、會掃**全部**管線。所以只要這份
+# 設定進了 main、ai_sov_response 這張表卻還不存在（或還沒有任何一列），
+# watchdog 每天都會 FAIL（check_freshness 對空表回「管線從未成功寫入」）。
+# 正確順序：先套用 supabase/migrations/024_ai_sov.sql → 再合併本分支 →
+# 立刻手動 dispatch 一次讓表有資料。這是刻意記在這裡而不是靠人記得。
+
+on:
+  schedule:
+    # 每週一 06:00 UTC。刻意避開 cwv-crux-history 的週二 06:00 與
+    # gsc-search-analytics 的每日 07:20，讓三者的失敗訊號不互相干擾。
+    # 排在週初而非週末是有語意的：本管線量的是「當下」，桶標籤 week_start
+    # 是它所屬那一週的週一——quality_gate_config.py 的 lag_buffer_hours=0.0
+    # 綁在這個前提上，改排程時要一起改那個值。
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      repeats:
+        description: '每條 prompt 重複幾次（1–10，預設 3）。⚠ 改動會影響週間可比性'
+        required: false
+        default: '3'
+      model:
+        description: 'LLM 模型（預設 gpt-5.4）'
+        required: false
+        default: 'gpt-5.4'
+
+# 同時只跑一個。不取消進行中的那個——它可能正在 upsert，取消會留下
+# status='running' 的孤兒列（同 crawl-hourly.yml / gsc-search-analytics.yml 的理由）。
+concurrency:
+  group: ai-sov-weekly
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    # 36 prompt × 3 次、每次都帶 web_search 工具實際去抓網頁，比純生成慢得多。
+    # 預設 360 分鐘的上限對一個每週只跑一次的作業太寬鬆：真的卡住時應該快點
+    # 失敗並讓新鮮度告警接手，而不是佔住 runner 六小時。
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        # 只需要 python-dotenv：LLM 呼叫與 Supabase 寫入都走 stdlib urllib
+        # （理由見 scripts/ai_sov_providers.py 設計決定 2），不裝 openai SDK。
+        run: pip install python-dotenv
+
+      - name: Ingest AI SoV
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # 經 env 傳遞而非直接內插進 run:——workflow_dispatch 的 input 是使用者輸入，
+          # 內插進 shell 等於命令注入面（同 crawl-hourly.yml / gsc-search-analytics.yml
+          # 的理由）。腳本自己也會再驗一次值域（--repeats 限 1..10）。
+          AI_SOV_REPEATS: ${{ github.event.inputs.repeats || '3' }}
+          AI_SOV_MODEL: ${{ github.event.inputs.model || 'gpt-5.4' }}
+        run: |
+          python scripts/ingest_ai_sov.py --execute \
+            --provider openai --repeats "$AI_SOV_REPEATS" --model "$AI_SOV_MODEL"
+
+      - name: Verify last write
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/ingest_ai_sov.py --verify
+
+  # 資料新鮮度告警。條件是「ai_sov_response 最新的週桶太舊」，不是「ingest job
+  # 有沒有失敗」——排程根本沒被觸發時（cron 語法錯、GitHub 因 repo 閒置自動停用
+  # schedule、有人手動關掉忘了開回來）不會產生任何失敗事件，失敗型告警在那種
+  # 情況下是靜音的。只有資料本身的缺席能證明作業沒在跑（硬約束 #12）。
+  #
+  # 這條管線特別需要它：資料**無法回填**。沒有人能事後去問「上週的 LLM 會怎麼
+  # 回答」，漏掉的那一週就是趨勢線上一個永遠補不回來的洞。
+  #
+  # needs: [ingest] + if: always()——理由與其他四支 workflow 同一段註解：
+  # needs 保證 freshness 在 ingest 這次執行有結果之後才跑（消掉「讀到還沒寫完的
+  # 資料庫」那個競態，CrUX 那條週頻管線實測幾乎每次都中，本管線同為週頻、
+  # 風險同構）；if: always() 保證 ingest 失敗時 freshness 依然會跑。
+  # 「workflow 整個沒被觸發」的涵蓋範圍由獨立排程的 data-quality-watchdog.yml 負責。
+  freshness:
+    runs-on: ubuntu-latest
+    needs: ingest
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      # 三類檢查一次跑完：新鮮度（門檻 192h）／空段（掃 4 週）／
+      # 靜默降級（grounding='ungrounded' 佔比，門檻 0.5 為 provisional）。
+      # 每個數字的推導寫在 scripts/quality_gate_config.py 的 ai_sov 區塊。
+      - name: Check ai_sov quality (freshness / gap / degradation)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --pipeline ai_sov
+
+      - name: Check for stale running ingestion_run rows (global)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --check stale-running

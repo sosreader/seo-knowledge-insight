@@ -509,6 +509,90 @@ PIPELINES: tuple[PipelineConfig, ...] = (
                       "4 筆（20%）為此值，門檻設 50% 是因為樣本量小（配額限制）雜訊本來就高，"
                       "50% 才不會對現況誤報，同時仍能抓到『驗證整批失效』這種量級的異常。",
     ),
+
+    # ── 6. AI 答案 share of voice（週跑 LLM 問答，S6.2）──────────────
+    PipelineConfig(
+        key="ai_sov",
+        table="ai_sov_response",
+        filters=(),
+        # week_start 是**桶標籤**（永遠是 UTC 週一），不是 run_at。
+        # 空段檢查用 _floor_to_cadence() 把週頻管線對齊到週一 00:00 做集合比對，
+        # 時間戳若取 run_at（週一 06:20 之類）永遠對不上，每一週都會被判成空段——
+        # 那不是門檻問題，是對齊方式本身錯了。migration 024 有 CHECK 綁死
+        # week_start 必為 ISO 週一，以及 run_at 必須落在它宣稱的那一週內。
+        timestamp_column="week_start",
+        # ═══ max_age_hours = 192h 的推導 ═══
+        #
+        # 本管線**沒有來源固有延遲**：資料是作業自己在呼叫 LLM 的當下產生的，
+        # 不像 CrUX/GSC 要等對方發布。所以適用「排程週期 × N」這一類公式，
+        # 而不是 cwv_hourly_crux 那種「來源延遲上限 + 排程緩衝」。
+        #
+        # 但**不能取 N=3**（504h ≈ 3 週）：週頻管線的 ×3 意味著漏跑要三週才叫，
+        # 而這份資料**無法回填**（沒辦法事後去問「上週的 LLM 會怎麼回答」），
+        # 三週的洞就是三週的洞。門檻改成 1 個週期 + 一天的餘裕：
+        #
+        #   穩態下 week_start 的年齡從 6h（cron 週一 06:00 UTC，桶起點後 6h 才跑）
+        #   漲到 174h（= 168 + 6，下一次排程前一刻）。上面再加：
+        #     - GitHub Actions schedule trigger 的實測漂移上限 ~1.8h
+        #       （本檔 crawl_daily 註解記錄的 104 分鐘最大相鄰間隔，同一個平台行為）
+        #     - 一次 run 的執行時長（36 prompt × 3 次，帶 web_search 工具）≈ 1h
+        #   → 最壞穩態年齡 ≈ 176.8h，門檻 192h 留約 15h 餘裕。
+        #
+        # 偵測延遲：整週漏跑後，每日跑的 data-quality-watchdog.yml 會在
+        # 漏跑時點後約 28h（隔日 09:30 UTC 那一輪）把它叫出來。
+        max_age_hours=168 + 24,
+        cadence_hours=24 * 7,
+        cadence_label="weekly",
+        # ═══ gap_window_hours = 4 週的推導 ═══
+        #
+        # 不用 cwv_hourly_crux 的 8 週：這份資料無法回填，漏掉的那一週**永遠**
+        # 補不回來，掃描窗多長，那個 FAIL 就會紅多久。8 週的窗等於一次漏跑
+        # 換來兩個月的常紅告警，而常紅告警就是被忽略的告警。
+        # 取 4 週的理由是它剛好等於「這個指標可判讀的最短序列長度」
+        # （報告 S6.2 的判讀規則：≥4 週才談趨勢）——可判讀窗內的洞必須看得見，
+        # 更舊的洞已經記錄在案且修不掉，繼續紅只有訓練大家忽略的效果。
+        gap_window_hours=24 * 28,
+        # ═══ lag_buffer_hours = 0.0 的推導（刻意填 0，不是漏填）═══
+        #
+        # 這個 buffer 的語意是「桶**關閉**後容忍多久沒資料」（見本檔尾端的
+        # 長註解）。本管線的資料在桶**起點後約 6h** 就寫好了——cron 排在
+        # 週一 06:00 UTC，量的是「當下」而不是「上一週」。等到那一桶關閉
+        # （下週一 00:00）時，資料已經就位約 162h。沒有任何來源固有延遲、
+        # 也沒有需要被容忍的寫入延遲，0.0 是這個推導的結論而不是預設值。
+        #
+        # ⚠ 這個 0.0 綁在「cron 排在週初」這個前提上。若之後把排程改到週末
+        # （例如週日 23:00 收當週資料），資料就變成貼著桶關閉時間才寫入，
+        # 這個值必須跟著改成能覆蓋 GHA 漂移 + run 時長的數字，否則每週
+        # 都會在跨週那一刻誤報一次。
+        lag_buffer_hours=0.0,
+        ingestion_run_table_name="ai_sov_response",
+        degradation=DegradationConfig(
+            # grounding='ungrounded' = 這次回應**零 citation**，沒有引用任何人。
+            # 這是本管線的靜默降級形狀：總列數完全正常、SoV 卻整批下滑，
+            # 而真正的原因在 provider 端（模型改版、web_search 工具沒被觸發、
+            # prompt 撞到安全政策），不是站方可見度變了。聚合視圖已經把
+            # ungrounded 排除在 SoV 分母外，這個檢查是為了讓「排除掉的那一堆
+            # 變很大」本身也會叫。
+            column="grounding", mode="fallback_value", fallback_value="ungrounded",
+            # ⚠ max_ratio=0.5 目前是 **provisional**：本 step 交付時沒有
+            # OPENAI_API_KEY，沒有任何一次真實呼叫可以拿來估 ungrounded 的
+            # 基線分布（smoke 走 FakeProvider，它的比例是寫死的參數，不是測值）。
+            # 取 0.5 的論證而非測值：超過一半的回應零 citation 時，週級 SoV
+            # 的分母就落在少數樣本上，那個比例已經不值得讀——這是「指標失效」
+            # 的門檻，不是「稍微變差」的門檻。累積 4 週真實資料後應該用實測
+            # 分布重新校準，並在報告裡記下改動的週次（同 gsc_url_inspection
+            # 的 50% 門檻，那個至少有 20 筆實測墊底，這個沒有）。
+            max_ratio=0.5,
+            # 一週 36 prompt × 3 次 = 108 列，min_sample=30 在單週資料上就達得到；
+            # 低於 30 列代表那一週的 run 根本沒跑完，該由新鮮度/空段檢查處理，
+            # 不該由降級檢查對一個殘缺樣本下判斷。
+            min_sample=30, sample_limit=500,
+        ),
+        schedule_note="門檻＝排程週期(168h)+24h 餘裕，不是週期×3——這份資料無法回填，"
+                      "漏跑三週才叫等於三週的洞。gap 窗刻意只掃 4 週（可判讀序列的最短長度），"
+                      "因為補不回來的洞掃再久也只是常紅。降級檢查看 grounding='ungrounded' 佔比"
+                      "（零 citation 的回應），門檻 0.5 目前是 provisional、無實測墊底。",
+    ),
 )
 
 PIPELINES_BY_KEY: dict[str, PipelineConfig] = {p.key: p for p in PIPELINES}

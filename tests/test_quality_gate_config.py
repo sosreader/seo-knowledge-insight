@@ -194,6 +194,70 @@ class TestPipelineConfigResolution:
             )
 
 
+class TestAiSovPipeline:
+    """S6.2（2026-09-03）新增的週頻管線。每個數字都鎖它的**推導**而不是魔術數字，
+    推導寫在 quality_gate_config.py 的 ai_sov 區塊。"""
+
+    @property
+    def pipeline(self) -> PipelineConfig:
+        return PIPELINES_BY_KEY["ai_sov"]
+
+    def test_timestamp_column_is_the_week_bucket_not_the_run_time(self) -> None:
+        """空段檢查用 _floor_to_cadence() 把週頻管線對齊到週一 00:00 UTC 做集合比對。
+        時間戳若取 run_at（週一 06:20 之類）永遠對不上，每一週都會被判成空段——
+        那不是門檻問題，是對齊方式本身錯了。migration 024 有 CHECK 綁死
+        week_start 必為 ISO 週一。"""
+        assert self.pipeline.timestamp_column == "week_start"
+        assert self.pipeline.cadence_hours == 24 * 7
+
+    def test_max_age_is_one_cadence_plus_a_day_not_three_cadences(self) -> None:
+        """『週期 × 3』對這條管線是 504h ≈ 3 週。這份資料**無法回填**
+        （沒辦法事後去問上週的 LLM 會怎麼回答），三週才叫等於三週的洞。"""
+        p = self.pipeline
+        assert p.max_age_hours == 168 + 24
+        assert p.max_age_hours < p.cadence_hours * 2
+
+    def test_max_age_covers_worst_case_steady_state_age(self) -> None:
+        """穩態最壞年齡 ≈ 168（週期）+ 6（cron 排在桶起點後 6h）
+        + 1.8（GHA schedule 漂移實測上限）+ 1（run 時長）≈ 176.8h。"""
+        worst_case_hours = 168 + 6 + 1.8 + 1
+        assert self.pipeline.max_age_hours > worst_case_hours
+
+    def test_gap_window_is_four_weeks_shorter_than_crux(self) -> None:
+        """補不回來的洞掃再久也只是常紅告警，而常紅告警就是被忽略的告警。
+        4 週＝這個指標可判讀序列的最短長度。"""
+        assert self.pipeline.gap_window_hours == 24 * 28
+        assert self.pipeline.gap_window_hours < PIPELINES_BY_KEY["cwv_hourly_crux"].gap_window_hours
+
+    def test_lag_buffer_is_deliberately_zero_because_cron_runs_at_week_start(self) -> None:
+        """buffer 的語意是「桶**關閉**後容忍多久沒資料」。本管線 cron 排在週一 06:00，
+        資料在桶起點後 6h 就寫好、桶關閉時已就位約 162h，沒有需要容忍的延遲。
+        ⚠ 這個 0.0 綁在「cron 排在週初」這個前提上：排程若改到週末，這個值必須跟著改。"""
+        assert self.pipeline.lag_buffer_hours == 0.0
+        workflow = (Path(__file__).resolve().parent.parent
+                    / ".github" / "workflows" / "ai-sov-weekly.yml").read_text()
+        assert "cron: '0 6 * * 1'" in workflow, "排程已不在週初，lag_buffer_hours=0.0 的前提不再成立"
+
+    def test_degradation_watches_ungrounded_share(self) -> None:
+        """零 citation 的回應沒有引用任何人。把它算進 SoV 分母會讓 provider 端的
+        檢索行為變動偽裝成站方可見度下降——聚合視圖已排除，這個檢查讓
+        「被排除的那一堆變很大」本身也會叫。"""
+        d = self.pipeline.degradation
+        assert d is not None
+        assert (d.column, d.mode, d.fallback_value) == ("grounding", "fallback_value", "ungrounded")
+        assert d.min_sample <= 36 * 3, "單週 108 列必須達得到 min_sample，否則檢查永遠 SKIP"
+
+    def test_ingestion_run_table_name_and_stale_threshold(self) -> None:
+        assert self.pipeline.ingestion_run_table_name == "ai_sov_response"
+        assert STALE_RUNNING_THRESHOLD_HOURS_BY_TABLE["ai_sov_response"] == 24.0
+
+    def test_queries_the_base_table_because_views_are_aggregates(self) -> None:
+        """其他管線「一律查視圖」是因為底表有重複計算的陷阱。這裡相反：
+        三個視圖都是**週級聚合**，新鮮度與空段檢查要的是逐列時間戳，
+        查聚合視圖會拿到已經被 GROUP BY 過的東西。"""
+        assert self.pipeline.table == "ai_sov_response"
+
+
 class TestDegradationOrGapMustExplainWhySkipped:
     """degradation=None 或 gap_window_hours=None 時必須附一句非空理由——
     「查不到資料/沒有檢查」不可以是靜默的，見任務書「不得在報表層以 0 呈現」的精神。

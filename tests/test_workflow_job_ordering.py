@@ -1,4 +1,4 @@
-"""回歸測試：五條管線 workflow 的 `freshness` job 必須 needs: ingest + if: always()。
+"""回歸測試：六條管線 workflow 的 `freshness` job 必須 needs: ingest + if: always()。
 
 背景（2026-09-03）：`freshness` job 原本刻意不設 `needs:`，讓它跟 `ingest` job
 平行起跑——理由是涵蓋「ingest 掛掉時 freshness 仍要跑」。但平行起跑同時製造了
@@ -29,15 +29,18 @@ import pytest
 ROOT_DIR = Path(__file__).resolve().parent.parent
 WORKFLOWS_DIR = ROOT_DIR / ".github" / "workflows"
 
-# 五條有 ingest + freshness 兩個 job 的管線 workflow。
+# 六條有 ingest + freshness 兩個 job 的管線 workflow。
 # etl-and-deploy.yml / deploy-ts-api.yml / deploy-docs.yml 不在此列——
 # 那些是別的形狀（單一管線內部 needs 串接一整條 pipeline），不适用本測試。
+# ai-sov-weekly.yml（S6.2，2026-09-03 新增）套用同一個形狀：週頻管線與 CrUX
+# 同構，正是本檔頂端那個競態最容易中的週期，不可例外。
 PIPELINE_WORKFLOWS = [
     "cwv-crux-history.yml",
     "cwv-hourly.yml",
     "crawl-hourly.yml",
     "gsc-search-analytics.yml",
     "gsc-url-inspection.yml",
+    "ai-sov-weekly.yml",
 ]
 
 
