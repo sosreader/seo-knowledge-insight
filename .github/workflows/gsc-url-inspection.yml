@@ -85,10 +85,21 @@ jobs:
 
   # 資料新鮮度告警。條件是「gsc_url_inspection 最新 inspected_at 太舊」，不是「ingest
   # job 有沒有失敗」——理由同 gsc-search-analytics.yml：排程根本沒被觸發時不會產生任何
-  # 失敗事件。needs: 刻意不設——ingest 掛掉時這個 job 仍要跑（GitHub Actions 預設
-  # 平行執行、互不依賴），它本來就是為了涵蓋「ingest 沒有回報任何東西」的情況，
-  # 若靠 needs: 串接、ingest 失敗會讓這個 job 被 skip，就會複製 S2.2 事故的病灶
-  # （新鮮度告警住在它要監控的作業裡，看不到自己的缺席）。
+  # 失敗事件。
+  #
+  # needs: [ingest] + if: always()——2026-09-03 修正。原本完全不設 needs
+  # （GitHub Actions 預設平行執行、互不依賴），理由是「光加 needs: ingest
+  # 會讓 ingest 失敗時這個 job 被 skip，複製 S2.2 事故的病灶（新鮮度告警住在
+  # 它要監控的作業裡，看不到自己的缺席）」——這個理由本身沒錯，但推論漏了
+  # 一步：問題出在「只加 needs 不加 if」，不是「加 needs 本身」。完全不設
+  # needs 換來的代價是 freshness 與 ingest 平行起跑，可能讀到 ingest 還沒
+  # 寫完的資料庫（在 CrUX 那條週頻管線上實測幾乎每次都中，見
+  # cwv-crux-history.yml 同一段註解；此處是同一個架構的預防性修正，daily
+  # 週期短、目前尚未觀察到實際觸發，但風險同構）。needs 保證順序，
+  # if: always() 保證 ingest 失敗時 freshness 仍會跑——兩個一起加，
+  # 才是「讀到的一定是 ingest 這次執行後的最終狀態」，S2.2 的病灶不會復發，
+  # 而「workflow 整個沒被觸發」的涵蓋範圍現在由獨立排程的
+  # data-quality-watchdog.yml 負責。
   #
   # 門檻見 quality_gate_config.py（96h）：inspect 沒有 search analytics 那種
   # 固有延遲，但配額可能被同 property 上看不到的其他呼叫方擠占導致連續數天零寫入
@@ -100,7 +111,8 @@ jobs:
   # 只做新鮮度的 ingest_gsc_url_inspection.py --check-freshness。
   freshness:
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: ingest
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

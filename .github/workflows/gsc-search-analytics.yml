@@ -72,8 +72,13 @@ jobs:
   # schedule、有人手動關掉忘了開回來）不會產生任何失敗事件，失敗型告警在那種情況下
   # 是靜音的。只有資料本身的缺席能證明作業沒在跑。
   #
-  # needs: 刻意不設——ingest 掛掉時這個 job 仍要跑；它本來就是為了涵蓋
-  # 「ingest 沒有回報任何東西」的情況。
+  # needs: [ingest] + if: always()——2026-09-03 修正，理由與細節見
+  # cwv-crux-history.yml 同一段註解：完全不設 needs 會讓 freshness 與 ingest
+  # 平行起跑，可能讀到 ingest 還沒寫完的資料庫（在 CrUX 那條週頻管線上實測
+  # 幾乎每次都中，此處是同一個架構的預防性修正，daily 週期短、目前尚未
+  # 觀察到實際觸發，但風險同構）。needs 保證順序，if: always() 保證
+  # ingest 失敗時 freshness 仍會跑；「workflow 整個沒被觸發」的涵蓋範圍
+  # 由獨立排程的 data-quality-watchdog.yml 負責。
   #
   # 門檻 144h = GSC 固有延遲上限 96h + 排程週期緩衝 48h，**不是**「排程週期 × N」。
   # GSC 的 max(date) 天生就落後現在 2-4 天，用 24h × 3 = 72h 會對健康資料誤報。
@@ -84,7 +89,8 @@ jobs:
   # 查詢一律走視圖 gsc_page_daily（見 quality_gate_config.py 註解），不查底表。
   freshness:
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: ingest
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

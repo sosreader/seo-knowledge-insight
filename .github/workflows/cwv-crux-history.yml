@@ -70,7 +70,27 @@ jobs:
   # 「ingest job 有沒有失敗」——理由同 cwv-hourly.yml：排程根本沒被觸發時不會有
   # 任何失敗事件，只有資料本身的缺席能證明作業沒在跑。
   #
-  # needs: 刻意不設，理由同 cwv-hourly.yml。
+  # needs: [ingest] + if: always()——2026-09-03 修正。原本跟其他四條管線一樣
+  # 完全不設 needs（兩個 job 平行起跑），理由是「ingest 掛掉時 freshness 仍要跑」；
+  # 但平行起跑同時製造了一個競態：實測 run 33710475866，freshness 的 gap 檢查在
+  # 03:11:52 讀到資料庫，ingest 到 03:12:07 才把這次要寫的那一週（2026-08-24）
+  # 寫完——freshness 讀到的是「ingest 還沒寫完」的舊狀態，把這次 run 自己正在
+  # 寫的那一週誤判成 gap FAIL。對每小時管線這個窗口很短、又有 lag_buffer_hours
+  # 蓋著所以沒暴露；CrUX 是週頻、ingest 要跑 15~20s，幾乎每次成功執行都會中，
+  # 等於「一個永遠在叫的告警」——跟 S3.5 想根除的東西一樣糟。
+  #
+  # 光加 needs: ingest（不加 if）不是正確修法：那樣 ingest 失敗時 freshness
+  # 會被 skip，複製 gsc-url-inspection.yml 註解提到的 S2.2 病灶（新鮮度告警
+  # 住在它要監控的作業裡，看不到自己的缺席）。needs 只保證「順序」，
+  # if: always() 才保證「不管 ingest 成功或失敗都會跑」——兩個一起加，
+  # 才是「讀到的一定是 ingest 這次執行後的最終狀態」而不是「讀到的一定是
+  # ingest 成功後的狀態」。這樣不會把真陽性蓋掉：ingest 真的失敗時，
+  # 資料庫在 freshness 檢查的當下確實還是缺那一週，gap FAIL 照樣正確觸發，
+  # 只是現在的觸發時機是「ingest 這次嘗試已經有結果」而不是「兩個 job
+  # 剛好同時起跑的任意時間點」。也不會退化「workflow 整個沒被觸發」的涵蓋
+  # 範圍——那個情境現在由獨立於本 workflow 排程的 data-quality-watchdog.yml
+  # 負責（兩個 job 一起不存在，needs 本來就管不到這一層）。
+  # regression test 見 tests/test_workflow_job_ordering.py。
   #
   # S3.5：改走統一資料品質 gate（scripts/data_quality_gate.py --pipeline
   # cwv_hourly_crux），取代原本的 ingest_cwv_crux_history.py --check-freshness。
@@ -81,7 +101,8 @@ jobs:
   # 抓到「這一週該有資料卻沒有」。
   freshness:
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: ingest
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

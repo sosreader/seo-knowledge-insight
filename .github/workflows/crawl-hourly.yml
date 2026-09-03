@@ -86,14 +86,20 @@ jobs:
   # 健康時這個條件不成立（正常每小時都有新資料），所以它是告警不是指標——
   # 每次都會成立的條件屬於儀表板，放在這裡只會訓練大家忽略它。
   #
-  # needs: 刻意不設——ingest 掛掉時這個 job 仍要跑；它本來就是為了涵蓋
-  # 「ingest 沒有回報任何東西」的情況。
+  # needs: [ingest] + if: always()——2026-09-03 修正，理由與細節見
+  # cwv-crux-history.yml 同一段註解：完全不設 needs 會讓 freshness 與 ingest
+  # 平行起跑，可能讀到 ingest 還沒寫完的資料庫（在 CrUX 那條週頻管線上實測
+  # 幾乎每次都中，此處是同一個架構的預防性修正，hourly 週期短、目前尚未
+  # 觀察到實際觸發，但風險同構）。needs 保證順序，if: always() 保證
+  # ingest 失敗時 freshness 仍會跑；「workflow 整個沒被觸發」的涵蓋範圍
+  # 由獨立排程的 data-quality-watchdog.yml 負責。
   #
   # S3.5：統一資料品質 gate（scripts/data_quality_gate.py），涵蓋新鮮度／空段／
   # 靜默降級三類，取代原本只做新鮮度的 ingest_crawl_hourly.py --check-freshness。
   freshness:
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: ingest
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
