@@ -37,16 +37,23 @@ from scripts.ingest_gsc_search_analytics import (  # noqa: E402
     DEFAULT_PROBE_DAYS,
     FRESHNESS_MAX_AGE_HOURS,
     MAX_BACKFILL_DAYS,
+    MAX_PROBE_DAYS,
+    MIN_PROBE_DAYS,
     PAGE_NOT_REQUESTED,
     PROPERTY,
     QUERY_NOT_REQUESTED,
     ROW_LIMIT,
+    SURFACE_COMBOS,
+    TABLE_GSC,
+    TABLE_TOTALS,
     GscQueryError,
     _assert_no_country_dimension,
     _gsc_post,
+    _ingest_totals,
     _service_account_info,
     _supabase_request,
     _validate_metrics,
+    _verify_surface,
     _write_slice,
     classify_gsc_error,
     collect_day_combo,
@@ -59,8 +66,10 @@ from scripts.ingest_gsc_search_analytics import (  # noqa: E402
     main,
     paginate_query,
     probe_available_dates,
+    probe_row_limit,
     reap_orphans,
     resolve_backfill_days,
+    resolve_probe_days,
     resolve_search_type,
     row_to_record,
     run_freshness_check,
@@ -69,6 +78,7 @@ from scripts.ingest_gsc_search_analytics import (  # noqa: E402
     start_run,
     supabase_config,
     upsert_rows,
+    write_totals,
 )
 
 MODULE = "scripts.ingest_gsc_search_analytics"
@@ -538,6 +548,97 @@ class TestUpsert:
         assert request.call_count == 3
 
 
+class TestWriteTotals:
+    """gsc_daily_totals 的寫入路徑：table／on_conflict 用 totals 那一套，
+    且在 ingestion_run 另記一列（table_name=gsc_daily_totals），不共用 metrics 那一列。"""
+
+    RECORD = {"date": DAY.isoformat(), "property": PROPERTY, "search_type": "googleNews",
+              "clicks": 5, "impressions": 20, "ctr": 0.25, "position": 0.0}
+    WINDOW = (datetime(2026, 8, 20, tzinfo=UTC), datetime(2026, 8, 26, tzinfo=UTC))
+
+    def test_uses_totals_table_name_when_starting_the_run(self) -> None:
+        with patch(f"{MODULE}.start_run", return_value="run-totals") as start, \
+             patch(f"{MODULE}.upsert_rows", return_value=(1, 0)), \
+             patch(f"{MODULE}.finish_run"):
+            write_totals([self.RECORD], self.WINDOW, "googleNews")
+        assert start.call_args.kwargs["table_name"] == "gsc_daily_totals"
+
+    def test_upserts_with_totals_table_and_conflict_key(self) -> None:
+        with patch(f"{MODULE}.start_run", return_value="run-totals"), \
+             patch(f"{MODULE}.upsert_rows", return_value=(1, 0)) as upsert, \
+             patch(f"{MODULE}.finish_run"):
+            write_totals([self.RECORD], self.WINDOW, "googleNews")
+        assert upsert.call_args.args[1] == "gsc_daily_totals"
+        assert upsert.call_args.args[2] == "property,search_type,date"
+
+    def test_all_succeed_is_status_success(self) -> None:
+        with patch(f"{MODULE}.start_run", return_value="run-totals"), \
+             patch(f"{MODULE}.upsert_rows", return_value=(3, 0)), \
+             patch(f"{MODULE}.finish_run") as finish:
+            assert write_totals([self.RECORD], self.WINDOW, "googleNews") == (3, 0)
+        assert finish.call_args.args[1] == "success"
+
+    def test_partial_failure_is_status_partial(self) -> None:
+        with patch(f"{MODULE}.start_run", return_value="run-totals"), \
+             patch(f"{MODULE}.upsert_rows", return_value=(2, 1)), \
+             patch(f"{MODULE}.finish_run") as finish:
+            write_totals([self.RECORD], self.WINDOW, "googleNews")
+        assert finish.call_args.args[1] == "partial"
+
+    def test_total_failure_is_status_failed(self) -> None:
+        with patch(f"{MODULE}.start_run", return_value="run-totals"), \
+             patch(f"{MODULE}.upsert_rows", return_value=(0, 2)), \
+             patch(f"{MODULE}.finish_run") as finish:
+            write_totals([self.RECORD], self.WINDOW, "googleNews")
+        assert finish.call_args.args[1] == "failed"
+
+
+class TestIngestTotals:
+    """_ingest_totals：探測回應 → gsc_daily_totals，0 列可寫入是硬失敗。"""
+
+    ROWS = [_api_row(DAY.isoformat())]
+
+    def test_no_writable_records_is_a_hard_error(self) -> None:
+        errors: list[str] = []
+        with patch(f"{MODULE}.build_totals_records", return_value=[]), \
+             patch(f"{MODULE}.write_totals") as write:
+            written = _ingest_totals(self.ROWS, search_type="web", execute=True,
+                                      errors=errors, warnings=[])
+        assert written == 0
+        assert len(errors) == 1 and "沒有可寫入的全站總數列" in errors[0]
+        write.assert_not_called()
+
+    def test_dry_run_does_not_call_write_totals(self) -> None:
+        records = [{"date": DAY.isoformat(), "property": PROPERTY, "search_type": "web",
+                    "clicks": 1, "impressions": 2, "ctr": 0.5, "position": 3.0}]
+        with patch(f"{MODULE}.build_totals_records", return_value=records), \
+             patch(f"{MODULE}.write_totals") as write:
+            written = _ingest_totals(self.ROWS, search_type="web", execute=False,
+                                      errors=[], warnings=[])
+        assert written == 0
+        write.assert_not_called()
+
+    def test_execute_writes_and_returns_succeeded_count(self) -> None:
+        records = [{"date": DAY.isoformat(), "property": PROPERTY, "search_type": "web",
+                    "clicks": 1, "impressions": 2, "ctr": 0.5, "position": 3.0}]
+        errors: list[str] = []
+        with patch(f"{MODULE}.build_totals_records", return_value=records), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)):
+            written = _ingest_totals(self.ROWS, search_type="web", execute=True,
+                                      errors=errors, warnings=[])
+        assert written == 1 and errors == []
+
+    def test_write_failure_is_recorded_as_error(self) -> None:
+        records = [{"date": DAY.isoformat(), "property": PROPERTY, "search_type": "web",
+                    "clicks": 1, "impressions": 2, "ctr": 0.5, "position": 3.0}]
+        errors: list[str] = []
+        with patch(f"{MODULE}.build_totals_records", return_value=records), \
+             patch(f"{MODULE}.write_totals", return_value=(0, 1)):
+            _ingest_totals(self.ROWS, search_type="web", execute=True,
+                           errors=errors, warnings=[])
+        assert len(errors) == 1 and "1 列寫入失敗" in errors[0]
+
+
 class TestReapOrphans:
     def test_deletes_only_rows_older_than_this_run(self) -> None:
         with patch(f"{MODULE}._supabase_request", return_value=(200, "[{},{}]")) as request:
@@ -559,6 +660,25 @@ class TestReapOrphans:
     def test_no_orphans_is_quiet(self) -> None:
         with patch(f"{MODULE}._supabase_request", return_value=(200, "[]")):
             assert reap_orphans(DAY, COMBO_PAGE, "web", INGESTED_AT) == 0
+
+
+class TestReapOrphansSurfaceScoping:
+    """googleNews／discover 只有 page 組；DELETE 判別式必須同時帶 search_type 與
+    page 判別式，證明不會刪到 web 的列，也不會刪到（假設性的）query 組的列。"""
+
+    def test_scopes_delete_to_search_type_and_page_discriminator(self) -> None:
+        with patch(f"{MODULE}._supabase_request", return_value=(200, "[]")) as request:
+            reap_orphans(DAY, COMBO_PAGE, "googleNews", INGESTED_AT)
+        path = request.call_args.args[1]
+        assert "search_type=eq.googleNews" in path
+        assert combo_filter(COMBO_PAGE) in path
+        assert "search_type=eq.web" not in path
+
+    def test_does_not_reuse_the_query_combo_discriminator(self) -> None:
+        with patch(f"{MODULE}._supabase_request", return_value=(200, "[]")) as request:
+            reap_orphans(DAY, COMBO_PAGE, "googleNews", INGESTED_AT)
+        path = request.call_args.args[1]
+        assert combo_filter(COMBO_QUERY) not in path
 
 
 class TestWriteSlice:
@@ -802,6 +922,55 @@ class TestRunIngestion:
         assert window_end == datetime(2026, 8, 26, tzinfo=UTC)
 
 
+class TestRunIngestionGoogleNewsSurface:
+    """googleNews 帶 query 維度送出去必定整個 run 400——SURFACE_COMBOS 只給它 page 組，
+    這裡直接證明 run_ingestion 真的照著這張表跑，而不是把兩組硬寫死在迴圈裡。"""
+
+    def test_only_page_combo_is_dispatched(self) -> None:
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_one_record) as collect, \
+             patch(f"{MODULE}.start_run", return_value="run-1"), \
+             patch(f"{MODULE}.finish_run"), \
+             patch(f"{MODULE}._write_slice", return_value=(1, 0)):
+            assert run_ingestion(execute=True, backfill_days=1, search_type="googleNews") == 0
+        combos_used = {call.args[2] for call in collect.call_args_list}
+        assert combos_used == {COMBO_PAGE}
+
+    def test_gsc_post_dimensions_never_include_query(self) -> None:
+        """不 mock collect_day_combo，讓真正的 paginate_query → _gsc_post 路徑跑一次，
+        直接斷言送出去的 body 沒有一次帶 query 維度。"""
+        api_response = {"rows": [_api_row(DAY.isoformat(), "https://vocus.cc/a", "MOBILE",
+                                          position=0.0)]}
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
+             patch(f"{MODULE}._gsc_post", return_value=api_response) as post:
+            assert run_ingestion(execute=False, backfill_days=1, search_type="googleNews") == 0
+        dimension_sets = [set(call.args[1]["dimensions"]) for call in post.call_args_list]
+        assert dimension_sets  # 至少發了一次請求
+        assert all("query" not in dims for dims in dimension_sets)
+
+
+class TestIngestionRunHasSeparateRowsPerTable:
+    """gsc_daily_metrics 與 gsc_daily_totals 各自的 ingestion_run 列不共用——
+    stale-running 之類的 gate 是按 table_name 分組的，混在一起會讓分組失真。"""
+
+    def test_metrics_and_totals_each_get_their_own_start_run_call(self) -> None:
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_one_record), \
+             patch(f"{MODULE}.upsert_rows", return_value=(1, 0)), \
+             patch(f"{MODULE}.reap_orphans", return_value=0), \
+             patch(f"{MODULE}.start_run", side_effect=["run-metrics", "run-totals"]) as start, \
+             patch(f"{MODULE}.finish_run"):
+            assert run_ingestion(execute=True, backfill_days=1, search_type="web") == 0
+        assert len(start.call_args_list) == 2
+        table_names = [call.kwargs.get("table_name", TABLE_GSC) for call in start.call_args_list]
+        assert table_names == [TABLE_GSC, TABLE_TOTALS]
+
+
 # ══════════════════════════════════════════════════════════════════════
 # verify / freshness
 # ══════════════════════════════════════════════════════════════════════
@@ -849,6 +1018,53 @@ class TestRunVerify:
         with patch(f"{MODULE}.count_rows", side_effect=[1, 1]), \
              patch(f"{MODULE}._supabase_request", side_effect=[(200, self.RECENT), (500, "boom")]):
             assert run_verify() == 1
+
+
+class TestVerifySurfaceNoRankingBranch:
+    """只有 page 組的 surface（googleNews／discover）不該被要求 query 組，
+    log 分支也要對；這是 _verify_surface 本身的單元測試，不透過 run_verify 間接跑。"""
+
+    def test_page_only_surface_logs_without_query_count(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
+             patch(f"{MODULE}.count_rows", return_value=42):
+            assert _verify_surface("googleNews") is True
+        assert "此 surface 不支援 query 維度" in caplog.text
+
+    def test_page_only_surface_empty_is_unhealthy(self) -> None:
+        with patch(f"{MODULE}.count_rows", return_value=0):
+            assert _verify_surface("googleNews") is False
+
+    def test_ranking_surface_still_reports_both_combos(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
+             patch(f"{MODULE}.count_rows", side_effect=[900, 100]):
+            assert _verify_surface("web") is True
+        assert "page 組 900 列 / query 組 100 列" in caplog.text
+
+
+class TestRunVerifySurfaceScoped:
+    """(g)：googleNews page 組 0 列要讓 run_verify 回非 0；web 兩組都有資料時回 0。
+    這裡直接控制 search_types 參數，而不是依賴其他測試共用的預設值。"""
+
+    RECENT = TestRunVerify.RECENT
+    RUNS = TestRunVerify.RUNS
+
+    def test_google_news_zero_page_rows_fails(self) -> None:
+        with patch(f"{MODULE}.count_rows", return_value=0), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, self.RECENT), (200, self.RUNS)]):
+            assert run_verify(["googleNews"]) == 1
+
+    def test_google_news_nonzero_page_rows_passes(self) -> None:
+        with patch(f"{MODULE}.count_rows", return_value=10), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, self.RECENT), (200, self.RUNS)]):
+            assert run_verify(["googleNews"]) == 0
+
+    def test_web_with_both_combos_present_passes(self) -> None:
+        with patch(f"{MODULE}.count_rows", side_effect=[900, 100]), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, self.RECENT), (200, self.RUNS)]):
+            assert run_verify(["web"]) == 0
 
 
 class TestFreshnessCheck:
@@ -913,6 +1129,68 @@ class TestArgumentResolution:
             resolve_search_type("sitemap")
 
 
+class TestBackfillDaysCappedByProbeDays:
+    """resolve_backfill_days 的上限是 min(MAX_BACKFILL_DAYS, probe_days)，不是
+    MAX_BACKFILL_DAYS 本身——探測窗只回看 probe_days 天，超過會被 resolve_targets
+    靜默截斷，這裡要求明確報錯而不是截斷。"""
+
+    def test_backfill_beyond_probe_days_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="probe-days=14"):
+            resolve_backfill_days(30, probe_days=14)
+
+    def test_backfill_equal_to_probe_days_is_accepted(self) -> None:
+        assert resolve_backfill_days(480, probe_days=480) == 480
+
+    def test_backfill_below_probe_days_is_accepted(self) -> None:
+        assert resolve_backfill_days(10, probe_days=14) == 10
+
+    def test_default_probe_days_argument_is_max_backfill_days(self) -> None:
+        """呼叫端不傳 probe_days 時退回舊行為（上限就是 MAX_BACKFILL_DAYS）。"""
+        assert resolve_backfill_days(MAX_BACKFILL_DAYS) == MAX_BACKFILL_DAYS
+
+
+class TestResolveProbeDays:
+    def test_default_when_nothing_set(self) -> None:
+        with patch.dict("os.environ", {"PROBE_DAYS": ""}):
+            assert resolve_probe_days(None) == DEFAULT_PROBE_DAYS
+
+    def test_env_variable_is_used_when_flag_absent(self) -> None:
+        """workflow 舊寫法（env PROBE_DAYS）仍要相容。"""
+        with patch.dict("os.environ", {"PROBE_DAYS": "21"}):
+            assert resolve_probe_days(None) == 21
+
+    def test_flag_takes_priority_over_env(self) -> None:
+        with patch.dict("os.environ", {"PROBE_DAYS": "21"}):
+            assert resolve_probe_days(9) == 9
+
+    def test_probe_days_501_is_out_of_range(self) -> None:
+        with pytest.raises(ValueError, match="501"):
+            resolve_probe_days(501)
+
+    def test_probe_days_zero_is_out_of_range(self) -> None:
+        with pytest.raises(ValueError):
+            resolve_probe_days(0)
+
+    @pytest.mark.parametrize("value", [MIN_PROBE_DAYS, MAX_PROBE_DAYS])
+    def test_boundary_values_are_accepted(self, value: int) -> None:
+        assert resolve_probe_days(value) == value
+
+
+class TestProbeRowLimit:
+    """探測每天恰回一列，rowLimit 只需略大於天數；仍受 API 的 25,000 上限。"""
+
+    def test_scales_with_probe_days(self) -> None:
+        assert probe_row_limit(14) == 21
+        assert probe_row_limit(100) == 107
+
+    def test_capped_at_api_row_limit(self) -> None:
+        assert probe_row_limit(30000) == ROW_LIMIT
+
+    def test_max_probe_days_stays_well_under_the_cap(self) -> None:
+        """MAX_PROBE_DAYS=500 時遠低於 25,000，封頂邏輯目前是防禦性的，不是常態路徑。"""
+        assert probe_row_limit(MAX_PROBE_DAYS) < ROW_LIMIT
+
+
 class TestCli:
     def _run(self, argv: list[str]) -> int:
         with patch("sys.argv", ["ingest_gsc_search_analytics.py", *argv]):
@@ -946,3 +1224,16 @@ class TestCli:
 
     def test_invalid_search_type_exits_two(self) -> None:
         assert self._run(["--search-type", "sitemap"]) == 2
+
+    def test_probe_days_501_exits_two(self) -> None:
+        assert self._run(["--probe-days", "501"]) == 2
+
+    def test_probe_days_is_passed_through(self) -> None:
+        with patch(f"{MODULE}.run_ingestion", return_value=0) as ingest:
+            self._run(["--execute", "--probe-days", "30", "--backfill-days", "30"])
+        assert ingest.call_args.kwargs["probe_days"] == 30
+        assert ingest.call_args.kwargs["backfill_days"] == 30
+
+    def test_backfill_beyond_probe_days_exits_two(self) -> None:
+        """CLI 層對 (f) 的整合驗證：--backfill-days 30 --probe-days 14 要報錯，不是靜默截斷。"""
+        assert self._run(["--backfill-days", "30", "--probe-days", "14"]) == 2
