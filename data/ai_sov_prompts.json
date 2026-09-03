@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "generated_at": "2026-09-03",
+  "target_domain": "vocus.cc",
+  "provenance": {
+    "method": "warehouse-derived",
+    "source_view": "gsc_query_daily",
+    "window_days": 28,
+    "window_end": "2026-09-03",
+    "search_type": "web",
+    "note": "主題來自近 28 天 gsc_query_daily（一律查視圖，不查 gsc_daily_metrics 底表）依 impressions 排序的前 9,000 列，去重後 1,918 個 query 分群而成。source_query 是該主題曝光量最高的代表字，prompt 是改寫後『使用者會問 AI 的問題句』，不是關鍵字本身。"
+  },
+  "exclusions": [
+    {
+      "excluded_theme": "成人／色情內容",
+      "reason": "曝光量前 20 名內有多個成人向 query（vocus.cc 有此類創作者內容）。主流 LLM provider 對這類 prompt 會直接拒答或不觸發 web_search，結構性地產生『零引用』回應，混進 panel 會讓 SoV 分母被一批必然為 0 的樣本稀釋，且波動來自 provider 的安全政策變動而非站方可見度。刻意排除，記為已知偏差：本 panel 量測的是 vocus.cc **可被 AI 引用的那部分內容**的 share of voice，不是全站。"
+    },
+    {
+      "excluded_theme": "品牌詞（方格子／vocus）",
+      "reason": "品牌詞問句幾乎必然引用官方站，命中率恆為 1，對趨勢沒有解析度。creator-platform 主題改用『功能／使用情境』問句，不用品牌名當主詞。"
+    }
+  ],
+  "prompts": [
+    { "id": "anime-01", "theme": "anime-novel", "prompt": "凡人修仙傳的動畫版和原著小說劇情差在哪裡？有哪些改編爭議？", "source_query": "凡人修仙傳" },
+    { "id": "anime-02", "theme": "anime-novel", "prompt": "牧神記這部小說的世界觀設定是什麼？值得追嗎？", "source_query": "牧神記" },
+    { "id": "anime-03", "theme": "anime-novel", "prompt": "我的英雄學院最終章的結局怎麼收的？粉絲評價如何？", "source_query": "我的英雄學院" },
+
+    { "id": "drama-01", "theme": "drama-film", "prompt": "粽邪4 的劇情在講什麼？跟前三集的關聯是什麼？", "source_query": "粽邪4" },
+    { "id": "drama-02", "theme": "drama-film", "prompt": "韓劇《背著善宰跑》好看嗎？劇情大綱和觀眾評價如何？", "source_query": "背著善宰跑" },
+    { "id": "drama-03", "theme": "drama-film", "prompt": "早春晴朗的結局是什麼意思？有沒有比較完整的解讀？", "source_query": "早春晴朗結局" },
+
+    { "id": "home-01", "theme": "home-appliance", "prompt": "2026 年台灣家用除濕機怎麼挑？有哪些實際使用心得可以參考？", "source_query": "除濕機推薦" },
+    { "id": "home-02", "theme": "home-appliance", "prompt": "氣炸鍋值得買嗎？實際用過的人覺得缺點是什麼？", "source_query": "氣炸鍋推薦" },
+    { "id": "home-03", "theme": "home-appliance", "prompt": "洗衣機要選滾筒還是直立式？兩種的長期使用差異在哪？", "source_query": "洗衣機推薦" },
+
+    { "id": "deal-01", "theme": "deals-coupon", "prompt": "iHerb 台灣下單怎麼買最便宜？運費和折扣要怎麼疊？", "source_query": "iherb 折扣碼" },
+    { "id": "deal-02", "theme": "deals-coupon", "prompt": "VPN 訂閱長約划不划算？有哪些實際比較過的心得？", "source_query": "surfshark 優惠碼" },
+    { "id": "deal-03", "theme": "deals-coupon", "prompt": "外送平台的訂閱制值得訂嗎？實際省下多少？", "source_query": "foodpanda優惠碼" },
+
+    { "id": "invest-01", "theme": "investing", "prompt": "存股領股利要注意哪些稅務和除息細節？有哪些個人實作經驗？", "source_query": "股利" },
+    { "id": "invest-02", "theme": "investing", "prompt": "台灣晶圓代工產業目前的競爭格局是什麼？散戶怎麼看這個題材？", "source_query": "晶圓代工" },
+    { "id": "invest-03", "theme": "investing", "prompt": "怎麼用 Goodinfo 之類的工具做個股基本面分析？有沒有step by step 的教學？", "source_query": "goodinfo" },
+
+    { "id": "aitool-01", "theme": "ai-dev-tool", "prompt": "OpenRouter 怎麼用？跟直接接各家 API 相比有什麼優缺點？", "source_query": "openrouter" },
+    { "id": "aitool-02", "theme": "ai-dev-tool", "prompt": "有哪些終端機裡的 AI coding agent 可以用？實際用起來差別在哪？", "source_query": "opencode" },
+    { "id": "aitool-03", "theme": "ai-dev-tool", "prompt": "Obsidian 拿來做知識管理的實際工作流長什麼樣？有沒有中文的心得分享？", "source_query": "obsidian" },
+
+    { "id": "device-01", "theme": "consumer-electronics", "prompt": "DJI Pocket 系列最新款值得入手嗎？實拍心得如何？", "source_query": "dji pocket 4 pro" },
+    { "id": "device-02", "theme": "consumer-electronics", "prompt": "文書用筆電三萬元以內怎麼挑？有哪些實際開箱可以參考？", "source_query": "筆電推薦" },
+    { "id": "device-03", "theme": "consumer-electronics", "prompt": "Google Pixel 在台灣使用的實際體驗如何？有什麼要注意的？", "source_query": "google pixel" },
+
+    { "id": "fortune-01", "theme": "fortune-religion", "prompt": "紫微斗數的命盤要怎麼看？入門該從哪裡開始？", "source_query": "紫微斗數" },
+    { "id": "fortune-02", "theme": "fortune-religion", "prompt": "八字命盤的十神怎麼解讀？有沒有白話一點的說明？", "source_query": "八字命盤" },
+    { "id": "fortune-03", "theme": "fortune-religion", "prompt": "地藏經該怎麼讀？誦經的常見疑問有哪些？", "source_query": "地藏經" },
+
+    { "id": "travel-01", "theme": "travel-dining", "prompt": "越南富國島自由行怎麼安排？有哪些實際去過的行程分享？", "source_query": "富國島" },
+    { "id": "travel-02", "theme": "travel-dining", "prompt": "台南住宿要選哪一區？各區的優缺點是什麼？", "source_query": "台南住宿" },
+    { "id": "travel-03", "theme": "travel-dining", "prompt": "台北的燒肉吃到飽哪幾家值得去？實際吃過的評價如何？", "source_query": "打爆豬韓式燒肉吃到飽" },
+
+    { "id": "game-01", "theme": "gaming", "prompt": "《活俠傳》好玩嗎？玩過的人覺得優缺點是什麼？", "source_query": "活俠傳" },
+    { "id": "game-02", "theme": "gaming", "prompt": "籃球人生模擬器要怎麼玩才容易上手？有沒有攻略？", "source_query": "籃球人生模擬器" },
+    { "id": "game-03", "theme": "gaming", "prompt": "皮克敏系列從哪一代開始玩比較好？各代差別在哪？", "source_query": "皮克敏系列" },
+
+    { "id": "howto-01", "theme": "software-howto", "prompt": "Windows 和 Mac 的截圖快捷鍵分別怎麼按？有哪些進階用法？", "source_query": "截圖快捷鍵" },
+    { "id": "howto-02", "theme": "software-howto", "prompt": "中文輸入時特殊符號要怎麼打？有沒有整理好的對照表？", "source_query": "特殊符號" },
+    { "id": "howto-03", "theme": "software-howto", "prompt": "ffmpeg 常用的影片轉檔指令有哪些？有沒有中文的實用範例？", "source_query": "ffmpeg" },
+
+    { "id": "creator-01", "theme": "creator-platform", "prompt": "在台灣寫部落格要怎麼開始有收入？有哪些平台可以選？", "source_query": "" },
+    { "id": "creator-02", "theme": "creator-platform", "prompt": "訂閱制寫作平台的分潤機制怎麼算？創作者實際賺得到錢嗎？", "source_query": "" },
+    { "id": "creator-03", "theme": "creator-platform", "prompt": "個人網站要不要綁自訂網域？對長期經營有什麼影響？", "source_query": "" }
+  ]
+}
