@@ -40,6 +40,10 @@ def _pipeline(**overrides) -> PipelineConfig:
         timestamp_column="ts", max_age_hours=3, cadence_hours=1,
         cadence_label="hourly", ingestion_run_table_name="test_table",
         schedule_note="", gap_window_hours=24,
+        lag_buffer_hours=0.0,  # 這裡的 0.0 只是測試建構子的方便預設，不是生產設定——
+                                # production PipelineConfig 的 lag_buffer_hours 已改成
+                                # 必填（見 quality_gate_config.py），這個 helper 保留
+                                # 一個 default 純粹是測試工具的便利性，兩者不要混為一談。
     )
     base.update(overrides)
     return PipelineConfig(**base)

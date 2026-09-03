@@ -85,7 +85,7 @@ class TestPipelineConfigResolution:
         broken = PipelineConfig(
             key="broken", table="x", filters=(), max_age_hours=1,
             cadence_hours=1, cadence_label="hourly", ingestion_run_table_name="x",
-            schedule_note="",
+            schedule_note="", lag_buffer_hours=0.0,  # 與本測試主題無關，滿足必填欄位
         )
         with pytest.raises(ValueError):
             broken.resolved_extractor()
@@ -120,6 +120,29 @@ class TestPipelineConfigResolution:
         assert pipeline.table == "gsc_daily_totals"
         assert pipeline.filters == (("search_type", "web"),)
         assert pipeline.ingestion_run_table_name == "gsc_daily_totals"
+
+    def test_lag_buffer_hours_is_mandatory(self) -> None:
+        """Regression（2026-09-03，team-lead 覆核發現）：`lag_buffer_hours`
+        不再有 default——cwv_hourly_crux 曾經漏填、吃 default 0.0，對一個
+        有 7 天發布延遲的來源必然誤報。拿掉 default 逼每條管線顯式填一個值，
+        解掉「欄位不存在」與「刻意填 0」的歧義：建構子漏填要直接 TypeError，
+        不能悄悄吃到一個看起來合理的預設值。"""
+        with pytest.raises(TypeError):
+            PipelineConfig(  # noqa: 故意漏 lag_buffer_hours
+                key="broken", table="x", filters=(), max_age_hours=1,
+                cadence_hours=1, cadence_label="hourly",
+                ingestion_run_table_name="x", schedule_note="",
+            )
+
+    def test_every_pipeline_has_a_non_negative_lag_buffer(self) -> None:
+        """必填不等於填對——這裡只鎖「有填、非負」這個最低限度的健全性；
+        個別管線的取值是否有實測依據，見各自的 regression test
+        （例如 cwv_hourly_crux 見 test_data_quality_gate.py 的
+        test_crux_lag_buffer_covers_documented_publish_cadence_ceiling）。"""
+        for pipeline in PIPELINES:
+            assert pipeline.lag_buffer_hours >= 0, (
+                f"{pipeline.key}: lag_buffer_hours={pipeline.lag_buffer_hours} 不可為負"
+            )
 
 
 class TestDegradationOrGapMustExplainWhySkipped:

@@ -99,12 +99,26 @@ class PipelineConfig:
     cadence_label: str              # 人類可讀的週期描述，用於報表
     ingestion_run_table_name: str   # ingestion_run.table_name 的值，供第三類「殘留 running」分組
     schedule_note: str              # 為什麼門檻設這個值（一句話，供 CLI/報表印出）
+    # lag_buffer_hours：掃描空段時，忽略「現在 - 這個值」以內的時間點（來源固有延遲）。
+    #
+    # 2026-09-03 改成必填（無 default）——原本 default 0.0，cwv_hourly_crux 漏填吃到
+    # 這個 default，等於要求「週期一結束、資料立刻要在」，對一個有 7 天發布延遲的
+    # 來源必然誤報（run 33710475866 實測撞到）。事後稽核時發現另一個問題：
+    # gsc_url_inspection「沒有這一行」是不是「刻意判斷用不到」，光看程式碼分不出來——
+    # 「欄位不存在」與「刻意不設」在 default 值制度下長得一模一樣。
+    #
+    # 拿掉 default 逼每條管線顯式填一個值，把這個歧義解掉：管線若不需要這個緩衝
+    # （例如 gap_window_hours=None，整個空段檢查都 SKIP），一樣要填 0.0，但**旁邊
+    # 附一行理由**——「填了 0.0 且說明為什麼」與「沒填」不會再同形。
+    # 不用額外的 sentinel 常數（例如 LAG_NOT_APPLICABLE）：Python 的必填欄位本身
+    # 就是型別系統能表達的最小承諾，建構時漏填會直接 TypeError，比用一個「看起來
+    # 像數值但其實是哨兵」的常數更不容易被誤用成正常值算進運算裡。
+    lag_buffer_hours: float
     timestamp_column: str | None = None
     extractor: Callable[[Mapping], datetime] | None = None
     select_columns: tuple[str, ...] = ()
     gap_window_hours: float | None = None   # None = 不做第二類檢查（見 gap_skip_reason）
     gap_skip_reason: str | None = None
-    lag_buffer_hours: float = 0.0    # 掃描空段時，忽略「現在 - 這個值」以內的時間點（來源固有延遲）
     degradation: DegradationConfig | None = None
     degradation_skip_reason: str | None = None
 
@@ -136,6 +150,9 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         filters=(("source", "rum"),),
         timestamp_column="hour",
         max_age_hours=3,  # 排程週期 1h 的 3 倍；來源 Loki retention 168h，見 ingest_cwv_hourly.py
+        # 「× 3」聽起來的安全邊際比實際的小——見 crawl_daily 同一個常數旁的完整
+        # 實測數字（GitHub Actions schedule trigger 本身的 jitter，不是這條管線
+        # 特有的），這裡不重複貼一次，只留指標。2026-09-03 team-lead 實測。
         cadence_hours=1,
         cadence_label="hourly",
         gap_window_hours=24,
@@ -188,6 +205,23 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         extractor=_crawl_daily_extractor,
         select_columns=("date", "hour"),
         max_age_hours=3,
+        # 「排程週期(1h) × 3」這個公式假設週期是準的——GitHub Actions 的 schedule
+        # trigger 不是。2026-09-03 team-lead 實測 crawl-hourly.yml（cron 15 * * * *）
+        # 最近 20 次 schedule 觸發（09-02 07:28..09-03 03:22）：
+        #   相鄰間隔(分)：64 55 59 57 73 50 60 62 60 55 67 51 65 56 61 58 98 39 104
+        #   實際觸發分鐘：20 21 22 23 25 26 28 30 33 36 38 59（名目 :15，最遲晚 44 分）
+        #   2 次接近雙倍間隔（98、104 分）——不是漏跑（20 次觸發對 ~20 小時，
+        #   總數對得上），是某一拍被 GitHub 往後推、下一拍補回來。
+        # 疊上實測寫入延遲（0.40–0.63h，見本檔尾端「lag_buffer_hours 的語意」）：
+        # 最壞情況 ≈ 104min + 38min ≈ 2.4h，離 max_age_hours=3h 只剩 ~0.6h 餘裕，
+        # 比「3 倍」聽起來的安全邊際窄得多。**目前沒有實際誤報，先不調**——
+        # 這行只是把「有效週期不是 1h」這個事實寫下來，下次有人真的要調這個
+        # 門檻時，判準跟 cwv_hourly_crux 的 lag_buffer_hours 一樣：從這組實測
+        # 分布反推，不要憑印象；調了要補 regression test 鎖語意
+        # （例如「門檻需覆蓋實測到的最大 schedule 間隔 + 寫入延遲 + 安全邊際」），
+        # 不要鎖魔術數字。cwv_hourly_rum（cron 5 * * * *）受同一個平台行為
+        # 影響，數字量級相同（team-lead／pipeline-outages 2026-09-03 各自
+        # 獨立驗證過），這裡不重複貼一次。
         cadence_hours=1,
         cadence_label="hourly",
         gap_window_hours=24,
@@ -313,6 +347,12 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         max_age_hours=24 * 4,
         cadence_hours=24,
         cadence_label="daily(quota-gated)",
+        # lag_buffer_hours 用不到：gap_window_hours=None 讓整個第二類檢查（空段）SKIP，
+        # 這個值只有 check_gaps() 會讀，check_gaps 對 gap_window_hours=None 的管線
+        # 第一行就直接回傳 SKIP、不會走到用 lag_buffer_hours 的那段邏輯。填 0.0
+        # 是滿足型別要求（見上方欄位註解「2026-09-03 改成必填」），不是「這條管線
+        # 剛好緩衝需求是 0」——這一行本身就是 team-lead 要求的「明確說明為什麼不需要」。
+        lag_buffer_hours=0.0,
         gap_window_hours=None,
         gap_skip_reason=(
             "此管線每日配額有限，『當日配額一開始就不夠 → 不查任何 URL → 0 筆寫入』是文件化的"
