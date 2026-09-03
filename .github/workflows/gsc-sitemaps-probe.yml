@@ -1,0 +1,27 @@
+name: GSC Sitemaps API Probe (一次性驗證)
+
+# 這不是常駐管線，是在蓋 gsc_sitemap_status 管線之前，先打一次真實 API
+# 確認 contents[].indexed 欄位在這個 property 上有沒有意義（Google 多年前已在
+# Search Console UI 拿掉 sitemap 報表的「已編入索引」數字，這欄很可能一律是 0）。
+# 只手動觸發，不排程；驗證完是否留著／刪掉由結論決定。
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install python-dotenv google-auth requests
+
+      - name: Probe GSC Sitemaps API
+        env:
+          GSC_READONLY_KEY: ${{ secrets.GSC_READONLY_KEY }}
+        run: python scripts/probe_gsc_sitemaps_api.py
