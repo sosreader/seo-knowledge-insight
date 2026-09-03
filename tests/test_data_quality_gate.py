@@ -438,6 +438,144 @@ class TestCheckGaps:
 
 
 # ══════════════════════════════════════════════════════════════════════
+# 第二類（逐點探測模式）：gap_probe_per_point=True
+#
+# 為什麼要另一條路徑：預設路徑把掃描窗內所有列抓回來只為了取 distinct 時間戳，
+# 在 gsc_page_daily（視圖，底表近百萬列）上要翻約 1,000 頁深 OFFSET，必然撞
+# statement_timeout（run 33776287535 實測 57014）。以下測試用假的 _get_page
+# 直接驗查詢形狀：每個預期時間點各一次 limit=1 探測，跟表多大無關。
+# ══════════════════════════════════════════════════════════════════════
+
+def _probe_pipeline(**overrides) -> PipelineConfig:
+    base = dict(
+        timestamp_column="date", cadence_hours=24, cadence_label="daily",
+        gap_window_hours=24 * 5, gap_probe_per_point=True, lag_buffer_hours=0.0,
+    )
+    base.update(overrides)
+    return _pipeline(**base)
+
+
+def _fake_get_page(available: set[str]):
+    """假的 _get_page：只認兩種查詢形狀——帶 order=…asc 的「最早時間戳」，
+    以及帶 date=eq.<日> 的「這天有沒有列」。任何其他形狀直接讓測試爆掉。"""
+    calls: list[str] = []
+
+    def fake(path: str, *, offset: int, page_size: int) -> tuple[list[dict], bool]:
+        assert offset == 0, "逐點探測不該用 OFFSET 分頁"
+        assert page_size == gate.PROBE_PAGE_SIZE, "逐點探測每次只取 1 列"
+        calls.append(path)
+        query = path.split("?", 1)[1]
+        if "order=date.asc" in query:
+            earliest = sorted(available)
+            return ([{"date": earliest[0]}] if earliest else [], False)
+        marker = "date=eq."
+        assert marker in query, f"未預期的查詢形狀：{query}"
+        day = query.split(marker, 1)[1].split("&", 1)[0]
+        return ([{"date": day}] if day in available else [], False)
+
+    fake.calls = calls  # type: ignore[attr-defined]
+    return fake
+
+
+class TestGapProbePerPoint:
+    NOW = datetime(2026, 9, 3, 12, 0, tzinfo=UTC)
+    ALL_DAYS = {"2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02"}
+
+    def test_every_expected_day_present_passes(self) -> None:
+        fake = _fake_get_page(self.ALL_DAYS)
+        with patch.object(gate, "_get_page", fake):
+            result = gate.check_gaps(_probe_pipeline(), now=self.NOW)
+        assert result.passed
+        assert not result.skipped
+        assert "逐點探測 4 個時間點" in result.message
+        # 1 次「最早時間戳」+ 每個預期時間點 1 次，沒有第二種請求
+        assert len(fake.calls) == 5  # type: ignore[attr-defined]
+
+    def test_missing_middle_day_is_reported_as_gap(self) -> None:
+        fake = _fake_get_page(self.ALL_DAYS - {"2026-08-31"})
+        with patch.object(gate, "_get_page", fake):
+            result = gate.check_gaps(_probe_pipeline(), now=self.NOW)
+        assert not result.passed
+        assert "2026-08-31" in result.message
+        assert "1 個應有資料的時間點缺席" in result.message
+
+    def test_earliest_timestamp_lifts_effective_start(self) -> None:
+        """管線上線不滿掃描窗長度時，上線前『本來就沒有資料』不算空段——
+        預設路徑靠 min(existing) 得到這個下限，探測路徑靠一次 order asc 取 1 列。"""
+        fake = _fake_get_page({"2026-09-01", "2026-09-02"})
+        with patch.object(gate, "_get_page", fake):
+            result = gate.check_gaps(_probe_pipeline(), now=self.NOW)
+        assert result.passed
+        assert "2026-09-01T00:00:00+00:00" in result.message  # effective_start 被墊高
+        assert "逐點探測 2 個時間點" in result.message
+
+    def test_empty_window_probes_nothing_beyond_the_earliest_lookup(self) -> None:
+        """窗內完全沒有資料時，effective_start 退回窗起點，每個預期時間點都是空段。"""
+        fake = _fake_get_page(set())
+        with patch.object(gate, "_get_page", fake):
+            result = gate.check_gaps(_probe_pipeline(), now=self.NOW)
+        assert not result.passed
+        assert "4 個應有資料的時間點缺席" in result.message
+
+    def test_query_error_fails_not_skips(self) -> None:
+        with patch.object(gate, "_get_page", side_effect=gate.SupabaseQueryError("57014")):
+            result = gate.check_gaps(_probe_pipeline(), now=self.NOW)
+        assert not result.passed
+        assert not result.skipped
+        assert "57014" in result.message
+
+    def test_probe_query_filters_are_carried_through(self) -> None:
+        fake = _fake_get_page(self.ALL_DAYS)
+        pipeline = _probe_pipeline(filters=(("search_type", "web"),))
+        with patch.object(gate, "_get_page", fake):
+            gate.check_gaps(pipeline, now=self.NOW)
+        assert all("search_type=eq.web" in path for path in fake.calls)  # type: ignore[attr-defined]
+
+    def test_timestamp_column_uses_half_open_interval_not_eq(self) -> None:
+        """非 DATE 欄位（timestamp）不能用 eq——桶是區間，要用 [t, t+cadence)。"""
+        seen: list[str] = []
+
+        def fake(path: str, *, offset: int, page_size: int) -> tuple[list[dict], bool]:
+            seen.append(path)
+            return [{"ts": "2026-09-02T12:00:00Z"}], False
+
+        pipeline = _probe_pipeline(timestamp_column="ts", cadence_hours=1, gap_window_hours=3)
+        with patch.object(gate, "_get_page", fake):
+            gate.check_gaps(pipeline, now=self.NOW)
+        point_queries = [p for p in seen if "order=" not in p]
+        assert point_queries, "應該有逐點探測的查詢"
+        assert all("ts=gte." in p and "ts=lt." in p for p in point_queries)
+
+
+class TestGapProbeOptInOnly:
+    """(d) 回歸：沒開 gap_probe_per_point 的管線行為零變更，仍走整窗抓取那條路。"""
+
+    def test_default_pipeline_still_uses_fetch_existing_timestamps(self) -> None:
+        pipeline = _pipeline(gap_window_hours=3)
+        assert pipeline.gap_probe_per_point is False
+        now = datetime(2026, 9, 2, 14, 30, tzinfo=UTC)
+        existing = {datetime(2026, 9, 2, 12, 0, tzinfo=UTC),
+                    datetime(2026, 9, 2, 13, 0, tzinfo=UTC)}
+        with patch.object(gate, "_fetch_existing_timestamps",
+                          return_value=(existing, [])) as fetch, \
+             patch.object(gate, "_probe_point_exists") as probe:
+            result = gate.check_gaps(pipeline, now=now)
+        assert result.passed
+        fetch.assert_called_once()
+        probe.assert_not_called()
+
+    def test_only_gsc_daily_metrics_opts_in(self) -> None:
+        """開關是 opt-in：小表走原路徑（一次請求抓完）比發 N 次請求便宜。"""
+        opted_in = [p.key for p in PIPELINES_BY_KEY.values() if p.gap_probe_per_point]
+        assert opted_in == ["gsc_daily_metrics"]
+
+    def test_gsc_daily_metrics_keeps_surface_agnostic_semantics(self) -> None:
+        """刻意不加 search_type 篩選：任一 surface 當天有列就算那天有資料，
+        跟改成逐點探測之前同一個語意（只換查詢形狀，不換判準）。"""
+        assert PIPELINES_BY_KEY["gsc_daily_metrics"].filters == ()
+
+
+# ══════════════════════════════════════════════════════════════════════
 # 第三類：靜默降級
 # ══════════════════════════════════════════════════════════════════════
 

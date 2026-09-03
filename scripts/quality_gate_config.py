@@ -119,6 +119,22 @@ class PipelineConfig:
     select_columns: tuple[str, ...] = ()
     gap_window_hours: float | None = None   # None = 不做第二類檢查（見 gap_skip_reason）
     gap_skip_reason: str | None = None
+    # gap_probe_per_point：空段檢查改用「每個預期時間點各發一次 limit=1 探測」，
+    # 而不是預設的「把掃描窗內所有列抓回來再取 distinct 時間戳」。
+    #
+    # 為什麼需要這個開關：預設路徑用 Range header 每頁 1000 列翻到底，只為了得到
+    # 一組 distinct 的日期。表小的時候沒差，表大的時候是災難——2026-09-03 16:03
+    # 的 watchdog run 33776287535 就是這樣掛的：gsc_page_daily 是視圖
+    # （WHERE page <> gsc_page_not_requested() + NULLIF(position,0)），底表
+    # gsc_daily_metrics 光 web 就有約 99 萬列，30 天窗要翻約 1,000 頁，而 PostgREST
+    # 的深 OFFSET 分頁在視圖上每一頁都要重算一次，必然撞 statement_timeout（57014）。
+    # 同日 09:34 的排程 run 還勉強 PASS，480 天回填後就再也過不了——是結構性問題，
+    # 不是偶發抖動，所以解法不是加大 timeout 而是換查詢形狀。
+    #
+    # 逐點探測的成本是「預期時間點數」次請求（30 天日頻 = 31 次），每次只取 1 列，
+    # 不做 OFFSET，跟表多大無關。只對真的需要的管線 opt-in：小表走原路徑（一次
+    # 請求就抓完）比發 N 次請求便宜，沒必要一起換。
+    gap_probe_per_point: bool = False
     degradation: DegradationConfig | None = None
     degradation_skip_reason: str | None = None
 
@@ -247,6 +263,12 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         cadence_hours=24,
         cadence_label="daily",
         gap_window_hours=24 * 30,
+        # 逐點探測：本管線是五條裡唯一大到會讓「整窗抓回來」撞 statement_timeout 的，
+        # 見 PipelineConfig.gap_probe_per_point 的欄位註解（run 33776287535）。
+        # 這裡刻意**不**加 filters=(("search_type","eq","web"),)：維持既有語意——
+        # 任一 surface 當天有列就算那天有資料。加了篩選會把語意從「GSC ingest 那天
+        # 有沒有跑」偷換成「web surface 那天有沒有列」，是另一個檢查，不在本次範圍。
+        gap_probe_per_point=True,
         lag_buffer_hours=96 + 48,  # 與新鮮度門檻同一個數字：門檻已經編碼了「來源延遲多久算正常」，
                                     # 空段掃描沿用同一個容忍窗，不重新發明一個數字
         ingestion_run_table_name="gsc_daily_metrics",

@@ -127,6 +127,7 @@ def _request(method: str, path: str, *, body: Any = None,
 
 
 READ_PAGE_SIZE = 1000  # PostgREST 的 db-max-rows 預設就是 1000
+PROBE_PAGE_SIZE = 1    # 逐點探測只問「這個時間點有沒有列」，取 1 列就夠（見 _probe_point_exists）
 
 
 def _get_page(path: str, *, offset: int, page_size: int) -> tuple[list[dict], bool]:
@@ -279,6 +280,68 @@ def _fetch_existing_timestamps(
     return {extractor(r) for r in rows}, rows
 
 
+def _range_value(pipeline: PipelineConfig, moment: datetime) -> str:
+    """把時間戳轉成該欄位在 PostgREST querystring 裡的字面值。DATE 欄位要用純日期，
+    帶時間會讓 `date=eq.2026-09-01T00:00:00Z` 這種查詢在 PG 端型別轉換失敗。"""
+    range_col = _range_filter_column(pipeline)
+    return moment.date().isoformat() if range_col == "date" else _iso_z(moment)
+
+
+def _probe_earliest_timestamp(pipeline: PipelineConfig, window_start: datetime) -> datetime | None:
+    """掃描窗內最早的一筆時間戳，用一次 order asc + 取 1 列拿到。
+
+    取代「把整窗抓回來再 min()」——後者為了一個 min() 值要翻上千頁（見
+    PipelineConfig.gap_probe_per_point 的欄位註解）。用 Range header 限筆數而非
+    querystring 的 limit=，理由同 _get_json_all。
+    """
+    range_col = _range_filter_column(pipeline)
+    cols = ",".join(pipeline.resolved_select_columns())
+    path = (f"/rest/v1/{pipeline.table}?select={cols}{_filter_qs(pipeline.filters)}"
+            f"&{range_col}=gte.{urllib.parse.quote(_range_value(pipeline, window_start))}"
+            f"&order={range_col}.asc")
+    rows, _has_more = _get_page(path, offset=0, page_size=PROBE_PAGE_SIZE)
+    return pipeline.resolved_extractor()(rows[0]) if rows else None
+
+
+def _probe_point_exists(pipeline: PipelineConfig, point: datetime) -> bool:
+    """這個預期時間點有沒有至少一列。DATE 欄位用 eq.<日期>；timestamp 欄位用
+    半開區間 [point, point + cadence)，跟 expected_timestamps() 的「桶」語意一致。"""
+    range_col = _range_filter_column(pipeline)
+    if range_col == "date":
+        window = f"&{range_col}=eq.{urllib.parse.quote(point.date().isoformat())}"
+    else:
+        upper = point + timedelta(hours=pipeline.cadence_hours)
+        window = (f"&{range_col}=gte.{urllib.parse.quote(_iso_z(point))}"
+                  f"&{range_col}=lt.{urllib.parse.quote(_iso_z(upper))}")
+    cols = ",".join(pipeline.resolved_select_columns())
+    path = f"/rest/v1/{pipeline.table}?select={cols}{_filter_qs(pipeline.filters)}{window}"
+    rows, _has_more = _get_page(path, offset=0, page_size=PROBE_PAGE_SIZE)
+    return bool(rows)
+
+
+def _resolve_gap_points(
+    pipeline: PipelineConfig, now: datetime, window_start: datetime,
+) -> tuple[datetime, list[datetime], list[datetime], str]:
+    """回傳 (effective_start, expected, gaps, 模式描述)。
+
+    effective_start：掃描下限不早於「目前資料實際最早的時間戳」——管線上線不滿掃描
+    窗長度時，避免把上線前『本來就沒有資料』的時段誤判成空段。兩條路徑共用這個規則，
+    差別只在「最早時間戳」與「某點有沒有資料」是怎麼問出來的。
+    """
+    lag_cutoff = now - timedelta(hours=pipeline.lag_buffer_hours)
+    if pipeline.gap_probe_per_point:
+        earliest = _probe_earliest_timestamp(pipeline, window_start)
+        effective_start = max(window_start, earliest) if earliest else window_start
+        expected = expected_timestamps(now, pipeline.cadence_hours, effective_start, lag_cutoff)
+        gaps = [t for t in expected if not _probe_point_exists(pipeline, t)]
+        return effective_start, expected, gaps, f"逐點探測 {len(expected)} 個時間點"
+
+    existing, _rows = _fetch_existing_timestamps(pipeline, window_start)
+    effective_start = max(window_start, min(existing)) if existing else window_start
+    expected = expected_timestamps(now, pipeline.cadence_hours, effective_start, lag_cutoff)
+    return effective_start, expected, find_gaps(existing, expected), f"{len(expected)} 個預期時間點"
+
+
 def check_gaps(pipeline: PipelineConfig, *, now: datetime | None = None) -> CheckResult:
     if pipeline.gap_window_hours is None:
         return CheckResult(pipeline.key, "gap", True,
@@ -287,16 +350,9 @@ def check_gaps(pipeline: PipelineConfig, *, now: datetime | None = None) -> Chec
     now = now or datetime.now(timezone.utc)
     window_start = now - timedelta(hours=pipeline.gap_window_hours)
     try:
-        existing, _rows = _fetch_existing_timestamps(pipeline, window_start)
+        effective_start, expected, gaps, mode = _resolve_gap_points(pipeline, now, window_start)
     except SupabaseQueryError as exc:
         return CheckResult(pipeline.key, "gap", False, f"查詢失敗，視為 FAIL：{exc}")
-
-    # 掃描下限不早於「目前資料實際最早的時間戳」——管線上線不滿掃描窗長度時，
-    # 避免把上線前『本來就沒有資料』的時段誤判成空段。
-    effective_start = max(window_start, min(existing)) if existing else window_start
-    lag_cutoff = now - timedelta(hours=pipeline.lag_buffer_hours)
-    expected = expected_timestamps(now, pipeline.cadence_hours, effective_start, lag_cutoff)
-    gaps = find_gaps(existing, expected)
 
     if gaps:
         shown = ", ".join(t.isoformat() for t in gaps[:5])
@@ -305,7 +361,7 @@ def check_gaps(pipeline: PipelineConfig, *, now: datetime | None = None) -> Chec
                             f"FAIL：{len(gaps)} 個應有資料的時間點缺席：{shown}{more}")
     return CheckResult(pipeline.key, "gap", True,
                         f"PASS：掃描 {effective_start.isoformat()}..{now.isoformat()}"
-                        f"（{len(expected)} 個預期時間點）無空段。")
+                        f"（{mode}）無空段。")
 
 
 # ══════════════════════════════════════════════════════════════════════
