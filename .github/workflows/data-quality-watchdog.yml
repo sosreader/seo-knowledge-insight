@@ -1,0 +1,51 @@
+name: Data Quality Watchdog
+
+# 獨立於五條 warehouse 管線各自的排程，每天跑一次「全部 pipeline」的資料品質 gate
+# （scripts/data_quality_gate.py，不帶 --pipeline，掃全部 5 條 + stale-running）。
+#
+# ═══ 為什麼需要獨立於它們各自的 workflow ═══
+#
+# 現有的新鮮度／空段／降級檢查都掛在**被監測管線自己的** workflow 裡
+# （freshness job：if: github.event_name == 'schedule' || 'workflow_dispatch'）。
+# 這代表如果某條管線的 schedule 本身沒被觸發，連它自己的品質 gate 也不會被跑到——
+# 監測機制與被監測對象同住一個部署單元，看不到「這個單元從未部署」這件事本身。
+#
+# 這不是假設性風險：cwv-crux-history.yml 就撞過一次。schedule 加進 main
+# （commit 5739596，2026-08-29T04:37 UTC）後一次都沒觸發，直到三天後
+# 下一次 push 觸碰 `.github/workflows/`（commit e8497a1，2026-09-01T08:00 UTC）
+# 才被 GitHub 重新同步、真正生效——中間唯一一次週二 06:00 UTC 的排程視窗
+# （09-01）完整錯過，而它自己 workflow 裡的 freshness job 因為同一個原因
+# 也從未被觸發，完全沒有叫出來。詳見
+# ~/Documents/knowledge-base/_pending/session-2026-09-03-crux-crawl-pipeline-outages.md。
+#
+# 這支 watchdog 的排程與任何一條管線的 workflow 都無關聯，只要它自己按時觸發，
+# 就能在「某條管線的排程整個沒動」時仍然叫出來——尤其 cwv_hourly_crux 是目前
+# 唯一週頻的管線，風險最高：漏一次排程要再等到下一個週二才會被自己的
+# workflow 重新檢查，而這支 watchdog 每天都會複查一次，最多 24h 就能發現。
+#
+# 會與各管線自己的 freshness job 重複告警——這是刻意的重複覆蓋，不是重工：
+# 各自的 job 涵蓋「跑了但資料不對」，這支涵蓋「連跑都沒跑」，兩者觸發條件不同構。
+
+on:
+  schedule:
+    - cron: '30 9 * * *'   # 每日 09:30 UTC，錯開其他管線排程的整點/半點
+  workflow_dispatch: {}
+
+jobs:
+  quality-gate-all-pipelines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      - name: Check all pipelines' data quality (independent of each pipeline's own schedule)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py
