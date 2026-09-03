@@ -985,6 +985,61 @@ class TestRunIngestionGoogleNewsSurface:
         assert all("query" not in dims for dims in dimension_sets)
 
 
+class TestRunIngestionDiscoverSurface:
+    """S2.5 discover-fix（2026-09-03）：live run 證實 discover 連 page 組（帶 device
+    維度）也回 400，SURFACE_COMBOS["discover"] 改成空 tuple。這裡直接證明 run_ingestion
+    對 combos 為空的 surface 不發 page 查詢、不建立 gsc_daily_metrics 的 ingestion_run
+    列、也不呼叫 reap，只做探測＋totals（呼應 TestRunIngestionGoogleNewsSurface 的驗證
+    方式，但斷言方向相反：googleNews 斷言「只送 page 組」，discover 斷言「什麼組都不送」）。
+    """
+
+    def test_collect_day_combo_never_called(self) -> None:
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
+             patch(f"{MODULE}.collect_day_combo") as collect, \
+             patch(f"{MODULE}.start_run", return_value="run-1"), \
+             patch(f"{MODULE}.finish_run"):
+            assert run_ingestion(execute=True, backfill_days=1, search_type="discover") == 0
+        collect.assert_not_called()
+
+    def test_reap_orphans_never_called(self) -> None:
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
+             patch(f"{MODULE}.start_run", return_value="run-1"), \
+             patch(f"{MODULE}.finish_run"), \
+             patch(f"{MODULE}.reap_orphans") as reap:
+            assert run_ingestion(execute=True, backfill_days=1, search_type="discover") == 0
+        reap.assert_not_called()
+
+    def test_no_gsc_daily_metrics_ingestion_run_is_created(self) -> None:
+        """run_ingestion 頂層那次 start_run(*run_window(targets))（預設 table_name=
+        TABLE_GSC）不該被呼叫——combos 為空時這個 surface 永遠不寫 gsc_daily_metrics，
+        建了也只會是一筆看似失敗、其實只是「本來就沒有 metrics」的殘影。write_totals
+        內部另有自己那次 start_run(table_name=TABLE_TOTALS)，這裡整個 mock 掉不驗證。"""
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
+             patch(f"{MODULE}.start_run") as start, \
+             patch(f"{MODULE}.finish_run"):
+            assert run_ingestion(execute=True, backfill_days=1, search_type="discover") == 0
+        start.assert_not_called()
+
+    def test_totals_write_failure_is_still_reported_as_failure(self) -> None:
+        """metrics_skipped 分支不能把 totals 寫入失敗吃掉——written 恆 0 不代表
+        一定成功，成功與否單純看 errors（totals 失敗會進 errors，見 _ingest_totals）。"""
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(0, 1)):
+            assert run_ingestion(execute=True, backfill_days=1, search_type="discover") == 1
+
+    def test_dry_run_with_healthy_totals_returns_zero(self) -> None:
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])):
+            assert run_ingestion(execute=False, backfill_days=1, search_type="discover") == 0
+
+
 class TestIngestionRunHasSeparateRowsPerTable:
     """gsc_daily_metrics 與 gsc_daily_totals 各自的 ingestion_run 列不共用——
     stale-running 之類的 gate 是按 table_name 分組的，混在一起會讓分組失真。"""
@@ -1115,6 +1170,49 @@ class TestRunVerifySurfaceScoped:
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["web"]) == 0
+
+
+class TestRunVerifyDiscoverSurface:
+    """S2.5 discover-fix（2026-09-03）：SURFACE_COMBOS["discover"] 是空 tuple——
+    combos 為空的 surface 不呼叫 _verify_surface（那裡沒有 gsc_daily_metrics 列可數），
+    健康度改看 gsc_daily_totals 的列數是否 > 0，見 run_verify 裡緊接在 totals_rows
+    logger.info 之後的檢查。"""
+
+    RECENT = TestRunVerify.RECENT
+    RUNS = TestRunVerify.RUNS
+
+    def test_verify_surface_not_called_for_discover(self) -> None:
+        with patch(f"{MODULE}._verify_surface") as verify_surface, \
+             patch(f"{MODULE}.count_rows", return_value=29), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, json.dumps([{"date": "2026-08-25"}])),
+                                (200, self.RECENT), (200, self.RUNS)]):
+            assert run_verify(["discover"]) == 0
+        verify_surface.assert_not_called()
+
+    def test_zero_totals_rows_fails(self) -> None:
+        with patch(f"{MODULE}.count_rows", return_value=0), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, json.dumps([])), (200, self.RECENT), (200, self.RUNS)]):
+            assert run_verify(["discover"]) == 1
+
+    def test_nonzero_totals_rows_passes(self) -> None:
+        with patch(f"{MODULE}.count_rows", return_value=29), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, json.dumps([{"date": "2026-08-25"}])),
+                                (200, self.RECENT), (200, self.RUNS)]):
+            assert run_verify(["discover"]) == 0
+
+    def test_mixed_web_and_discover_only_web_goes_through_verify_surface(self) -> None:
+        """search_types 混合 web／discover 時，metrics_types 過濾只留 combos 非空的 web。"""
+        with patch(f"{MODULE}._verify_surface", return_value=True) as verify_surface, \
+             patch(f"{MODULE}.count_rows", return_value=5), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, json.dumps([{"date": "2026-08-25"}])),
+                                (200, json.dumps([{"date": "2026-08-25"}])),
+                                (200, self.RECENT), (200, self.RUNS)]):
+            assert run_verify(["web", "discover"]) == 0
+        verify_surface.assert_called_once_with("web")
 
 
 class TestFreshnessCheck:

@@ -587,9 +587,9 @@ def _ingest_totals(
 
 def _finalize_run(
     run_id: str | None, *, execute: bool, errors: list[str], warnings: list[str],
-    written: int, failed: int,
+    written: int, failed: int, metrics_skipped: bool = False,
 ) -> int:
-    """印出本次的提醒與硬問題、決定 run status、收尾 ingestion_run，回傳 exit code。"""
+    """印出提醒與硬問題、決定 run status、收尾 ingestion_run，回傳 exit code；metrics_skipped（combos 為空）時 written 恆 0，不套一般規則判 failed，run_id 也恆 None（finish_run no-op）。"""
     for message in warnings:
         logger.warning("  資料品質：%s", message)
     for message in errors:
@@ -599,8 +599,9 @@ def _finalize_run(
                     len(errors), len(warnings))
         return 1 if errors else 0
     # warnings 刻意不參與 status —— 理由見 collect_day_combo docstring。
-    run_status = "success" if not errors and not failed and written else (
-        "failed" if not written else "partial"
+    run_status = ("success" if not errors else "failed") if metrics_skipped else (
+        "success" if not errors and not failed and written
+        else ("failed" if not written else "partial")
     )
     finish_run(run_id, run_status, written)
     logger.info("寫入完成：%d 列成功 / %d 列失敗，run status=%s（%d 個資料品質提醒）",
@@ -622,7 +623,8 @@ def run_ingestion(
         logger.error("FAIL: 探測最近 %d 天完全沒有資料 —— 權限、property 或配額有問題，"
                      "不是資料延遲。", probe_days)
         return 1
-    run_id = start_run(*run_window(targets)) if execute else None
+    combos = SURFACE_COMBOS[search_type]  # 空＝discover，見 gsc_surfaces.py
+    run_id = start_run(*run_window(targets)) if execute and combos else None
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -635,7 +637,7 @@ def run_ingestion(
         _ingest_totals(probe_rows, search_type=search_type, execute=execute,
                        errors=errors, warnings=warnings)
         for day in targets:
-            for combo in SURFACE_COMBOS[search_type]:
+            for combo in combos:
                 records = collect_day_combo(token, day, combo, search_type,
                                             run_started_at, errors, warnings)
                 if not execute or not records:
@@ -649,14 +651,14 @@ def run_ingestion(
         return 1
 
     return _finalize_run(run_id, execute=execute, errors=errors, warnings=warnings,
-                         written=total_written, failed=total_failed)
+                         written=total_written, failed=total_failed, metrics_skipped=not combos)
 
 
 def _verify_surface(search_type: str) -> bool:
     """印出單一 surface 的各組列數，並斷言它該有的組別都不是 0。
 
     全表計數看不出單一 surface 寫入失敗（web 有資料就會 PASS），所以按 surface 分組；
-    只有 page 組的 surface（googleNews / discover）不要求 query 組。
+    只有 page 組的 surface（googleNews）不要求 query 組；combos 為空（discover）不呼叫本函式，見 run_verify。
     """
     counts = {
         combo: count_rows(f"&search_type=eq.{search_type}&{combo_filter(combo)}")
@@ -676,23 +678,24 @@ def _verify_surface(search_type: str) -> bool:
 
 
 def run_verify(search_types: Sequence[str] = (DEFAULT_SEARCH_TYPE,)) -> int:
-    """唯讀檢查。按 surface 分組印出各組列數，以及 gsc_daily_totals（對本次 surface
-    過濾）的列數與最新日期 —— 這是「不可相加」與「單一 surface 寫入失敗」兩件事的
-    持續可見性（review S4.1 #9：S2.3 當時跳過的 totals 輸出，補在這裡）。"""
-    healthy = all([_verify_surface(search_type) for search_type in search_types])
+    """唯讀檢查。按 surface 分組印出各組列數，以及 gsc_daily_totals（對本次 surface 過濾）的列數與
+    最新日期——「不可相加」與「單一 surface 寫入失敗」兩件事的持續可見性（review S4.1 #9）。"""
+    metrics_types = [st for st in search_types if SURFACE_COMBOS[st]]  # 空 combos（discover）不驗 metrics
+    healthy = all([_verify_surface(search_type) for search_type in metrics_types])
     logger.info("⚠ 兩組是同一批底層資料的兩個邊際聚合，SUM 前必須帶判別式，"
                 "否則點擊數會被算兩次。gsc_daily_totals 是另一個母體（全量），更不可相加。")
 
     for search_type in search_types:
         totals_rows = count_rows(f"&search_type=eq.{search_type}", TABLE_TOTALS)
         status, body = _supabase_request(
-            "GET",
-            f"/rest/v1/{TABLE_TOTALS}?select=date&search_type=eq.{search_type}"
-            "&order=date.desc&limit=1",
+            "GET", f"/rest/v1/{TABLE_TOTALS}?select=date&search_type=eq.{search_type}&order=date.desc&limit=1",
         )
         latest_rows = json.loads(body) if status == 200 else []
         latest = latest_rows[0]["date"] if latest_rows else "N/A"
         logger.info("  totals(%s)：%d 列，最新日期 %s", search_type, totals_rows, latest)
+        if not SURFACE_COMBOS[search_type] and not totals_rows:
+            logger.error("%s：只收 totals 且 0 列 —— 視為失敗", search_type)
+            healthy = False
 
     status, body = _supabase_request(
         "GET",

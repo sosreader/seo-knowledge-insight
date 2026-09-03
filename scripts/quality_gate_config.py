@@ -307,10 +307,14 @@ PIPELINES: tuple[PipelineConfig, ...] = (
     # ── 4c. GSC Search Analytics — Discover（無排名，page 組）────────
     PipelineConfig(
         key="gsc_discover",
-        table="gsc_page_daily",
+        # 2026-09-03 S2.5：live run 證實 discover 連 page 組（date+page+device）都回 400
+        # 「Requests for Discover cannot be grouped by device」——不只 query 維度被擋，
+        # device 維度本身就不支援。SURFACE_COMBOS["discover"] 因此改成空 tuple，discover
+        # 只收 gsc_daily_totals，不再有 gsc_page_daily 列可查，本管線改指向 totals 表。
+        table="gsc_daily_totals",
         filters=(("search_type", "discover"),),
         timestamp_column="date",
-        max_age_hours=96 + 48,
+        max_age_hours=96 + 48,  # 沿用 gsc_daily_metrics：totals 與探測查詢同一次 run 內完成
         cadence_hours=24,
         cadence_label="daily",
         # lag_buffer_hours 用不到：gap_window_hours=None 讓整個第二類檢查（空段）SKIP，
@@ -318,24 +322,27 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         lag_buffer_hours=0.0,
         gap_window_hours=None,
         gap_skip_reason=(
-            "review S4.1 SF-2（2026-09-03）：discover 是無排名 surface，曝光本質斷續——"
-            "一篇文章進 Discover 才有曝光，ingest 端只抓探測到有資料的日期，某天沒有"
-            "Discover 曝光時那天沒有列是合法狀態，不是管線故障。gap_window_hours 掃 30 天窗"
+            "review S4.1 SF-2（2026-09-03）＋S2.5 discover-fix 更新：discover 曝光本質斷續——"
+            "一篇文章進 Discover 才有曝光，ingest 端只抓探測到有資料的日期，某天沒有 Discover"
+            "曝光時那天沒有 totals 列是合法狀態，不是管線故障。gap_window_hours 掃 30 天窗"
             "會把沒曝光的日子當空段、連紅 30 天直到滑出窗外，不是機率事件，是曝光模式的"
-            "必然結果。web 每天都有搜尋流量不會遇到，沿用它的 gap 設定在此不成立。"
+            "必然結果，改查 gsc_daily_totals 後這個論證仍然成立（母體換了，斷續的本質沒換）。"
             "新鮮度檢查（max_age_hours=144h）已涵蓋『作業真的停擺』，此處不重複用一個"
-            "會誤報的規則去涵蓋同一件事；is_position_valid()/022 CHECK 仍保證單列品質。"
+            "會誤報的規則去涵蓋同一件事。"
         ),
-        ingestion_run_table_name="gsc_daily_metrics",
+        # discover 只收 totals（S2.5），totals 的 ingestion_run 由 write_totals() 另記一列，
+        # 不再共用 gsc_daily_metrics 的分組——那張表 discover 現在完全不寫。
+        ingestion_run_table_name="gsc_daily_totals",
         degradation=None,
         degradation_skip_reason=(
-            "沿用 gsc_daily_metrics 的判定：device 值域在 ingest 端直接 reject 非法值，"
-            "不合法列不會落表，reject 數量未持久化到可查詢欄位。discover 只有 page 組"
-            "（見 SURFACE_COMBOS，無排名 surface 不送 query 維度），母體比 web 更窄，"
-            "沒有額外的降級維度可查，記為已知缺口，理由與 gsc_daily_metrics 相同。"
+            "S2.5 discover-fix 後 gsc_discover 指向 gsc_daily_totals：全站彙總沒有"
+            "page/query/device 之類的維度可拆，因此沒有『某個子集被靜默丟棄』這種降級可查——"
+            "與 gsc_daily_totals 管線本身的判定同理，唯一可能的資料品質問題是整批 0 列，"
+            "屬於新鮮度／空段檢查的範圍，不重複用降級規則。"
         ),
-        schedule_note="門檻沿用 gsc_daily_metrics：discover 與 web 是同一支腳本、"
-                      "同一次探測查詢的不同 search_type 分支，來源延遲特性相同。",
+        schedule_note="門檻沿用 gsc_daily_metrics：totals 與探測查詢在同一支腳本、"
+                      "同一次 run 內完成（見 ingest_gsc_search_analytics.py write_totals()），"
+                      "來源延遲特性相同。",
     ),
 
     # ── 4d. GSC 全站總數（date-only 探測查詢的副產品，非抽樣）────────

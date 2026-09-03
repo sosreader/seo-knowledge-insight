@@ -114,11 +114,15 @@ class TestPipelineConfigResolution:
         assert pipeline.gap_window_hours is None
         assert pipeline.gap_skip_reason
 
-    def test_gsc_discover_pipeline_filters_and_ingestion_run_table(self) -> None:
+    def test_gsc_discover_pipeline_points_to_totals_table(self) -> None:
+        """S2.5 discover-fix（2026-09-03）：live run 證實 discover 連 page 組
+        （date+page+device）都回 400，SURFACE_COMBOS["discover"] 改空 tuple，
+        discover 只收 gsc_daily_totals；本管線跟著改指向 totals 表，
+        ingestion_run_table_name 也從 gsc_daily_metrics 換成 gsc_daily_totals。"""
         pipeline = PIPELINES_BY_KEY["gsc_discover"]
-        assert pipeline.table == "gsc_page_daily"
+        assert pipeline.table == "gsc_daily_totals"
         assert pipeline.filters == (("search_type", "discover"),)
-        assert pipeline.ingestion_run_table_name == "gsc_daily_metrics"
+        assert pipeline.ingestion_run_table_name == "gsc_daily_totals"
 
     def test_gsc_discover_gap_check_is_skipped(self) -> None:
         """Regression（review S4.1 SF-2，2026-09-03）：discover 曝光本質斷續，

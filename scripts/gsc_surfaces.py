@@ -48,16 +48,25 @@ KB learned skill：cross-script-import-in-scripts-dir-needs-repo-root-on-syspath
 ═══ 沒有排名概念的 surface（googleNews / discover）═══
 
 實測：這兩個 surface 的每一列 position 都是 0，而且 dimensions 帶 query 會回 400
-`Request for GOOGLE_NEWS cannot be grouped by query`。於是：
-
-  - SURFACE_COMBOS 只給它們 page 組（帶 query 送出去必定整個 run 失敗）；
-  - position 驗證改為 surface-aware：這兩個 surface 的 0 是**忠實的 API 原值**，照收；
-    其他 < 1 的值仍然擋下——那才是「BQ 0-based sum_position 忘了 +1」的形狀，
-    015 的 position_ck 本來就是為了擋它。
+`Request for GOOGLE_NEWS cannot be grouped by query`。於是 SURFACE_COMBOS 只給
+googleNews page 組（帶 query 送出去必定整個 run 失敗）；position 驗證改為
+surface-aware：這兩個 surface 的 0 是**忠實的 API 原值**，照收；其他 < 1 的值仍然
+擋下——那才是「BQ 0-based sum_position 忘了 +1」的形狀，015 的 position_ck 本來就是
+為了擋它。
 
 腳本原則是不靜默改寫 API 回的值，所以存 0 而不是寫入時轉 NULL；「無排名」這件事
 由視圖層的 NULLIF(position, 0) 呈現（migration 022）。is_position_valid() 與
 022 的條件式 CHECK 一一對應，兩邊要一起改。
+
+【discover 更進一步：連 page 組也不支援】2026-09-03 live run（S2.5）證實 discover
+連 `(date, page, device)` 這個 page 組也回 400
+`Requests for Discover cannot be grouped by device`——不是只有 query 維度被擋，
+device 維度本身 discover 就不支援。於是 discover 的 SURFACE_COMBOS 是空 tuple：
+只收 gsc_daily_totals（date-only 探測查詢的副產品，本來就不帶 device），不收
+gsc_daily_metrics 的 page 層列。要收 page 層需要一個不帶 device 的新維度組合，
+是尚未做的 follow-up（需要新的哨兵值設計與 migration，見任務書 S2.6）。
+run_ingestion／run_verify 對 SURFACE_COMBOS 為空的 surface 一律跳過 metrics 階段，
+只做探測＋totals。
 
 
 ═══ 全站總數（gsc_daily_totals）的母體與本表不同 ═══
@@ -96,7 +105,9 @@ SURFACE_COMBOS: dict[str, tuple[str, ...]] = {
     "video": (COMBO_PAGE, COMBO_QUERY),
     "news": (COMBO_PAGE, COMBO_QUERY),
     "googleNews": (COMBO_PAGE,),  # API 400：cannot be grouped by query
-    "discover": (COMBO_PAGE,),    # 同上；device 維度支援為 provisional，首次 live run 證實
+    # 空 tuple：2026-09-03 live run 400 原文「Requests for Discover cannot be
+    # grouped by device」——連 page 組（帶 device 維度）都不支援，只收 totals。
+    "discover": (),
 }
 
 # position 恆為 0（沒有排名概念）的 surface，與 022 的條件式 position_ck 一致

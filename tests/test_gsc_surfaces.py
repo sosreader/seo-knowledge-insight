@@ -57,10 +57,20 @@ class TestSurfaceCombosConfiguration:
         for combo in SURFACE_COMBOS[surface]:
             assert combo in COMBO_DIMENSIONS
 
-    @pytest.mark.parametrize("surface", sorted(NO_RANKING_SURFACES))
-    def test_no_ranking_surfaces_have_page_combo_only(self, surface: str) -> None:
-        """googleNews／discover 帶 query 維度送出去必定整個 run 400，只能是 page 組。"""
-        assert SURFACE_COMBOS[surface] == (COMBO_PAGE,)
+    def test_googlenews_has_page_combo_only(self) -> None:
+        """googleNews 帶 query 維度送出去必定整個 run 400，只能是 page 組。"""
+        assert SURFACE_COMBOS["googleNews"] == (COMBO_PAGE,)
+
+    def test_discover_has_no_combos(self) -> None:
+        """2026-09-03 live run（S2.5）：discover 連 page 組（帶 device 維度）也回 400
+        `Requests for Discover cannot be grouped by device`——比 googleNews 更窄，
+        SURFACE_COMBOS 對它是空 tuple，只收 gsc_daily_totals。"""
+        assert SURFACE_COMBOS["discover"] == ()
+
+    def test_no_ranking_surfaces_combos_are_a_subset_of_googlenews(self) -> None:
+        """NO_RANKING_SURFACES 兩個成員的 combos 都不含 query 組（不論是否為空）。"""
+        for surface in sorted(NO_RANKING_SURFACES):
+            assert COMBO_QUERY not in SURFACE_COMBOS[surface]
 
     @pytest.mark.parametrize("surface", sorted(set(SURFACE_COMBOS) - NO_RANKING_SURFACES))
     def test_ranking_surfaces_have_both_combos(self, surface: str) -> None:
