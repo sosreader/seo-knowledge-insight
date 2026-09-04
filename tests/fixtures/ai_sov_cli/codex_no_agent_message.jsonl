@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"web_search","query":"範例主題","action":{"type":"search","query":"範例主題","queries":["範例主題"]}}}
+{"type":"turn.completed","usage":{"input_tokens":1200,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0}}

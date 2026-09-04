@@ -1,0 +1,9 @@
+{"type":"thread.started","thread_id":"11111111-2222-3333-4444-555555555555"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation."}}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc 'find .. -name AGENTS.md | head -5'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc 'find .. -name AGENTS.md | head -5'","aggregated_output":"../example-project/AGENTS.md\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"web_search","query":"範例主題 世界觀 評價","action":{"type":"search","query":"範例主題 世界觀 評價","queries":["範例主題 世界觀 評價","範例主題 書評"]}}}
+{"type":"item.completed","item":{"id":"item_3","type":"web_search","query":"https://example.com/review/1","action":{"type":"other"}}}
+{"type":"item.completed","item":{"id":"item_4","type":"agent_message","text":"{\"answer\":\"這是一段測試用的整理回答，內容不重要，重點是結構符合 schema。\",\"sources\":[\"https://example.com/review/1\",\"https://vocus.cc/article/abc123\",\"https://blog.example.org/post/2\"]}"}}
+{"type":"turn.completed","usage":{"input_tokens":15000,"cached_input_tokens":9000,"cache_write_input_tokens":0,"output_tokens":800,"reasoning_output_tokens":150}}

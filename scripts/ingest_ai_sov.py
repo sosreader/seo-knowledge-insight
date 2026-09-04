@@ -11,6 +11,8 @@ ai_sov_response。判讀一律走 migration 024 建的三個週級視圖，不�
   python scripts/ingest_ai_sov.py --execute                        # 實際寫入
   python scripts/ingest_ai_sov.py --provider fake --max-prompts 3  # smoke（強制 dry-run）
   python scripts/ingest_ai_sov.py --verify                         # 讀回最新一週的摘要
+  python scripts/ingest_ai_sov.py --provider codex --execute --concurrency 2   # 本機 codex CLI
+  python scripts/ingest_ai_sov.py --provider claude-code --max-prompts 2       # 本機 claude CLI smoke
 
 
 ═══ 這個指標的成熟度（讀之前必看）═══
@@ -67,6 +69,25 @@ panel 才被看見（實測：108 次呼叫、21 分鐘、0 列產出）。因�
 收到 ProviderFatalError 時立即回傳，不再呼叫 provider——failures 只會有
 一筆，rows 保留中止前已成功累積的部分（若有）。下游 _persist 的語意
 不變：只要 failures 非空就標 failed、跳過 sweep、非零碼結束。
+
+【5. codex／claude-code：本機 CLI provider，走訂閱額度不走 API 計費】
+細節與已知限制寫在 scripts/ai_sov_cli_providers.py 的模組 docstring
+（探測證據、grounded 判定、codex 無法完全關掉 shell 工具等），這裡只記
+對本檔的影響：這兩家 provider 必須在使用者已登入 codex/claude CLI 的
+機器上執行，不能像 openai provider 那樣純靠 CI 裡的一組 API key。
+GitHub Actions workflow（ai-sov-weekly.yml）因此**不改**，只走 openai；
+本機跑法見 `make ai-sov-local` 與 docs/ai-sov-local-runner.md。兩條路徑
+各自獨立，同一週要嘛全部走 CI 的 openai、要嘛全部走本機的 codex/
+claude-code——provider 欄位本身就把兩者在資料庫層隔開，不會混。
+
+【6. --concurrency：本機 CLI provider 才需要，openai/fake 沒有意義但不禁】
+每題實測 56～70 秒，108 次序跑約 2 小時，對每週手動跑一次的本機作業
+太長。ThreadPoolExecutor 平行呼叫把牆鐘時間除以並行度，寫入仍集中在
+主 thread（run_panel 收集 rows/failures 後才回傳，_persist 完全不變）。
+上限 4：codex/claude CLI 各自對它們的後端有自己的並行請求限制，開太多
+只會把部分呼叫擠成逾時或 429，不是線性加速。預設 1（循序）保留：
+openai provider 的既有呼叫模式與 test_fatal_error_aborts_entire_run_
+immediately 這類鎖定「fatal 時 provider 恰好只被呼叫 1 次」的測試不受影響。
 """
 from __future__ import annotations
 
@@ -74,12 +95,19 @@ import argparse
 import logging
 import os
 import sys
+import threading
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from ai_sov_cli_providers import (  # noqa: E402
+    ClaudeCodeProvider,
+    CodexProvider,
+    DEFAULT_CLAUDE_CODE_MODEL,
+)
 from ai_sov_panel import PanelPrompt, load_panel, panel_target_domain  # noqa: E402
 from ai_sov_providers import (  # noqa: E402
     FakeProvider,
@@ -105,6 +133,8 @@ DEFAULT_REPEATS = 3
 MAX_REPEATS = 10  # 超過這個值的成本與可比性風險都該先被人看一眼，不該只是打字打錯
 DEFAULT_MODEL = "gpt-5.4"
 DEFAULT_PROVIDER = "openai"
+DEFAULT_CONCURRENCY = 1
+MAX_CONCURRENCY = 4  # 本機 CLI provider 各自吃一份訂閱額度/rate limit，不宜無上限平行
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -176,7 +206,7 @@ def summarize(rows: list[dict]) -> dict:
 # ══════════════════════════════════════════════════════════════════════
 
 def run_panel(provider: Provider, prompts: tuple[PanelPrompt, ...], *, repeats: int,
-              target_domain: str, week_start: date, run_at: datetime,
+              target_domain: str, week_start: date, run_at: datetime, concurrency: int = 1,
               ) -> tuple[list[dict], list[str]]:
     """對每條 prompt 問 repeats 次。回傳 (列, 失敗描述)。
 
@@ -184,7 +214,26 @@ def run_panel(provider: Provider, prompts: tuple[PanelPrompt, ...], *, repeats: 
     （設計決定 4）。ProviderFatalError（額度耗盡／認證失效）不一樣：那個
     錯誤對後續呼叫必然重現，因此立即中止整條 run、不再呼叫 provider
     （設計決定 4b），rows/failures 保留中止前已累積的內容。
+
+    concurrency=1（預設）走原本的循序迴圈，逐字保留既有語意——遇到 fatal
+    當下 provider 恰好只被呼叫過 1 次（見 test_fatal_error_aborts_entire_run_
+    immediately）。concurrency>1 時改走 _run_panel_concurrent：多個 worker
+    thread 平行呼叫 provider.answer()，寫入 rows/failures 仍只發生在主
+    thread（呼叫端集中處理 future 結果），不需要額外的鎖。fatal 早停在
+    平行模式下是『偵測到後不再送出新呼叫』，已經在飛的呼叫允許跑完——
+    provider 被呼叫的確切次數因此可能大於 1（並行度的必然代價），但仍然
+    遠小於把整個 panel 跑完的呼叫數。
     """
+    if concurrency <= 1:
+        return _run_panel_sequential(provider, prompts, repeats=repeats,
+                                     target_domain=target_domain, week_start=week_start, run_at=run_at)
+    return _run_panel_concurrent(provider, prompts, repeats=repeats, target_domain=target_domain,
+                                 week_start=week_start, run_at=run_at, concurrency=concurrency)
+
+
+def _run_panel_sequential(provider: Provider, prompts: tuple[PanelPrompt, ...], *, repeats: int,
+                          target_domain: str, week_start: date, run_at: datetime,
+                          ) -> tuple[list[dict], list[str]]:
     rows: list[dict] = []
     failures: list[str] = []
     for prompt in prompts:
@@ -207,12 +256,61 @@ def run_panel(provider: Provider, prompts: tuple[PanelPrompt, ...], *, repeats: 
     return rows, failures
 
 
+def _run_panel_concurrent(provider: Provider, prompts: tuple[PanelPrompt, ...], *, repeats: int,
+                          target_domain: str, week_start: date, run_at: datetime, concurrency: int,
+                          ) -> tuple[list[dict], list[str]]:
+    tasks = [(prompt, repeat_idx) for prompt in prompts for repeat_idx in range(repeats)]
+    fatal_seen = threading.Event()
+
+    def call(prompt: PanelPrompt, repeat_idx: int) -> tuple[str, PanelPrompt, int, object]:
+        if fatal_seen.is_set():
+            return "skipped", prompt, repeat_idx, None
+        try:
+            return "ok", prompt, repeat_idx, provider.answer(prompt.prompt)
+        except ProviderFatalError as exc:
+            fatal_seen.set()
+            return "fatal", prompt, repeat_idx, exc
+        except ProviderError as exc:
+            return "error", prompt, repeat_idx, exc
+
+    rows: list[dict] = []
+    failures: list[str] = []
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = [executor.submit(call, prompt, repeat_idx) for prompt, repeat_idx in tasks]
+        for future in as_completed(futures):
+            kind, prompt, repeat_idx, payload = future.result()
+            if kind == "skipped":
+                continue
+            if kind == "fatal":
+                failures.append(f"{prompt.id}#{repeat_idx}: {payload}")
+                logger.error("  %s repeat=%d 遇到不可重試錯誤，不再送出新呼叫（設計決定 4b）：%s",
+                            prompt.id, repeat_idx, payload)
+                continue
+            if kind == "error":
+                failures.append(f"{prompt.id}#{repeat_idx}: {payload}")
+                logger.error("  %s repeat=%d 失敗：%s", prompt.id, repeat_idx, payload)
+                continue
+            rows.append(build_row(
+                prompt, repeat_idx, payload, provider=provider.name, model=provider.model,
+                week_start=week_start, run_at=run_at, target_domain=target_domain,
+            ))
+    return rows, failures
+
+
 def resolve_provider(name: str, model: str, target_domain: str) -> Provider:
     if name == "fake":
         return FakeProvider(model=model if model != DEFAULT_MODEL else "fake-1",
                             target_domain=target_domain)
     if name == "openai":
         return OpenAIProvider(api_key=os.environ.get("OPENAI_API_KEY", ""), model=model)
+    if name == "codex":
+        return CodexProvider(model=model)
+    if name == "claude-code":
+        # DEFAULT_MODEL 是 openai/codex 的 gpt-5.4——使用者沒有明確傳
+        # --model 時，CLI 參數會落到這個 openai 系的預設值，對 claude-code
+        # 是錯的模型字串，換成 claude-code 自己的預設（同 FakeProvider 的
+        # "model != DEFAULT_MODEL ? 用它 : 用自己的預設" 這套既有慣例）。
+        return ClaudeCodeProvider(model=model if model != DEFAULT_MODEL else DEFAULT_CLAUDE_CODE_MODEL)
     raise ProviderError(f"未知的 provider：{name}")
 
 
@@ -235,9 +333,13 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="AI 答案 share of voice 週級量測")
     parser.add_argument("--execute", action="store_true", help="實際寫入 Supabase（預設 dry-run）")
     parser.add_argument("--provider", default=os.environ.get("AI_SOV_PROVIDER", DEFAULT_PROVIDER),
-                        choices=["openai", "fake"])
+                        choices=["openai", "fake", "codex", "claude-code"])
     parser.add_argument("--model", default=os.environ.get("AI_SOV_MODEL", DEFAULT_MODEL))
     parser.add_argument("--repeats", type=int, default=int(os.environ.get("AI_SOV_REPEATS", DEFAULT_REPEATS)))
+    parser.add_argument("--concurrency", type=int,
+                        default=int(os.environ.get("AI_SOV_CONCURRENCY", DEFAULT_CONCURRENCY)),
+                        help=f"平行呼叫 provider 的 worker 數（1..{MAX_CONCURRENCY}，預設 1＝循序）。"
+                             "主要給本機 CLI provider（codex/claude-code）縮短總耗時用")
     parser.add_argument("--max-prompts", type=int, default=0,
                         help="只跑前 N 條 prompt（smoke 用）。會讓 panel 不完整，因此強制 dry-run")
     parser.add_argument("--verify", action="store_true", help="讀回最新一週的摘要，不呼叫 provider")
@@ -247,6 +349,8 @@ def _parse_args() -> argparse.Namespace:
 def _validate_args(args: argparse.Namespace) -> None:
     if not 1 <= args.repeats <= MAX_REPEATS:
         raise SystemExit(f"--repeats 需在 1..{MAX_REPEATS}，實得 {args.repeats}")
+    if not 1 <= args.concurrency <= MAX_CONCURRENCY:
+        raise SystemExit(f"--concurrency 需在 1..{MAX_CONCURRENCY}，實得 {args.concurrency}")
     if args.max_prompts and args.execute:
         # 半套的 panel 寫進去會讓該週的分母與其他週不可比，而且沒有任何訊號。
         raise SystemExit("--max-prompts 只供 smoke 使用，不可與 --execute 併用")
@@ -305,11 +409,12 @@ def main() -> None:
         # 明確失敗，不靜默退回 FakeProvider——那會寫進一整週看起來正常、
         # 實際上完全捏造的資料，而且沒有任何訊號能事後分辨。
         raise SystemExit(f"無法建立 provider：{exc}") from exc
-    logger.info("provider=%s model=%s prompts=%d repeats=%d week_start=%s",
-                provider.name, provider.model, len(prompts), args.repeats, week_start.isoformat())
+    logger.info("provider=%s model=%s prompts=%d repeats=%d concurrency=%d week_start=%s",
+                provider.name, provider.model, len(prompts), args.repeats, args.concurrency,
+                week_start.isoformat())
 
-    rows, failures = run_panel(provider, prompts, repeats=args.repeats,
-                               target_domain=target_domain, week_start=week_start, run_at=run_at)
+    rows, failures = run_panel(provider, prompts, repeats=args.repeats, target_domain=target_domain,
+                               week_start=week_start, run_at=run_at, concurrency=args.concurrency)
     _log_summary(rows, failures)
 
     if not args.execute:

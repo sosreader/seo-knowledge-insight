@@ -1,0 +1,2 @@
+{"type": "system", "subtype": "hook_started", "hook_name": "SessionStart:startup", "session_id": "sess-3"}
+{"type": "result", "subtype": "error_max_turns", "is_error": true, "result": "已達最大回合數限制", "usage": {}}

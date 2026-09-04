@@ -13,6 +13,7 @@
 ##   make generate-report     週報生成（Step 4）
 ##   make evaluate-qa         品質評估（Step 5）
 ##   make rebuild-embeddings  修復 qa_embeddings.npy 與 qa_final.json 不一致
+##   make ai-sov-local        AI SoV 用本機 codex/claude CLI 跑（訂閱額度，見 docs/ai-sov-local-runner.md）
 ##   make test                執行測試
 ##   make dry-run             同 make check（向下相容）
 ##   make install             安裝依賴
@@ -462,6 +463,21 @@ autoresearch-baseline: ## AutoResearch retrieval baseline eval（需先啟動 AP
 .PHONY: autoresearch-meeting-prep-baseline
 autoresearch-meeting-prep-baseline: ## AutoResearch meeting-prep baseline eval（rule-based composite，零 LLM）
 	$(PYTHON) autoresearch/meeting-prep/eval_local.py --report eval/fixtures/meeting_prep/meeting_prep_20260306_ea576a4f.md
+
+# ── AI SoV 本機 provider（S6.2，訂閱額度，不走 OpenAI API 計費）──────
+
+# 可在呼叫時覆寫，例如：make ai-sov-local PROVIDER=claude-code CONCURRENCY=1
+PROVIDER ?= codex
+REPEATS ?= 3
+CONCURRENCY ?= 2
+
+.PHONY: ai-sov-local
+ai-sov-local: ## AI SoV 用本機 codex/claude CLI 跑（PROVIDER/REPEATS/CONCURRENCY 可覆寫，見 docs/ai-sov-local-runner.md）
+	@mkdir -p output/ai-sov
+	@echo "provider=$(PROVIDER) repeats=$(REPEATS) concurrency=$(CONCURRENCY)"
+	$(PYTHON) scripts/ingest_ai_sov.py --execute \
+		--provider $(PROVIDER) --repeats $(REPEATS) --concurrency $(CONCURRENCY) \
+		2>&1 | tee -a "output/ai-sov/$$(date +%Y-%m-%d).log"
 
 # ── 說明 ─────────────────────────────────────────────
 

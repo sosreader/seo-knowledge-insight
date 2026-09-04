@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"99999999-8888-7777-6666-555555555555"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"這不是 JSON，只是純文字回答，schema 被繞過或模型沒有遵守 --output-schema。"}}
+{"type":"turn.completed","usage":{"input_tokens":500,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":100,"reasoning_output_tokens":0}}

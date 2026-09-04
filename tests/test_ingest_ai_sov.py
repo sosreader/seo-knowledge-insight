@@ -269,6 +269,101 @@ class TestRunPanel:
         assert provider.calls == 2
 
 
+class TestRunPanelConcurrent:
+    """concurrency > 1 時走 _run_panel_concurrent，語意與循序模式不完全相同
+    （見 run_panel docstring）：fatal 早停在這裡是『偵測到後不再送出新呼叫』，
+    不保證恰好只呼叫 1 次。"""
+
+    @staticmethod
+    def _prompts(n: int) -> tuple:
+        from ai_sov_panel import PanelPrompt
+
+        return tuple(PanelPrompt(id=f"p{i}", theme="t", prompt=f"問題 {i}？", source_query="")
+                     for i in range(n))
+
+    def test_produces_same_row_count_as_sequential(self) -> None:
+        rows, failures = ingest.run_panel(FakeProvider(), self._prompts(4), repeats=3,
+                                          target_domain="vocus.cc", week_start=WEEK, run_at=RUN_AT,
+                                          concurrency=3)
+        assert len(rows) == 12 and failures == []
+
+    def test_failures_are_recorded_not_dropped(self) -> None:
+        import threading
+
+        class FlakyThreadSafe:
+            name, model = "flaky", "m"
+
+            def __init__(self) -> None:
+                self._lock = threading.Lock()
+                self.calls = 0
+
+            def answer(self, prompt: str) -> ProviderAnswer:
+                with self._lock:
+                    self.calls += 1
+                    call_no = self.calls
+                if call_no % 3 == 0:
+                    raise ProviderError("boom")
+                return ProviderAnswer(text="ok", citations=(Citation("https://a.test/1", "a.test"),))
+
+        rows, failures = ingest.run_panel(FlakyThreadSafe(), self._prompts(3), repeats=3,
+                                          target_domain="vocus.cc", week_start=WEEK, run_at=RUN_AT,
+                                          concurrency=2)
+        assert len(rows) + len(failures) == 9
+        assert len(failures) == 3
+
+    def test_fatal_error_stops_new_calls_and_keeps_partial_rows(self) -> None:
+        import threading
+
+        class FatalAfterFew:
+            name, model = "openai", "m"
+
+            def __init__(self) -> None:
+                self._lock = threading.Lock()
+                self.calls = 0
+
+            def answer(self, prompt: str) -> ProviderAnswer:
+                with self._lock:
+                    self.calls += 1
+                    call_no = self.calls
+                if call_no == 1:
+                    return ProviderAnswer(text="ok", citations=(Citation("https://a.test/1", "a.test"),))
+                raise ProviderFatalError("quota exhausted")
+
+        # 直接呼叫 _run_panel_concurrent（而非經 run_panel）以確保真的走
+        # 並行路徑——run_panel(concurrency=1) 會被導去 _run_panel_sequential。
+        provider = FatalAfterFew()
+        rows, failures = ingest._run_panel_concurrent(
+            provider, self._prompts(6), repeats=1, target_domain="vocus.cc",
+            week_start=WEEK, run_at=RUN_AT, concurrency=1)
+        assert len(rows) == 1
+        assert len(failures) == 1 and "quota exhausted" in failures[0]
+        assert provider.calls <= 2  # concurrency=1 時最多『飛行中的 1 個』再多 1 個排隊中
+
+
+class TestRunPanelDispatch:
+    def test_concurrency_1_matches_sequential_semantics(self) -> None:
+        """run_panel(concurrency=1) 必須精確落在 _run_panel_sequential，
+        fatal 時 provider 恰好只被呼叫 1 次——這是 concurrency 這個新參數
+        對既有行為做出的唯一承諾（並行模式本身不保證這麼精確，見上面
+        TestRunPanelConcurrent 的說明）。"""
+        class QuotaExhausted:
+            name, model = "openai", "m"
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def answer(self, prompt: str) -> ProviderAnswer:
+                self.calls += 1
+                raise ProviderFatalError("不可重試")
+
+        provider = QuotaExhausted()
+        prompts = TestRunPanelConcurrent._prompts(5)
+        rows, failures = ingest.run_panel(provider, prompts, repeats=2,
+                                          target_domain="vocus.cc", week_start=WEEK, run_at=RUN_AT,
+                                          concurrency=1)
+        assert rows == [] and len(failures) == 1 and provider.calls == 1
+
+
 class TestResolveProvider:
     def test_fake(self) -> None:
         provider = ingest.resolve_provider("fake", ingest.DEFAULT_MODEL, "vocus.cc")
@@ -283,11 +378,25 @@ class TestResolveProvider:
         with pytest.raises(ProviderError, match="未知"):
             ingest.resolve_provider("perplexity", "m", "vocus.cc")
 
+    def test_codex_uses_given_model(self) -> None:
+        provider = ingest.resolve_provider("codex", "gpt-5.4-custom", "vocus.cc")
+        assert provider.name == "codex" and provider.model == "gpt-5.4-custom"
+
+    def test_claude_code_falls_back_to_its_own_default_model(self) -> None:
+        """--model 未被使用者覆寫時會落到 openai 系的 DEFAULT_MODEL（gpt-5.4），
+        對 claude-code 是錯的模型字串，必須換成 claude-code 自己的預設。"""
+        provider = ingest.resolve_provider("claude-code", ingest.DEFAULT_MODEL, "vocus.cc")
+        assert provider.name == "claude-code" and provider.model == ingest.DEFAULT_CLAUDE_CODE_MODEL
+
+    def test_claude_code_respects_explicit_model_override(self) -> None:
+        provider = ingest.resolve_provider("claude-code", "claude-opus-5", "vocus.cc")
+        assert provider.model == "claude-opus-5"
+
 
 class TestArgValidation:
     @staticmethod
     def _args(**kwargs) -> argparse.Namespace:
-        base = {"repeats": 3, "max_prompts": 0, "execute": False}
+        base = {"repeats": 3, "concurrency": 1, "max_prompts": 0, "execute": False}
         base.update(kwargs)
         return argparse.Namespace(**base)
 
@@ -298,6 +407,11 @@ class TestArgValidation:
     def test_rejects_out_of_range_repeats(self, repeats: int) -> None:
         with pytest.raises(SystemExit, match="repeats"):
             ingest._validate_args(self._args(repeats=repeats))
+
+    @pytest.mark.parametrize("concurrency", [0, -1, ingest.MAX_CONCURRENCY + 1])
+    def test_rejects_out_of_range_concurrency(self, concurrency: int) -> None:
+        with pytest.raises(SystemExit, match="concurrency"):
+            ingest._validate_args(self._args(concurrency=concurrency))
 
     def test_rejects_partial_panel_with_execute(self) -> None:
         """半套 panel 寫進去會讓該週的分母與其他週不可比，而且沒有任何訊號。"""
