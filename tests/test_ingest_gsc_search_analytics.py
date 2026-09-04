@@ -786,6 +786,14 @@ class TestHasRows:
         path = request.call_args.args[1]
         assert "gsc_daily_totals" in path and "search_type=eq.web" in path
 
+    def test_uses_date_desc_order_to_hit_the_date_index_not_a_seq_scan(self) -> None:
+        """run 33849046525 之後：不帶 order 會 seq scan 從 heap 頭掃到剛寫入的尾端，
+        表大到一定程度會逾時；帶 order=date.desc 讓它走 (date DESC) 索引。"""
+        with patch(f"{MODULE}._supabase_request", return_value=(200, "[]")) as request:
+            has_rows()
+        path = request.call_args.args[1]
+        assert "order=date.desc" in path
+
 
 class TestLatestDate:
     def test_returns_parsed_date(self) -> None:
@@ -1163,6 +1171,19 @@ class TestRunVerify:
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(500, "boom"), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify() == 0
+
+    def test_sample_query_has_no_clicks_sort_only_date_desc(self) -> None:
+        """run 33849046525：帶 clicks.desc 迫使 planner 把最新一天全部 surface 的列
+        （約 20 萬列）撈回做 Incremental Sort，表到 1.6M 列就逾時。read-back 樣本
+        不是 top-N 排行，只需要 order=date.desc 走索引取到 8 列即停。"""
+        with patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
+             patch(f"{MODULE}.has_rows", return_value=True), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]) as request:
+            assert run_verify() == 0
+        sample_query_path = request.call_args_list[1].args[1]
+        assert "clicks.desc" not in sample_query_path
+        assert "order=date.desc&limit=8" in sample_query_path
 
 
 class TestVerifySurfaceNoRankingBranch:

@@ -492,8 +492,11 @@ def has_rows(extra_query: str = "", table: str = TABLE_GSC) -> bool:
     這是 count_rows() 換成 planned 之後補回來的那個保證：planner 估計有下限 1，
     拿它去判斷「0 列」等於讓那條檢查永遠通過。取 1 列的成本與表多大無關。
     """
+    # 帶 order=date.desc，讓它走 (date DESC) 索引由新到舊找第一列，而不是 seq scan
+    # 從 heap 頭掃到剛寫入的尾端——剛寫入的列在 heap 尾端，不帶 order 的 seq scan
+    # 要先掃過百萬列才碰到，表夠大會逾時（見 run 33849046525）。
     status, body = _supabase_request(
-        "GET", f"/rest/v1/{table}?select=date{extra_query}&limit=1"
+        "GET", f"/rest/v1/{table}?select=date{extra_query}&order=date.desc&limit=1"
     )
     if status != 200:
         raise RuntimeError(f"存在性查詢失敗：{status} {body[:200]}")
@@ -729,10 +732,14 @@ def run_verify(search_types: Sequence[str] = (DEFAULT_SEARCH_TYPE,)) -> int:
                          search_type, status)
             healthy = False
 
+    # 這是 read-back 樣本、不是 top-N 排行，不需要 clicks 排序。之前帶 order=...,clicks.desc
+    # 會迫使 planner 先把最新一天所有 surface 的列（六個 surface 合計約 20 萬列）從 heap
+    # 撈回、篩 search_type，再依 clicks 做 Incremental Sort，表到 1.6M 列就逾時
+    # （run 33849046525）。只留 order=date.desc，走 (date DESC) 索引由新到舊取到 8 列即停。
     status, body = _supabase_request(
         "GET",
         f"/rest/v1/{TABLE_GSC}?select=date,page,query,device,clicks,impressions,ctr,position"
-        f"&search_type=in.({','.join(search_types)})&order=date.desc,clicks.desc&limit=8",
+        f"&search_type=in.({','.join(search_types)})&order=date.desc&limit=8",
     )
     if status != 200:
         logger.error("讀取 %s 失敗：%s %s", TABLE_GSC, status, body[:300])
