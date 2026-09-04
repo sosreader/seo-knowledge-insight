@@ -484,7 +484,7 @@ PIPELINES: tuple[PipelineConfig, ...] = (
     # ── 4c-2. GSC Search Analytics — Discover page 層（page_nodevice 組）───
     # 2026-09-04 S2.4：discover 補上不帶 device 的 page_nodevice 組合後，
     # (date, page) 列開始進 gsc_page_daily（見 gsc_surfaces.py SURFACE_COMBOS／
-    # 015 device_surface_ck）。totals 與 page 層是兩個母體、兩條寫入路徑，
+    # 025 device_surface_ck）。totals 與 page 層是兩個母體、兩條寫入路徑，
     # 各自要有自己的新鮮度訊號，因此不改 gsc_discover 的指向，另立本條目。
     PipelineConfig(
         key="gsc_discover_pages",
@@ -514,7 +514,7 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         degradation=None,
         degradation_skip_reason=(
             "discover 的 page_nodevice 組不請求 device 維度，寫入時 device 恆為 'n/a' 哨兵"
-            "（015 device_surface_ck 綁死，見 gsc_surfaces.py is_device_valid()），沒有"
+            "（025 device_surface_ck 綁死，見 gsc_surfaces.py is_device_valid()），沒有"
             "可拆的裝置子維度可能被靜默丟棄；page_nodevice 組本身也不含 query 維度"
             "（discover 是無排名 surface，同 gsc_googlenews），因此沒有除 device 以外的"
             "額外維度可查。唯一可能的資料品質問題是整批列數異常，屬於新鮮度／空段檢查的"
