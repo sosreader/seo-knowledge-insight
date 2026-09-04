@@ -23,9 +23,10 @@ query 組每天回 47.8k-48.0k 列，**貼著 50K 天花板**，代表該組確�
 
 ═══ 維度組合、哨兵值、surface 規則都在 scripts/gsc_surfaces.py ═══
 
-兩套維度組合（page 組 / query 組）怎麼共用同一個七欄 unique key 空間、三個哨兵值
-為什麼選成那樣、判別式為什麼一律以 page 為準、googleNews 與 discover 為什麼只跑
-page 組且 position 存 0 —— 全部搬到 `scripts/gsc_surfaces.py` 的 docstring，
+維度組合（page 組 / query 組 / page_nodevice 組）怎麼共用同一個七欄 unique key 空間、
+哨兵值為什麼選成那樣、判別式為什麼一律以 page 為準、googleNews 為什麼只跑 page 組且
+position 存 0、discover 為什麼改跑不帶 device 的 page_nodevice 組且 device 存 'n/a'
+哨兵 —— 全部搬到 `scripts/gsc_surfaces.py` 的 docstring，
 因為那些常數與驗證函式都定義在那裡。**不帶判別式直接 SUM 會得到約兩倍的假數字且
 不會有任何錯誤訊號**，--verify 因此固定按 surface 分組印出兩邊列數。
 
@@ -217,8 +218,8 @@ def classify_gsc_error(status: int, body: str) -> GscQueryError:
     if status == 429:
         return GscQueryError(f"HTTP 429：超出 QPS/QPD 配額。{body[:200]}")
     if status == 400:
-        return GscQueryError("HTTP 400：請求參數不合法（維度組合或日期範圍）；googleNews 與 discover "
-                             f"不支援 query 維度，先檢查 SURFACE_COMBOS。{body[:300]}")
+        return GscQueryError("HTTP 400：請求參數不合法（維度組合或日期範圍）；部分 surface "
+                             f"不支援 query 或 device 維度，先檢查 SURFACE_COMBOS／COMBO_DIMENSIONS。{body[:300]}")
     return GscQueryError(f"HTTP {status}：{body[:300]}")
 
 
@@ -720,7 +721,9 @@ def _verify_surface(search_type: str) -> bool:
     """印出單一 surface 的各組列數，並斷言它該有的組別都不是 0。
 
     全表計數看不出單一 surface 寫入失敗（web 有資料就會 PASS），所以按 surface 分組；
-    只有 page 組的 surface（googleNews）不要求 query 組；combos 為空（discover）不呼叫本函式，見 run_verify。
+    每個 surface 有幾個 combo 就印幾組，不假設固定是 page／query 兩組——discover 只有
+    page_nodevice 一組，web 等有 page／query 兩組。目前沒有 surface 落到「combos 為空」
+    （discover 已有 page_nodevice 組），run_verify 對此仍留一條保險分支，見其內註解。
 
     每個 combo 只打一次請求（見 _combo_probe）：量級估計與存在性判定合併在同一次
     查詢裡，不再各打一次 count_rows() 又一次 has_rows()。
@@ -738,12 +741,9 @@ def _verify_surface(search_type: str) -> bool:
         for combo in SURFACE_COMBOS[search_type]
     }
     counts = {combo: count for combo, (count, _exists) in probes.items()}
-    if COMBO_QUERY in counts:
-        logger.info("%s：page 組 %d 列 / query 組 %d 列（合計 %d，planner 估計）", search_type,
-                    counts[COMBO_PAGE], counts[COMBO_QUERY], sum(counts.values()))
-    else:
-        logger.info("%s：page 組 %d 列（planner 估計；此 surface 不支援 query 維度）",
-                    search_type, counts[COMBO_PAGE])
+    breakdown = " / ".join(f"{combo} 組 {count} 列" for combo, count in counts.items())
+    note = "；此 surface 不支援 query 維度" if COMBO_QUERY not in counts else ""
+    logger.info("%s：%s（合計 %d，planner 估計%s）", search_type, breakdown, sum(counts.values()), note)
     # 空/非空一律看 _combo_probe() 實際取回的那 1 列，不看上面那些估計值（見其 docstring）。
     empty = [combo for combo, (_count, exists) in probes.items() if not exists]
     if empty:
@@ -755,7 +755,7 @@ def _verify_surface(search_type: str) -> bool:
 def run_verify(search_types: Sequence[str] = (DEFAULT_SEARCH_TYPE,)) -> int:
     """唯讀檢查。按 surface 分組印出各組列數，以及 gsc_daily_totals（對本次 surface 過濾）的列數與
     最新日期——「不可相加」與「單一 surface 寫入失敗」兩件事的持續可見性（review S4.1 #9）。"""
-    metrics_types = [st for st in search_types if SURFACE_COMBOS[st]]  # 空 combos（discover）不驗 metrics
+    metrics_types = [st for st in search_types if SURFACE_COMBOS[st]]  # 目前沒有 surface 命中（discover 已有 page_nodevice 組），保留防未來新增 totals-only surface
     healthy = all([_verify_surface(search_type) for search_type in metrics_types])
     logger.info("⚠ 兩組是同一批底層資料的兩個邊際聚合，SUM 前必須帶判別式，"
                 "否則點擊數會被算兩次。gsc_daily_totals 是另一個母體（全量），更不可相加。")
@@ -769,8 +769,9 @@ def run_verify(search_types: Sequence[str] = (DEFAULT_SEARCH_TYPE,)) -> int:
         latest = latest_rows[0]["date"] if latest_rows else "N/A"
         logger.info("  totals(%s)：%d 列（planner 估計），最新日期 %s",
                     search_type, totals_rows, latest)
-        # 只收 totals 的 surface（discover）健康度看「有沒有列」，而且直接沿用上面那次
-        # order=date.desc&limit=1 的結果——它本身就是一次精確的存在性探測，不必再問一次。
+        # 目前沒有 surface 命中（discover 已有 page_nodevice 組，不再是空 combos）——
+        # 這條分支是防未來新增「只收 totals」surface 的保險，一旦命中就直接沿用上面那次
+        # order=date.desc&limit=1 的結果，它本身就是一次精確的存在性探測，不必再問一次。
         # 查詢失敗（status != 200）同樣落在這裡：查不到就是失敗，不在報表層以 0 呈現。
         if not SURFACE_COMBOS[search_type] and not latest_rows:
             logger.error("%s：只收 totals 但查不到任何列（status=%s）—— 視為失敗",
