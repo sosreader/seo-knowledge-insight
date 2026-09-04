@@ -41,6 +41,10 @@ on:
         description: 'search type（web/image/video/news/googleNews/discover）'
         required: false
         default: 'web'
+      dry_run:
+        description: '只查 API 不寫庫；用來探測維度支援'
+        required: false
+        default: 'false'
 
 # 同時只跑一個，避免排程與手動回填互相覆寫。不取消進行中的那個——
 # 它可能正在寫入，取消會留下 status='running' 的孤兒列（同 cwv-hourly.yml 的理由）。
@@ -87,11 +91,15 @@ jobs:
           BACKFILL_DAYS: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.backfill_days || '7') || '7' }}
           PROBE_DAYS: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.probe_days || '14') || '14' }}
           SEARCH_TYPE: ${{ matrix.search_type }}
+          # dry_run 只在 workflow_dispatch 有意義；schedule 事件恆為 --execute。
+          MODE_FLAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' && '--dry-run' || '--execute' }}
         run: |
           python scripts/ingest_gsc_search_analytics.py \
-            --execute --backfill-days "$BACKFILL_DAYS" --probe-days "$PROBE_DAYS" --search-type "$SEARCH_TYPE"
+            "$MODE_FLAG" --backfill-days "$BACKFILL_DAYS" --probe-days "$PROBE_DAYS" --search-type "$SEARCH_TYPE"
 
       - name: Verify last write
+        # dry-run 沒有寫庫，驗證上一輪的舊資料沒有意義，跳過。
+        if: github.event.inputs.dry_run != 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

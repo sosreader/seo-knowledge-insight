@@ -902,7 +902,9 @@ class TestRunIngestion:
              patch(f"{MODULE}.finish_run"), \
              patch(f"{MODULE}._write_slice", return_value=(1, 0)):
             run_ingestion(execute=True, backfill_days=3, search_type="web")
-        assert collect.call_count == 3 * len(COMBO_DIMENSIONS)
+        # len(COMBO_DIMENSIONS) 曾與 web 的組合數巧合相等；page_nodevice 加入後
+        # COMBO_DIMENSIONS 變 3 但 web 仍只有 page／query 兩組，改用 SURFACE_COMBOS["web"]。
+        assert collect.call_count == 3 * len(SURFACE_COMBOS["web"])
 
     def test_zero_written_rows_is_status_failed(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \

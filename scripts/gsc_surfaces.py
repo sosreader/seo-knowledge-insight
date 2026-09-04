@@ -93,9 +93,13 @@ logger = logging.getLogger("ingest_gsc_search_analytics")
 # 維度組合代號 → 送給 API 的 dimensions 陣列
 COMBO_PAGE = "page"
 COMBO_QUERY = "query"
+# discover 專用：page 組帶 device 維度回 400「cannot be grouped by device」，
+# 這組不請求 device，見 SURFACE_COMBOS["discover"] 與 row_to_record() 的哨兵填法。
+COMBO_PAGE_NODEVICE = "page_nodevice"
 COMBO_DIMENSIONS: dict[str, tuple[str, ...]] = {
     COMBO_PAGE: ("date", "page", "device"),
     COMBO_QUERY: ("date", "query", "device"),
+    COMBO_PAGE_NODEVICE: ("date", "page"),
 }
 
 # surface → 該 surface 實際跑得起來的維度組合。加新 surface 只改這張表。
@@ -105,9 +109,9 @@ SURFACE_COMBOS: dict[str, tuple[str, ...]] = {
     "video": (COMBO_PAGE, COMBO_QUERY),
     "news": (COMBO_PAGE, COMBO_QUERY),
     "googleNews": (COMBO_PAGE,),  # API 400：cannot be grouped by query
-    # 空 tuple：2026-09-03 live run 400 原文「Requests for Discover cannot be
-    # grouped by device」——連 page 組（帶 device 維度）都不支援，只收 totals。
-    "discover": (),
+    # page_nodevice：2026-09-03 live run 400 原文「Requests for Discover cannot be
+    # grouped by device」——只有不帶 device 維度的 page 組能用，見 COMBO_PAGE_NODEVICE。
+    "discover": (COMBO_PAGE_NODEVICE,),
 }
 
 # position 恆為 0（沒有排名概念）的 surface，與 022 的條件式 position_ck 一致
@@ -145,6 +149,10 @@ PROPERTY = "https://vocus.cc/"
 PAGE_NOT_REQUESTED = "https://__dimension_not_requested__/"
 QUERY_NOT_REQUESTED = ""
 COUNTRY_NOT_REQUESTED = "zzz"
+# discover 的 page_nodevice 組不請求 device 維度，填這個哨兵；哪些 surface 允許它
+# 由 025 migration 的 device_surface_ck 對應鎖死（S2.2 補 is_device_valid()）。
+DEVICE_NOT_SUPPORTED = "n/a"
+NO_DEVICE_SURFACES = frozenset({"discover"})
 
 # 與 schema CHECK 一致的欄位上限
 MAX_PAGE_OCTETS = 1024
@@ -276,22 +284,32 @@ def row_to_record(
     row: Mapping[str, Any], *, combo: str, day: date, search_type: str,
     ingested_at: str, rejects: dict[str, int],
 ) -> dict | None:
-    """API 的一列 → gsc_daily_metrics 的一列。不合法回 None 並記到 rejects。"""
+    """API 的一列 → gsc_daily_metrics 的一列。不合法回 None 並記到 rejects。
+
+    組合的維度名決定怎麼拆 keys（不再靠位置假設每組都是 date+X+device）：
+    device 只在該組的 dimensions 帶了 "device" 時才映射，否則填 DEVICE_NOT_SUPPORTED
+    （目前只有 page_nodevice／discover 落這條路，S2.2 補 is_device_valid() 交叉驗證）。
+    """
+    dims = COMBO_DIMENSIONS[combo]
     keys = row.get("keys") or []
-    if len(keys) != len(COMBO_DIMENSIONS[combo]):
+    if len(keys) != len(dims):
         _reject("keys 長度與 dimensions 不符", rejects)
         return None
-    row_date, dimension_value, raw_device = keys[0], keys[1], keys[2]
-    if row_date != day.isoformat():
+    values = dict(zip(dims, keys))
+    if values["date"] != day.isoformat():
         _reject("date 與查詢日期不符", rejects)
         return None
-    device = DEVICE_MAP.get(str(raw_device).upper())
-    if device is None:
-        _reject(f"未知 device {raw_device!r}", rejects)
-        return None
 
-    page = dimension_value if combo == COMBO_PAGE else PAGE_NOT_REQUESTED
-    query = dimension_value if combo == COMBO_QUERY else QUERY_NOT_REQUESTED
+    if "device" in dims:
+        device = DEVICE_MAP.get(str(values["device"]).upper())
+        if device is None:
+            _reject(f"未知 device {values['device']!r}", rejects)
+            return None
+    else:
+        device = DEVICE_NOT_SUPPORTED
+
+    page = values.get("page", PAGE_NOT_REQUESTED)
+    query = values.get("query", QUERY_NOT_REQUESTED)
     if not page.startswith(("http://", "https://")) or len(page.encode()) > MAX_PAGE_OCTETS:
         _reject("page 不合法或過長", rejects)
         return None
