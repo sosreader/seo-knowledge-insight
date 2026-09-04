@@ -28,6 +28,7 @@ import data_quality_gate as gate  # noqa: E402
 from quality_gate_config import (  # noqa: E402
     CRUX_PUBLISH_CADENCE_CEILING_HOURS,
     DegradationConfig,
+    GSC_PROPERTY,
     PipelineConfig,
     PIPELINES_BY_KEY,
 )
@@ -168,6 +169,37 @@ class TestAllRealPipelinesFreshnessNeverTriggersOnJobStatus:
         with patch.object(gate, "_get_json", return_value=[row]):
             result = gate.check_freshness(pipeline, now=simulated_now)
         assert not result.passed, f"{key} 應該 FAIL 但沒有"
+
+
+class TestGscPipelinesCarryPropertyFilter:
+    """run 33863650667／33863653352 撞 57014：gsc_page_daily 視圖查詢不帶 property
+    時 planner 會挑錯索引全表掃描。property 透過 PipelineConfig.filters 走既有的
+    _filter_qs() 機制自動帶進每個查詢函式，這裡直接驗證組出來的 URL 有這個 filter。"""
+
+    @pytest.mark.parametrize("key", ["gsc_daily_metrics", "gsc_googlenews", "gsc_image", "gsc_video"])
+    def test_freshness_query_carries_property(self, key: str) -> None:
+        pipeline = PIPELINES_BY_KEY[key]
+        with patch.object(gate, "_get_json", return_value=[]) as get_json:
+            gate.check_freshness(pipeline)
+        path = get_json.call_args.args[0]
+        assert f"property=eq.{gate.urllib.parse.quote(GSC_PROPERTY)}" in path
+
+    def test_probe_point_exists_date_branch_carries_property(self) -> None:
+        """gsc_daily_metrics 是唯一 gap_probe_per_point=True 的管線，這裡直接驗證
+        _probe_point_exists 的 date 分支組出來的 URL 帶 property（透過 filters，
+        不需要另外改 _probe_point_exists 的程式碼）。"""
+        pipeline = PIPELINES_BY_KEY["gsc_daily_metrics"]
+        seen: list[str] = []
+
+        def fake(path: str, *, offset: int, page_size: int) -> tuple[list[dict], bool]:
+            seen.append(path)
+            return [{"date": "2026-09-02"}], False
+
+        with patch.object(gate, "_get_page", fake):
+            gate._probe_point_exists(pipeline, datetime(2026, 9, 2, tzinfo=UTC))
+        assert seen
+        assert f"property=eq.{gate.urllib.parse.quote(GSC_PROPERTY)}" in seen[0]
+        assert "date=eq.2026-09-02" in seen[0]
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -572,8 +604,14 @@ class TestGapProbeOptInOnly:
 
     def test_gsc_daily_metrics_keeps_surface_agnostic_semantics(self) -> None:
         """刻意不加 search_type 篩選：任一 surface 當天有列就算那天有資料，
-        跟改成逐點探測之前同一個語意（只換查詢形狀，不換判準）。"""
-        assert PIPELINES_BY_KEY["gsc_daily_metrics"].filters == ()
+        跟改成逐點探測之前同一個語意（只換查詢形狀，不換判準）。
+
+        2026-09-04 過渡：filters 從 () 改成只帶 property——property 是查詢效率的
+        filter 不是語意窄化（這張表目前只有一個 property），run 33863650667 撞 57014
+        後加的，理由見 quality_gate_config.py 的 GSC_PROPERTY 常數註解。"""
+        pipeline = PIPELINES_BY_KEY["gsc_daily_metrics"]
+        assert pipeline.filters == (("property", GSC_PROPERTY),)
+        assert not any(k == "search_type" for k, _v in pipeline.filters)
 
 
 # ══════════════════════════════════════════════════════════════════════

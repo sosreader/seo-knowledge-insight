@@ -724,9 +724,17 @@ def _verify_surface(search_type: str) -> bool:
 
     每個 combo 只打一次請求（見 _combo_probe）：量級估計與存在性判定合併在同一次
     查詢裡，不再各打一次 count_rows() 又一次 has_rows()。
+
+    帶 property=eq.<PROPERTY>：run 33863653352 的 Verify 步驟在這裡撞過 57014——
+    EXPLAIN 實測 gsc_daily_metrics_dim_uniq(property, search_type, date, page,
+    query, device, country) 只要查詢帶 property 就會被 planner 用上（Index Only
+    Scan Backward，4.2ms），沒帶 property 時 planner 會挑錯索引全表掃描
+    （26,208ms）。不帶不是語意上更寬鬆——這張表目前只有一個 property
+    （vocus.cc），差別只在查詢效率。
     """
+    property_filter = f"&property=eq.{urllib.parse.quote(PROPERTY, safe='')}"
     probes = {
-        combo: _combo_probe(f"&search_type=eq.{search_type}&{combo_filter(combo)}")
+        combo: _combo_probe(f"{property_filter}&search_type=eq.{search_type}&{combo_filter(combo)}")
         for combo in SURFACE_COMBOS[search_type]
     }
     counts = {combo: count for combo, (count, _exists) in probes.items()}
@@ -773,9 +781,13 @@ def run_verify(search_types: Sequence[str] = (DEFAULT_SEARCH_TYPE,)) -> int:
     # 會迫使 planner 先把最新一天所有 surface 的列（六個 surface 合計約 20 萬列）從 heap
     # 撈回、篩 search_type，再依 clicks 做 Incremental Sort，表到 1.6M 列就逾時
     # （run 33849046525）。只留 order=date.desc，走 (date DESC) 索引由新到舊取到 8 列即停。
+    # 補 property=eq.<PROPERTY>：跟 _verify_surface() 同一個理由（dim_uniq 需要 property
+    # 才會被 planner 選上），這裡帶 search_type=in.(...) 而非單一 eq，仍是「底表 +
+    # search_type 篩選」，同樣的防禦性寫法一併加上。
     status, body = _supabase_request(
         "GET",
         f"/rest/v1/{TABLE_GSC}?select=date,page,query,device,clicks,impressions,ctr,position"
+        f"&property=eq.{urllib.parse.quote(PROPERTY, safe='')}"
         f"&search_type=in.({','.join(search_types)})&order=date.desc&limit=8",
     )
     if status != 200:

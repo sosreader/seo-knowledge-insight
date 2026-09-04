@@ -17,6 +17,7 @@ import json
 import logging
 import sys
 import urllib.error
+import urllib.parse
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
@@ -1187,6 +1188,18 @@ class TestRunVerify:
         assert "clicks.desc" not in sample_query_path
         assert "order=date.desc&limit=8" in sample_query_path
 
+    def test_sample_query_carries_property_filter(self) -> None:
+        """run 33863653352：底表帶 search_type 篩選卻沒帶 property 時，planner 會挑錯
+        索引全表掃描；帶 property 才會被 gsc_daily_metrics_dim_uniq 用上（EXPLAIN 實測
+        4.2ms vs 26,208ms，見 .verification/2026-09-04/gate-probe-shape/）。"""
+        with patch(f"{MODULE}._combo_probe", side_effect=[(900, True), (100, True)]), \
+             patch(f"{MODULE}.count_rows", side_effect=[30]), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]) as request:
+            assert run_verify() == 0
+        sample_query_path = request.call_args_list[1].args[1]
+        assert f"property=eq.{urllib.parse.quote(PROPERTY, safe='')}" in sample_query_path
+
 
 class TestVerifySurfaceNoRankingBranch:
     """只有 page 組的 surface（googleNews／discover）不該被要求 query 組，
@@ -1215,6 +1228,15 @@ class TestVerifySurfaceNoRankingBranch:
         with patch(f"{MODULE}._combo_probe", side_effect=[(900, True), (100, True)]) as probe:
             _verify_surface("web")
         assert probe.call_count == len(SURFACE_COMBOS["web"]) == 2
+
+    def test_verify_surface_probe_carries_property_filter(self) -> None:
+        """run 33863653352：_combo_probe 查底表帶 search_type 卻沒帶 property 時撞過
+        57014——planner 選不到 gsc_daily_metrics_dim_uniq，全表掃描。每個 combo 的
+        extra_query 都要帶 property=eq.<PROPERTY>。"""
+        with patch(f"{MODULE}._combo_probe", side_effect=[(900, True), (100, True)]) as probe:
+            _verify_surface("web")
+        expected = f"property=eq.{urllib.parse.quote(PROPERTY, safe='')}"
+        assert all(expected in call.args[0] for call in probe.call_args_list)
 
 
 class TestRunVerifySurfaceScoped:
