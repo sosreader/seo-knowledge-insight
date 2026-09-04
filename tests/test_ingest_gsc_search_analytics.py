@@ -82,6 +82,14 @@ from scripts.ingest_gsc_search_analytics import (  # noqa: E402
     upsert_rows,
     write_totals,
 )
+# gsc_surfaces 端的 device 哨兵規則沒被 ingest 主檔重新匯出（見 gsc_surfaces.py
+# 的 import 注意事項）；本檔要直接測它，另外從原模組 import。
+from scripts.gsc_surfaces import (  # noqa: E402
+    COMBO_PAGE_NODEVICE,
+    DEVICE_NOT_SUPPORTED,
+    NO_DEVICE_SURFACES,
+    is_device_valid,
+)
 
 MODULE = "scripts.ingest_gsc_search_analytics"
 UTC = timezone.utc
@@ -693,6 +701,19 @@ class TestReapOrphansSurfaceScoping:
         path = request.call_args.args[1]
         assert combo_filter(COMBO_QUERY) not in path
 
+    def test_discover_scopes_delete_to_search_type_and_page_nodevice_discriminator(self) -> None:
+        """S2.5：discover 走 page_nodevice 組；combo_filter 不特判 page_nodevice，
+        判別式與 page 組完全相同，DELETE 只掃得到 discover 自己的列。"""
+        with patch(f"{MODULE}._supabase_request", return_value=(200, "[]")) as request:
+            reap_orphans(DAY, COMBO_PAGE_NODEVICE, "discover", INGESTED_AT)
+        path = request.call_args.args[1]
+        assert f"property=eq.{urllib.parse.quote(PROPERTY, safe='')}" in path
+        assert "search_type=eq.discover" in path
+        assert combo_filter(COMBO_PAGE_NODEVICE) in path
+        assert "page=neq." in path  # page 側判別式，不是 query 側
+        assert "ingested_at=lt." in path
+        assert "search_type=eq.web" not in path
+
 
 class TestWriteSlice:
     ROW = TestUpsert.ROW
@@ -1032,58 +1053,93 @@ class TestRunIngestionGoogleNewsSurface:
 
 
 class TestRunIngestionDiscoverSurface:
-    """S2.5 discover-fix（2026-09-03）：live run 證實 discover 連 page 組（帶 device
-    維度）也回 400，SURFACE_COMBOS["discover"] 改成空 tuple。這裡直接證明 run_ingestion
-    對 combos 為空的 surface 不發 page 查詢、不建立 gsc_daily_metrics 的 ingestion_run
-    列、也不呼叫 reap，只做探測＋totals（呼應 TestRunIngestionGoogleNewsSurface 的驗證
-    方式，但斷言方向相反：googleNews 斷言「只送 page 組」，discover 斷言「什麼組都不送」）。
+    """S2.5（2026-09-04）：discover 現在有 page_nodevice 組（SURFACE_COMBOS["discover"]
+    == (COMBO_PAGE_NODEVICE,)）。run_ingestion 對它的行為因此改回跟
+    TestRunIngestionGoogleNewsSurface 同構——只是 combo 換成 page_nodevice、
+    送出去的 dimensions 不帶 device——不再是舊版「combos 為空、什麼組都不送」的行為。
     """
 
-    def test_collect_day_combo_never_called(self) -> None:
+    def test_collect_day_combo_is_called_with_page_nodevice_combo(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
              patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
              patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
-             patch(f"{MODULE}.collect_day_combo") as collect, \
-             patch(f"{MODULE}.start_run", return_value="run-1"), \
-             patch(f"{MODULE}.finish_run"):
-            assert run_ingestion(execute=True, backfill_days=1, search_type="discover") == 0
-        collect.assert_not_called()
-
-    def test_reap_orphans_never_called(self) -> None:
-        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
-             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_one_record) as collect, \
              patch(f"{MODULE}.start_run", return_value="run-1"), \
              patch(f"{MODULE}.finish_run"), \
-             patch(f"{MODULE}.reap_orphans") as reap:
+             patch(f"{MODULE}._write_slice", return_value=(1, 0)):
             assert run_ingestion(execute=True, backfill_days=1, search_type="discover") == 0
-        reap.assert_not_called()
+        combos_used = {call.args[2] for call in collect.call_args_list}
+        assert combos_used == {COMBO_PAGE_NODEVICE}
 
-    def test_no_gsc_daily_metrics_ingestion_run_is_created(self) -> None:
-        """run_ingestion 頂層那次 start_run(*run_window(targets))（預設 table_name=
-        TABLE_GSC）不該被呼叫——combos 為空時這個 surface 永遠不寫 gsc_daily_metrics，
-        建了也只會是一筆看似失敗、其實只是「本來就沒有 metrics」的殘影。write_totals
-        內部另有自己那次 start_run(table_name=TABLE_TOTALS)，這裡整個 mock 掉不驗證。"""
+    def test_gsc_post_dimensions_are_date_and_page_only(self) -> None:
+        """不 mock collect_day_combo，讓真正的 paginate_query → _gsc_post 路徑跑一次，
+        直接斷言送出去的 body 是 {"date","page"}——不帶 device，那正是 400 的原因。"""
+        api_response = {"rows": [{"keys": [DAY.isoformat(), "https://vocus.cc/a"],
+                                   "clicks": 3, "impressions": 10, "ctr": 0.3, "position": 0.0}]}
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
              patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
              patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
-             patch(f"{MODULE}.start_run") as start, \
-             patch(f"{MODULE}.finish_run"):
+             patch(f"{MODULE}._gsc_post", return_value=api_response) as post, \
+             patch(f"{MODULE}.start_run", return_value="run-1"), \
+             patch(f"{MODULE}.finish_run"), \
+             patch(f"{MODULE}.upsert_rows", return_value=(1, 0)), \
+             patch(f"{MODULE}.reap_orphans", return_value=0):
             assert run_ingestion(execute=True, backfill_days=1, search_type="discover") == 0
-        start.assert_not_called()
+        dimension_sets = [set(call.args[1]["dimensions"]) for call in post.call_args_list]
+        assert dimension_sets  # 至少發了一次請求
+        assert all(dims == {"date", "page"} for dims in dimension_sets)
 
-    def test_totals_write_failure_is_still_reported_as_failure(self) -> None:
-        """metrics_skipped 分支不能把 totals 寫入失敗吃掉——written 恆 0 不代表
-        一定成功，成功與否單純看 errors（totals 失敗會進 errors，見 _ingest_totals）。"""
+    def test_reap_orphans_called_with_page_nodevice_combo(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
              patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
-             patch(f"{MODULE}.write_totals", return_value=(0, 1)):
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_one_record), \
+             patch(f"{MODULE}.upsert_rows", return_value=(1, 0)), \
+             patch(f"{MODULE}.start_run", return_value="run-1"), \
+             patch(f"{MODULE}.finish_run"), \
+             patch(f"{MODULE}.reap_orphans", return_value=0) as reap:
+            assert run_ingestion(execute=True, backfill_days=1, search_type="discover") == 0
+        reap.assert_called_once()
+        assert reap.call_args.args[1] == COMBO_PAGE_NODEVICE
+        assert reap.call_args.args[2] == "discover"
+
+    def test_gsc_daily_metrics_ingestion_run_is_created(self) -> None:
+        """discover 現在有非空 combos，頂層 start_run(*run_window(targets))（預設
+        table_name=TABLE_GSC）該被呼叫——不再是「combos 為空永遠不建」的舊行為。
+        write_totals 內部另有自己那次 start_run(table_name=TABLE_TOTALS)。"""
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_one_record), \
+             patch(f"{MODULE}.upsert_rows", return_value=(1, 0)), \
+             patch(f"{MODULE}.reap_orphans", return_value=0), \
+             patch(f"{MODULE}.start_run", side_effect=["run-metrics", "run-totals"]) as start, \
+             patch(f"{MODULE}.finish_run"):
+            assert run_ingestion(execute=True, backfill_days=1, search_type="discover") == 0
+        assert len(start.call_args_list) == 2
+        table_names = [call.kwargs.get("table_name", TABLE_GSC) for call in start.call_args_list]
+        assert table_names == [TABLE_GSC, TABLE_TOTALS]
+
+    def test_totals_write_failure_is_still_reported_as_failure(self) -> None:
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(0, 1)), \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_one_record), \
+             patch(f"{MODULE}.upsert_rows", return_value=(1, 0)), \
+             patch(f"{MODULE}.reap_orphans", return_value=0), \
+             patch(f"{MODULE}.start_run", return_value="run-1"), \
+             patch(f"{MODULE}.finish_run"):
             assert run_ingestion(execute=True, backfill_days=1, search_type="discover") == 1
 
     def test_dry_run_with_healthy_totals_returns_zero(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
-             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])):
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals", return_value=(1, 0)), \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_one_record), \
+             patch(f"{MODULE}.start_run") as start, \
+             patch(f"{MODULE}._write_slice") as write:
             assert run_ingestion(execute=False, backfill_days=1, search_type="discover") == 0
+        start.assert_not_called()
+        write.assert_not_called()
 
 
 class TestIngestionRunHasSeparateRowsPerTable:
@@ -1271,48 +1327,64 @@ class TestRunVerifySurfaceScoped:
 
 
 class TestRunVerifyDiscoverSurface:
-    """S2.5 discover-fix（2026-09-03）：SURFACE_COMBOS["discover"] 是空 tuple——
-    combos 為空的 surface 不呼叫 _verify_surface（那裡沒有 gsc_daily_metrics 列可數），
-    健康度改看 gsc_daily_totals 的列數是否 > 0，見 run_verify 裡緊接在 totals_rows
-    logger.info 之後的檢查。"""
+    """S2.5（2026-09-04）：discover 現在有 page_nodevice 組，run_verify 對它的行為
+    改回跟 googleNews 同構——_verify_surface 會被呼叫（不再是「combos 為空跳過」）。
+    這裡同時鎖住 _verify_surface 對 discover 的 log 分支不會 KeyError——舊版硬取
+    counts[COMBO_PAGE]，discover 的 counts dict 只有 page_nodevice 一個 key，
+    改版前這裡會直接炸掉。"""
 
     RECENT = TestRunVerify.RECENT
     RUNS = TestRunVerify.RUNS
+    TOTALS_LATEST = TestRunVerify.TOTALS_LATEST
 
-    def test_verify_surface_not_called_for_discover(self) -> None:
-        with patch(f"{MODULE}._verify_surface") as verify_surface, \
+    def test_verify_surface_is_called_for_discover(self) -> None:
+        with patch(f"{MODULE}._verify_surface", return_value=True) as verify_surface, \
              patch(f"{MODULE}.count_rows", return_value=29), \
              patch(f"{MODULE}._supabase_request",
-                   side_effect=[(200, json.dumps([{"date": "2026-08-25"}])),
-                                (200, self.RECENT), (200, self.RUNS)]):
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["discover"]) == 0
-        verify_surface.assert_not_called()
+        verify_surface.assert_called_once_with("discover")
 
-    def test_zero_totals_rows_fails(self) -> None:
-        """只收 totals 的 surface：健康度看「有沒有列」，來源是 order=date.desc&limit=1
-        那次查詢本身（一次精確的存在性探測），不看 planner 估計。"""
-        with patch(f"{MODULE}.count_rows", return_value=17), \
+    def test_page_nodevice_probe_does_not_raise_keyerror(self) -> None:
+        """回歸：_verify_surface 對 counts 逐 combo 印，不再硬取 counts[COMBO_PAGE]。
+        跑真正的 _verify_surface（不 mock 掉），只 mock 它底下的 _combo_probe，
+        若 log 分支還在硬取 COMBO_PAGE 這裡會直接 KeyError 而不是回傳值。"""
+        with patch(f"{MODULE}._combo_probe", return_value=(10, True)), \
+             patch(f"{MODULE}.count_rows", return_value=10), \
              patch(f"{MODULE}._supabase_request",
-                   side_effect=[(200, json.dumps([])), (200, self.RECENT), (200, self.RUNS)]):
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
+            assert run_verify(["discover"]) == 0
+
+    def test_page_nodevice_zero_rows_fails(self) -> None:
+        """_combo_probe 回 exists=False（page_nodevice 組實際 0 列）要讓 run_verify
+        回非 0，即使 planner 估計值非零。"""
+        with patch(f"{MODULE}._combo_probe", return_value=(1, False)), \
+             patch(f"{MODULE}.count_rows", return_value=1), \
+             patch(f"{MODULE}._supabase_request",
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["discover"]) == 1
 
-    def test_nonzero_totals_rows_passes(self) -> None:
-        with patch(f"{MODULE}.count_rows", return_value=29), \
-             patch(f"{MODULE}._supabase_request",
-                   side_effect=[(200, json.dumps([{"date": "2026-08-25"}])),
-                                (200, self.RECENT), (200, self.RUNS)]):
-            assert run_verify(["discover"]) == 0
+    def test_verify_surface_discover_probe_carries_property_and_page_nodevice_filter(self) -> None:
+        """(f)：_verify_surface("discover") 發出的 probe query 必須帶
+        property=eq.<PROPERTY>（REQ-3 橫切規則）與 page_nodevice 的判別式。"""
+        with patch(f"{MODULE}._combo_probe", return_value=(10, True)) as probe:
+            assert _verify_surface("discover") is True
+        assert probe.call_count == 1
+        extra_query = probe.call_args.args[0]
+        assert f"property=eq.{urllib.parse.quote(PROPERTY, safe='')}" in extra_query
+        assert combo_filter(COMBO_PAGE_NODEVICE) in extra_query
+        assert "search_type=eq.discover" in extra_query
 
-    def test_mixed_web_and_discover_only_web_goes_through_verify_surface(self) -> None:
-        """search_types 混合 web／discover 時，metrics_types 過濾只留 combos 非空的 web。"""
+    def test_mixed_web_and_discover_both_go_through_verify_surface(self) -> None:
+        """search_types 混合 web／discover：兩者 combos 現在都非空，metrics_types
+        兩個都留，_verify_surface 依序對兩者各呼叫一次。"""
         with patch(f"{MODULE}._verify_surface", return_value=True) as verify_surface, \
              patch(f"{MODULE}.count_rows", return_value=5), \
              patch(f"{MODULE}._supabase_request",
-                   side_effect=[(200, json.dumps([{"date": "2026-08-25"}])),
-                                (200, json.dumps([{"date": "2026-08-25"}])),
-                                (200, self.RECENT), (200, self.RUNS)]):
+                   side_effect=[(200, self.TOTALS_LATEST), (200, self.TOTALS_LATEST),
+                               (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["web", "discover"]) == 0
-        verify_surface.assert_called_once_with("web")
+        assert [call.args[0] for call in verify_surface.call_args_list] == ["web", "discover"]
 
 
 class TestFreshnessCheck:

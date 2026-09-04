@@ -171,6 +171,32 @@ class TestPipelineConfigResolution:
         assert pipeline.gap_window_hours is None
         assert pipeline.gap_skip_reason
 
+    def test_gsc_discover_pages_pipeline_points_to_page_daily_view(self) -> None:
+        """S2.4／S2.5：discover 的 page_nodevice 組把 (date, page) 列寫進
+        gsc_page_daily（見 gsc_surfaces.py SURFACE_COMBOS／025 device_surface_ck）。
+        totals（gsc_discover）與 page 層是兩個母體、兩條寫入路徑，各自要有自己的
+        新鮮度訊號，因此本條目不改 gsc_discover 的指向，另立一條。filters 第一項
+        必須是 property（REQ-3 橫切規則，讓 planner 用上 dim_uniq 前綴）。"""
+        pipeline = PIPELINES_BY_KEY["gsc_discover_pages"]
+        assert pipeline.table == "gsc_page_daily"
+        assert pipeline.filters == (("property", GSC_PROPERTY), ("search_type", "discover"))
+        assert pipeline.ingestion_run_table_name == "gsc_daily_metrics"
+
+    def test_gsc_discover_pages_gap_check_is_skipped(self) -> None:
+        """曝光本質斷續，理由同 gsc_discover（totals）——母體從 totals 換成 page
+        明細，斷續的本質沒換。"""
+        pipeline = PIPELINES_BY_KEY["gsc_discover_pages"]
+        assert pipeline.gap_window_hours is None
+        assert pipeline.gap_skip_reason
+
+    def test_gsc_property_matches_gsc_surfaces_property(self) -> None:
+        """(g)：GSC_PROPERTY 是本檔的本地常數，quality_gate_config.py 沒有 import
+        gsc_surfaces（見 GSC_PROPERTY 常數註解）——這條相等斷言是它與 ingest 端
+        寫入用的同一個值不漂移的唯一防線。兩邊哪天分岔，這裡先紅於 gsc_discover_pages
+        的 filters 悄悄查錯 property。"""
+        from gsc_surfaces import PROPERTY
+        assert GSC_PROPERTY == PROPERTY
+
     def test_gsc_daily_totals_pipeline_filters_and_ingestion_run_table(self) -> None:
         """totals 查自己的表（全量母體，與 gsc_page_daily 抽樣母體不同）、
         filters 取 web 當代表；ingestion_run_table_name 是新的

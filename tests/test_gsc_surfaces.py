@@ -21,8 +21,11 @@ from scripts.gsc_surfaces import (  # noqa: E402
     ALLOWED_SEARCH_TYPES,
     COMBO_DIMENSIONS,
     COMBO_PAGE,
+    COMBO_PAGE_NODEVICE,
     COMBO_QUERY,
     DEFAULT_SEARCH_TYPE,
+    DEVICE_NOT_SUPPORTED,
+    NO_DEVICE_SURFACES,
     NO_RANKING_SURFACES,
     PROPERTY,
     REJECT_POSITION_NO_RANKING,
@@ -31,13 +34,18 @@ from scripts.gsc_surfaces import (  # noqa: E402
     TOTALS_CONFLICT_FIELDS,
     _validate_metrics,
     build_totals_records,
+    combo_filter,
     dedupe_by_key,
+    is_device_valid,
     is_position_valid,
     position_reject_reason,
+    row_to_record,
     totals_record,
 )
 
 DAY = date(2026, 8, 25)
+INGESTED_AT = "2026-08-29T00:00:00Z"
+MIGRATION_025_PATH = Path(__file__).resolve().parent.parent / "supabase" / "migrations" / "025_gsc_discover_device_sentinel.sql"
 
 
 def _probe_row(day: date, *, clicks: int = 5, impressions: int = 20,
@@ -61,11 +69,13 @@ class TestSurfaceCombosConfiguration:
         """googleNews 帶 query 維度送出去必定整個 run 400，只能是 page 組。"""
         assert SURFACE_COMBOS["googleNews"] == (COMBO_PAGE,)
 
-    def test_discover_has_no_combos(self) -> None:
-        """2026-09-03 live run（S2.5）：discover 連 page 組（帶 device 維度）也回 400
-        `Requests for Discover cannot be grouped by device`——比 googleNews 更窄，
-        SURFACE_COMBOS 對它是空 tuple，只收 gsc_daily_totals。"""
-        assert SURFACE_COMBOS["discover"] == ()
+    def test_discover_has_page_nodevice_only(self) -> None:
+        """2026-09-03 live run 證實 discover 連 page 組（帶 device 維度）也回 400
+        `Requests for Discover cannot be grouped by device`——device 維度本身
+        discover 就不提供。2026-09-04 補上不帶 device 的 page_nodevice 組，
+        discover 的 (date, page) 列改走它，device 欄填 'n/a' 哨兵
+        （025 device_surface_ck 綁死，見 is_device_valid）。"""
+        assert SURFACE_COMBOS["discover"] == (COMBO_PAGE_NODEVICE,)
 
     def test_no_ranking_surfaces_combos_are_a_subset_of_googlenews(self) -> None:
         """NO_RANKING_SURFACES 兩個成員的 combos 都不含 query 組（不論是否為空）。"""
@@ -256,3 +266,115 @@ class TestDedupeByKeyWithTotalsFields:
         b = {"property": PROPERTY, "search_type": "web", "date": DAY.isoformat(), "clicks": 2}
         result = dedupe_by_key([a, b], TOTALS_CONFLICT_FIELDS)
         assert len(result) == 1 and result[0]["clicks"] == 2
+
+
+# ══════════════════════════════════════════════════════════════════════
+# (a) page_nodevice 組合本身：維度只有 date+page，不含 device／country
+# ══════════════════════════════════════════════════════════════════════
+
+class TestComboPageNodeviceDimensions:
+    def test_dimensions_are_date_and_page_only(self) -> None:
+        assert COMBO_DIMENSIONS[COMBO_PAGE_NODEVICE] == ("date", "page")
+
+    def test_does_not_include_device_or_country(self) -> None:
+        dims = COMBO_DIMENSIONS[COMBO_PAGE_NODEVICE]
+        assert "device" not in dims
+        assert "country" not in dims
+
+
+# ══════════════════════════════════════════════════════════════════════
+# (b) is_device_valid ⇔ 025 device_surface_ck 的等價 CHECK
+# ══════════════════════════════════════════════════════════════════════
+
+class TestIsDeviceValidMatchesDeviceSurfaceCk:
+    @pytest.mark.parametrize("search_type, device, expected", [
+        ("discover", DEVICE_NOT_SUPPORTED, True),   # 哨兵配 discover：合法
+        ("discover", "mobile", False),               # discover 被配上真實 device：不合法
+        ("web", DEVICE_NOT_SUPPORTED, False),        # 哨兵配非 discover：不合法
+        ("web", "mobile", True),                      # 真實 device 配非 discover：合法
+    ])
+    def test_four_quadrants(self, search_type: str, device: str, expected: bool) -> None:
+        assert is_device_valid(search_type, device) is expected
+
+    @pytest.mark.parametrize("search_type", ALLOWED_SEARCH_TYPES)
+    def test_equivalence_holds_for_every_surface(self, search_type: str) -> None:
+        """等價（不是蘊含）：對每個 surface，device='n/a' 合法 iff 該 surface
+        在 NO_DEVICE_SURFACES 裡——兩個方向都要成立，才讓「同一 surface 同時有
+        分裝置列與不分裝置列」無法表示。"""
+        assert is_device_valid(search_type, DEVICE_NOT_SUPPORTED) == (
+            search_type in NO_DEVICE_SURFACES
+        )
+
+    def test_no_device_surfaces_is_exactly_discover(self) -> None:
+        """加第二個沒有 device 維度的 surface 時，這條測試會先紅，提醒要同步
+        改 025 的 device_surface_ck IN 清單。"""
+        assert NO_DEVICE_SURFACES == frozenset({"discover"})
+
+    def test_matches_migration_025_device_surface_ck_text(self) -> None:
+        """對照 025 的 CHECK 定義字串本身，而不只是行為——CHECK 表達式改了
+        沒同步改 is_device_valid()，這裡會先紅於 DB 層的 ADD CONSTRAINT。"""
+        sql = MIGRATION_025_PATH.read_text(encoding="utf-8")
+        assert "CHECK ((device = 'n/a') = (search_type IN ('discover')));" in sql
+
+    def test_matches_migration_025_device_ck_domain_text(self) -> None:
+        sql = MIGRATION_025_PATH.read_text(encoding="utf-8")
+        assert "CHECK (device IN ('mobile', 'tablet', 'desktop', 'n/a'));" in sql
+
+
+# ══════════════════════════════════════════════════════════════════════
+# (c) row_to_record：page_nodevice 組的哨兵填法、keys 長度必須是 2
+# ══════════════════════════════════════════════════════════════════════
+
+class TestRowToRecordPageNodeviceCombo:
+    def _row(self, *keys: str, position: float = 0.0) -> dict:
+        return {"keys": list(keys), "clicks": 3, "impressions": 10, "ctr": 0.3, "position": position}
+
+    def test_maps_device_query_and_country_sentinels(self) -> None:
+        rejects: dict[str, int] = {}
+        record = row_to_record(
+            self._row(DAY.isoformat(), "https://vocus.cc/a"),
+            combo=COMBO_PAGE_NODEVICE, day=DAY, search_type="discover",
+            ingested_at=INGESTED_AT, rejects=rejects,
+        )
+        assert rejects == {}
+        assert record["device"] == DEVICE_NOT_SUPPORTED == "n/a"
+        assert record["query"] == ""
+        assert record["country"] == "zzz"
+        assert record["page"] == "https://vocus.cc/a"
+
+    def test_keys_length_three_is_rejected(self) -> None:
+        """page_nodevice 只有兩個維度（date, page）；帶第三個 key（例如誤配了
+        page 組的 device 值）代表組合表配錯，必須被 row_to_record 擋下，
+        而不是靜默按位置塞進去。"""
+        rejects: dict[str, int] = {}
+        record = row_to_record(
+            self._row(DAY.isoformat(), "https://vocus.cc/a", "MOBILE"),
+            combo=COMBO_PAGE_NODEVICE, day=DAY, search_type="discover",
+            ingested_at=INGESTED_AT, rejects=rejects,
+        )
+        assert record is None
+        assert "keys 長度與 dimensions 不符" in rejects
+
+    def test_device_surface_mismatch_is_rejected_before_it_reaches_the_check(self) -> None:
+        """組合表配錯 surface（page_nodevice 被誤配到 web）：is_device_valid()
+        在寫入前就要擋下，不必等 025 的 CHECK 回 400。"""
+        rejects: dict[str, int] = {}
+        record = row_to_record(
+            self._row(DAY.isoformat(), "https://vocus.cc/a"),
+            combo=COMBO_PAGE_NODEVICE, day=DAY, search_type="web",
+            ingested_at=INGESTED_AT, rejects=rejects,
+        )
+        assert record is None
+        assert "device 與 surface 不符" in rejects
+
+
+# ══════════════════════════════════════════════════════════════════════
+# (d) combo_filter：page_nodevice 是 page 側，不特判
+# ══════════════════════════════════════════════════════════════════════
+
+class TestComboFilterPageNodevice:
+    def test_page_nodevice_uses_the_same_discriminator_as_page(self) -> None:
+        assert combo_filter(COMBO_PAGE_NODEVICE) == combo_filter(COMBO_PAGE)
+
+    def test_page_nodevice_differs_from_query_discriminator(self) -> None:
+        assert combo_filter(COMBO_PAGE_NODEVICE) != combo_filter(COMBO_QUERY)
