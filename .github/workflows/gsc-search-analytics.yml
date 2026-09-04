@@ -1,8 +1,9 @@
 name: GSC Search Analytics Ingestion
 
 # 每日把 GSC Search Analytics API 的逐日資料寫進 Supabase gsc_daily_metrics（無排名的
-# googleNews／discover 只有 date+page+device 一套維度組合；有排名的 web／image／video／
-# news 另加 date+query+device）；同一次探測查詢的副產品（全站總數）另寫進 gsc_daily_totals。
+# googleNews 只有 date+page+device 一套維度組合；discover 因 device 維度本身不支援，
+# 改用不帶 device 的 date+page（page_nodevice）一套；有排名的 web／image／video／news
+# 另加 date+query+device）；同一次探測查詢的副產品（全站總數）另寫進 gsc_daily_totals。
 #
 # ingest job 用 matrix 依序（max-parallel: 1）跑六個 surface：web／news／googleNews／
 # discover／image／video。排程（schedule）事件固定跑全部六個；手動觸發
@@ -161,6 +162,15 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/data_quality_gate.py --pipeline gsc_discover
+
+      # 2026-09-04 S2.4 新增：discover page 層（page_nodevice 組）另立的新鮮度訊號，
+      # 與上面 gsc_discover（totals）是兩個母體、兩條寫入路徑，各自要能看到停擺。
+      - name: Check gsc_discover_pages quality
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --pipeline gsc_discover_pages
 
       # 2026-09-04 新增：image／video 併入排程後補的兩條 gate，理由同 gsc_googlenews——
       # gsc_daily_metrics（不帶 filter）新鮮/空段檢查看到 web 每天在寫就會綠燈，

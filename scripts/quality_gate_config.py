@@ -444,6 +444,9 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         # 「Requests for Discover cannot be grouped by device」——不只 query 維度被擋，
         # device 維度本身就不支援。SURFACE_COMBOS["discover"] 因此改成空 tuple，discover
         # 只收 gsc_daily_totals，不再有 gsc_page_daily 列可查，本管線改指向 totals 表。
+        # 2026-09-04 S2.4 補：discover 之後補上不帶 device 的 page_nodevice 組
+        # （見 gsc_surfaces.py），page 層有了自己的寫入路徑，新鮮度訊號另立
+        # gsc_discover_pages（見下方），本條目維持只管 totals 母體的新鮮度。
         table="gsc_daily_totals",
         filters=(("search_type", "discover"),),
         timestamp_column="date",
@@ -476,6 +479,49 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         schedule_note="門檻沿用 gsc_daily_metrics：totals 與探測查詢在同一支腳本、"
                       "同一次 run 內完成（見 ingest_gsc_search_analytics.py write_totals()），"
                       "來源延遲特性相同。",
+    ),
+
+    # ── 4c-2. GSC Search Analytics — Discover page 層（page_nodevice 組）───
+    # 2026-09-04 S2.4：discover 補上不帶 device 的 page_nodevice 組合後，
+    # (date, page) 列開始進 gsc_page_daily（見 gsc_surfaces.py SURFACE_COMBOS／
+    # 015 device_surface_ck）。totals 與 page 層是兩個母體、兩條寫入路徑，
+    # 各自要有自己的新鮮度訊號，因此不改 gsc_discover 的指向，另立本條目。
+    PipelineConfig(
+        key="gsc_discover_pages",
+        table="gsc_page_daily",  # 一律查視圖，同 gsc_daily_metrics 的理由
+        # property 必帶：gsc_daily_metrics_dim_uniq(property, search_type, date, ...) 的
+        # 前綴要有 property 等值條件 planner 才會選它，不帶會退回 26s 級全表掃描
+        # （見 GSC_PROPERTY 欄位註解、2026-09-04 team-lead EXPLAIN ANALYZE 實測）。
+        filters=(("property", GSC_PROPERTY), ("search_type", "discover")),
+        timestamp_column="date",
+        max_age_hours=96 + 48,  # 沿用 gsc_daily_metrics：同一支腳本、同一次 run 內完成，來源延遲同構
+        cadence_hours=24,
+        cadence_label="daily",
+        # lag_buffer_hours 用不到：gap_window_hours=None 讓整個第二類檢查（空段）SKIP，
+        # 這個值只有 check_gaps() 會讀，填 0.0 是滿足型別要求，理由見下方 gap_skip_reason。
+        lag_buffer_hours=0.0,
+        gap_window_hours=None,
+        gap_skip_reason=(
+            "與 gsc_discover（totals）同一個成因：discover 曝光本質斷續——一篇文章進"
+            "Discover 才有曝光，ingest 端只抓探測到有資料的日期，某天沒有 Discover 曝光時"
+            "那天在 gsc_page_daily 沒有列是合法狀態，不是管線故障。page 層改走"
+            "page_nodevice 組後這個論證不變（母體從 totals 換成 page 明細，斷續的本質"
+            "沒換）。gap_window_hours 掃 30 天窗會把沒曝光的日子當空段、連紅 30 天直到"
+            "滑出窗外，不是機率事件，是曝光模式的必然結果。新鮮度檢查（max_age_hours=144h）"
+            "已涵蓋『作業真的停擺』，此處不重複用一個會誤報的規則去涵蓋同一件事。"
+        ),
+        ingestion_run_table_name="gsc_daily_metrics",
+        degradation=None,
+        degradation_skip_reason=(
+            "discover 的 page_nodevice 組不請求 device 維度，寫入時 device 恆為 'n/a' 哨兵"
+            "（015 device_surface_ck 綁死，見 gsc_surfaces.py is_device_valid()），沒有"
+            "可拆的裝置子維度可能被靜默丟棄；page_nodevice 組本身也不含 query 維度"
+            "（discover 是無排名 surface，同 gsc_googlenews），因此沒有除 device 以外的"
+            "額外維度可查。唯一可能的資料品質問題是整批列數異常，屬於新鮮度／空段檢查的"
+            "範圍，不重複用降級規則，理由結構同 gsc_googlenews。"
+        ),
+        schedule_note="門檻沿用 gsc_daily_metrics：discover 與 web 是同一支腳本、"
+                      "同一次探測查詢的不同 search_type 分支，來源延遲特性相同。",
     ),
 
     # ── 4d. GSC 全站總數（date-only 探測查詢的副產品，非抽樣）────────
