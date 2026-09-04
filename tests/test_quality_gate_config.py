@@ -155,13 +155,16 @@ class TestPipelineConfigResolution:
         assert "video" not in NO_RANKING_SURFACES
 
     def test_gsc_discover_pipeline_points_to_totals_table(self) -> None:
-        """S2.5 discover-fix（2026-09-03）：live run 證實 discover 連 page 組
-        （date+page+device）都回 400，SURFACE_COMBOS["discover"] 改空 tuple，
-        discover 只收 gsc_daily_totals；本管線跟著改指向 totals 表，
-        ingestion_run_table_name 也從 gsc_daily_metrics 換成 gsc_daily_totals。"""
+        """review NB-4（2026-09-04）：docstring 更新為現況——S2.4 之後 discover 已經
+        有 page_nodevice 組把 (date, page) 列寫進 gsc_daily_metrics，本管線（key=
+        "gsc_discover"）指向 gsc_daily_totals 不是因為 discover 不寫 metrics，而是
+        totals 與 page 層是兩個母體、兩條寫入路徑：本條目只管 totals 母體的新鮮度，
+        page 層的新鮮度訊號另立 gsc_discover_pages（見下方測試）。
+        review NB-3：filters 補上 property 作第一項（gsc_daily_totals_uniq 同樣以
+        property 前導，REQ-3 橫切規則對 totals 表同樣適用）。"""
         pipeline = PIPELINES_BY_KEY["gsc_discover"]
         assert pipeline.table == "gsc_daily_totals"
-        assert pipeline.filters == (("search_type", "discover"),)
+        assert pipeline.filters == (("property", GSC_PROPERTY), ("search_type", "discover"))
         assert pipeline.ingestion_run_table_name == "gsc_daily_totals"
 
     def test_gsc_discover_gap_check_is_skipped(self) -> None:

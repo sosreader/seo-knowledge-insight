@@ -447,8 +447,11 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         # 2026-09-04 S2.4 補：discover 之後補上不帶 device 的 page_nodevice 組
         # （見 gsc_surfaces.py），page 層有了自己的寫入路徑，新鮮度訊號另立
         # gsc_discover_pages（見下方），本條目維持只管 totals 母體的新鮮度。
+        # review NB-3（2026-09-04）：filters 補上 property（排在 search_type 前面）——
+        # gsc_daily_totals_uniq(property, search_type, date) 同樣以 property 前導
+        # （見 TOTALS_CONFLICT_FIELDS），REQ-3 橫切規則對 totals 表同樣適用。
         table="gsc_daily_totals",
-        filters=(("search_type", "discover"),),
+        filters=(("property", GSC_PROPERTY), ("search_type", "discover")),
         timestamp_column="date",
         max_age_hours=96 + 48,  # 沿用 gsc_daily_metrics：totals 與探測查詢同一次 run 內完成
         cadence_hours=24,
@@ -466,8 +469,13 @@ PIPELINES: tuple[PipelineConfig, ...] = (
             "新鮮度檢查（max_age_hours=144h）已涵蓋『作業真的停擺』，此處不重複用一個"
             "會誤報的規則去涵蓋同一件事。"
         ),
-        # discover 只收 totals（S2.5），totals 的 ingestion_run 由 write_totals() 另記一列，
-        # 不再共用 gsc_daily_metrics 的分組——那張表 discover 現在完全不寫。
+        # review NB-2（2026-09-04）：此段原文（S2.5 discover-fix 時）寫「discover 只收
+        # totals，那張表 discover 現在完全不寫」已過時——S2.4 補上 page_nodevice 組後，
+        # discover 現在會把 (date, page) 列寫進 gsc_daily_metrics（見 gsc_surfaces.py
+        # SURFACE_COMBOS["discover"]）。本條目仍指向 gsc_daily_totals，是因為 totals 與
+        # page 層是兩個母體、兩條寫入路徑：totals 的 ingestion_run 由 write_totals()
+        # 另記一列，不與 gsc_daily_metrics 共用分組；page 層的新鮮度訊號另立
+        # gsc_discover_pages（見下方），各自獨立追蹤各自的寫入路徑。
         ingestion_run_table_name="gsc_daily_totals",
         degradation=None,
         degradation_skip_reason=(

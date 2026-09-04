@@ -82,14 +82,11 @@ from scripts.ingest_gsc_search_analytics import (  # noqa: E402
     upsert_rows,
     write_totals,
 )
-# gsc_surfaces 端的 device 哨兵規則沒被 ingest 主檔重新匯出（見 gsc_surfaces.py
-# 的 import 注意事項）；本檔要直接測它，另外從原模組 import。
-from scripts.gsc_surfaces import (  # noqa: E402
-    COMBO_PAGE_NODEVICE,
-    DEVICE_NOT_SUPPORTED,
-    NO_DEVICE_SURFACES,
-    is_device_valid,
-)
+# COMBO_PAGE_NODEVICE 沒被 ingest 主檔重新匯出（見 gsc_surfaces.py 的 import 注意
+# 事項）；本檔要直接測 discover 走這個組合，另外從原模組 import。device 哨兵規則
+# （is_device_valid／DEVICE_NOT_SUPPORTED／NO_DEVICE_SURFACES）的測試在
+# tests/test_gsc_surfaces.py（含與 025 migration CHECK 文字的對照），不在本檔重複。
+from scripts.gsc_surfaces import COMBO_PAGE_NODEVICE  # noqa: E402
 
 MODULE = "scripts.ingest_gsc_search_analytics"
 UTC = timezone.utc
