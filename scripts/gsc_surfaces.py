@@ -58,15 +58,30 @@ surface-aware：這兩個 surface 的 0 是**忠實的 API 原值**，照收；�
 由視圖層的 NULLIF(position, 0) 呈現（migration 022）。is_position_valid() 與
 022 的條件式 CHECK 一一對應，兩邊要一起改。
 
-【discover 更進一步：連 page 組也不支援】2026-09-03 live run（S2.5）證實 discover
+【discover：page_nodevice 組 + device 哨兵 'n/a'】2026-09-03 live run 證實 discover
 連 `(date, page, device)` 這個 page 組也回 400
-`Requests for Discover cannot be grouped by device`——不是只有 query 維度被擋，
-device 維度本身 discover 就不支援。於是 discover 的 SURFACE_COMBOS 是空 tuple：
-只收 gsc_daily_totals（date-only 探測查詢的副產品，本來就不帶 device），不收
-gsc_daily_metrics 的 page 層列。要收 page 層需要一個不帶 device 的新維度組合，
-是尚未做的 follow-up（需要新的哨兵值設計與 migration，見任務書 S2.6）。
-run_ingestion／run_verify 對 SURFACE_COMBOS 為空的 surface 一律跳過 metrics 階段，
-只做探測＋totals。
+`Requests for Discover cannot be grouped by device`——被擋的不只 query，device
+維度本身 discover 就不提供。於是 discover 走 COMBO_PAGE_NODEVICE（dimensions 只有
+date+page），device 欄填 DEVICE_NOT_SUPPORTED = 'n/a'，語意是「這個 surface 的 API
+不提供裝置維度」，不是「我們把裝置彙總起來了」。
+
+  哨兵與 surface 由 migration 025 的**等價** CHECK 雙向綁死：
+      CHECK ((device = 'n/a') = (search_type IN ('discover')))
+  discover 的列 device 只能是 'n/a'，非 discover 的列一律不能是 'n/a'。於是「同一個
+  surface 同時存在分裝置列與不分裝置列」在**單列層級**就不合法——不必依賴跨列語意，
+  就擋掉了上面 country／page 哨兵擋不住、只能靠下游判別式防的那種重複加總。
+  is_device_valid() 與這條 CHECK 一一對應，兩邊要一起改；未來加第二個無 device 的
+  surface，NO_DEVICE_SURFACES 與 025 的 IN 清單要同步。
+
+  為什麼哨兵不是 'all'：015 L231–246 已明確拒絕在本表放 'all'（可重組的量存彙總列
+  只引進四倍風險）。cwv_hourly 的 'all' 與成分列共存、語意是「拆了再合」；這裡的
+  'n/a' 不與成分列共存、語意是「API 拆不開」。語意不同就不該同名，否則讀 015 的人
+  會以為 025 推翻了那個論證。同理不把 device 改成 nullable（UNIQUE 視 NULL 互異，
+  upsert 冪等會失效），也不假填 'mobile'（違反不靜默改寫 API 值；日後 API 若開放
+  device 拆分，舊列與新列在同一 key 空間就是真雙算，沒有 CHECK 分辨得出來）。
+
+判別式仍以 page 為準：page_nodevice 的 page 欄是真實 URL（非哨兵），所以它屬 page 側，
+combo_filter() 不必特判，reap_orphans 的 `page<>哨兵` 過濾天然只掃得到自己的列。
 
 
 ═══ 全站總數（gsc_daily_totals）的母體與本表不同 ═══
@@ -150,7 +165,7 @@ PAGE_NOT_REQUESTED = "https://__dimension_not_requested__/"
 QUERY_NOT_REQUESTED = ""
 COUNTRY_NOT_REQUESTED = "zzz"
 # discover 的 page_nodevice 組不請求 device 維度，填這個哨兵；哪些 surface 允許它
-# 由 025 migration 的 device_surface_ck 對應鎖死（S2.2 補 is_device_valid()）。
+# 由 025 migration 的 device_surface_ck 雙向鎖死，Python 端對應 is_device_valid()。
 DEVICE_NOT_SUPPORTED = "n/a"
 NO_DEVICE_SURFACES = frozenset({"discover"})
 
@@ -176,6 +191,7 @@ TOTALS_CONFLICT_KEY = ",".join(TOTALS_CONFLICT_FIELDS)
 # reject 標籤。key 會直接進 rejects 計數與 log，改動等於改對外訊號。
 REJECT_POSITION_RANKED = "position<1"
 REJECT_POSITION_NO_RANKING = "position 非 0（無排名 surface）"
+REJECT_DEVICE_SURFACE_MISMATCH = "device 與 surface 不符"
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -183,7 +199,11 @@ REJECT_POSITION_NO_RANKING = "position 非 0（無排名 surface）"
 # ══════════════════════════════════════════════════════════════════════
 
 def combo_filter(combo: str) -> str:
-    """PostgREST 的組合判別式。以 page 為準，理由見模組 docstring。"""
+    """PostgREST 的組合判別式。以 page 為準，理由見模組 docstring。
+
+    page_nodevice 是 page 側（page 欄放真實 URL），判別式與 page 組完全相同，
+    因此這裡不必特判——只有 query 組走 `page=eq.哨兵` 那一邊。
+    """
     encoded = urllib.parse.quote(PAGE_NOT_REQUESTED, safe="")
     return f"page=eq.{encoded}" if combo == COMBO_QUERY else f"page=neq.{encoded}"
 
@@ -216,6 +236,17 @@ def is_position_valid(search_type: str, position: float) -> bool:
 def position_reject_reason(search_type: str) -> str:
     """rejects 計數用的標籤。有排名 surface 沿用既有字串，別動（下游 log 在看）。"""
     return REJECT_POSITION_NO_RANKING if search_type in NO_RANKING_SURFACES else REJECT_POSITION_RANKED
+
+
+def is_device_valid(search_type: str, device: str) -> bool:
+    """與 025 的 gsc_daily_metrics_device_surface_ck 一一對應。
+
+    `CHECK ((device = 'n/a') = (search_type IN ('discover')))` —— 等價而非蘊含：
+    無 device 維度的 surface **只能**填哨兵，其他 surface **一律不能**填哨兵。
+    兩個方向都要擋，才讓「同一 surface 同時有分裝置與不分裝置列」無法表示。
+    改這裡要同步改 025 的 IN 清單與 NO_DEVICE_SURFACES（見模組 docstring）。
+    """
+    return (device == DEVICE_NOT_SUPPORTED) == (search_type in NO_DEVICE_SURFACES)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -280,15 +311,37 @@ def dedupe_by_key(
 # API 列 → DB 列
 # ══════════════════════════════════════════════════════════════════════
 
+def _resolve_device(
+    values: Mapping[str, Any], dims: Sequence[str], *, search_type: str, rejects: dict[str, int],
+) -> str | None:
+    """取出（或以哨兵補上）device 欄並檢查它與 surface 相容。不合法回 None。
+
+    有 device 維度的組合走 DEVICE_MAP，未知值不靜默改寫、直接 reject；沒有 device
+    維度的組合填 DEVICE_NOT_SUPPORTED。兩條路都要過 is_device_valid()——它擋的是
+    「discover 被配上 page 組」或「web 被配上 page_nodevice 組」這種組合表配錯
+    surface 的情形，讓錯配在寫入前就被擋下，而不是等 025 的 CHECK 回 400。
+    """
+    if "device" in dims:
+        device = DEVICE_MAP.get(str(values["device"]).upper())
+        if device is None:
+            _reject(f"未知 device {values['device']!r}", rejects)
+            return None
+    else:
+        device = DEVICE_NOT_SUPPORTED
+    if not is_device_valid(search_type, device):
+        _reject(REJECT_DEVICE_SURFACE_MISMATCH, rejects)
+        return None
+    return device
+
+
 def row_to_record(
     row: Mapping[str, Any], *, combo: str, day: date, search_type: str,
     ingested_at: str, rejects: dict[str, int],
 ) -> dict | None:
     """API 的一列 → gsc_daily_metrics 的一列。不合法回 None 並記到 rejects。
 
-    組合的維度名決定怎麼拆 keys（不再靠位置假設每組都是 date+X+device）：
-    device 只在該組的 dimensions 帶了 "device" 時才映射，否則填 DEVICE_NOT_SUPPORTED
-    （目前只有 page_nodevice／discover 落這條路，S2.2 補 is_device_valid() 交叉驗證）。
+    組合的維度名決定怎麼拆 keys（不再靠位置假設每組都是 date+X+device）；
+    device 欄的取值與 surface 相容性交給 _resolve_device()。
     """
     dims = COMBO_DIMENSIONS[combo]
     keys = row.get("keys") or []
@@ -300,13 +353,9 @@ def row_to_record(
         _reject("date 與查詢日期不符", rejects)
         return None
 
-    if "device" in dims:
-        device = DEVICE_MAP.get(str(values["device"]).upper())
-        if device is None:
-            _reject(f"未知 device {values['device']!r}", rejects)
-            return None
-    else:
-        device = DEVICE_NOT_SUPPORTED
+    device = _resolve_device(values, dims, search_type=search_type, rejects=rejects)
+    if device is None:
+        return None
 
     page = values.get("page", PAGE_NOT_REQUESTED)
     query = values.get("query", QUERY_NOT_REQUESTED)
