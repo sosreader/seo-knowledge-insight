@@ -57,6 +57,10 @@ jobs:
       # 六個 surface 共用同一個 Supabase 連線與同一張 ingestion_run 表，序列執行
       # 讓每個 surface 的 run 紀錄與 log 互不交錯，也避免對 GSC API 同時發出多筆請求。
       max-parallel: 1
+      # fail-fast: false——六個 surface 互不依賴，一個失敗不該取消排在後面的其他幾個。
+      # 2026-09-04 07:30 UTC 排程：image 的 verify 撞 statement timeout，video 因預設
+      # fail-fast=true 被連帶 cancelled，當天完全沒跑到；freshness gate 會各自報。
+      fail-fast: false
       matrix:
         search_type: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', github.event.inputs.search_type || 'web')) || fromJSON('["web", "news", "googleNews", "discover", "image", "video"]') }}
     steps:
