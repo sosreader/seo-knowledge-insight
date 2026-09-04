@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from quality_gate_config import (  # noqa: E402
     DEFAULT_STALE_RUNNING_THRESHOLD_HOURS,
+    GSC_PROPERTY,
     PIPELINES,
     PIPELINES_BY_KEY,
     STALE_RUNNING_THRESHOLD_HOURS_BY_TABLE,
@@ -100,10 +101,13 @@ class TestPipelineConfigResolution:
 
     def test_gsc_googlenews_pipeline_filters_and_ingestion_run_table(self) -> None:
         """googleNews 查視圖、以 search_type 篩選；ingestion_run_table_name 沿用
-        gsc_daily_metrics（補充決策：surface 資訊不進 table_name，維持分組相容）。"""
+        gsc_daily_metrics（補充決策：surface 資訊不進 table_name，維持分組相容）。
+
+        2026-09-04 過渡：filters 補上 property（排在 search_type 前面）——run
+        33863650667／33863653352 撞 57014，理由見 GSC_PROPERTY 常數註解。"""
         pipeline = PIPELINES_BY_KEY["gsc_googlenews"]
         assert pipeline.table == "gsc_page_daily"
-        assert pipeline.filters == (("search_type", "googleNews"),)
+        assert pipeline.filters == (("property", GSC_PROPERTY), ("search_type", "googleNews"))
         assert pipeline.ingestion_run_table_name == "gsc_daily_metrics"
 
     def test_gsc_googlenews_gap_check_is_skipped(self) -> None:
@@ -119,10 +123,16 @@ class TestPipelineConfigResolution:
         """2026-09-04：image／video 併入排程後補的兩條 gate。與 gsc_googlenews 不同——
         image／video 是有排名的 surface（SURFACE_COMBOS 給 page＋query 兩組，與 web 同構），
         不屬於 NO_RANKING_SURFACES；查視圖、以 search_type 篩選，ingestion_run_table_name
-        沿用 gsc_daily_metrics（補充決策：surface 資訊不進 table_name）。"""
+        沿用 gsc_daily_metrics（補充決策：surface 資訊不進 table_name）。
+
+        2026-09-04 過渡：filters 補上 property（排在 search_type 前面）——run
+        33863650667 撞 57014，EXPLAIN 實測 video 的 freshness 查詢在視圖上不帶 property
+        時 planner 選錯索引、26–33 秒；帶了命中 dim_uniq，個位數毫秒。理由見
+        GSC_PROPERTY 常數註解。table 仍是 gsc_page_daily，不改指 gsc_daily_totals
+        （上一輪的 totals 改法已作廢）。"""
         pipeline = PIPELINES_BY_KEY[f"gsc_{search_type}"]
         assert pipeline.table == "gsc_page_daily"
-        assert pipeline.filters == (("search_type", search_type),)
+        assert pipeline.filters == (("property", GSC_PROPERTY), ("search_type", search_type))
         assert pipeline.ingestion_run_table_name == "gsc_daily_metrics"
 
     @pytest.mark.parametrize("search_type", ["image", "video"])

@@ -45,6 +45,22 @@ def _standard_extractor(timestamp_column: str) -> Callable[[Mapping], datetime]:
     return _extract
 
 
+GSC_PROPERTY = "https://vocus.cc/"
+# 來源：scripts/gsc_surfaces.py 的 PROPERTY 常數（ingest 端寫入時用的同一個值）。
+# 本檔刻意不 import gsc_surfaces（那個模組是 ingest pipeline 的一部分，維持本檔
+# 「只放設定與純資料結構、零外部依賴」的既有原則，見模組 docstring），改成複製
+# 這個值——`select distinct property from gsc_daily_totals` 目前只有這一個值，
+# 兩邊要保持一致，改動一邊記得改另一邊。
+#
+# 為什麼要在 gsc_* 管線的 filters 帶上這個值：run 33863653352／run 33863650667
+# 都撞過 57014。EXPLAIN ANALYZE 實測 gsc_daily_metrics_dim_uniq
+# (property, search_type, date, page, query, device, country) 只要查詢帶
+# property 就會被 planner 選上（Index Only Scan／Index Scan，個位數毫秒）；
+# 沒帶 property 時 planner 會挑錯索引（gsc_daily_metrics_page_date_idx）做
+# 近全表掃描，11–33 秒。不是語意窄化——這張表目前只有一個 property，
+# 加這個 filter 不改變任何一條管線原本篩出來的列集合，純粹是讓 planner
+# 找到對的索引。
+
 CRUX_PUBLISH_CADENCE_CEILING_HOURS = 168.0  # 7 天
 # CrUX History API 自己的發布週期落差上限（不是我們的排程週期、也不是 max_age_hours
 # 裡疊加的排程緩衝）。實測基礎：
@@ -257,7 +273,13 @@ PIPELINES: tuple[PipelineConfig, ...] = (
     PipelineConfig(
         key="gsc_daily_metrics",
         table="gsc_page_daily",  # 一律查視圖，見任務書「gsc_daily_metrics 底表…會得到約兩倍假數字」
-        filters=(),
+        # 只帶 property，不帶 search_type：property 是查詢效率的 filter，不是語意窄化——
+        # 這張表目前只有一個 property（GSC_PROPERTY 註解），帶不帶都是同一批列，差別只在
+        # planner 選不選得到 gsc_daily_metrics_dim_uniq（見 GSC_PROPERTY 欄位註解，
+        # run 33863650667）。**刻意不加** search_type 篩選：維持既有語意——任一 surface
+        # 當天有列就算那天有資料。加了 search_type 篩選會把語意從「GSC ingest 那天有沒有
+        # 跑」偷換成「web surface 那天有沒有列」，是另一個檢查，不在本次範圍。
+        filters=(("property", GSC_PROPERTY),),
         timestamp_column="date",
         max_age_hours=96 + 48,  # 144h：GSC 官方 2-3 天延遲 + 排程緩衝，既有腳本已用此值
         cadence_hours=24,
@@ -265,9 +287,6 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         gap_window_hours=24 * 30,
         # 逐點探測：本管線是五條裡唯一大到會讓「整窗抓回來」撞 statement_timeout 的，
         # 見 PipelineConfig.gap_probe_per_point 的欄位註解（run 33776287535）。
-        # 這裡刻意**不**加 filters=(("search_type","eq","web"),)：維持既有語意——
-        # 任一 surface 當天有列就算那天有資料。加了篩選會把語意從「GSC ingest 那天
-        # 有沒有跑」偷換成「web surface 那天有沒有列」，是另一個檢查，不在本次範圍。
         gap_probe_per_point=True,
         lag_buffer_hours=96 + 48,  # 與新鮮度門檻同一個數字：門檻已經編碼了「來源延遲多久算正常」，
                                     # 空段掃描沿用同一個容忍窗，不重新發明一個數字
@@ -291,7 +310,10 @@ PIPELINES: tuple[PipelineConfig, ...] = (
     PipelineConfig(
         key="gsc_googlenews",
         table="gsc_page_daily",  # 一律查視圖，同 gsc_daily_metrics 的理由
-        filters=(("search_type", "googleNews"),),
+        # property 排在 search_type 前面，對齊 gsc_daily_metrics_dim_uniq(property,
+        # search_type, ...) 的欄位順序與 EXPLAIN 實測用的查詢寫法（見 GSC_PROPERTY 註解）；
+        # PostgREST querystring 順序不影響 planner 選索引，這裡純粹是可讀性。
+        filters=(("property", GSC_PROPERTY), ("search_type", "googleNews")),
         timestamp_column="date",
         max_age_hours=96 + 48,  # 沿用 gsc_daily_metrics：同一支腳本、同一次 run 內完成，來源延遲同構
         cadence_hours=24,
@@ -335,7 +357,10 @@ PIPELINES: tuple[PipelineConfig, ...] = (
     PipelineConfig(
         key="gsc_image",
         table="gsc_page_daily",  # 一律查視圖，同 gsc_daily_metrics 的理由
-        filters=(("search_type", "image"),),
+        # property 排在 search_type 前面，理由同 gsc_googlenews；run 33863650667 撞 57014，
+        # EXPLAIN 實測不帶 property 時 freshness 查詢（search_type=eq.video 那個形狀，
+        # image 同構）要 26–33 秒，帶了只要個位數毫秒（見 GSC_PROPERTY 註解）。
+        filters=(("property", GSC_PROPERTY), ("search_type", "image")),
         timestamp_column="date",
         max_age_hours=96 + 48,  # 沿用 gsc_daily_metrics：同一支腳本、同一次 run 內完成，來源延遲同構
         cadence_hours=24,
@@ -378,7 +403,10 @@ PIPELINES: tuple[PipelineConfig, ...] = (
     PipelineConfig(
         key="gsc_video",
         table="gsc_page_daily",  # 一律查視圖，同 gsc_daily_metrics 的理由
-        filters=(("search_type", "video"),),
+        # property 排在 search_type 前面，理由同 gsc_googlenews；run 33863650667 撞 57014，
+        # EXPLAIN 實測不帶 property 時這個查詢形狀（search_type=eq.video&order=date.desc
+        # &limit=1）要 26,208ms／33,266ms，帶了只要 4.2ms（見 GSC_PROPERTY 註解）。
+        filters=(("property", GSC_PROPERTY), ("search_type", "video")),
         timestamp_column="date",
         max_age_hours=96 + 48,  # 沿用 gsc_daily_metrics：同一支腳本、同一次 run 內完成，來源延遲同構
         cadence_hours=24,
