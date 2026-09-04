@@ -108,7 +108,7 @@
 --      查詢變成 UNION。
 --
 --   4. 假填 'mobile'：違反 ingest 端「不靜默改寫 API 回的值」的原則
---      （scripts/ingest_gsc_search_analytics.py L334 註解）。
+--      （scripts/gsc_surfaces.py:80 註解，「不假填 'mobile'」那段）。
 --      更糟的是如果 API 日後開放 Discover 的 device 拆分，舊的假 mobile 列
 --      與新的真 mobile 列會落在同一個 key 空間變成真雙算，
 --      而且沒有任何 CHECK 分辨得出來。
@@ -140,15 +140,39 @@
 -- COMMENT ON 天生冪等（覆寫既有註解）。
 -- 本檔可重跑任意次（本機 postgres:17 實測套用兩次，第二次零 ERROR）。
 --
--- 【lock 影響】兩次 ALTER TABLE ... ADD CONSTRAINT 各取一次 ACCESS EXCLUSIVE lock
--- 並對 gsc_daily_metrics 全表驗證（022 在約 1M 列時實測秒級；現況 1.62M 列，
--- 估 <10 秒，provisional）。lock 期間排程寫入會等待——
+-- 【lock 影響】本檔對 gsc_daily_metrics 發四道 ALTER TABLE，**四道都取 ACCESS EXCLUSIVE lock**：
+--   兩道 DROP CONSTRAINT IF EXISTS —— 取鎖，但只改 catalog，不掃表，瞬間完成；
+--   兩道 ADD CONSTRAINT         —— 取鎖，且各做一次全表驗證掃描
+--                                  （022 在約 1M 列時實測秒級；現況 1.62M 列 × 兩次，
+--                                   估 5-15 秒，provisional）。
+-- 因為整支在單一 transaction 內，第一道 DROP 取得的鎖就會一路持有到 COMMIT，
+-- 四道不是「取四次放四次」而是「取一次持有到底」——
+-- 所以持鎖總時間由那兩次驗證掃描決定，把 DROP 算進來不會讓它變長。
+-- 敘述要完整的理由是：真正的起點是第一道 DROP，估算「從哪一刻開始擋寫入」要從它算起。
+-- lock 期間排程寫入會等待——
 -- push 本檔請避開 07:00-08:00 UTC（每日 GSC 排程）與 09:30 UTC 前後。
+--
+-- 【為什麼下方要 SET LOCAL lock_timeout】supabase db push 把每支 migration 包在
+-- 單一 transaction 內（provisional），而 ACCESS EXCLUSIVE lock 一旦取得就會
+-- **一路持有到 COMMIT**，不是「驗證完就放」。真正的風險不是驗證掃描那 5-15 秒，
+-- 是「拿不到鎖」的情況：若此時有長交易或排程寫入占著表，本檔會無限期排隊，
+-- 而排在它後面的所有新查詢又會被本檔的 lock 請求擋住（PG 的 lock 佇列是 FIFO，
+-- 一個等待中的 ACCESS EXCLUSIVE 請求足以讓後續 SELECT 一起卡住），
+-- 於是一支 DDL 的等待會放大成整條 API 停擺。
+-- lock_timeout = '5s' 讓這個情境變成「5 秒後放棄、整支 migration rollback」——
+-- 失敗是可重試的、看得見的；停擺不是。逾時就換個時段重跑即可。
+-- SET LOCAL 的作用域是當前 transaction，COMMIT / ROLLBACK 後自動還原，
+-- 不會外溢到連線的其他工作。
+-- ⚠ 若在 transaction block 外執行（例如 psql -f 的 autocommit 模式），
+-- PG 只會發一則 WARNING: SET LOCAL can only be used in transaction blocks，
+-- 不是 ERROR，本檔仍會正常套用——本機驗證鏈實測即是這個情形。
 --
 -- 【本檔刻意不做的事】不加任何索引。既有 dim_uniq 的前綴就是
 -- (property, search_type, date)，2026-09-04 在 1.62M 列上實測：per-surface 查詢
--- 只要帶 property = 'https://vocus.cc/' 就會走 dim_uniq（26,208 ms → 4.2 ms）；
+-- 只要帶 property = 'https://vocus.cc/'，同形的 freshness 查詢就從 33,266 ms
+-- 掉到個位數毫秒（googleNews 那條走 Index Only Scan Backward using dim_uniq，5.0 ms）；
 -- 不帶 property 則前導欄位缺等值條件，任何複合索引前綴都用不上。
+-- 實測檔在 .verification/2026-09-04/gate-probe-shape/（explain-5 vs explain-after-*）。
 -- 這是查詢寫法的問題，不是缺索引的問題，加索引解不掉也不需要。
 -- 詳見下方 COMMENT ON TABLE 的最後一句。
 
@@ -161,6 +185,11 @@
 -- 寫入端打成 'na' / 'N/A' / 'unknown' 一律被擋，不會靜默生出第二種哨兵拼法。
 -- 這一段單獨看是「放寬」，必須與第 2 段一起讀才是完整的防線——
 -- 兩道 CHECK 必須在同一支 migration 一起改，否則就是 015 對 discover 警告過的半開狀態。
+
+-- 拿不到鎖就在 5 秒後放棄整支 migration（rollback），理由見檔頭【為什麼下方要 SET LOCAL lock_timeout】。
+-- 放在第一個 ALTER 之前，涵蓋本檔的兩次 ADD CONSTRAINT。
+SET LOCAL lock_timeout = '5s';
+
 ALTER TABLE gsc_daily_metrics
   DROP CONSTRAINT IF EXISTS gsc_daily_metrics_device_ck;
 
@@ -228,8 +257,14 @@ COMMENT ON TABLE gsc_daily_metrics IS
   '且官方明講只回 top rows、不保證涵蓋全部資料列。因此 SUM(clicks) 必然小於 GSC UI 上的當日總點擊，落差大小不可知。'
   'property 值域鎖成單一值以杜絕跨 property 重複計算。資料保留 16 個月、延遲 2-3 天。'
   '⚠ 【帶 search_type 的查詢一定要同時帶 property】dim_uniq 的前綴是 (property, search_type, date)，'
-  '前導欄位缺等值條件時整個複合索引前綴用不上。2026-09-04 在 162 萬列上實測同一個 freshness 查詢：'
-  '不帶 property 26,208 ms（全表掃描），帶 property = ''https://vocus.cc/'' 4.2 ms（Index Only Scan using dim_uniq）。'
+  '前導欄位缺等值條件時整個複合索引前綴用不上。2026-09-04 在 162 萬列上實測 freshness 查詢：'
+  '只帶 search_type=''video'' 不帶 property 是 33,266 ms（走 date_idx，Rows Removed by Filter 145,064）；'
+  '補上 property = ''https://vocus.cc/'' 後同形查詢落在 2.4-63 ms，'
+  '其中 googleNews 那條走 Index Only Scan Backward using dim_uniq（5.0 ms）。'
+  '⚠ 帶了 property 不保證一定走 dim_uniq：image 那條仍走 date_idx（63 ms），'
+  '因為該 surface 的切片夠大、planner 判斷掃 date_idx 更划算——重點是最壞情況從 33 秒收斂到毫秒級。'
+  '原始 EXPLAIN ANALYZE 輸出在 repo 的 .verification/2026-09-04/gate-probe-shape/'
+  '（explain-5-freshness-video-search-type 對照 explain-after-1..3）。'
   'property 是單值 DOMAIN，帶上它不改變任何結果，只改索引路徑。';
 
 
