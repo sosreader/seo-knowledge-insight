@@ -1,1 +1,710 @@
-{"dashboard":{"description":"vocus.cc 技術 SEO 倉儲。三條每小時／每日自動寫入的管線：Core Web Vitals、Google 搜尋成效、爬蟲與 AI bot。資料源走唯讀角色 seo_dashboard_ro，只有六張表的 SELECT 權限。","editable":true,"id":122,"panels":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"這一格是整張儀表板存在的理由。管線停掉時不會有人來通知——只有這裡的「距今小時」會慢慢變大。2026-08 曾有一條管線停了三天沒人發現，因為它的告警住在那支從未被執行的檔案裡。","fieldConfig":{"defaults":{},"overrides":[{"matcher":{"id":"byName","options":"距今小時"},"properties":[{"id":"custom.cellOptions","value":{"mode":"gradient","type":"color-background"}},{"id":"thresholds","value":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"#EAB839","value":6},{"color":"red","value":26}]}}]}]},"gridPos":{"h":6,"w":24,"x":0,"y":0},"id":1,"options":{},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"table","rawQuery":true,"rawSql":"SELECT table_name AS \"管線\",\n       max(finished_at) AS \"最後成功寫入\",\n       round((EXTRACT(EPOCH FROM (now() - max(finished_at)))/3600.0)::numeric, 1) AS \"距今小時\"\nFROM ingestion_run WHERE status = 'success'\nGROUP BY 1 ORDER BY 3 DESC","refId":"A"}],"title":"管線最後一次成功寫入","type":"table"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"裝上這條管線之前，沒有人知道答案。AI 爬蟲的量長期高於 Googlebot 全家加總。","fieldConfig":{"defaults":{},"overrides":[]},"gridPos":{"h":9,"w":14,"x":0,"y":6},"id":2,"options":{"legend":{"calcs":["sum"],"displayMode":"table","placement":"right","showLegend":true},"tooltip":{"mode":"multi","sort":"desc"}},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"time_series","rawQuery":true,"rawSql":"SELECT ts AS time, metric, sum(request_count)::bigint AS value\nFROM (\n  SELECT (date::timestamp + (hour || ' hours')::interval) AT TIME ZONE 'UTC' AS ts,\n         request_count,\n         CASE WHEN ua_group LIKE 'ai-%'       THEN 'AI 爬蟲'\n              WHEN ua_group LIKE 'googlebot%' THEN 'Googlebot 家族'\n              WHEN ua_group = 'bingbot'       THEN 'bingbot'\n              WHEN ua_group = 'seo-tool-bot'  THEN 'SEO 工具'\n              WHEN ua_group = 'social-bot'    THEN '社群預覽'\n              ELSE '其他 bot' END AS metric\n  FROM crawl_daily WHERE ua_group <> 'human'\n) t\nWHERE $__timeFilter(ts)\nGROUP BY 1, 2 ORDER BY 1","refId":"A"}],"title":"誰在爬 vocus.cc（每小時請求數，不含真人）","type":"timeseries"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"用具名而非分群，因為同一個分群內的行為可以差很多：ai-mixed-bot 底下 amazonbot 錯誤率 7.1%、applebot 47.7%，差 6.7 倍。當初把 ua_name 放進儲存鍵就是為了保留這個拆解能力——Loki 只留 168h，事後想重新分類已經沒有原始資料。","fieldConfig":{"defaults":{},"overrides":[]},"gridPos":{"h":9,"w":10,"x":14,"y":6},"id":3,"options":{"legend":{"showLegend":false},"orientation":"horizontal","xTickLabelRotation":0},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"table","rawQuery":true,"rawSql":"SELECT ua_name AS \"爬蟲\", sum(request_count)::bigint AS \"請求數\"\nFROM crawl_daily WHERE ua_group <> 'human'\nGROUP BY 1 ORDER BY 2 DESC LIMIT 16","refId":"A"}],"title":"各爬蟲累計請求（具名，不含真人）","type":"barchart"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"資料源是 gsc_page_daily 視圖，不是底表。底表把「頁面×裝置」與「關鍵字×裝置」兩套維度存在一起，直接對底表加總會得到約兩倍的假數字，而且不報錯。","fieldConfig":{"defaults":{},"overrides":[{"matcher":{"id":"byName","options":"曝光"},"properties":[{"id":"custom.axisPlacement","value":"right"}]}]},"gridPos":{"h":9,"w":14,"x":0,"y":15},"id":4,"options":{},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"time_series","rawQuery":true,"rawSql":"SELECT date::timestamp AS time,\n       sum(clicks)::bigint      AS \"點擊\",\n       sum(impressions)::bigint AS \"曝光\"\nFROM gsc_page_daily\nWHERE $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 1","refId":"A"}],"title":"Google 搜尋每日點擊與曝光","type":"timeseries"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"關鍵字維度每天被 API 的 5 萬列上限截斷（連續七天落在 47,832–48,048，波動不到 0.5%），缺的正好是長尾。所以這份排名可信，但「總共有多少關鍵字」不可信。","fieldConfig":{"defaults":{},"overrides":[]},"gridPos":{"h":9,"w":10,"x":14,"y":15},"id":5,"options":{},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"table","rawQuery":true,"rawSql":"SELECT query AS \"關鍵字\",\n       sum(clicks)::bigint      AS \"點擊\",\n       sum(impressions)::bigint AS \"曝光\",\n       round((100.0 * sum(clicks) / NULLIF(sum(impressions), 0))::numeric, 1) AS \"CTR %\"\nFROM gsc_query_daily\nWHERE $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 2 DESC LIMIT 20","refId":"A"}],"title":"帶來最多點擊的關鍵字","type":"table"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"刻意固定在單一維度組合（文章頁 × 行動裝置）。p75 不能跨維度重新聚合——把不同分群的 p75 平均起來會得到一個不對應任何真實使用者的數字。CLS 與 LoAF 單位不同，另外看。","fieldConfig":{"defaults":{"unit":"ms"},"overrides":[]},"gridPos":{"h":9,"w":14,"x":0,"y":24},"id":6,"options":{"legend":{"calcs":["mean","max"],"displayMode":"table","placement":"right","showLegend":true},"tooltip":{"mode":"multi","sort":"desc"}},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"time_series","rawQuery":true,"rawSql":"SELECT hour AS time, metric AS metric, p75 AS value\nFROM cwv_hourly\nWHERE environment = 'production' AND source = 'rum'\n  AND route_type = '/article/[id]' AND device = 'mobile'\n  AND metric IN ('LCP', 'INP', 'FCP', 'TTFB')\n  AND $__timeFilter(hour)\nORDER BY 1","refId":"A"}],"title":"文章頁載入體驗 p75（行動裝置，production RUM）","type":"timeseries"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"回答「這頁零曝光是因為沒人搜，還是 Google 根本沒收錄」——這兩件事的處置完全相反，而在這條管線之前無法區分。URL is unknown to Google = Google 從沒看過這一頁。","fieldConfig":{"defaults":{},"overrides":[]},"gridPos":{"h":9,"w":10,"x":14,"y":24},"id":7,"options":{"legend":{"displayMode":"table","placement":"right","values":["value","percent"]},"pieType":"donut","reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":true}},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"table","rawQuery":true,"rawSql":"SELECT coverage_state AS \"狀態\", count(*)::bigint AS \"頁數\"\nFROM gsc_url_inspection\nGROUP BY 1 ORDER BY 2 DESC","refId":"A"}],"title":"Google 收錄狀態（抽樣）","type":"piechart"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"在這條管線之前沒有人看過這個數字。applebot 有近半數請求失敗（8,499 次 404，其中 6,482 次打在 /tags）；exasearchbot 拿到的是 406 Not Acceptable——那不是找不到，是我們主動拒絕它。錯誤率高不一定要修（爬蟲本來就會試舊網址），但「不知道」與「知道且決定不修」是兩回事。","fieldConfig":{"defaults":{},"overrides":[{"matcher":{"id":"byName","options":"錯誤率 %"},"properties":[{"id":"custom.cellOptions","value":{"mode":"gradient","type":"color-background"}},{"id":"thresholds","value":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"#EAB839","value":20},{"color":"red","value":45}]}}]}]},"gridPos":{"h":9,"w":12,"x":0,"y":33},"id":8,"options":{},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"table","rawQuery":true,"rawSql":"SELECT ua_name AS \"爬蟲\",\n       sum(request_count)::bigint AS \"請求數\",\n       round((100.0 * sum(request_count) FILTER (WHERE status_code >= 400)\n              / NULLIF(sum(request_count), 0))::numeric, 1) AS \"錯誤率 %\"\nFROM crawl_daily\nWHERE ua_group <> 'human'\nGROUP BY 1 HAVING sum(request_count) > 100\nORDER BY 3 DESC","refId":"A"}],"title":"各爬蟲的錯誤率","type":"table"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"/tags 是目前最大的一塊。判斷要不要處理之前，注意兩件已知的刻意決策：三個 /api/ 前綴開放檢索是刻意的、不得提議收攏；某次 PR 造成的三個 app-webview 路徑 404 也是刻意的，屬已知非 regression。","fieldConfig":{"defaults":{},"overrides":[]},"gridPos":{"h":9,"w":12,"x":12,"y":33},"id":9,"options":{},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"table","rawQuery":true,"rawSql":"SELECT path_prefix AS \"路徑\", status_code AS \"狀態碼\",\n       sum(request_count)::bigint AS \"次數\"\nFROM crawl_daily\nWHERE ua_group <> 'human' AND status_code >= 400\nGROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15","refId":"A"}],"title":"爬蟲撞到錯誤的路徑（狀態碼 >= 400）","type":"table"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"資料源是 gsc_daily_totals，全站全量、與 GSC UI 同口徑（不是 gsc_page_daily／gsc_query_daily 的 top-N 抽樣）。2026-08-25 對照 GSC UI 介面數字，差異 0.00%。不可與抽樣表的加總相加。","fieldConfig":{"defaults":{},"overrides":[{"matcher":{"id":"byName","options":"曝光"},"properties":[{"id":"custom.axisPlacement","value":"right"}]}]},"gridPos":{"h":9,"w":12,"x":0,"y":42},"id":10,"options":{},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"time_series","rawQuery":true,"rawSql":"SELECT date::timestamp AS time,\n       sum(clicks)::bigint      AS \"點擊\",\n       sum(impressions)::bigint AS \"曝光\"\nFROM gsc_daily_totals\nWHERE search_type = 'web' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 1","refId":"A"}],"title":"全站每日點擊與曝光（GSC UI 同口徑）","type":"timeseries"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"資料源是 gsc_daily_totals，search_type='googleNews'（Google 新聞聯播），全站全量、非抽樣。position 恆為 0（無排名概念），本圖不含排名欄。","fieldConfig":{"defaults":{},"overrides":[{"matcher":{"id":"byName","options":"曝光"},"properties":[{"id":"custom.axisPlacement","value":"right"}]}]},"gridPos":{"h":9,"w":12,"x":12,"y":42},"id":11,"options":{},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"time_series","rawQuery":true,"rawSql":"SELECT date::timestamp AS time,\n       sum(clicks)::bigint      AS \"點擊\",\n       sum(impressions)::bigint AS \"曝光\"\nFROM gsc_daily_totals\nWHERE search_type = 'googleNews' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 1","refId":"A"}],"title":"Google 新聞（googleNews）每日曝光與點擊","type":"timeseries"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"只有全站總數（gsc_daily_totals），無 page 層——Discover API 不支援 device 維度（S2.5 已 live 證實：400 cannot be grouped by device），故只收 date-only totals。2026-08-13 官方 Discover 曝光數少記，跨該日比較時須留意。","fieldConfig":{"defaults":{},"overrides":[{"matcher":{"id":"byName","options":"曝光"},"properties":[{"id":"custom.axisPlacement","value":"right"}]}]},"gridPos":{"h":9,"w":12,"x":0,"y":51},"id":12,"options":{},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"time_series","rawQuery":true,"rawSql":"SELECT date::timestamp AS time,\n       sum(clicks)::bigint      AS \"點擊\",\n       sum(impressions)::bigint AS \"曝光\"\nFROM gsc_daily_totals\nWHERE search_type = 'discover' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 1","refId":"A"}],"title":"Discover 每日曝光與點擊","type":"timeseries"},{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"description":"資料源是 gsc_page_daily 視圖（top-N 抽樣，非全量），search_type='googleNews'。Discover 無 page 層資料（決策：只收 date-only totals），故此表僅涵蓋 googleNews。","fieldConfig":{"defaults":{},"overrides":[]},"gridPos":{"h":9,"w":12,"x":12,"y":51},"id":13,"options":{},"targets":[{"datasource":{"type":"grafana-postgresql-datasource","uid":"seo-warehouse"},"editorMode":"code","format":"table","rawQuery":true,"rawSql":"SELECT page AS \"頁面\",\n       sum(impressions)::bigint AS \"曝光\",\n       sum(clicks)::bigint      AS \"點擊\"\nFROM gsc_page_daily\nWHERE search_type = 'googleNews' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 2 DESC LIMIT 20","refId":"A"}],"title":"googleNews 曝光前 20 頁面（區間內）","type":"table"}],"refresh":"15m","schemaVersion":39,"tags":["seo","warehouse","frontend","supabase"],"time":{"from":"now-30d","to":"now"},"timezone":"browser","title":"SEO Warehouse — 倉儲總覽","uid":"seo-warehouse-overview","version":4},"meta":{"annotationsPermissions":{"dashboard":{"canAdd":true,"canDelete":true,"canEdit":true},"organization":{"canAdd":true,"canDelete":true,"canEdit":true}},"apiVersion":"v0alpha1","canAdmin":true,"canDelete":true,"canEdit":true,"canSave":true,"canStar":true,"created":"2026-09-02T09:44:45.000Z","createdBy":"claude-mcp-readonly","expires":"0001-01-01T00:00:00.000Z","folderId":75,"folderTitle":"Frontend","folderUid":"frontend-folder","folderUrl":"/dashboards/f/frontend-folder/frontend","slug":"seo-warehouse-e28094-e58089-e584b2-e7b8bd-e8a6bd","type":"db","updated":"2026-09-03T15:01:44.000Z","updatedBy":"claude-mcp-readonly","url":"/d/seo-warehouse-overview/seo-warehouse-e28094-e58089-e584b2-e7b8bd-e8a6bd","version":4}}
+{
+  "dashboard": {
+    "description": "vocus.cc 技術 SEO 倉儲。三條每小時／每日自動寫入的管線：Core Web Vitals、Google 搜尋成效、爬蟲與 AI bot。資料源走唯讀角色 seo_dashboard_ro，只有六張表的 SELECT 權限。",
+    "editable": true,
+    "id": 122,
+    "panels": [
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "這一格是整張儀表板存在的理由。管線停掉時不會有人來通知——只有這裡的「距今小時」會慢慢變大。2026-08 曾有一條管線停了三天沒人發現，因為它的告警住在那支從未被執行的檔案裡。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "距今小時"
+              },
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "mode": "gradient",
+                    "type": "color-background"
+                  }
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "#EAB839",
+                        "value": 6
+                      },
+                      {
+                        "color": "red",
+                        "value": 26
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT table_name AS \"管線\",\n       max(finished_at) AS \"最後成功寫入\",\n       round((EXTRACT(EPOCH FROM (now() - max(finished_at)))/3600.0)::numeric, 1) AS \"距今小時\"\nFROM ingestion_run WHERE status = 'success'\nGROUP BY 1 ORDER BY 3 DESC",
+            "refId": "A"
+          }
+        ],
+        "title": "管線最後一次成功寫入",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "裝上這條管線之前，沒有人知道答案。AI 爬蟲的量長期高於 Googlebot 全家加總。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 14,
+          "x": 0,
+          "y": 6
+        },
+        "id": 2,
+        "options": {
+          "legend": {
+            "calcs": [
+              "sum"
+            ],
+            "displayMode": "table",
+            "placement": "right",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "time_series",
+            "rawQuery": true,
+            "rawSql": "SELECT ts AS time, metric, sum(request_count)::bigint AS value\nFROM (\n  SELECT (date::timestamp + (hour || ' hours')::interval) AT TIME ZONE 'UTC' AS ts,\n         request_count,\n         CASE WHEN ua_group LIKE 'ai-%'       THEN 'AI 爬蟲'\n              WHEN ua_group LIKE 'googlebot%' THEN 'Googlebot 家族'\n              WHEN ua_group = 'bingbot'       THEN 'bingbot'\n              WHEN ua_group = 'seo-tool-bot'  THEN 'SEO 工具'\n              WHEN ua_group = 'social-bot'    THEN '社群預覽'\n              ELSE '其他 bot' END AS metric\n  FROM crawl_daily WHERE ua_group <> 'human'\n) t\nWHERE $__timeFilter(ts)\nGROUP BY 1, 2 ORDER BY 1",
+            "refId": "A"
+          }
+        ],
+        "title": "誰在爬 vocus.cc（每小時請求數，不含真人）",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "用具名而非分群，因為同一個分群內的行為可以差很多：ai-mixed-bot 底下 amazonbot 錯誤率 7.1%、applebot 47.7%，差 6.7 倍。當初把 ua_name 放進儲存鍵就是為了保留這個拆解能力——Loki 只留 168h，事後想重新分類已經沒有原始資料。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 10,
+          "x": 14,
+          "y": 6
+        },
+        "id": 3,
+        "options": {
+          "legend": {
+            "showLegend": false
+          },
+          "orientation": "horizontal",
+          "xTickLabelRotation": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT ua_name AS \"爬蟲\", sum(request_count)::bigint AS \"請求數\"\nFROM crawl_daily WHERE ua_group <> 'human'\nGROUP BY 1 ORDER BY 2 DESC LIMIT 16",
+            "refId": "A"
+          }
+        ],
+        "title": "各爬蟲累計請求（具名，不含真人）",
+        "type": "barchart"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "資料源是 gsc_page_daily 視圖，不是底表。底表把「頁面×裝置」與「關鍵字×裝置」兩套維度存在一起，直接對底表加總會得到約兩倍的假數字，而且不報錯。（2026-09-04 補：本圖限定 search_type='web'，與 panel 11／12 的 googleNews／Discover 分開，避免 Discover page 列自 2026-09-04 起加入 gsc_page_daily 後與 web 混算出現階梯狀失真。）",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "曝光"
+              },
+              "properties": [
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 14,
+          "x": 0,
+          "y": 15
+        },
+        "id": 4,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "time_series",
+            "rawQuery": true,
+            "rawSql": "SELECT date::timestamp AS time,\n       sum(clicks)::bigint      AS \"點擊\",\n       sum(impressions)::bigint AS \"曝光\"\nFROM gsc_page_daily\nWHERE property = 'https://vocus.cc/' AND search_type = 'web' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 1",
+            "refId": "A"
+          }
+        ],
+        "title": "Google 搜尋每日點擊與曝光",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "關鍵字維度每天被 API 的 5 萬列上限截斷（連續七天落在 47,832–48,048，波動不到 0.5%），缺的正好是長尾。所以這份排名可信，但「總共有多少關鍵字」不可信。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 10,
+          "x": 14,
+          "y": 15
+        },
+        "id": 5,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT query AS \"關鍵字\",\n       sum(clicks)::bigint      AS \"點擊\",\n       sum(impressions)::bigint AS \"曝光\",\n       round((100.0 * sum(clicks) / NULLIF(sum(impressions), 0))::numeric, 1) AS \"CTR %\"\nFROM gsc_query_daily\nWHERE property = 'https://vocus.cc/' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 2 DESC LIMIT 20",
+            "refId": "A"
+          }
+        ],
+        "title": "帶來最多點擊的關鍵字",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "刻意固定在單一維度組合（文章頁 × 行動裝置）。p75 不能跨維度重新聚合——把不同分群的 p75 平均起來會得到一個不對應任何真實使用者的數字。CLS 與 LoAF 單位不同，另外看。",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 14,
+          "x": 0,
+          "y": 24
+        },
+        "id": 6,
+        "options": {
+          "legend": {
+            "calcs": [
+              "mean",
+              "max"
+            ],
+            "displayMode": "table",
+            "placement": "right",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "time_series",
+            "rawQuery": true,
+            "rawSql": "SELECT hour AS time, metric AS metric, p75 AS value\nFROM cwv_hourly\nWHERE environment = 'production' AND source = 'rum'\n  AND route_type = '/article/[id]' AND device = 'mobile'\n  AND metric IN ('LCP', 'INP', 'FCP', 'TTFB')\n  AND $__timeFilter(hour)\nORDER BY 1",
+            "refId": "A"
+          }
+        ],
+        "title": "文章頁載入體驗 p75（行動裝置，production RUM）",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "回答「這頁零曝光是因為沒人搜，還是 Google 根本沒收錄」——這兩件事的處置完全相反，而在這條管線之前無法區分。URL is unknown to Google = Google 從沒看過這一頁。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 10,
+          "x": 14,
+          "y": 24
+        },
+        "id": 7,
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": [
+              "value",
+              "percent"
+            ]
+          },
+          "pieType": "donut",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": true
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT coverage_state AS \"狀態\", count(*)::bigint AS \"頁數\"\nFROM gsc_url_inspection\nGROUP BY 1 ORDER BY 2 DESC",
+            "refId": "A"
+          }
+        ],
+        "title": "Google 收錄狀態（抽樣）",
+        "type": "piechart"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "在這條管線之前沒有人看過這個數字。applebot 有近半數請求失敗（8,499 次 404，其中 6,482 次打在 /tags）；exasearchbot 拿到的是 406 Not Acceptable——那不是找不到，是我們主動拒絕它。錯誤率高不一定要修（爬蟲本來就會試舊網址），但「不知道」與「知道且決定不修」是兩回事。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "錯誤率 %"
+              },
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "mode": "gradient",
+                    "type": "color-background"
+                  }
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "#EAB839",
+                        "value": 20
+                      },
+                      {
+                        "color": "red",
+                        "value": 45
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 33
+        },
+        "id": 8,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT ua_name AS \"爬蟲\",\n       sum(request_count)::bigint AS \"請求數\",\n       round((100.0 * sum(request_count) FILTER (WHERE status_code >= 400)\n              / NULLIF(sum(request_count), 0))::numeric, 1) AS \"錯誤率 %\"\nFROM crawl_daily\nWHERE ua_group <> 'human'\nGROUP BY 1 HAVING sum(request_count) > 100\nORDER BY 3 DESC",
+            "refId": "A"
+          }
+        ],
+        "title": "各爬蟲的錯誤率",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "/tags 是目前最大的一塊。判斷要不要處理之前，注意兩件已知的刻意決策：三個 /api/ 前綴開放檢索是刻意的、不得提議收攏；某次 PR 造成的三個 app-webview 路徑 404 也是刻意的，屬已知非 regression。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 33
+        },
+        "id": 9,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT path_prefix AS \"路徑\", status_code AS \"狀態碼\",\n       sum(request_count)::bigint AS \"次數\"\nFROM crawl_daily\nWHERE ua_group <> 'human' AND status_code >= 400\nGROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15",
+            "refId": "A"
+          }
+        ],
+        "title": "爬蟲撞到錯誤的路徑（狀態碼 >= 400）",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "資料源是 gsc_daily_totals，全站全量、與 GSC UI 同口徑（不是 gsc_page_daily／gsc_query_daily 的 top-N 抽樣）。2026-08-25 對照 GSC UI 介面數字，差異 0.00%。不可與抽樣表的加總相加。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "曝光"
+              },
+              "properties": [
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 42
+        },
+        "id": 10,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "time_series",
+            "rawQuery": true,
+            "rawSql": "SELECT date::timestamp AS time,\n       sum(clicks)::bigint      AS \"點擊\",\n       sum(impressions)::bigint AS \"曝光\"\nFROM gsc_daily_totals\nWHERE property = 'https://vocus.cc/' AND search_type = 'web' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 1",
+            "refId": "A"
+          }
+        ],
+        "title": "全站每日點擊與曝光（GSC UI 同口徑）",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "資料源是 gsc_daily_totals，search_type='googleNews'（Google 新聞聯播），全站全量、非抽樣。position 恆為 0（無排名概念），本圖不含排名欄。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "曝光"
+              },
+              "properties": [
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 42
+        },
+        "id": 11,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "time_series",
+            "rawQuery": true,
+            "rawSql": "SELECT date::timestamp AS time,\n       sum(clicks)::bigint      AS \"點擊\",\n       sum(impressions)::bigint AS \"曝光\"\nFROM gsc_daily_totals\nWHERE property = 'https://vocus.cc/' AND search_type = 'googleNews' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 1",
+            "refId": "A"
+          }
+        ],
+        "title": "Google 新聞（googleNews）每日曝光與點擊",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "資料源是 gsc_daily_totals，search_type='discover'，全站全量、非抽樣。page 層明細見 panel 14（gsc_page_daily 抽樣，device 恆為 'n/a'——Discover API 不支援裝置維度，S2.5 已 live 證實：400 cannot be grouped by device）。2026-08-13 官方 Discover 曝光數少記，跨該日比較時須留意。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "曝光"
+              },
+              "properties": [
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 51
+        },
+        "id": 12,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "time_series",
+            "rawQuery": true,
+            "rawSql": "SELECT date::timestamp AS time,\n       sum(clicks)::bigint      AS \"點擊\",\n       sum(impressions)::bigint AS \"曝光\"\nFROM gsc_daily_totals\nWHERE property = 'https://vocus.cc/' AND search_type = 'discover' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 1",
+            "refId": "A"
+          }
+        ],
+        "title": "Discover 每日曝光與點擊",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "資料源是 gsc_page_daily 視圖（top-N 抽樣，非全量），search_type='googleNews'。Discover 的對應 page 層明細見 panel 14。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 51
+        },
+        "id": 13,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT page AS \"頁面\",\n       sum(impressions)::bigint AS \"曝光\",\n       sum(clicks)::bigint      AS \"點擊\"\nFROM gsc_page_daily\nWHERE property = 'https://vocus.cc/' AND search_type = 'googleNews' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 2 DESC LIMIT 20",
+            "refId": "A"
+          }
+        ],
+        "title": "googleNews 曝光前 20 頁面（區間內）",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "資料源是 gsc_page_daily 視圖（top-N 抽樣，非全量），search_type='discover'。device 恆為 'n/a'（Discover API 不支援裝置維度，S2.5 已 live 證實：400 cannot be grouped by device）。不可與 panel 12 的 totals（gsc_daily_totals，全量）相加。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 24,
+          "x": 0,
+          "y": 60
+        },
+        "id": 14,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT page AS \"頁面\",\n       sum(impressions)::bigint AS \"曝光\",\n       sum(clicks)::bigint      AS \"點擊\"\nFROM gsc_page_daily\nWHERE property = 'https://vocus.cc/' AND search_type = 'discover' AND $__timeFilter(date::timestamp)\nGROUP BY 1 ORDER BY 2 DESC LIMIT 20",
+            "refId": "A"
+          }
+        ],
+        "title": "Discover 曝光前 20 頁面（區間內）",
+        "type": "table"
+      }
+    ],
+    "refresh": "15m",
+    "schemaVersion": 39,
+    "tags": [
+      "seo",
+      "warehouse",
+      "frontend",
+      "supabase"
+    ],
+    "time": {
+      "from": "now-30d",
+      "to": "now"
+    },
+    "timezone": "browser",
+    "title": "SEO Warehouse — 倉儲總覽",
+    "uid": "seo-warehouse-overview",
+    "version": 5
+  },
+  "meta": {
+    "annotationsPermissions": {
+      "dashboard": {
+        "canAdd": true,
+        "canDelete": true,
+        "canEdit": true
+      },
+      "organization": {
+        "canAdd": true,
+        "canDelete": true,
+        "canEdit": true
+      }
+    },
+    "apiVersion": "v0alpha1",
+    "canAdmin": true,
+    "canDelete": true,
+    "canEdit": true,
+    "canSave": true,
+    "canStar": true,
+    "created": "2026-09-02T09:44:45.000Z",
+    "createdBy": "claude-mcp-readonly",
+    "expires": "0001-01-01T00:00:00.000Z",
+    "folderId": 75,
+    "folderTitle": "Frontend",
+    "folderUid": "frontend-folder",
+    "folderUrl": "/dashboards/f/frontend-folder/frontend",
+    "slug": "seo-warehouse-e28094-e58089-e584b2-e7b8bd-e8a6bd",
+    "type": "db",
+    "updated": "2026-09-04T13:08:12.000Z",
+    "updatedBy": "claude-mcp-readonly",
+    "url": "/d/seo-warehouse-overview/seo-warehouse-e28094-e58089-e584b2-e7b8bd-e8a6bd",
+    "version": 5
+  }
+}
