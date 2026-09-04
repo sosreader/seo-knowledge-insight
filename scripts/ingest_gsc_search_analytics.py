@@ -503,6 +503,40 @@ def has_rows(extra_query: str = "", table: str = TABLE_GSC) -> bool:
     return bool(json.loads(body))
 
 
+def _combo_probe(extra_query: str = "", table: str = TABLE_GSC) -> tuple[int, bool]:
+    """一次請求同時拿到「量級估計」與「存在性」——_verify_surface() 原本對每個
+    combo 各打一次 count_rows() 與一次 has_rows()，兩者查的是同一個 filter，
+    多打的那次 has_rows() 純屬重複。
+
+    做法沿用 has_rows() 的查詢形狀（order=date.desc&limit=1，走索引避免 seq
+    scan），疊加 Prefer: count=planned 讀 Content-Range 拿量級估計；空/非空
+    一律看回傳 body 是否有列，不看 count 估計值——planner 估計有下限 1，拿它
+    判斷「0 列」等於讓判定永遠通過（同 count_rows() docstring 的理由，
+    因此不可把這裡的 Prefer 換成 count=exact，那會撞 statement_timeout）。
+    """
+    url, key = supabase_config()
+    headers = {
+        "apikey": key, "Authorization": f"Bearer {key}", "User-Agent": USER_AGENT,
+        "Prefer": "count=planned",
+    }
+    request = urllib.request.Request(
+        url + f"/rest/v1/{table}?select=date{extra_query}&order=date.desc&limit=1",
+        headers=headers, method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
+            content_range = response.headers.get("Content-Range", "")
+            body = response.read().decode()
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(
+            f"存在性/計數查詢失敗：{exc.code} {exc.read().decode(errors='replace')[:200]}"
+        ) from exc
+    total = content_range.rsplit("/", 1)[-1]
+    if not total.isdigit():
+        raise RuntimeError(f"count 查詢的 Content-Range 格式異常：{content_range!r}")
+    return int(total), bool(json.loads(body))
+
+
 def latest_date() -> date | None:
     status, body = _supabase_request(
         "GET", f"/rest/v1/{TABLE_GSC}?select=date&order=date.desc&limit=1"
@@ -687,20 +721,23 @@ def _verify_surface(search_type: str) -> bool:
 
     全表計數看不出單一 surface 寫入失敗（web 有資料就會 PASS），所以按 surface 分組；
     只有 page 組的 surface（googleNews）不要求 query 組；combos 為空（discover）不呼叫本函式，見 run_verify。
+
+    每個 combo 只打一次請求（見 _combo_probe）：量級估計與存在性判定合併在同一次
+    查詢裡，不再各打一次 count_rows() 又一次 has_rows()。
     """
-    counts = {
-        combo: count_rows(f"&search_type=eq.{search_type}&{combo_filter(combo)}")
+    probes = {
+        combo: _combo_probe(f"&search_type=eq.{search_type}&{combo_filter(combo)}")
         for combo in SURFACE_COMBOS[search_type]
     }
+    counts = {combo: count for combo, (count, _exists) in probes.items()}
     if COMBO_QUERY in counts:
         logger.info("%s：page 組 %d 列 / query 組 %d 列（合計 %d，planner 估計）", search_type,
                     counts[COMBO_PAGE], counts[COMBO_QUERY], sum(counts.values()))
     else:
         logger.info("%s：page 組 %d 列（planner 估計；此 surface 不支援 query 維度）",
                     search_type, counts[COMBO_PAGE])
-    # 空/非空一律用 has_rows() 實際取 1 列判定，不看上面那些估計值（見 count_rows docstring）。
-    empty = [combo for combo in counts
-             if not has_rows(f"&search_type=eq.{search_type}&{combo_filter(combo)}")]
+    # 空/非空一律看 _combo_probe() 實際取回的那 1 列，不看上面那些估計值（見其 docstring）。
+    empty = [combo for combo, (_count, exists) in probes.items() if not exists]
     if empty:
         logger.error("%s：%s 組 0 列 —— 該 surface 沒有資料，視為失敗",
                      search_type, "／".join(empty))

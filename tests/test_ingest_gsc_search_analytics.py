@@ -1123,8 +1123,8 @@ class TestRunVerify:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
-             patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
-             patch(f"{MODULE}.has_rows", return_value=True), \
+             patch(f"{MODULE}._combo_probe", side_effect=[(900, True), (100, True)]), \
+             patch(f"{MODULE}.count_rows", side_effect=[30]), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify() == 0
@@ -1134,8 +1134,8 @@ class TestRunVerify:
 
     def test_labels_each_row_by_the_page_discriminator(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
-             patch(f"{MODULE}.count_rows", side_effect=[1, 1, 1]), \
-             patch(f"{MODULE}.has_rows", return_value=True), \
+             patch(f"{MODULE}._combo_probe", side_effect=[(1, True), (1, True)]), \
+             patch(f"{MODULE}.count_rows", side_effect=[1]), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             run_verify()
@@ -1143,22 +1143,22 @@ class TestRunVerify:
         assert f"[{COMBO_PAGE}] https://vocus.cc/a" in caplog.text
 
     def test_missing_one_combo_fails(self) -> None:
-        """query 組實際沒有列（has_rows=False）就要失敗——即使 planner 把它估成 100。"""
-        with patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
-             patch(f"{MODULE}.has_rows", side_effect=[True, False]), \
+        """query 組實際沒有列（_combo_probe 回 exists=False）就要失敗——即使 planner 把它估成 100。"""
+        with patch(f"{MODULE}._combo_probe", side_effect=[(900, True), (100, False)]), \
+             patch(f"{MODULE}.count_rows", side_effect=[30]), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify() == 1
 
     def test_read_failure_returns_one(self) -> None:
-        with patch(f"{MODULE}.count_rows", side_effect=[1, 1, 1]), \
-             patch(f"{MODULE}.has_rows", return_value=True), \
+        with patch(f"{MODULE}._combo_probe", side_effect=[(1, True), (1, True)]), \
+             patch(f"{MODULE}.count_rows", side_effect=[1]), \
              patch(f"{MODULE}._supabase_request", return_value=(500, "boom")):
             assert run_verify() == 1
 
     def test_run_table_read_failure_returns_one(self) -> None:
-        with patch(f"{MODULE}.count_rows", side_effect=[1, 1, 1]), \
-             patch(f"{MODULE}.has_rows", return_value=True), \
+        with patch(f"{MODULE}._combo_probe", side_effect=[(1, True), (1, True)]), \
+             patch(f"{MODULE}.count_rows", side_effect=[1]), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (500, "boom")]):
             assert run_verify() == 1
@@ -1166,8 +1166,8 @@ class TestRunVerify:
     def test_totals_read_failure_still_lets_run_verify_continue(self) -> None:
         """totals 查詢失敗不該讓 run_verify 整個中止——沿用 latest_date() 對
         非 200 的處理方式，記 N/A 後繼續看 TABLE_GSC／TABLE_RUN 那兩段。"""
-        with patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
-             patch(f"{MODULE}.has_rows", return_value=True), \
+        with patch(f"{MODULE}._combo_probe", side_effect=[(900, True), (100, True)]), \
+             patch(f"{MODULE}.count_rows", side_effect=[30]), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(500, "boom"), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify() == 0
@@ -1176,8 +1176,8 @@ class TestRunVerify:
         """run 33849046525：帶 clicks.desc 迫使 planner 把最新一天全部 surface 的列
         （約 20 萬列）撈回做 Incremental Sort，表到 1.6M 列就逾時。read-back 樣本
         不是 top-N 排行，只需要 order=date.desc 走索引取到 8 列即停。"""
-        with patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
-             patch(f"{MODULE}.has_rows", return_value=True), \
+        with patch(f"{MODULE}._combo_probe", side_effect=[(900, True), (100, True)]), \
+             patch(f"{MODULE}.count_rows", side_effect=[30]), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]) as request:
             assert run_verify() == 0
@@ -1192,23 +1192,27 @@ class TestVerifySurfaceNoRankingBranch:
 
     def test_page_only_surface_logs_without_query_count(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
-             patch(f"{MODULE}.count_rows", return_value=42), \
-             patch(f"{MODULE}.has_rows", return_value=True):
+             patch(f"{MODULE}._combo_probe", return_value=(42, True)):
             assert _verify_surface("googleNews") is True
         assert "此 surface 不支援 query 維度" in caplog.text
 
     def test_page_only_surface_empty_is_unhealthy(self) -> None:
-        """判定看 has_rows，不看 count_rows——planner 估計 1 也不能救一個真的空的 surface。"""
-        with patch(f"{MODULE}.count_rows", return_value=1), \
-             patch(f"{MODULE}.has_rows", return_value=False):
+        """判定看 _combo_probe 的存在性，不看它回傳的估計列數——planner 估計 1
+        也不能救一個真的空的 surface。"""
+        with patch(f"{MODULE}._combo_probe", return_value=(1, False)):
             assert _verify_surface("googleNews") is False
 
     def test_ranking_surface_still_reports_both_combos(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.INFO, logger="ingest_gsc_search_analytics"), \
-             patch(f"{MODULE}.count_rows", side_effect=[900, 100]), \
-             patch(f"{MODULE}.has_rows", return_value=True):
+             patch(f"{MODULE}._combo_probe", side_effect=[(900, True), (100, True)]):
             assert _verify_surface("web") is True
         assert "page 組 900 列 / query 組 100 列" in caplog.text
+
+    def test_verify_surface_makes_exactly_one_probe_per_combo(self) -> None:
+        """回歸：每個 combo 只打一次請求，不再各打一次 count_rows() 又一次 has_rows()。"""
+        with patch(f"{MODULE}._combo_probe", side_effect=[(900, True), (100, True)]) as probe:
+            _verify_surface("web")
+        assert probe.call_count == len(SURFACE_COMBOS["web"]) == 2
 
 
 class TestRunVerifySurfaceScoped:
@@ -1221,22 +1225,22 @@ class TestRunVerifySurfaceScoped:
     TOTALS_LATEST = TestRunVerify.TOTALS_LATEST
 
     def test_google_news_zero_page_rows_fails(self) -> None:
-        with patch(f"{MODULE}.count_rows", return_value=1), \
-             patch(f"{MODULE}.has_rows", return_value=False), \
+        with patch(f"{MODULE}._combo_probe", return_value=(1, False)), \
+             patch(f"{MODULE}.count_rows", return_value=1), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["googleNews"]) == 1
 
     def test_google_news_nonzero_page_rows_passes(self) -> None:
-        with patch(f"{MODULE}.count_rows", return_value=10), \
-             patch(f"{MODULE}.has_rows", return_value=True), \
+        with patch(f"{MODULE}._combo_probe", return_value=(10, True)), \
+             patch(f"{MODULE}.count_rows", return_value=10), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["googleNews"]) == 0
 
     def test_web_with_both_combos_present_passes(self) -> None:
-        with patch(f"{MODULE}.count_rows", side_effect=[900, 100, 30]), \
-             patch(f"{MODULE}.has_rows", return_value=True), \
+        with patch(f"{MODULE}._combo_probe", side_effect=[(900, True), (100, True)]), \
+             patch(f"{MODULE}.count_rows", side_effect=[30]), \
              patch(f"{MODULE}._supabase_request",
                    side_effect=[(200, self.TOTALS_LATEST), (200, self.RECENT), (200, self.RUNS)]):
             assert run_verify(["web"]) == 0
