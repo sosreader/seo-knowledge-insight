@@ -273,7 +273,9 @@ def find_gaps(existing: set[datetime], expected: Sequence[datetime]) -> list[dat
 
 def _fetch_existing_timestamps(
     pipeline: PipelineConfig, window_start: datetime,
-) -> tuple[set[datetime], list[dict]]:
+) -> set[datetime]:
+    """回傳窗內既有時間戳的集合。原始 rows 只是抓取的中間產物，唯一呼叫端
+    （_resolve_gap_points 的整窗抓取路徑）只用得到集合本身，不回傳 rows。"""
     range_col = _range_filter_column(pipeline)
     range_value = window_start.date().isoformat() if range_col == "date" else _iso_z(window_start)
     cols = ",".join(pipeline.resolved_select_columns())
@@ -281,7 +283,7 @@ def _fetch_existing_timestamps(
             f"&{range_col}=gte.{urllib.parse.quote(range_value)}")
     rows = _get_json_all(path)  # 抓到底，不設 max_rows——空段窗內可能有數千列（見 _get_json_all 註解）
     extractor = pipeline.resolved_extractor()
-    return {extractor(r) for r in rows}, rows
+    return {extractor(r) for r in rows}
 
 
 def _range_value(pipeline: PipelineConfig, moment: datetime) -> str:
@@ -340,7 +342,7 @@ def _resolve_gap_points(
         gaps = [t for t in expected if not _probe_point_exists(pipeline, t)]
         return effective_start, expected, gaps, f"逐點探測 {len(expected)} 個時間點"
 
-    existing, _rows = _fetch_existing_timestamps(pipeline, window_start)
+    existing = _fetch_existing_timestamps(pipeline, window_start)
     effective_start = max(window_start, min(existing)) if existing else window_start
     expected = expected_timestamps(now, pipeline.cadence_hours, effective_start, lag_cutoff)
     return effective_start, expected, find_gaps(existing, expected), f"{len(expected)} 個預期時間點"

@@ -399,7 +399,7 @@ class TestCheckGaps:
             datetime(2026, 9, 2, 12, 0, tzinfo=UTC),
             # 13:00 缺席——模擬「應該有 row 卻實得 0」
         }
-        with patch.object(gate, "_fetch_existing_timestamps", return_value=(existing, [])):
+        with patch.object(gate, "_fetch_existing_timestamps", return_value=existing):
             result = gate.check_gaps(pipeline, now=now)
         assert not result.passed
         assert "13:00" in result.message
@@ -411,7 +411,7 @@ class TestCheckGaps:
             datetime(2026, 9, 2, 12, 0, tzinfo=UTC),
             datetime(2026, 9, 2, 13, 0, tzinfo=UTC),
         }
-        with patch.object(gate, "_fetch_existing_timestamps", return_value=(existing, [])):
+        with patch.object(gate, "_fetch_existing_timestamps", return_value=existing):
             result = gate.check_gaps(pipeline, now=now)
         assert result.passed
         assert not result.skipped
@@ -433,7 +433,7 @@ class TestCheckGaps:
             datetime(2026, 8, 31, tzinfo=UTC),
             datetime(2026, 9, 1, tzinfo=UTC),
         }
-        with patch.object(gate, "_fetch_existing_timestamps", return_value=(existing, [])):
+        with patch.object(gate, "_fetch_existing_timestamps", return_value=existing):
             result = gate.check_gaps(pipeline, now=now)
         assert result.passed
 
@@ -558,7 +558,7 @@ class TestGapProbeOptInOnly:
         existing = {datetime(2026, 9, 2, 12, 0, tzinfo=UTC),
                     datetime(2026, 9, 2, 13, 0, tzinfo=UTC)}
         with patch.object(gate, "_fetch_existing_timestamps",
-                          return_value=(existing, [])) as fetch, \
+                          return_value=existing) as fetch, \
              patch.object(gate, "_probe_point_exists") as probe:
             result = gate.check_gaps(pipeline, now=now)
         assert result.passed
@@ -875,13 +875,12 @@ class TestSmallHelpers:
         pipeline = _pipeline(timestamp_column="hour", select_columns=("hour",))
         rows = [{"hour": "2026-09-02T12:00:00+00:00"}, {"hour": "2026-09-02T13:00:00+00:00"}]
         with patch.object(gate, "_get_json_all", return_value=rows):
-            existing, returned_rows = gate._fetch_existing_timestamps(
+            existing = gate._fetch_existing_timestamps(
                 pipeline, datetime(2026, 9, 2, tzinfo=UTC))
         assert existing == {
             datetime(2026, 9, 2, 12, 0, tzinfo=UTC),
             datetime(2026, 9, 2, 13, 0, tzinfo=UTC),
         }
-        assert returned_rows == rows
 
     def test_degradation_select_columns_includes_weight_column(self) -> None:
         d = DegradationConfig(column="ua_group", mode="fallback_value", fallback_value="other-bot",
