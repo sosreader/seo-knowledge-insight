@@ -100,12 +100,19 @@ claude CLI 各自對它們的後端有自己的並行請求限制，開太多只
   會怎麼回答」。與 `ai-sov-weekly.yml` 的 workflow docstring 描述的限制
   完全一樣，本機路徑額外多一層：workflow 在 CI runner 上跑，機器一定在；
   本機路徑要求「使用者的機器那天有開機、CLI 額度沒被別的任務用掉」。
-- **codex 的 shell 工具關不掉。** 已在 `scripts/ai_sov_cli_providers.py` 的
-  模組 docstring 設計決定 5 記錄：codex 即使沒被要求，也可能執行唯讀 shell
-  指令（探測到讀了 sandbox 目錄以外的檔案）。已用 `--sandbox read-only` +
-  prompt 提醒兩層緩解，讀取仍可能發生，是已知殘留風險。介意的話選
+- **codex 的 shell 工具沒有結構性關掉的選項，但根因已找到並修掉。**
+  第一次探測發現 codex 會主動搜尋、讀取 sandbox 目錄以外的檔案（含使用者
+  home 目錄下其他 repo 的 AGENTS.md／CLAUDE.md）。根因是使用者本機
+  `~/.codex/config.toml` 的 `persistent_instructions` 明講「Follow project
+  AGENTS.md guidelines」，等於系統提示教它去找專案文件。CodexProvider 已
+  帶 `--ignore-user-config`（不載入該設定檔，登入憑證不受影響）——實測
+  同一個 prompt 加上這個旗標後完全沒有 command_execution 事件，
+  input_tokens 也從 ~15.7 萬降到 ~11.7 萬。但這**不是**『CLI 層級白名單』
+  那種結構性保證：--ignore-user-config 移除的是誘發探索的那個持久化提示，
+  不是拿掉 shell 這個工具本身，模型理論上仍可能因為別的理由呼叫它。仍保留
+  `--sandbox read-only` + prompt 提醒兩層防禦深度。介意這個差異的話選
   `claude-code`——`--allowedTools WebSearch` 是 CLI 層級白名單，沒被列入的
-  工具連呼叫機會都沒有，是強保證。
+  工具連呼叫機會都沒有，不依賴系統提示內容，是真正的結構性保證。
 - **grounded 判定的可信度不對稱。** claude-code 有『來源 URL ∩ 搜尋結果 URL』
   的交叉驗證；codex 因為 CLI 沒有把搜尋結果 URL 曝露在事件流裡，只能信任
   `--output-schema` 強制的結構化輸出本身，是弱一階的保證。兩個 provider 的

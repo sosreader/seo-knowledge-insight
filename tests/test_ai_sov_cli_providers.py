@@ -243,6 +243,10 @@ class TestCodexProviderAnswer:
         assert args[0] == "codex"
         assert "--search" in args and args[args.index("--search") + 1] == "exec"
         assert "--sandbox" in args and args[args.index("--sandbox") + 1] == "read-only"
+        # --ignore-user-config：實測證實 ~/.codex/config.toml 的
+        # persistent_instructions 是「codex 主動搜尋/讀取本機專案文件」的
+        # 根因（見設計決定 5），不帶這個旗標會誘發不必要的 command_execution。
+        assert "--ignore-user-config" in args
         assert "-m" in args and args[args.index("-m") + 1] == "gpt-5.4"
         assert "--output-schema" in args
         assert args[-1].endswith("範例問題？")  # prompt 前綴限制說明後接原始 prompt

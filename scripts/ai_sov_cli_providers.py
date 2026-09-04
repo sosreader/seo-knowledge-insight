@@ -59,21 +59,32 @@ title/url 陣列。CodexProvider 因此無法比照 ClaudeCodeProvider 做『來
 如果未來想補強，需要 codex CLI 在事件裡曝露 web_search 的實際結果列表，
 目前版本（0.149.0）沒有。
 
-【5. 為什麼沒有『完全關掉 shell 工具』這個選項】
-codex 的探測顯示：即使沒有要求，它也會執行 command_execution——探測那次
-甚至讀了 sandbox 目錄以外的檔案（使用者 home 目錄下其他 repo 的
-AGENTS.md／CLAUDE.md，見 codex.jsonl 的 item_5／item_6）。查過
-`codex exec --help` 與 `~/.codex/config.toml` 可調項，沒有『只保留
-web_search、關掉 shell』這個開關——sandbox 模式（read-only／
-workspace-write／danger-full-access）管的是『shell 指令能不能寫入』，
-不是『能不能執行 shell』本身。因此只能做兩層緩解，緩解不了：
-  1. prompt 前綴明講『禁止執行任何指令、禁止讀取本機檔案』（模型可能不遵守）；
-  2. 顯式帶 --sandbox read-only（不管 prompt 有沒有被遵守，至少保證
-     不會有任何寫入；讀取仍可能發生，是已知殘留風險）。
-claude-code 沒有這個問題：--allowedTools WebSearch 是 CLI 層級的白名單，
-沒被列入的工具（含任何 shell/Bash 工具）連呼叫的機會都沒有，是強保證
-不是自律慣例。這是 codex／claude-code 之間一個實質的安全性差異，
-選 provider 時應納入考量。
+【5. codex 為什麼探測時會亂讀檔案、以及 --ignore-user-config 為什麼修得掉這個】
+第一次探測（見 knowledge-base probe 證據 codex.jsonl）顯示：即使沒有要求，
+codex 也會執行 command_execution，甚至讀了 sandbox 目錄以外的檔案（使用者
+home 目錄下其他 repo 的 AGENTS.md／CLAUDE.md）。根因找到了：使用者本機
+`~/.codex/config.toml` 有一行 `persistent_instructions = "Follow project
+AGENTS.md guidelines. ..."`，這行對「每一次」codex 呼叫都生效，等於系統
+提示明講「去找並遵守 AGENTS.md」——這才是它主動搜尋、讀取專案文件的直接
+原因，不是模型自發的越界行為。config.toml 裡的 `[projects."..."]` trust
+清單（含好幾個真實 repo 的絕對路徑）很可能也在同一份被載入的設定裡，
+讓模型「知道」有哪些路徑可查。
+
+修法用 CLI 既有的 `--ignore-user-config`（不載入 $CODEX_HOME/config.toml，
+但 CODEX_HOME 下的登入憑證不受影響）驗證過：同一個 prompt、同樣的 --sandbox
+read-only，加上這個旗標後**完全沒有任何 command_execution 事件**，
+直接進 web_search → agent_message，input_tokens 從實測 ~15.7 萬降到
+~11.7 萬（少了被讀進 context 的那些專案文件）。這比原本設想的『無法
+關掉、只能緩解』更進一步：--ignore-user-config 不是『關掉 shell 工具』
+本身（模型理論上仍可能因為其他理由呼叫 shell），但它移除了會主動誘發
+shell 探索的那個持久化系統提示，觀察到的探索行為因此消失。仍保留兩層
+既有緩解作為防禦深度：
+  1. prompt 前綴明講『禁止執行任何指令、禁止讀取本機檔案』；
+  2. 顯式帶 --sandbox read-only（保底不會有任何寫入）。
+claude-code 的保證仍然更強：--allowedTools WebSearch 是 CLI 層級白名單，
+沒被列入的工具（含任何 shell/Bash 工具）連呼叫的機會都沒有，是結構性
+保證，不依賴『系統提示裡有沒有教它別亂搜』這種可能因設定檔內容而變動的
+前提。選 provider 時仍應把這個差異納入考量。
 """
 from __future__ import annotations
 
@@ -268,6 +279,7 @@ class CodexProvider:
             args = [
                 self._executable, "--search", "exec",
                 "--skip-git-repo-check", "--ephemeral", "--json",
+                "--ignore-user-config",
                 "-m", self.model,
                 "--sandbox", "read-only",
                 "--output-schema", str(schema_path),
