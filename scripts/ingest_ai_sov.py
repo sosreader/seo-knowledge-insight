@@ -57,6 +57,16 @@ provider 呼叫失敗（重試耗盡）不會被記成「這次沒引用」—�
 偽裝成可見度下降。失敗的 (prompt, repeat) 直接不產生列，計入 failures，
 ingestion_run 標 failed，行程以非零碼結束，而且**跳過 sweep_stale**
 （見 ai_sov_warehouse 設計決定 3：半套的 run 去掃過期列會刪掉好資料）。
+
+【4b. Fatal 錯誤要整條 run 早停，不是每個 (prompt, repeat) 各自失敗】
+決定 4 描述的是「單次呼叫失敗」的處理，前提是失敗彼此獨立（這次超時，
+下次可能就好了）。但 ProviderFatalError（額度耗盡／認證失效）不是獨立
+事件：一旦第一次遇到，之後 107 次呼叫必然是同一個結果。繼續照決定 4
+的邏輯逐一呼叫、逐一記錄失敗，只是把「已知會失敗」的事實拖到跑完整個
+panel 才被看見（實測：108 次呼叫、21 分鐘、0 列產出）。因此 run_panel
+收到 ProviderFatalError 時立即回傳，不再呼叫 provider——failures 只會有
+一筆，rows 保留中止前已成功累積的部分（若有）。下游 _persist 的語意
+不變：只要 failures 非空就標 failed、跳過 sweep、非零碼結束。
 """
 from __future__ import annotations
 
@@ -77,6 +87,7 @@ from ai_sov_providers import (  # noqa: E402
     Provider,
     ProviderAnswer,
     ProviderError,
+    ProviderFatalError,
     first_target_rank,
     response_digest,
 )
@@ -167,13 +178,24 @@ def summarize(rows: list[dict]) -> dict:
 def run_panel(provider: Provider, prompts: tuple[PanelPrompt, ...], *, repeats: int,
               target_domain: str, week_start: date, run_at: datetime,
               ) -> tuple[list[dict], list[str]]:
-    """對每條 prompt 問 repeats 次。回傳 (列, 失敗描述)。失敗不產生列（見設計決定 4）。"""
+    """對每條 prompt 問 repeats 次。回傳 (列, 失敗描述)。
+
+    一般失敗（ProviderError）不產生列，記進 failures，繼續跑下一次呼叫
+    （設計決定 4）。ProviderFatalError（額度耗盡／認證失效）不一樣：那個
+    錯誤對後續呼叫必然重現，因此立即中止整條 run、不再呼叫 provider
+    （設計決定 4b），rows/failures 保留中止前已累積的內容。
+    """
     rows: list[dict] = []
     failures: list[str] = []
     for prompt in prompts:
         for repeat_idx in range(repeats):
             try:
                 answer = provider.answer(prompt.prompt)
+            except ProviderFatalError as exc:
+                failures.append(f"{prompt.id}#{repeat_idx}: {exc}")
+                logger.error("  %s repeat=%d 遇到不可重試錯誤，整條 run 立即中止（設計決定 4b）：%s",
+                            prompt.id, repeat_idx, exc)
+                return rows, failures
             except ProviderError as exc:
                 failures.append(f"{prompt.id}#{repeat_idx}: {exc}")
                 logger.error("  %s repeat=%d 失敗：%s", prompt.id, repeat_idx, exc)

@@ -34,6 +34,17 @@ Responses API 的 annotation 帶 start_index（citation 在回應文字裡的位
 同一個 URL 可能在一段回應裡被標註多次。用出現順序排序後以 URL 去重，
 得到的才是「這個回應實際引了哪幾個來源、依序是誰」。
 ⚠ 這個序不是 SERP 排名，跨 provider 比較沒有意義（見 migration 024 的欄位註解）。
+
+【5. 為什麼 429 要拆成兩種、而不是一律重試】
+OpenAI 用同一個 HTTP 狀態碼（429）表達兩件完全不同的事：暫時性的速率限制
+（`error.type=rate_limit_error`，重試通常會成功），與帳號額度耗盡
+（`error.type=insufficient_quota`／`error.code=credit_balance_exhausted`，
+不管重試幾次都是同一個結果，因為問題不在請求頻率、在帳戶餘額）。
+把兩者都當成 RETRYABLE_STATUS 處理，會讓後者對 108 次呼叫各重試到底
+（實測 21 分鐘、0 列產出）——那不是保守，是在已知徒勞的情況下繼續徒勞。
+401/403（金鑰失效／權限不足）同理：換一次請求不會讓金鑰重新生效。
+這三種歸為 fatal：不重試、拋 ProviderFatalError，讓上層（run_panel）
+立即中止整條 run，而不是耗盡 MAX_ATTEMPTS 才對外表現出「失敗」。
 """
 from __future__ import annotations
 
@@ -54,11 +65,31 @@ HTTP_TIMEOUT_SECONDS = 120  # web_search 工具會實際去抓網頁，比純生
 MAX_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = (2.0, 8.0)  # 第 1、2 次重試前的等待；長度必須 = MAX_ATTEMPTS - 1
 RETRYABLE_STATUS = (408, 429, 500, 502, 503, 504)
+# 429 本身可重試（速率限制），但下列狀態碼一律 fatal：401/403 是金鑰失效或
+# 權限不足，重試不會讓金鑰重新生效。429 是否 fatal 要再看 error body（見
+# _is_fatal_openai_error），因為它同時承載速率限制（可重試）與額度耗盡
+# （不可重試）兩種語意（設計決定 5）。
+FATAL_HTTP_STATUS = (401, 403)
+# OpenAI 額度/帳務類錯誤的 error.type／error.code——只有這些值視為 fatal，
+# 其他 429（例如 rate_limit_error / rate_limit_exceeded）仍走一般重試。
+FATAL_OPENAI_ERROR_TYPES = frozenset({"insufficient_quota"})
+FATAL_OPENAI_ERROR_CODES = frozenset({"insufficient_quota", "credit_balance_exhausted"})
 USER_AGENT = "seo-knowledge-insight-ai-sov/1.0"
 
 
 class ProviderError(RuntimeError):
     """呼叫 provider 失敗。呼叫端必須當成失敗處理，不得靜默記成『沒引用』。"""
+
+
+class ProviderFatalError(ProviderError):
+    """呼叫 provider 失敗，且重試對這個錯誤沒有意義（額度耗盡／認證失效）。
+
+    這類錯誤不是暫時性的：對同一個 (prompt, repeat) 重試 3 次、或對 108 次
+    呼叫各重試 3 次，得到的都是同一個結果，只是白白多耗時間（實例：
+    2026-09-04 run 33862967625，OpenAI 回 insufficient_quota，108 次呼叫
+    各重試 2 次，整條 run 白耗 21 分鐘才以 0 列結束）。呼叫端（ingest_ai_sov
+    的 run_panel）收到這個例外必須立即中止整條 run，不得繼續問下一個
+    prompt——見 ai_sov_providers 設計決定 5。"""
 
 
 @dataclass(frozen=True)
@@ -204,6 +235,30 @@ def parse_openai_response(payload: Mapping) -> ProviderAnswer:
     )
 
 
+def _is_fatal_openai_error(status: int, raw_body: str) -> bool:
+    """判斷一次失敗回應是不是『重試沒有意義』（見設計決定 5）。
+
+    401/403 一律 fatal。429 要拆開看 error body：`error.type` 或 `error.code`
+    命中額度/帳務類清單才算 fatal，其餘 429（含 body 解析不出來、或明確是
+    rate_limit_error 的情形）一律視為可重試——寧可對真正的速率限制多重試
+    幾次，也不要把解析不出來的錯誤誤判成 fatal 而漏掉可能自癒的失敗。
+    """
+    if status in FATAL_HTTP_STATUS:
+        return True
+    if status != 429:
+        return False
+    try:
+        payload = json.loads(raw_body)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    error = payload.get("error") if isinstance(payload, Mapping) else None
+    if not isinstance(error, Mapping):
+        return False
+    error_type = str(error.get("type") or "")
+    error_code = str(error.get("code") or "")
+    return error_type in FATAL_OPENAI_ERROR_TYPES or error_code in FATAL_OPENAI_ERROR_CODES
+
+
 def _post_json(url: str, body: Mapping, headers: Mapping[str, str], timeout: int) -> tuple[int, str]:
     request = urllib.request.Request(
         url, data=json.dumps(body).encode(), headers=dict(headers), method="POST"
@@ -256,6 +311,11 @@ class OpenAIProvider:
             if status == 200:
                 return parse_openai_response(json.loads(raw))
             last_error = f"HTTP {status}：{raw[:300]}"
+            if _is_fatal_openai_error(status, raw):
+                # 額度耗盡／認證失效：重試得到的一定是同一個結果，不進
+                # RETRYABLE_STATUS 的重試迴圈，直接讓上層立即中止整條 run
+                # （見設計決定 5）。
+                raise ProviderFatalError(f"OpenAI 呼叫失敗（不可重試）：{last_error}")
             if status not in RETRYABLE_STATUS or attempt == MAX_ATTEMPTS - 1:
                 break
             wait = RETRY_BACKOFF_SECONDS[attempt]

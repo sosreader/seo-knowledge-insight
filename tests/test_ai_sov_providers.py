@@ -23,6 +23,7 @@ from ai_sov_providers import (  # noqa: E402
     OpenAIProvider,
     ProviderAnswer,
     ProviderError,
+    ProviderFatalError,
     dedupe_citations,
     first_target_rank,
     is_target_domain,
@@ -235,6 +236,107 @@ class TestOpenAIProvider:
 
     def test_backoff_table_matches_attempt_count(self) -> None:
         assert len(providers.RETRY_BACKOFF_SECONDS) == providers.MAX_ATTEMPTS - 1
+
+    def test_insufficient_quota_429_is_fatal_and_not_retried(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """實例：run 33862967625，108 次呼叫全部這個 body，卻各重試 3 次
+        白耗 21 分鐘。額度耗盡重試沒有意義，必須不重試、拋 ProviderFatalError。"""
+        import json as _json
+
+        calls: list[int] = []
+        body = _json.dumps({"error": {
+            "type": "insufficient_quota",
+            "code": "credit_balance_exhausted",
+            "message": "You have no credits remaining...",
+        }})
+
+        def fake_post(url, req_body, headers, timeout):
+            calls.append(1)
+            return 429, body
+
+        monkeypatch.setattr(providers, "_post_json", fake_post)
+        monkeypatch.setattr(providers.time, "sleep", lambda _s: None)
+        with pytest.raises(ProviderFatalError, match="不可重試"):
+            OpenAIProvider(api_key="k", model="m").answer("問題")
+        assert len(calls) == 1
+
+    def test_rate_limit_429_still_retries_to_the_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """速率限制是暫時性的（type=rate_limit_error），不該被歸類為 fatal。"""
+        import json as _json
+
+        calls: list[int] = []
+        body = _json.dumps({"error": {
+            "type": "rate_limit_error",
+            "code": "rate_limit_exceeded",
+            "message": "Rate limit reached",
+        }})
+
+        def fake_post(url, req_body, headers, timeout):
+            calls.append(1)
+            return 429, body
+
+        monkeypatch.setattr(providers, "_post_json", fake_post)
+        monkeypatch.setattr(providers.time, "sleep", lambda _s: None)
+        with pytest.raises(ProviderError) as exc_info:
+            OpenAIProvider(api_key="k", model="m").answer("問題")
+        assert not isinstance(exc_info.value, ProviderFatalError)
+        assert len(calls) == providers.MAX_ATTEMPTS
+
+    @pytest.mark.parametrize("status", [401, 403])
+    def test_auth_errors_are_fatal_and_not_retried(self, status: int, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls: list[int] = []
+
+        def fake_post(url, req_body, headers, timeout):
+            calls.append(1)
+            return status, '{"error": {"message": "invalid api key"}}'
+
+        monkeypatch.setattr(providers, "_post_json", fake_post)
+        monkeypatch.setattr(providers.time, "sleep", lambda _s: None)
+        with pytest.raises(ProviderFatalError):
+            OpenAIProvider(api_key="k", model="m").answer("問題")
+        assert len(calls) == 1
+
+    def test_provider_fatal_error_is_a_provider_error(self) -> None:
+        """run_panel 若只 except ProviderError 也要能接住——但它必須先被辨識
+        出來才能觸發早停，這條只鎖繼承關係，早停行為在 test_ingest_ai_sov.py 驗。"""
+        assert issubclass(ProviderFatalError, ProviderError)
+
+    def test_unparseable_429_body_is_not_fatal(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """body 解析不出來時寧可當成可重試，不要誤判成 fatal 而漏掉可能自癒的失敗。"""
+        calls: list[int] = []
+
+        def fake_post(url, req_body, headers, timeout):
+            calls.append(1)
+            return 429, "not json"
+
+        monkeypatch.setattr(providers, "_post_json", fake_post)
+        monkeypatch.setattr(providers.time, "sleep", lambda _s: None)
+        with pytest.raises(ProviderError) as exc_info:
+            OpenAIProvider(api_key="k", model="m").answer("問題")
+        assert not isinstance(exc_info.value, ProviderFatalError)
+        assert len(calls) == providers.MAX_ATTEMPTS
+
+
+class TestIsFatalOpenAIError:
+    def test_401_403_are_fatal(self) -> None:
+        assert providers._is_fatal_openai_error(401, "") is True
+        assert providers._is_fatal_openai_error(403, "") is True
+
+    def test_insufficient_quota_type_is_fatal(self) -> None:
+        body = '{"error": {"type": "insufficient_quota", "code": "credit_balance_exhausted"}}'
+        assert providers._is_fatal_openai_error(429, body) is True
+
+    def test_rate_limit_type_is_not_fatal(self) -> None:
+        body = '{"error": {"type": "rate_limit_error", "code": "rate_limit_exceeded"}}'
+        assert providers._is_fatal_openai_error(429, body) is False
+
+    def test_non_429_non_auth_status_is_not_fatal(self) -> None:
+        assert providers._is_fatal_openai_error(500, "") is False
+        assert providers._is_fatal_openai_error(503, "") is False
+
+    def test_malformed_body_is_not_fatal(self) -> None:
+        assert providers._is_fatal_openai_error(429, "{not valid json") is False
+        assert providers._is_fatal_openai_error(429, '{"error": "not-a-mapping"}') is False
+        assert providers._is_fatal_openai_error(429, "{}") is False
 
 
 class TestFakeProvider:

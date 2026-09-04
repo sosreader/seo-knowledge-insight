@@ -28,6 +28,7 @@ from ai_sov_providers import (  # noqa: E402
     FakeProvider,
     ProviderAnswer,
     ProviderError,
+    ProviderFatalError,
     dedupe_citations,
 )
 
@@ -220,6 +221,52 @@ class TestRunPanel:
                                           target_domain="vocus.cc", week_start=WEEK, run_at=RUN_AT)
         assert rows == [] and len(failures) == 6
         assert ingest.summarize(rows)["ungrounded_ratio"] is None
+
+    def test_fatal_error_aborts_entire_run_immediately(self) -> None:
+        """實例：run 33862967625，OpenAI insufficient_quota 對 108 次呼叫各重試，
+        白耗 21 分鐘、0 列產出。fatal 錯誤必須在第一次遇到就中止整條 run，
+        不得繼續問下一個 prompt（設計決定 4b）。"""
+
+        class QuotaExhausted:
+            name, model = "openai", "m"
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def answer(self, prompt: str) -> ProviderAnswer:
+                self.calls += 1
+                raise ProviderFatalError("OpenAI 呼叫失敗（不可重試）：HTTP 429：insufficient_quota")
+
+        provider = QuotaExhausted()
+        rows, failures = ingest.run_panel(provider, self._prompts(36), repeats=3,
+                                          target_domain="vocus.cc", week_start=WEEK, run_at=RUN_AT)
+        assert rows == []
+        assert len(failures) == 1 and failures[0].startswith("p0#0")
+        assert "不可重試" in failures[0]
+        assert provider.calls == 1  # 不是 36 * 3 = 108 次
+
+    def test_fatal_error_after_partial_success_keeps_earlier_rows(self) -> None:
+        """中止前已成功累積的列要保留，不因為後面遇到 fatal 就整批丟棄
+        （既有行為：失敗只影響失敗當下與之後，不回頭抹掉已成功的部分）。"""
+
+        class SucceedsOnceThenFatal:
+            name, model = "openai", "m"
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def answer(self, prompt: str) -> ProviderAnswer:
+                self.calls += 1
+                if self.calls == 1:
+                    return ProviderAnswer(text="ok", citations=(Citation("https://a.test/1", "a.test"),))
+                raise ProviderFatalError("quota exhausted")
+
+        provider = SucceedsOnceThenFatal()
+        rows, failures = ingest.run_panel(provider, self._prompts(2), repeats=2,
+                                          target_domain="vocus.cc", week_start=WEEK, run_at=RUN_AT)
+        assert len(rows) == 1 and rows[0]["prompt_id"] == "p0" and rows[0]["repeat_idx"] == 0
+        assert len(failures) == 1 and failures[0].startswith("p0#1")
+        assert provider.calls == 2
 
 
 class TestResolveProvider:
