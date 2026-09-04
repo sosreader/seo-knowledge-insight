@@ -41,6 +41,7 @@ import argparse
 import json
 import logging
 import sys
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -78,6 +79,9 @@ load_dotenv(ROOT_DIR / ".env")
 
 TABLE_RUN = "ingestion_run"
 HTTP_TIMEOUT_SECONDS = 30
+# 單一 check（尤其 gap_probe_per_point 的逐點探測）可能疊多次 HTTP_TIMEOUT_SECONDS=30
+# 的請求，check 級門檻因此明顯拉高，而非直接沿用單次請求的 30s——見 _run_check_with_timeout。
+CHECK_TIMEOUT_SECONDS = 180
 USER_AGENT = "seo-knowledge-insight-data-quality-gate/1.0"
 DEFAULT_REAP_ACTOR = "data_quality_gate.py --reap-stale-running"
 
@@ -498,18 +502,54 @@ def reap_stale_running(
 # CLI
 # ══════════════════════════════════════════════════════════════════════
 
+def _run_check_with_timeout(
+    pipeline_key: str, category: str, fn, *args: Any, timeout: float = CHECK_TIMEOUT_SECONDS,
+) -> CheckResult:
+    """單一 check 的逾時保護：一個卡住的 PostgREST 請求不該拖死整條 watchdog，
+    其餘 check 要照跑。
+
+    用 daemon thread 而非 concurrent.futures.ThreadPoolExecutor——後者的
+    worker thread 會被直譯器的 atexit hook 追蹤，若那個 check 真的卡死，
+    行程結束時一樣會被拖住等它收尾；daemon thread 不阻塞行程結束，逾時後
+    直接回報 FAIL，讓卡住的執行緒留在背景（受個別請求的 HTTP_TIMEOUT_SECONDS
+    拘束，不是永久掛住），不影響後續 check 或整支腳本的結束時間。
+    """
+    box: dict[str, Any] = {}
+
+    def runner() -> None:
+        try:
+            box["result"] = fn(*args)
+        except BaseException as exc:  # noqa: BLE001 — 任何例外都要轉成 FAIL，不能讓整個 gate 崩掉
+            box["error"] = exc
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout)
+    if thread.is_alive():
+        return CheckResult(pipeline_key, category, False,
+                            f"FAIL：check 逾時（timeout after {timeout}s）。")
+    if "error" in box:
+        return CheckResult(pipeline_key, category, False,
+                            f"FAIL：check 拋出例外：{box['error']}")
+    return box["result"]
+
+
 def _run_checks(pipeline_key: str | None, check: str) -> list[CheckResult]:
     pipelines = [PIPELINES_BY_KEY[pipeline_key]] if pipeline_key else list(PIPELINES)
     results: list[CheckResult] = []
     for p in pipelines:
         if check in ("all", "freshness"):
-            results.append(check_freshness(p))
+            results.append(_run_check_with_timeout(
+                p.key, "freshness", check_freshness, p, timeout=CHECK_TIMEOUT_SECONDS))
         if check in ("all", "gaps"):
-            results.append(check_gaps(p))
+            results.append(_run_check_with_timeout(
+                p.key, "gap", check_gaps, p, timeout=CHECK_TIMEOUT_SECONDS))
         if check in ("all", "degradation"):
-            results.append(check_degradation(p))
+            results.append(_run_check_with_timeout(
+                p.key, "degradation", check_degradation, p, timeout=CHECK_TIMEOUT_SECONDS))
     if check in ("all", "stale-running") and pipeline_key is None:
-        results.append(check_stale_running())
+        results.append(_run_check_with_timeout(
+            "__global__", "stale_running", check_stale_running, timeout=CHECK_TIMEOUT_SECONDS))
     return results
 
 

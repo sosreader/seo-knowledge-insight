@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -891,6 +892,75 @@ class TestSmallHelpers:
             _pipeline(select_columns=("date", "hour"), degradation=d))
         assert "request_count" in cols
         assert "ua_group" in cols
+
+
+class TestRunCheckWithTimeout:
+    """check 級逾時保護：一個卡住的 check 不該拖死其餘 check（watchdog 的存在意義）。"""
+
+    def test_returns_result_when_fn_finishes_in_time(self) -> None:
+        fn = lambda pipeline: gate.CheckResult(pipeline.key, "freshness", True, "PASS：測試")
+        pipeline = _pipeline()
+        result = gate._run_check_with_timeout("test_pipeline", "freshness", fn, pipeline, timeout=1)
+        assert result.passed
+        assert result.message == "PASS：測試"
+
+    def test_times_out_and_reports_fail_with_seconds_in_message(self) -> None:
+        def slow_fn(pipeline) -> gate.CheckResult:
+            time.sleep(0.3)
+            return gate.CheckResult(pipeline.key, "freshness", True, "PASS：不該被用到")
+
+        pipeline = _pipeline()
+        result = gate._run_check_with_timeout(
+            "test_pipeline", "freshness", slow_fn, pipeline, timeout=0.05)
+        assert not result.passed
+        assert not result.skipped
+        assert "timeout after 0.05s" in result.message
+        assert result.pipeline_key == "test_pipeline"
+        assert result.category == "freshness"
+
+    def test_exception_inside_fn_becomes_fail_not_crash(self) -> None:
+        def boom(pipeline) -> gate.CheckResult:
+            raise RuntimeError("查詢炸了")
+
+        pipeline = _pipeline()
+        result = gate._run_check_with_timeout(
+            "test_pipeline", "freshness", boom, pipeline, timeout=1)
+        assert not result.passed
+        assert "查詢炸了" in result.message
+
+    def test_run_checks_uses_timeout_wrapper_for_every_category(self) -> None:
+        """驗證 _run_checks 真的把每一類 check 都包進逾時保護，而不是只包其中一種。"""
+        pipeline = PIPELINES_BY_KEY[next(iter(PIPELINES_BY_KEY))]
+        with patch.object(gate, "_run_check_with_timeout",
+                           return_value=gate.CheckResult(pipeline.key, "x", True, "PASS")) as wrapped:
+            gate._run_checks(pipeline.key, "all")
+        categories = [call.args[1] for call in wrapped.call_args_list]
+        assert categories.count("freshness") == 1
+        assert categories.count("gap") == 1
+        assert categories.count("degradation") == 1
+
+    def test_stuck_check_does_not_block_other_pipelines(self) -> None:
+        """一個 pipeline 的 check 卡住逾時，其餘 pipeline 的 check 仍要跑完並回報。"""
+        stuck_pipeline = _pipeline(key="stuck")
+        ok_pipeline = _pipeline(key="ok")
+
+        def fake_freshness(pipeline) -> gate.CheckResult:
+            if pipeline.key == "stuck":
+                time.sleep(0.3)
+            return gate.CheckResult(pipeline.key, "freshness", True, "PASS：測試")
+
+        with patch.object(gate, "PIPELINES", [stuck_pipeline, ok_pipeline]), \
+             patch.object(gate, "check_freshness", side_effect=fake_freshness), \
+             patch.object(gate, "check_gaps",
+                          return_value=gate.CheckResult("x", "gap", True, "SKIP", skipped=True)), \
+             patch.object(gate, "check_degradation",
+                          return_value=gate.CheckResult("x", "degradation", True, "SKIP", skipped=True)), \
+             patch.object(gate, "CHECK_TIMEOUT_SECONDS", 0.05):
+            results = gate._run_checks(None, "freshness")
+        by_key = {r.pipeline_key: r for r in results}
+        assert not by_key["stuck"].passed
+        assert "timeout after" in by_key["stuck"].message
+        assert by_key["ok"].passed
 
 
 class TestMainCli:
