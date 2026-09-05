@@ -32,13 +32,18 @@ name: AI SoV Weekly
 # 立刻手動 dispatch 一次讓表有資料。這是刻意記在這裡而不是靠人記得。
 
 on:
-  schedule:
-    # 每週一 06:00 UTC。刻意避開 cwv-crux-history 的週二 06:00 與
-    # gsc-search-analytics 的每日 07:20，讓三者的失敗訊號不互相干擾。
-    # 排在週初而非週末是有語意的：本管線量的是「當下」，桶標籤 week_start
-    # 是它所屬那一週的週一——quality_gate_config.py 的 lag_buffer_hours=0.0
-    # 綁在這個前提上，改排程時要一起改那個值。
-    - cron: '0 6 * * 1'
+  # ═══ 2026-09-05 起：週排程改由使用者本機 launchd 跑 codex CLI，本檔只留手動 dispatch ═══
+  #
+  # 原因：OpenAI API 帳戶餘額為 0（run 33862967625 全部 429 insufficient_quota），
+  # 使用者決定不儲值，改用本機 Codex／Claude Code 訂閱額度執行
+  # （scripts/ai_sov_cli_providers.py、Makefile ai-sov-local、docs/ai-sov-local-runner.md，
+  # launchd label cc.vocus.ai-sov-local，每週一 07:00 本地時間）。
+  # 這裡的 OpenAI API 路徑保留給「哪天儲值後想在雲端跑」的情境，用 workflow_dispatch 觸發。
+  # 若要恢復排程，把下面被註解的 schedule 打開，並記得 quality_gate_config.py 的
+  # lag_buffer_hours=0.0 綁在「排在週初」這個前提上。
+  #
+  # schedule:
+  #   - cron: '0 6 * * 1'   # 原：每週一 06:00 UTC，避開 cwv-crux-history 週二 06:00 與 gsc 每日 07:20
   workflow_dispatch:
     inputs:
       repeats:
