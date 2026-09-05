@@ -304,12 +304,17 @@ def resolve_provider(name: str, model: str, target_domain: str) -> Provider:
     if name == "openai":
         return OpenAIProvider(api_key=os.environ.get("OPENAI_API_KEY", ""), model=model)
     if name == "codex":
-        return CodexProvider(model=model)
+        # DEFAULT_MODEL（"gpt-5.4"）是 CLI 參數層級的 sentinel，代表使用者
+        # 沒有明確傳 --model——這時不能把它硬塞給 codex，ChatGPT 訂閱帳戶
+        # 只接受帳戶方案支援的一組模型，任意字串會撞 400 invalid_request_
+        # error（實例：2026-09-04 批次跑，帳戶不接受 gpt-5.4）。model=None
+        # 讓 CodexProvider 自己決定（不帶 -m、讓帳戶預設接手，見該類別
+        # docstring 設計決定 6）。
+        return CodexProvider(model=None if model == DEFAULT_MODEL else model)
     if name == "claude-code":
-        # DEFAULT_MODEL 是 openai/codex 的 gpt-5.4——使用者沒有明確傳
-        # --model 時，CLI 參數會落到這個 openai 系的預設值，對 claude-code
-        # 是錯的模型字串，換成 claude-code 自己的預設（同 FakeProvider 的
-        # "model != DEFAULT_MODEL ? 用它 : 用自己的預設" 這套既有慣例）。
+        # 同一個 sentinel、換一套後備值：對 claude-code 是換成它自己的預設
+        # 模型字串（同 FakeProvider 的 "model != DEFAULT_MODEL ? 用它 : 用
+        # 自己的預設" 這套既有慣例）。
         return ClaudeCodeProvider(model=model if model != DEFAULT_MODEL else DEFAULT_CLAUDE_CODE_MODEL)
     raise ProviderError(f"未知的 provider：{name}")
 

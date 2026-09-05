@@ -85,6 +85,45 @@ claude-code 的保證仍然更強：--allowedTools WebSearch 是 CLI 層級白�
 沒被列入的工具（含任何 shell/Bash 工具）連呼叫的機會都沒有，是結構性
 保證，不依賴『系統提示裡有沒有教它別亂搜』這種可能因設定檔內容而變動的
 前提。選 provider 時仍應把這個差異納入考量。
+
+【6. codex 為什麼預設不帶 -m、以及為什麼要自己讀 config.toml 的 model】
+真跑批次時實際撞到：CodexProvider 原本預設帶 `-m gpt-5.4`，使用者的
+ChatGPT 訂閱帳戶回 HTTP 400 `invalid_request_error`：「The 'gpt-5.4'
+model is not supported when using Codex with a ChatGPT account.」——
+ChatGPT 帳戶模式只接受帳戶方案支援的一組模型，不是任意字串。使用者
+`~/.codex/config.toml` 的 `model = "gpt-5.6-sol"` 才是這個帳戶實測可用
+的值，但那是**這個人的**設定，換一台機器、換一個帳戶完全可能是別的值，
+寫死在程式碼裡就是重演同一個 bug。
+
+因此：沒有明確傳 `--model` 時，CodexProvider **完全不帶 `-m` 旗標**，
+讓 codex CLI／帳戶自己決定要用哪個模型（實測驗證過：不帶 -m、帶
+--ignore-user-config 一樣能正常跑完，8 秒內回應，沒有 400）。`self.model`
+這個欄位（寫進 ai_sov_response 的 model 欄）則獨立於呼叫參數之外，
+用來源優先序決定：① 若有明確傳 model，直接用；② 否則自己用 tomllib 讀
+`$CODEX_HOME/config.toml`（找不到 CODEX_HOME 就退回 `~/.codex/config.toml`）
+裡的 `model` 這個頂層鍵，純粹當「這台機器帳戶預設是什麼」的紀錄用途，
+**不會**拿去組 `-m` 參數（那正是要避免的事）；③ 都讀不到就記
+`"codex-default"`，代表「這次呼叫沒有指定、也查不到设定檔，用的是 CLI/
+帳戶當下的預設，實際是哪個模型未知」。事件流若曝露了實際生效的模型名稱
+（目前版本 0.149.0 未曝露，見 _model_from_events 的保留邏輯）則優先用
+事件流的值覆寫，因為那才是這次呼叫的 ground truth。
+
+【7. codex 的 400／429 怎麼分辨 fatal 與可重試】
+非零 exit 時，`_run_cli` 原本只把 stderr 前 500 字當錯誤訊息——但 codex
+批次呼叫的 stderr 幾乎永遠只有「Reading additional input from stdin...」
+這行無資訊噪音（設計決定 2），真正的失敗原因在 stdout 的 JSONL 事件裡：
+`turn.failed` 事件的 `error.message`，或頂層 `{"type":"error",...}` 事件的
+`message`，兩者的值都是**再包一層 JSON 字串**（`{"status":400,"error":
+{"type":"invalid_request_error","message":"..."}}`）。CodexProvider 因此
+不走共用的 `_run_cli`，改用較底層的 `_subprocess_run`（回傳
+CompletedProcess、不對非零 exit 拋例外），自己解析這個結構化錯誤：
+status=400 且 error.type=="invalid_request_error"（模型不支援／請求本身
+有問題）判 fatal——同一組參數重試 108 次會是同一個結果，跟 OpenAI
+insufficient_quota 同一類（ai_sov_providers 設計決定 5）；status=429
+（用量上限／速率限制）判可重試，帶退避重試（沿用 OpenAIProvider 的
+MAX_ATTEMPTS=3、退避秒數同一套慣例）。其餘非零 exit（沒有可解析的
+結構化錯誤）一律當一般 ProviderError，訊息優先用解析出來的內容、
+解析不到才退回 stderr 片段。
 """
 from __future__ import annotations
 
@@ -94,6 +133,8 @@ import os
 import re
 import subprocess
 import tempfile
+import time
+import tomllib
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -107,7 +148,11 @@ from ai_sov_providers import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_SECONDS = 240  # 每題實測 56～70 秒，含重試緩衝抓 3～4 倍
-DEFAULT_CODEX_MODEL = "gpt-5.4"
+# 沒有明確 --model、config.toml 也讀不到時的佔位字串——代表「這次用的是
+# CLI/帳戶當下的預設，實際是哪個模型未知」，不是一個真的模型 ID（見設計決定 6）。
+CODEX_FALLBACK_MODEL_LABEL = "codex-default"
+CODEX_MAX_ATTEMPTS = 3  # 只有 429（可重試）才會用到；沿用 OpenAIProvider 的慣例
+CODEX_RETRY_BACKOFF_SECONDS = (2.0, 8.0)  # 長度必須 = CODEX_MAX_ATTEMPTS - 1
 DEFAULT_CLAUDE_CODE_MODEL = "claude-sonnet-5"
 DEFAULT_CLAUDE_CODE_MAX_TURNS = 8
 
@@ -140,21 +185,23 @@ def _strip_trailing_punctuation(url: str) -> str:
     return url.rstrip(".,;:!?)\"'』」")
 
 
-def _run_cli(args: Sequence[str], *, timeout: int, cwd: Path,
-             unset_env: Sequence[str] = ()) -> str:
-    """執行本機 CLI，回傳 stdout。
+def _subprocess_run(args: Sequence[str], *, timeout: int, cwd: Path,
+                     unset_env: Sequence[str] = ()) -> subprocess.CompletedProcess:
+    """執行本機 CLI，回傳 CompletedProcess（不對非零 exit 拋例外）。
 
-    找不到執行檔（沒裝／沒在 PATH）視為系統性問題，跟 OpenAI 的
-    401/403（金鑰失效）同一類：換一次呼叫不會讓執行檔突然出現，因此拋
+    找不到執行檔（沒裝／沒在 PATH）視為系統性問題，跟 OpenAI 的 401/403
+    （金鑰失效）同一類：換一次呼叫不會讓執行檔突然出現，因此拋
     ProviderFatalError 讓上層立即中止整條 run（見 ai_sov_providers 設計
-    決定 5）。逾時與非零 exit 是單次呼叫層級的失敗，拋 ProviderError，
-    上層會記一筆失敗、繼續跑下一次呼叫（設計決定 4）。
+    決定 5）。逾時同理拋 ProviderError。非零 exit 本身**不在這裡處理**——
+    codex 需要先解析 stdout 的 JSONL 才知道是 fatal 還是可重試（設計決定
+    7），把這個判斷留給呼叫端；只有不需要這種區分的呼叫端（見 _run_cli）
+    才在外面直接轉成一般 ProviderError。
     """
     env = os.environ.copy()
     for key in unset_env:
         env.pop(key, None)
     try:
-        result = subprocess.run(
+        return subprocess.run(
             list(args), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, timeout=timeout, cwd=str(cwd), env=env, text=True,
         )
@@ -162,6 +209,16 @@ def _run_cli(args: Sequence[str], *, timeout: int, cwd: Path,
         raise ProviderFatalError(f"找不到本機 CLI 執行檔 {args[0]}：{exc}") from exc
     except subprocess.TimeoutExpired as exc:
         raise ProviderError(f"CLI 逾時（{timeout}s，未在時限內結束）") from exc
+
+
+def _run_cli(args: Sequence[str], *, timeout: int, cwd: Path,
+             unset_env: Sequence[str] = ()) -> str:
+    """執行本機 CLI，回傳 stdout；非零 exit 直接拋 ProviderError（用 stderr 片段）。
+
+    給不需要區分 fatal／可重試的呼叫端用（目前是 ClaudeCodeProvider——
+    它的失敗一律靠 is_error 欄位判斷，見 parse_claude_code_output）。
+    """
+    result = _subprocess_run(args, timeout=timeout, cwd=cwd, unset_env=unset_env)
     if result.returncode != 0:
         raise ProviderError(
             f"CLI 以非零碼結束（exit={result.returncode}）：{(result.stderr or '')[:500]}"
@@ -185,6 +242,111 @@ def _iter_jsonl_events(stdout: str) -> Iterable[dict]:
 # ══════════════════════════════════════════════════════════════════════
 # Codex CLI
 # ══════════════════════════════════════════════════════════════════════
+
+def _codex_config_path() -> Path:
+    """$CODEX_HOME/config.toml，沒設 CODEX_HOME 就退回 ~/.codex/config.toml。
+
+    對齊 codex CLI 自己的慣例（`--ignore-user-config` 的說明文字就是
+    「不載入 $CODEX_HOME/config.toml，但登入憑證仍走 CODEX_HOME」）。
+    """
+    home = os.environ.get("CODEX_HOME")
+    base = Path(home) if home else Path.home() / ".codex"
+    return base / "config.toml"
+
+
+def _read_codex_config_model() -> str | None:
+    """讀這台機器 config.toml 裡的 model 頂層鍵，純粹當紀錄用途（設計決定 6）。
+
+    ⚠ 這裡讀到的值**不會**被拿去組 `-m` 參數——那正是造成 400
+    invalid_request_error 的原因（見設計決定 6）。只用來填 self.model
+    這個寫進資料庫的欄位，讓人知道『這次沒指定 model 時，這台機器當下的
+    帳戶預設大概是什麼』。讀不到（檔案不存在／格式錯誤／沒有這個鍵）
+    一律回 None，呼叫端會再退回 CODEX_FALLBACK_MODEL_LABEL，不拋例外——
+    這只是個記錄用的旁支資訊，壞掉不該讓整次呼叫失敗。
+    """
+    try:
+        with _codex_config_path().open("rb") as f:
+            data = tomllib.load(f)
+    except (FileNotFoundError, OSError, tomllib.TOMLDecodeError):
+        return None
+    model = data.get("model")
+    return model if isinstance(model, str) and model else None
+
+
+def _model_from_events(events: list[dict]) -> str | None:
+    """若事件流曝露了本次呼叫實際生效的模型名稱就回傳，否則回 None。
+
+    目前版本（codex-cli 0.149.0）的事件裡沒有任何欄位帶模型名稱（thread.
+    started 只有 thread_id、turn.completed 只有 usage，逐一查過），這個
+    函式因此在這個版本下恆回 None。保留它是因為『事件流的值才是這次呼叫
+    的 ground truth，比讀 config.toml 準』——CLI 未來版本若補上這個欄位，
+    呼叫端不必再改一次，直接就會被撿到。
+    """
+    for event in events:
+        model = event.get("model")
+        if isinstance(model, str) and model:
+            return model
+        item = event.get("item")
+        if isinstance(item, dict):
+            item_model = item.get("model")
+            if isinstance(item_model, str) and item_model:
+                return item_model
+    return None
+
+
+def _codex_failure_detail(stdout: str) -> tuple[str, dict | None]:
+    """從非零 exit 的 stdout 找『真正的』失敗原因，回傳 (顯示訊息, 結構化 payload)。
+
+    codex 批次呼叫的 stderr 幾乎永遠只有『Reading additional input from
+    stdin...』這行噪音（設計決定 2），真正原因在 stdout 的 JSONL 事件裡：
+    `turn.failed` 事件的 error.message，或頂層 `{"type":"error",...}` 事件
+    的 message——兩者的值都是再包一層 JSON 字串（見設計決定 7 的範例）。
+    取不到就回 ("", None)，呼叫端會退回 stderr 片段。
+    """
+    raw_message: str | None = None
+    for event in _iter_jsonl_events(stdout):
+        etype = event.get("type")
+        if etype == "turn.failed":
+            error = event.get("error")
+            if isinstance(error, dict) and isinstance(error.get("message"), str):
+                raw_message = error["message"]
+        elif etype == "error" and "item" not in event:
+            # 頂層 error 事件（不是 item.completed 包起來的那種告警訊息）
+            message = event.get("message")
+            if isinstance(message, str):
+                raw_message = message
+    if raw_message is None:
+        return "", None
+    try:
+        payload = json.loads(raw_message)
+    except (json.JSONDecodeError, TypeError):
+        return raw_message, None
+    if not isinstance(payload, dict):
+        return raw_message, None
+    inner_error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    display = str(inner_error.get("message") or payload.get("message") or raw_message)
+    return display, payload
+
+
+def _is_fatal_codex_error(payload: dict | None) -> bool:
+    """400 invalid_request_error（模型不支援／請求本身有問題）判 fatal。
+
+    同一組參數重試 108 次得到的是同一個結果，跟 OpenAI 的
+    insufficient_quota 同一類（ai_sov_providers 設計決定 5）——實例就是
+    這個函式要擋下的那個 bug：帳戶不支援 -m 指定的模型。
+    """
+    if not isinstance(payload, dict):
+        return False
+    error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    if payload.get("status") == 400 and error.get("type") == "invalid_request_error":
+        return True
+    return "not supported" in str(error.get("message") or "").lower()
+
+
+def _is_retryable_codex_error(payload: dict | None) -> bool:
+    """429（用量上限／速率限制）判可重試——與 fatal 的 400 是不同的錯誤語意。"""
+    return isinstance(payload, dict) and payload.get("status") == 429
+
 
 def _last_codex_agent_message(events: list[dict]) -> str:
     """取最後一個 item.type=="agent_message" 的 text（符合 --output-schema 的 JSON 字串）。
@@ -254,12 +416,20 @@ def parse_codex_output(stdout: str) -> ProviderAnswer:
 
 
 class CodexProvider:
-    """本機 codex CLI（訂閱額度）。已知限制見模組設計決定 4／5。"""
+    """本機 codex CLI（訂閱額度）。已知限制見模組設計決定 4／5／6／7。
 
-    def __init__(self, *, model: str = DEFAULT_CODEX_MODEL, timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    ⚠ model：沒有明確傳 model 時**不會**帶 -m 給 CLI（設計決定 6）——
+    ChatGPT 帳戶模式只接受帳戶方案支援的一組模型，硬塞任意字串會撞
+    400 invalid_request_error。self.model 這個記錄用欄位的來源優先序：
+    明確傳入 > 讀 config.toml 的 model > "codex-default" 佔位字串；
+    成功呼叫後若事件流曝露了實際模型名稱（目前版本沒有）會再覆寫一次。
+    """
+
+    def __init__(self, *, model: str | None = None, timeout: int = DEFAULT_TIMEOUT_SECONDS,
                  executable: str = "codex") -> None:
         self.name = "codex"
-        self.model = model
+        self._explicit_model = model
+        self.model = model or _read_codex_config_model() or CODEX_FALLBACK_MODEL_LABEL
         self._timeout = timeout
         self._executable = executable
 
@@ -271,23 +441,55 @@ class CodexProvider:
             + prompt
         )
 
-    def answer(self, prompt: str) -> ProviderAnswer:
+    def _build_args(self, prompt: str, schema_path: Path, tmp: str) -> list[str]:
+        args = [
+            self._executable, "--search", "exec",
+            "--skip-git-repo-check", "--ephemeral", "--json",
+            "--ignore-user-config",
+        ]
+        if self._explicit_model:
+            args += ["-m", self._explicit_model]
+        args += [
+            "--sandbox", "read-only",
+            "--output-schema", str(schema_path),
+            "-C", tmp,
+            self._build_prompt(prompt),
+        ]
+        return args
+
+    def _run_once(self, prompt: str) -> subprocess.CompletedProcess:
         with tempfile.TemporaryDirectory(prefix="ai-sov-codex-") as tmp:
             tmp_path = Path(tmp)
             schema_path = tmp_path / "schema.json"
             schema_path.write_text(json.dumps(CODEX_OUTPUT_SCHEMA), encoding="utf-8")
-            args = [
-                self._executable, "--search", "exec",
-                "--skip-git-repo-check", "--ephemeral", "--json",
-                "--ignore-user-config",
-                "-m", self.model,
-                "--sandbox", "read-only",
-                "--output-schema", str(schema_path),
-                "-C", tmp,
-                self._build_prompt(prompt),
-            ]
-            stdout = _run_cli(args, timeout=self._timeout, cwd=tmp_path)
-        return parse_codex_output(stdout)
+            args = self._build_args(prompt, schema_path, tmp)
+            return _subprocess_run(args, timeout=self._timeout, cwd=tmp_path)
+
+    def answer(self, prompt: str) -> ProviderAnswer:
+        """呼叫 codex，失敗時依 status 分流：400 invalid_request_error 一律
+        fatal（設計決定 7）；429 帶退避重試；其餘非零 exit 當一般 ProviderError。
+        """
+        last_detail = ""
+        for attempt in range(CODEX_MAX_ATTEMPTS):
+            result = self._run_once(prompt)
+            if result.returncode == 0:
+                events = list(_iter_jsonl_events(result.stdout))
+                observed_model = _model_from_events(events)
+                if observed_model:
+                    self.model = observed_model
+                return parse_codex_output(result.stdout)
+
+            display, payload = _codex_failure_detail(result.stdout)
+            last_detail = display or (result.stderr or "")[:500]
+            if _is_fatal_codex_error(payload):
+                raise ProviderFatalError(f"codex 呼叫失敗（不可重試）：{last_detail}")
+            if not _is_retryable_codex_error(payload) or attempt == CODEX_MAX_ATTEMPTS - 1:
+                break
+            wait = CODEX_RETRY_BACKOFF_SECONDS[attempt]
+            logger.warning("codex 回應可重試錯誤（用量上限／速率限制），%.0fs 後重試（第 %d/%d 次）：%s",
+                           wait, attempt + 2, CODEX_MAX_ATTEMPTS, last_detail)
+            time.sleep(wait)
+        raise ProviderError(f"codex 呼叫失敗：{last_detail}")
 
 
 # ══════════════════════════════════════════════════════════════════════

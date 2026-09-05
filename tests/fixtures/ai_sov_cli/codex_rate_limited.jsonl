@@ -1,0 +1,4 @@
+{"type": "thread.started", "thread_id": "bbbb0000-0000-0000-0000-000000000002"}
+{"type": "turn.started"}
+{"type": "error", "message": "{\"type\":\"error\",\"status\":429,\"error\":{\"type\":\"rate_limit_exceeded\",\"message\":\"You have hit your usage limit. Please try again later.\"}}"}
+{"type": "turn.failed", "error": {"message": "{\"type\":\"error\",\"status\":429,\"error\":{\"type\":\"rate_limit_exceeded\",\"message\":\"You have hit your usage limit. Please try again later.\"}}"}}

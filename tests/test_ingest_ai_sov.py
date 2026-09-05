@@ -20,6 +20,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import ai_sov_cli_providers as cli_providers  # noqa: E402
 import ai_sov_warehouse as warehouse  # noqa: E402
 import ingest_ai_sov as ingest  # noqa: E402
 from ai_sov_panel import PanelPrompt  # noqa: E402
@@ -381,6 +382,17 @@ class TestResolveProvider:
     def test_codex_uses_given_model(self) -> None:
         provider = ingest.resolve_provider("codex", "gpt-5.4-custom", "vocus.cc")
         assert provider.name == "codex" and provider.model == "gpt-5.4-custom"
+
+    def test_codex_ignores_sentinel_default_and_does_not_force_dash_m(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """實例：2026-09-04 真跑批次撞到——沒明確傳 --model 時 CLI 參數落到
+        openai 系的 DEFAULT_MODEL（gpt-5.4），ChatGPT 帳戶不接受這個模型，
+        回 400 invalid_request_error。resolve_provider 必須把這個 sentinel
+        換成 None，讓 CodexProvider 不帶 -m（見該類別 docstring 設計決定 6）。"""
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: None)
+        provider = ingest.resolve_provider("codex", ingest.DEFAULT_MODEL, "vocus.cc")
+        assert provider.name == "codex"
+        assert provider.model == cli_providers.CODEX_FALLBACK_MODEL_LABEL
 
     def test_claude_code_falls_back_to_its_own_default_model(self) -> None:
         """--model 未被使用者覆寫時會落到 openai 系的 DEFAULT_MODEL（gpt-5.4），

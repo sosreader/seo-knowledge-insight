@@ -220,7 +220,69 @@ class TestRunCli:
         assert "CLAUDECODE" not in captured["env"]
 
 
+class TestCodexModelResolution:
+    """實跑批次撞到的真 bug：帳戶不接受硬塞的 -m gpt-5.4（400
+    invalid_request_error）。修法是『沒明確傳 model 就不帶 -m』；
+    self.model 這個記錄用欄位改用 config.toml 或佔位字串（設計決定 6）。"""
+
+    def test_explicit_model_is_recorded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: "should-not-be-used")
+        provider = CodexProvider(model="gpt-5.4-custom")
+        assert provider.model == "gpt-5.4-custom"
+
+    def test_no_explicit_model_reads_config_toml(self, tmp_path: Path,
+                                                  monkeypatch: pytest.MonkeyPatch) -> None:
+        (tmp_path / "config.toml").write_text('model = "gpt-5.6-sol"\n', encoding="utf-8")
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+        provider = CodexProvider()
+        assert provider.model == "gpt-5.6-sol"
+
+    def test_no_explicit_model_and_missing_config_falls_back_to_placeholder(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path))  # 目錄存在但沒有 config.toml
+        provider = CodexProvider()
+        assert provider.model == cli_providers.CODEX_FALLBACK_MODEL_LABEL
+
+    def test_falls_back_to_home_dot_codex_when_codex_home_unset(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("CODEX_HOME", raising=False)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        (codex_dir / "config.toml").write_text('model = "gpt-5.9-x"\n', encoding="utf-8")
+        provider = CodexProvider()
+        assert provider.model == "gpt-5.9-x"
+
+    def test_malformed_config_toml_does_not_raise(self, tmp_path: Path,
+                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+        (tmp_path / "config.toml").write_text("not valid = = toml{{{", encoding="utf-8")
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+        provider = CodexProvider()
+        assert provider.model == cli_providers.CODEX_FALLBACK_MODEL_LABEL
+
+
 class TestCodexProviderAnswer:
+    @staticmethod
+    def _fake_run(stdout_by_call, monkeypatch: pytest.MonkeyPatch):
+        calls = {"n": 0}
+
+        class FakeResult:
+            def __init__(self, returncode, stdout, stderr=""):
+                self.returncode = returncode
+                self.stdout = stdout
+                self.stderr = stderr
+
+        results = list(stdout_by_call)
+
+        def fake_run(args, **kwargs):
+            idx = min(calls["n"], len(results) - 1)
+            calls["n"] += 1
+            returncode, stdout = results[idx]
+            return FakeResult(returncode, stdout)
+
+        monkeypatch.setattr(cli_providers.subprocess, "run", fake_run)
+        return calls
+
     def test_answer_invokes_expected_args_and_parses(self, tmp_path: Path,
                                                        monkeypatch: pytest.MonkeyPatch) -> None:
         captured = {}
@@ -252,14 +314,111 @@ class TestCodexProviderAnswer:
         assert args[-1].endswith("範例問題？")  # prompt 前綴限制說明後接原始 prompt
         assert answer.is_grounded
 
+    def test_does_not_pass_dash_m_when_model_not_overridden(self, tmp_path: Path,
+                                                              monkeypatch: pytest.MonkeyPatch) -> None:
+        """實測撞到的真 bug：帳戶不支援硬塞的 -m gpt-5.4。修法是沒有明確
+        model 時完全不帶 -m，讓帳戶自己決定（見設計決定 6）。"""
+        captured = {}
+
+        class FakeResult:
+            returncode = 0
+            stdout = _read("codex_grounded.jsonl")
+            stderr = ""
+
+        def fake_run(args, **kwargs):
+            captured["args"] = args
+            return FakeResult()
+
+        monkeypatch.setattr(cli_providers.subprocess, "run", fake_run)
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: None)
+        provider = CodexProvider(model=None)
+        provider.answer("範例問題？")
+        assert "-m" not in captured["args"]
+
     def test_fatal_when_executable_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def fake_run(args, **kwargs):
             raise FileNotFoundError(args[0])
 
         monkeypatch.setattr(cli_providers.subprocess, "run", fake_run)
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: None)
         provider = CodexProvider(executable="no-such-codex-binary")
         with pytest.raises(ProviderFatalError):
             provider.answer("q")
+
+    def test_model_not_supported_400_is_fatal_with_api_message(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """實例：2026-09-04 真跑批次撞到的原始 bug。stderr 只有
+        『Reading additional input from stdin...』，真正原因要從 stdout
+        的 JSONL 事件裡挖，不能只截 stderr（team-lead 回報的落差）。"""
+        self._fake_run([(1, _read("codex_model_not_supported.jsonl"))], monkeypatch)
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: None)
+        provider = CodexProvider(model="gpt-5.4")
+        with pytest.raises(ProviderFatalError, match="not supported when using Codex"):
+            provider.answer("q")
+
+    def test_rate_limited_429_retries_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = self._fake_run(
+            [(1, _read("codex_rate_limited.jsonl")), (0, _read("codex_grounded.jsonl"))],
+            monkeypatch,
+        )
+        monkeypatch.setattr(cli_providers.time, "sleep", lambda _seconds: None)
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: None)
+        provider = CodexProvider(model="gpt-5.4")
+        answer = provider.answer("q")
+        assert answer.is_grounded
+        assert calls["n"] == 2
+
+    def test_rate_limited_429_exhausts_attempts_raises_provider_error(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._fake_run(
+            [(1, _read("codex_rate_limited.jsonl"))] * cli_providers.CODEX_MAX_ATTEMPTS,
+            monkeypatch,
+        )
+        monkeypatch.setattr(cli_providers.time, "sleep", lambda _seconds: None)
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: None)
+        provider = CodexProvider(model="gpt-5.4")
+        with pytest.raises(ProviderError, match="usage limit"):
+            provider.answer("q")
+
+    def test_nonzero_exit_without_parseable_payload_uses_stderr(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class FakeResult:
+            returncode = 1
+            stdout = "not jsonl at all\n"
+            stderr = "boom from stderr"
+
+        monkeypatch.setattr(cli_providers.subprocess, "run", lambda *a, **k: FakeResult())
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: None)
+        provider = CodexProvider(model="gpt-5.4")
+        with pytest.raises(ProviderError, match="boom from stderr"):
+            provider.answer("q")
+
+
+class TestCodexFailureParsing:
+    def test_extracts_message_from_turn_failed(self) -> None:
+        display, payload = cli_providers._codex_failure_detail(_read("codex_model_not_supported.jsonl"))
+        assert "not supported when using Codex" in display
+        assert payload["status"] == 400
+
+    def test_is_fatal_for_invalid_request_error(self) -> None:
+        _, payload = cli_providers._codex_failure_detail(_read("codex_model_not_supported.jsonl"))
+        assert cli_providers._is_fatal_codex_error(payload)
+        assert not cli_providers._is_retryable_codex_error(payload)
+
+    def test_is_retryable_for_429(self) -> None:
+        _, payload = cli_providers._codex_failure_detail(_read("codex_rate_limited.jsonl"))
+        assert cli_providers._is_retryable_codex_error(payload)
+        assert not cli_providers._is_fatal_codex_error(payload)
+
+    def test_no_failure_event_returns_empty(self) -> None:
+        display, payload = cli_providers._codex_failure_detail(_read("codex_grounded.jsonl"))
+        assert display == "" and payload is None
+
+    def test_model_from_events_reads_top_level_or_item_field(self) -> None:
+        assert cli_providers._model_from_events([{"type": "x", "model": "m1"}]) == "m1"
+        assert cli_providers._model_from_events(
+            [{"type": "item.completed", "item": {"model": "m2"}}]) == "m2"
+        assert cli_providers._model_from_events([{"type": "thread.started"}]) is None
 
 
 class TestClaudeCodeProviderAnswer:
