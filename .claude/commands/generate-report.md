@@ -36,9 +36,24 @@
 |   | 工具名：`GSC` `Search Console` `Screaming Frog` `Ahrefs` `Semrush` `PageSpeed` `GA4` `Chrome` | | |
 |   | 動詞：`檢查` `驗證` `篩選` `設定` `修復` `排查` `測試` `重寫` `補上` `移除` `加入` `優化 title` `優化 description` | | |
 | 4 | 含數據段落 ≥ **70**（每段含 `%` 或絕對數值） | `data_evidence_ratio` = 含數據段落 ÷ 70 | ≥ 1.0 |
-| 5 | Section 三、四、五 **各 ≥4 分析段落**（與 Section 一、六 字數差距 < 3x） | `section_depth_variance` = 1 − (max_len − min_len) ÷ max_len | ≥ 0.6 |
+| 5 | Section 三、四、五 **各 ≥4 分析段落**（與 Section 一、六 字數差距 < 3x） | `section_depth_variance` = 1 − std ÷ mean（對 7 個章節的去空白字數；**非** (max−min)÷max） | ≥ 0.6 |
 
 > **失敗教訓**（autoresearch Round 6/10/11）：壓縮 Section 一來平衡深度會犧牲 causal_chain。正確做法是只擴展短 section，不壓縮長的。
+
+> **補充（2026-09-04 實測）：`section_depth_variance` 由「Section 七 來源清單」的長度主導，且目標長度有閉式解。**
+> 該次 §七 被 89 筆引用撐到 18,151 字、其餘六節各約 7,000 字，分數 0.0000；盲目擴寫四輪每輪只推進約 0.05。
+> 先解出目標長度再一次補到位，可把 4-5 輪壓成 1 輪：
+>
+> ```python
+> R = 20213                                   # §七 實測長度（不含空白）
+> x = (2.449*R - 0.4*R) / (2.449 + 0.4*6)     # -> 8542，即其餘六節各需的長度（N=7）
+> ```
+>
+> 三個伴隨陷阱：(1) **先定稿引用清單再解 x**——補 8 筆漏列引用讓 R 變大，分數從 0.6082 掉回 0.5556；
+> (2) `insert(before="## 六、")` 會插進**第五節末尾**，插入點要用目標節的**下一個** marker，插完用
+> `Counter(paragraphs)` 掃重複；(3) **裸關鍵字 `find()` 錨定的 checker 要求該關鍵字全文唯一**——
+> 正文一句「本週最值得投入內容資源的方向」出現在 §二，比 §六的 `💡 **最值得投入**：` 更早，
+> 讓 `top_recommendation` 的 300 字視窗落錯位置、分數由 1.0 掉到 0.5。詳見 `research/03-evaluation.md` §26.1。
 
 ---
 
