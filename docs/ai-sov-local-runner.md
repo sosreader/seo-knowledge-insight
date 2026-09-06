@@ -113,6 +113,15 @@ claude CLI 各自對它們的後端有自己的並行請求限制，開太多只
   `--sandbox read-only` + prompt 提醒兩層防禦深度。介意這個差異的話選
   `claude-code`——`--allowedTools WebSearch` 是 CLI 層級白名單，沒被列入的
   工具連呼叫機會都沒有，不依賴系統提示內容，是真正的結構性保證。
+- **Codex 額度耗盡應立即停止。** JSONL 錯誤若明確標示 `insufficient_quota`
+  或 `credit_balance_exhausted`，以及 HTTP 401/403，provider 會拋 fatal，
+  讓批次停止派送後續題目；已在執行的並行題目仍可能完成。其他 429 最多嘗試
+  3 次。這補齊先前只在 OpenAI provider 落實的額度耗盡早停規則；原因不明
+  的 429 仍保留重試，不能只憑「usage limit」文字判斷額度是否用盡。
+  ⚠ 實測（真跑撞到、非探測樣本）另發現一種不走上述 JSON 結構的額度耗盡：
+  workspace 額度用盡時 `turn.failed.error.message` 是**純文字**「Your
+  workspace is out of credits...」，不是包一層 JSON——已用字串比對兜底
+  （`_is_fatal_codex_message`），同樣判 fatal。
 - **grounded 判定的可信度不對稱。** claude-code 有『來源 URL ∩ 搜尋結果 URL』
   的交叉驗證；codex 因為 CLI 沒有把搜尋結果 URL 曝露在事件流裡，只能信任
   `--output-schema` 強制的結構化輸出本身，是弱一階的保證。兩個 provider 的
@@ -122,8 +131,19 @@ claude CLI 各自對它們的後端有自己的並行請求限制，開太多只
 
 ## launchd 排程範本（僅供參考，未安裝）
 
-以下 plist 示範「每週一本地時間 07:00 自動跑一次」。**這是範本，本次交付
+以下 plist 示範「每週一台北時間 09:00 自動跑一次」。**這是範本，本次交付
 沒有安裝它**——是否要排程、排到哪台機器，由使用者自行決定並手動安裝。
+
+⚠ **時間點不是隨便挑的，是為了對齊 `week_start` 的桶界線。** 台北時間
+07:00＝UTC 週日 23:00——早於 UTC 週一 00:00，這次跑出來的資料會被
+`warehouse.week_start_for()` 算進**上一週**的桶（week_start 用的是 UTC
+週一），跟使用者直覺的「這週一早上跑的資料」對不上；更嚴重的是
+`scripts/data_quality_gate.py` 對 ai_sov 的新鮮度檢查門檻是 192 小時，
+若每週固定卡在 UTC 週一 00:00 之前跑，本週桶永遠遲一週才出現，
+freshness gate 會每週紅（門檻與桶界線的推導見
+`scripts/quality_gate_config.py` 的 ai_sov 區塊）。必須排在 **UTC 週一
+00:00 之後**（即台北時間 08:00 之後）才會落在正確的一週；09:00 多留
+1 小時緩衝，避免夏令時間或時鐘漂移把排程再次擠回 08:00 之前。
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -150,7 +170,7 @@ claude CLI 各自對它們的後端有自己的並行請求限制，開太多只
     <key>Weekday</key>
     <integer>1</integer>  <!-- 1 = 週一 -->
     <key>Hour</key>
-    <integer>7</integer>
+    <integer>9</integer>  <!-- 台北 09:00 = UTC 週一 01:00，在 week_start 的桶界線之後 -->
     <key>Minute</key>
     <integer>0</integer>
   </dict>

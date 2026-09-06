@@ -86,7 +86,7 @@ claude-code 的保證仍然更強：--allowedTools WebSearch 是 CLI 層級白�
 保證，不依賴『系統提示裡有沒有教它別亂搜』這種可能因設定檔內容而變動的
 前提。選 provider 時仍應把這個差異納入考量。
 
-【6. codex 為什麼預設不帶 -m、以及為什麼要自己讀 config.toml 的 model】
+【6. codex 的 model 到底要不要帶 -m、以及為什麼要自己讀 config.toml】
 真跑批次時實際撞到：CodexProvider 原本預設帶 `-m gpt-5.4`，使用者的
 ChatGPT 訂閱帳戶回 HTTP 400 `invalid_request_error`：「The 'gpt-5.4'
 model is not supported when using Codex with a ChatGPT account.」——
@@ -95,18 +95,24 @@ ChatGPT 帳戶模式只接受帳戶方案支援的一組模型，不是任意字
 的值，但那是**這個人的**設定，換一台機器、換一個帳戶完全可能是別的值，
 寫死在程式碼裡就是重演同一個 bug。
 
-因此：沒有明確傳 `--model` 時，CodexProvider **完全不帶 `-m` 旗標**，
-讓 codex CLI／帳戶自己決定要用哪個模型（實測驗證過：不帶 -m、帶
---ignore-user-config 一樣能正常跑完，8 秒內回應，沒有 400）。`self.model`
-這個欄位（寫進 ai_sov_response 的 model 欄）則獨立於呼叫參數之外，
-用來源優先序決定：① 若有明確傳 model，直接用；② 否則自己用 tomllib 讀
-`$CODEX_HOME/config.toml`（找不到 CODEX_HOME 就退回 `~/.codex/config.toml`）
-裡的 `model` 這個頂層鍵，純粹當「這台機器帳戶預設是什麼」的紀錄用途，
-**不會**拿去組 `-m` 參數（那正是要避免的事）；③ 都讀不到就記
-`"codex-default"`，代表「這次呼叫沒有指定、也查不到设定檔，用的是 CLI/
-帳戶當下的預設，實際是哪個模型未知」。事件流若曝露了實際生效的模型名稱
-（目前版本 0.149.0 未曝露，見 _model_from_events 的保留邏輯）則優先用
-事件流的值覆寫，因為那才是這次呼叫的 ground truth。
+第一版修法「乾脆不帶 -m，讓 CLI/帳戶自己決定」有一個沒考慮到的交互作用：
+本檔已經因為設計決定 5 的緣故帶了 `--ignore-user-config`，這個旗標的
+效果是 codex CLI **完全不載入** `~/.codex/config.toml`——連帶 config 裡
+`model = "gpt-5.6-sol"` 這個帳戶專屬預設也一起被跳過，不帶 -m 時退回的
+是 CLI 自己內建的預設，不是 config 裡那個實測可行的值，兩者在
+--ignore-user-config 之下是兩件不同的事（team-lead 實測驗證：不帶
+--ignore-user-config、不帶 -m 才會走到 config 的 gpt-5.6-sol 並 exit 0；
+帶 -m gpt-5.4 不論有沒有 --ignore-user-config 都被 400 拒絕）。
+
+正確做法：provider 自己用 tomllib 讀 config.toml 的 `model` 這個頂層鍵
+（CLI 不會再幫我們讀，因為 --ignore-user-config 還是要保留，見設計決定
+5），讀到的話**明確以 `-m <該值>` 傳入**，同時保留 --ignore-user-config；
+只有「使用者沒明確傳 --model」且「config.toml 讀不到 model」兩者同時成立
+時才真的不帶 -m，退回 CLI 內建預設（實際是哪個模型未知，`self.model`
+誠實記成 `"codex-default"`，不假裝知道）。優先序：明確傳入 model >
+讀 config.toml 的 model > 都沒有就不帶 -m。事件流若曝露了實際生效的
+模型名稱（目前版本 0.149.0 未曝露，見 _model_from_events 的保留邏輯）
+則優先用事件流的值覆寫，因為那才是這次呼叫的 ground truth。
 
 【7. codex 的 400／429 怎麼分辨 fatal 與可重試】
 非零 exit 時，`_run_cli` 原本只把 stderr 前 500 字當錯誤訊息——但 codex
@@ -119,8 +125,9 @@ ChatGPT 帳戶模式只接受帳戶方案支援的一組模型，不是任意字
 CompletedProcess、不對非零 exit 拋例外），自己解析這個結構化錯誤：
 status=400 且 error.type=="invalid_request_error"（模型不支援／請求本身
 有問題）判 fatal——同一組參數重試 108 次會是同一個結果，跟 OpenAI
-insufficient_quota 同一類（ai_sov_providers 設計決定 5）；status=429
-（用量上限／速率限制）判可重試，帶退避重試（沿用 OpenAIProvider 的
+insufficient_quota 同一類（ai_sov_providers 設計決定 5）；401/403 或 429 的
+error.type/code 明確表示額度耗盡，也判 fatal。其餘 429（速率限制或原因
+不明）才帶退避重試（沿用 OpenAIProvider 的
 MAX_ATTEMPTS=3、退避秒數同一套慣例）。其餘非零 exit（沒有可解析的
 結構化錯誤）一律當一般 ProviderError，訊息優先用解析出來的內容、
 解析不到才退回 stderr 片段。
@@ -139,6 +146,9 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from ai_sov_providers import (
+    FATAL_HTTP_STATUS,
+    FATAL_OPENAI_ERROR_CODES,
+    FATAL_OPENAI_ERROR_TYPES,
     ProviderAnswer,
     ProviderError,
     ProviderFatalError,
@@ -255,14 +265,14 @@ def _codex_config_path() -> Path:
 
 
 def _read_codex_config_model() -> str | None:
-    """讀這台機器 config.toml 裡的 model 頂層鍵，純粹當紀錄用途（設計決定 6）。
+    """讀這台機器 config.toml 裡的 model 頂層鍵（設計決定 6）。
 
-    ⚠ 這裡讀到的值**不會**被拿去組 `-m` 參數——那正是造成 400
-    invalid_request_error 的原因（見設計決定 6）。只用來填 self.model
-    這個寫進資料庫的欄位，讓人知道『這次沒指定 model 時，這台機器當下的
-    帳戶預設大概是什麼』。讀不到（檔案不存在／格式錯誤／沒有這個鍵）
-    一律回 None，呼叫端會再退回 CODEX_FALLBACK_MODEL_LABEL，不拋例外——
-    這只是個記錄用的旁支資訊，壞掉不該讓整次呼叫失敗。
+    --ignore-user-config 讓 codex CLI 自己不會載入這個檔案，所以這裡讀到
+    的值**會**被呼叫端明確組成 `-m <值>` 傳給 CLI（不是只拿來記錄——第一版
+    以為『不帶 -m』就等於『用這個值』，其實兩者在 --ignore-user-config
+    之下是兩件事，見設計決定 6 的修正說明）。讀不到（檔案不存在／格式
+    錯誤／沒有這個鍵）一律回 None，呼叫端會直接不帶 -m、退回 CLI 內建
+    預設，不拋例外——config.toml 壞掉不該讓整次呼叫失敗。
     """
     try:
         with _codex_config_path().open("rb") as f:
@@ -329,7 +339,7 @@ def _codex_failure_detail(stdout: str) -> tuple[str, dict | None]:
 
 
 def _is_fatal_codex_error(payload: dict | None) -> bool:
-    """400 invalid_request_error（模型不支援／請求本身有問題）判 fatal。
+    """模型不支援、認證失效或明確額度耗盡判 fatal。
 
     同一組參數重試 108 次得到的是同一個結果，跟 OpenAI 的
     insufficient_quota 同一類（ai_sov_providers 設計決定 5）——實例就是
@@ -338,14 +348,39 @@ def _is_fatal_codex_error(payload: dict | None) -> bool:
     if not isinstance(payload, dict):
         return False
     error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    if payload.get("status") in FATAL_HTTP_STATUS:
+        return True
+    if payload.get("status") == 429 and (
+        str(error.get("type") or "") in FATAL_OPENAI_ERROR_TYPES
+        or str(error.get("code") or "") in FATAL_OPENAI_ERROR_CODES
+    ):
+        return True
     if payload.get("status") == 400 and error.get("type") == "invalid_request_error":
         return True
     return "not supported" in str(error.get("message") or "").lower()
 
 
 def _is_retryable_codex_error(payload: dict | None) -> bool:
-    """429（用量上限／速率限制）判可重試——與 fatal 的 400 是不同的錯誤語意。"""
-    return isinstance(payload, dict) and payload.get("status") == 429
+    """只有排除 fatal 後的 429 才重試；額度耗盡不會因短暫退避恢復。"""
+    return (
+        isinstance(payload, dict)
+        and payload.get("status") == 429
+        and not _is_fatal_codex_error(payload)
+    )
+
+
+# 實測（非探測樣本，真跑撞到）：workspace 額度用盡時，turn.failed.error.message
+# 是**純文字**，不是像 400/429 那樣包一層 JSON——_codex_failure_detail 因此解不
+# 出結構化 payload，_is_fatal_codex_error(None) 只查 payload 會漏掉這個同樣
+# 「重試 108 次沒有意義」的情境。用已知字串兜底；只有這一種是實測證實過的原文，
+# 沒有把清單擴大猜測其他措辭。
+_FATAL_CODEX_MESSAGE_SUBSTRINGS = ("out of credits",)
+
+
+def _is_fatal_codex_message(message: str) -> bool:
+    """_is_fatal_codex_error 的純文字兜底版——見上面註解。"""
+    lowered = message.lower()
+    return any(needle in lowered for needle in _FATAL_CODEX_MESSAGE_SUBSTRINGS)
 
 
 def _last_codex_agent_message(events: list[dict]) -> str:
@@ -418,18 +453,27 @@ def parse_codex_output(stdout: str) -> ProviderAnswer:
 class CodexProvider:
     """本機 codex CLI（訂閱額度）。已知限制見模組設計決定 4／5／6／7。
 
-    ⚠ model：沒有明確傳 model 時**不會**帶 -m 給 CLI（設計決定 6）——
-    ChatGPT 帳戶模式只接受帳戶方案支援的一組模型，硬塞任意字串會撞
-    400 invalid_request_error。self.model 這個記錄用欄位的來源優先序：
-    明確傳入 > 讀 config.toml 的 model > "codex-default" 佔位字串；
+    ⚠ model：--ignore-user-config 讓 codex CLI 自己**不會**載入
+    ~/.codex/config.toml（設計決定 5 的安全修法），代價是 config 裡的
+    `model = "gpt-5.6-sol"` 這種帳戶專屬預設也一起被跳過不了——不帶 -m
+    時 CLI 會退回它自己內建的預設，不保證是這個 ChatGPT 帳戶支援的模型
+    （這正是設計決定 6 那個 400 bug的來源之一：以為『不帶 -m』就等於
+    『用 config 的預設』，其實兩者在 --ignore-user-config 之下是兩件事）。
+    因此 provider 自己用 tomllib 讀 config.toml 的 model（不透過 CLI），
+    讀到就明確以 -m <該值> 傳入，同時保留 --ignore-user-config；沒有明確
+    傳 model 也讀不到 config 時才真的不帶 -m，把 self.model 記成
+    "codex-default" 誠實反映『這次用的是 CLI 內建預設，實際是哪個模型未知』
+    這件事。優先序：明確傳入 model > 讀 config.toml 的 model > 不帶 -m；
     成功呼叫後若事件流曝露了實際模型名稱（目前版本沒有）會再覆寫一次。
     """
 
     def __init__(self, *, model: str | None = None, timeout: int = DEFAULT_TIMEOUT_SECONDS,
                  executable: str = "codex") -> None:
         self.name = "codex"
-        self._explicit_model = model
-        self.model = model or _read_codex_config_model() or CODEX_FALLBACK_MODEL_LABEL
+        # 明確傳入優先；否則用 tomllib 自己讀 config.toml 的 model（CLI 因
+        # --ignore-user-config 不會再幫我們讀這個檔案，見上面 docstring）。
+        self._model_to_pass = model or _read_codex_config_model()
+        self.model = self._model_to_pass or CODEX_FALLBACK_MODEL_LABEL
         self._timeout = timeout
         self._executable = executable
 
@@ -447,8 +491,8 @@ class CodexProvider:
             "--skip-git-repo-check", "--ephemeral", "--json",
             "--ignore-user-config",
         ]
-        if self._explicit_model:
-            args += ["-m", self._explicit_model]
+        if self._model_to_pass:
+            args += ["-m", self._model_to_pass]
         args += [
             "--sandbox", "read-only",
             "--output-schema", str(schema_path),
@@ -467,7 +511,8 @@ class CodexProvider:
 
     def answer(self, prompt: str) -> ProviderAnswer:
         """呼叫 codex，失敗時依 status 分流：400 invalid_request_error 一律
-        fatal（設計決定 7）；429 帶退避重試；其餘非零 exit 當一般 ProviderError。
+        fatal（設計決定 7）；認證失效／額度耗盡同樣 fatal；其餘 429 帶退避
+        重試；其餘非零 exit 當一般 ProviderError。
         """
         last_detail = ""
         for attempt in range(CODEX_MAX_ATTEMPTS):
@@ -481,7 +526,7 @@ class CodexProvider:
 
             display, payload = _codex_failure_detail(result.stdout)
             last_detail = display or (result.stderr or "")[:500]
-            if _is_fatal_codex_error(payload):
+            if _is_fatal_codex_error(payload) or _is_fatal_codex_message(last_detail):
                 raise ProviderFatalError(f"codex 呼叫失敗（不可重試）：{last_detail}")
             if not _is_retryable_codex_error(payload) or attempt == CODEX_MAX_ATTEMPTS - 1:
                 break

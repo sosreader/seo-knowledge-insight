@@ -16,6 +16,7 @@ Fixture 來源：tests/fixtures/ai_sov_cli/ 下的 JSONL，是根據真實探測
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -314,10 +315,10 @@ class TestCodexProviderAnswer:
         assert args[-1].endswith("範例問題？")  # prompt 前綴限制說明後接原始 prompt
         assert answer.is_grounded
 
-    def test_does_not_pass_dash_m_when_model_not_overridden(self, tmp_path: Path,
-                                                              monkeypatch: pytest.MonkeyPatch) -> None:
-        """實測撞到的真 bug：帳戶不支援硬塞的 -m gpt-5.4。修法是沒有明確
-        model 時完全不帶 -m，讓帳戶自己決定（見設計決定 6）。"""
+    def test_does_not_pass_dash_m_when_model_not_overridden_and_no_config(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """真的兩邊都沒有（沒明確 model、config.toml 也讀不到）才不帶 -m，
+        讓 codex CLI 內建預設接手（見設計決定 6）。"""
         captured = {}
 
         class FakeResult:
@@ -334,6 +335,32 @@ class TestCodexProviderAnswer:
         provider = CodexProvider(model=None)
         provider.answer("範例問題？")
         assert "-m" not in captured["args"]
+
+    def test_dash_m_comes_from_config_toml_when_model_not_overridden(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """team-lead 實測糾正過的落差：--ignore-user-config 讓 codex CLI 自己
+        不會載入 config.toml，所以『不帶 -m』不等於『用 config 的
+        model = "gpt-5.6-sol"』——provider 得自己讀出來、明確以 -m 傳入，
+        --ignore-user-config 仍要保留（見設計決定 6 的修正說明）。"""
+        captured = {}
+
+        class FakeResult:
+            returncode = 0
+            stdout = _read("codex_grounded.jsonl")
+            stderr = ""
+
+        def fake_run(args, **kwargs):
+            captured["args"] = args
+            return FakeResult()
+
+        monkeypatch.setattr(cli_providers.subprocess, "run", fake_run)
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: "gpt-5.6-sol")
+        provider = CodexProvider(model=None)
+        assert provider.model == "gpt-5.6-sol"
+        provider.answer("範例問題？")
+        args = captured["args"]
+        assert "--ignore-user-config" in args
+        assert "-m" in args and args[args.index("-m") + 1] == "gpt-5.6-sol"
 
     def test_fatal_when_executable_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def fake_run(args, **kwargs):
@@ -355,6 +382,42 @@ class TestCodexProviderAnswer:
         provider = CodexProvider(model="gpt-5.4")
         with pytest.raises(ProviderFatalError, match="not supported when using Codex"):
             provider.answer("q")
+
+    def test_out_of_credits_plain_text_message_is_fatal(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """實測（非探測樣本，真跑撞到）：workspace 額度用盡時 turn.failed.
+        error.message 是**純文字**，不是像 400/429 那樣包一層 JSON——
+        _codex_failure_detail 解不出結構化 payload，只查 payload 的
+        _is_fatal_codex_error 會漏掉，要靠 _is_fatal_codex_message 這個
+        純文字兜底。"""
+        self._fake_run([(1, _read("codex_out_of_credits.jsonl"))], monkeypatch)
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: None)
+        provider = CodexProvider(model="gpt-6-astra")
+        with pytest.raises(ProviderFatalError, match="out of credits"):
+            provider.answer("q")
+
+    @pytest.mark.parametrize("status,error", [
+        (429, {"type": "insufficient_quota"}),
+        (429, {"code": "insufficient_quota"}),
+        (429, {"code": "credit_balance_exhausted"}),
+        (401, {}),
+        (403, {}),
+    ])
+    def test_quota_or_auth_failure_aborts_without_retry(
+            self, monkeypatch: pytest.MonkeyPatch, status: int, error: dict) -> None:
+        """KB 已修的額度耗盡早停語意也必須涵蓋 Codex CLI。"""
+        payload = {"status": status, "error": {**error, "message": "帳戶無法完成請求"}}
+        stdout = json.dumps({"type": "turn.failed", "error": {
+            "message": json.dumps(payload),
+        }})
+        calls = self._fake_run([(1, stdout)] * cli_providers.CODEX_MAX_ATTEMPTS, monkeypatch)
+        waits = []
+        monkeypatch.setattr(cli_providers.time, "sleep", waits.append)
+        with pytest.raises(ProviderFatalError, match="帳戶無法完成請求"):
+            CodexProvider(model="test-model").answer("q")
+        assert calls["n"] == 1
+        assert waits == []
+        assert not cli_providers._is_retryable_codex_error(payload)
 
     def test_rate_limited_429_retries_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls = self._fake_run(
@@ -413,6 +476,18 @@ class TestCodexFailureParsing:
     def test_no_failure_event_returns_empty(self) -> None:
         display, payload = cli_providers._codex_failure_detail(_read("codex_grounded.jsonl"))
         assert display == "" and payload is None
+
+    def test_out_of_credits_is_plain_text_not_json(self) -> None:
+        """實測撞到：這個錯誤不像 400/429 那樣包 JSON，payload 解不出來，
+        display 仍要是可讀的原文（讓 _is_fatal_codex_message 有東西可查）。"""
+        display, payload = cli_providers._codex_failure_detail(_read("codex_out_of_credits.jsonl"))
+        assert "out of credits" in display
+        assert payload is None
+
+    def test_is_fatal_codex_message_matches_out_of_credits(self) -> None:
+        assert cli_providers._is_fatal_codex_message("Your workspace is out of credits.")
+        assert cli_providers._is_fatal_codex_message("OUT OF CREDITS")  # 大小寫不敏感
+        assert not cli_providers._is_fatal_codex_message("some other transient error")
 
     def test_model_from_events_reads_top_level_or_item_field(self) -> None:
         assert cli_providers._model_from_events([{"type": "x", "model": "m1"}]) == "m1"
