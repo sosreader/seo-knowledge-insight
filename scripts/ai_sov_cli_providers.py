@@ -369,12 +369,16 @@ def _is_retryable_codex_error(payload: dict | None) -> bool:
     )
 
 
-# 實測（非探測樣本，真跑撞到）：workspace 額度用盡時，turn.failed.error.message
-# 是**純文字**，不是像 400/429 那樣包一層 JSON——_codex_failure_detail 因此解不
-# 出結構化 payload，_is_fatal_codex_error(None) 只查 payload 會漏掉這個同樣
-# 「重試 108 次沒有意義」的情境。用已知字串兜底；只有這一種是實測證實過的原文，
-# 沒有把清單擴大猜測其他措辭。
-_FATAL_CODEX_MESSAGE_SUBSTRINGS = ("out of credits",)
+# 實測（非探測樣本，真跑撞到，見 output/ai-sov/run-2026-09-07-manual.log）：
+# workspace 額度用盡時，turn.failed.error.message 是**純文字**，不是像
+# 400/429 那樣包一層 JSON——_codex_failure_detail 因此解不出結構化 payload，
+# _is_fatal_codex_error(None) 只查 payload 會漏掉，108 題會各自重試到底
+# （那次真跑：36 個 prompt 全部落在同一個 workspace 額度耗盡，19 次失敗後才
+# 被手動 Terminated，若沒中止會是 108 次）。「out of credits」是實測證實過的
+# 原文；refill／insufficient_quota／credit 是團隊追加、涵蓋同一類額度／帳務
+# 訊息可能的其他措辭（credit 會包含 out of credits，兩者並列是為了在原文字串
+# 改變措辭時仍不漏接，不是重複判斷）。
+_FATAL_CODEX_MESSAGE_SUBSTRINGS = ("out of credits", "refill", "insufficient_quota", "credit")
 
 
 def _is_fatal_codex_message(message: str) -> bool:

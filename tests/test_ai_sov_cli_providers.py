@@ -489,6 +489,19 @@ class TestCodexFailureParsing:
         assert cli_providers._is_fatal_codex_message("OUT OF CREDITS")  # 大小寫不敏感
         assert not cli_providers._is_fatal_codex_message("some other transient error")
 
+    @pytest.mark.parametrize("message", [
+        "Your workspace is out of credits. Ask your workspace owner to refill in order to continue.",
+        "Please refill your account balance to continue.",
+        "The request was rejected: insufficient_quota",
+        "Your credit balance is too low to make this request.",
+    ])
+    def test_is_fatal_codex_message_covers_credit_wording_variants(self, message: str) -> None:
+        """team-lead 追加：real 跑 output/ai-sov/run-2026-09-07-manual.log 顯示
+        36 個 prompt 全撞同一個 workspace 額度耗盡卻沒有早停（那次的程式碼版本
+        還沒有 _is_fatal_codex_message）。除了實測證實過的「out of credits」，
+        也涵蓋團隊追加的措辭：refill／insufficient_quota／credit。"""
+        assert cli_providers._is_fatal_codex_message(message)
+
     def test_model_from_events_reads_top_level_or_item_field(self) -> None:
         assert cli_providers._model_from_events([{"type": "x", "model": "m1"}]) == "m1"
         assert cli_providers._model_from_events(
