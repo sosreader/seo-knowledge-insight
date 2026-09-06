@@ -138,10 +138,11 @@ claude CLI 各自對它們的後端有自己的並行請求限制，開太多只
 
 ---
 
-## launchd 排程範本（僅供參考，未安裝）
+## launchd 排程範本（2026-09-07 實測可跑的版本，撞過兩個 TCC 坑）
 
-以下 plist 示範「每週一台北時間 09:00 自動跑一次」。**這是範本，本次交付
-沒有安裝它**——是否要排程、排到哪台機器，由使用者自行決定並手動安裝。
+以下 plist 示範「每週一台北時間 09:00 自動跑一次」，是**實際在本機驗證過、
+現在正用 launchd 跑整批**的版本——路徑對應這台機器（`/Users/shiun/...`），
+搬到別台機器要對應改路徑，是否要排程、排到哪台機器仍由使用者自行決定。
 
 ⚠ **時間點不是隨便挑的，是為了對齊 `week_start` 的桶界線。** 台北時間
 07:00＝UTC 週日 23:00——早於 UTC 週一 00:00，這次跑出來的資料會被
@@ -154,6 +155,18 @@ freshness gate 會每週紅（門檻與桶界線的推導見
 00:00 之後**（即台北時間 08:00 之後）才會落在正確的一週；09:00 多留
 1 小時緩衝，避免夏令時間或時鐘漂移把排程再次擠回 08:00 之前。
 
+⚠ **`ProgramArguments` 不能直接放 `/usr/bin/make`。** 第一版這樣寫，
+launchd 觸發時撞到 macOS TCC（隱私權限）擋 `~/Documents`：`make` 一啟動
+就 `getcwd: Operation not permitted`，緊接著找不到 Makefile 而報
+`No rule to make target`——launchd 直接產生的子行程沒有存取 `~/Documents`
+的權限，跟在終端機手動跑完全是兩回事。修法是改叫一支已授權 Full Disk
+Access 的自製 launcher（`~/.claude/automation/kb-launcher`，行為是
+`exec /bin/bash <script>`），讓真正需要碰 `~/Documents` 的行程繼承 launcher
+的權限，而不是讓 launchd 直接生。`scripts/ai_sov_launchd_wrapper.sh`
+把原本塞在 `ProgramArguments` 裡的 `make -C <repo> ai-sov-local ...` 邏輯
+收進腳本本體，PROVIDER/REPEATS/CONCURRENCY 改用環境變數傳入（各自有預設值，
+見腳本內的 `${VAR:-預設}`）。
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -165,14 +178,19 @@ freshness gate 會每週紅（門檻與桶界線的推導見
 
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/make</string>
-    <string>-C</string>
-    <string>/absolute/path/to/seo-knowledge-insight</string>
-    <string>ai-sov-local</string>
-    <string>PROVIDER=claude-code</string>
-    <string>REPEATS=3</string>
-    <string>CONCURRENCY=2</string>
+    <string>/Users/shiun/.claude/automation/kb-launcher</string>
+    <string>/absolute/path/to/seo-knowledge-insight/scripts/ai_sov_launchd_wrapper.sh</string>
   </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PROVIDER</key>
+    <string>claude-code</string>
+    <key>REPEATS</key>
+    <string>3</string>
+    <key>CONCURRENCY</key>
+    <string>2</string>
+  </dict>
 
   <key>StartCalendarInterval</key>
   <dict>
@@ -185,9 +203,16 @@ freshness gate 會每週紅（門檻與桶界線的推導見
   </dict>
 
   <key>StandardOutPath</key>
-  <string>/absolute/path/to/seo-knowledge-insight/output/ai-sov/launchd.out.log</string>
+  <string>/Users/shiun/Library/Logs/cc.vocus.ai-sov-local/launchd.out.log</string>
   <key>StandardErrorPath</key>
-  <string>/absolute/path/to/seo-knowledge-insight/output/ai-sov/launchd.err.log</string>
+  <string>/Users/shiun/Library/Logs/cc.vocus.ai-sov-local/launchd.err.log</string>
+
+  <!-- StandardOutPath／StandardErrorPath 一樣不能指進 ~/Documents：launchd
+       在 spawn 這個行程之前就要先開這兩個檔案，跟 ProgramArguments 的
+       getcwd 問題是不同階段但同一個 TCC 根因——launchd 本身（不是它生出的
+       子行程）沒有 Full Disk Access，一樣被擋，症狀是行程完全沒跑起來、
+       exit code 78（EX_CONFIG），兩個 log 檔案零新內容。改指到
+       ~/Library/Logs 之下不受這個限制。 -->
 
   <!-- codex/claude CLI 的登入憑證通常存在使用者 keychain／設定檔裡，
        launchd 以背景 daemon 身分執行時不一定能存取到與互動終端機相同的
@@ -197,12 +222,44 @@ freshness gate 會每週紅（門檻與桶界線的推導見
 </plist>
 ```
 
-安裝方式（**未執行，供之後手動操作時參考**）：
+安裝方式：
 
 ```bash
+mkdir -p ~/Library/Logs/cc.vocus.ai-sov-local
 cp this.plist ~/Library/LaunchAgents/cc.vocus.ai-sov-local.plist
-launchctl load ~/Library/LaunchAgents/cc.vocus.ai-sov-local.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/cc.vocus.ai-sov-local.plist
 ```
+
+（`~/Library/Logs/cc.vocus.ai-sov-local` 要先手動建立——launchd 開
+`StandardOutPath`／`StandardErrorPath` 時不會自動建立不存在的目錄，只會建立
+不存在的檔案本身。舊式 `launchctl load` 在新版 macOS 上行為不穩定，改用
+`bootstrap`。）
+
+不想等到下週一才知道整條鏈通不通，可以手動立即觸發一次：
+
+```bash
+launchctl kickstart -k gui/$(id -u)/cc.vocus.ai-sov-local
+```
+
+觸發後看兩個地方：`~/Library/Logs/cc.vocus.ai-sov-local/launchd.{out,err}.log`
+只用來確認行程真的啟動、有沒有在最外層就整條掛掉；實際的批次進度（每題每次
+repeat 的「進度 N/M」行）在 repo 裡的 `output/ai-sov/<今天日期>.log`
+（wrapper 最終呼叫的 `make ai-sov-local` 會 `tee -a` 到這裡，這個路徑在
+`~/Documents` 底下但透過 kb-launcher 的權限鏈可以正常寫入，不受上面兩個
+TCC 坑影響）。
+
+### 排錯
+
+- **`launchd.err.log` 顯示 `last exit code = 78`（EX_CONFIG）、兩個 log
+  檔案零新行**：`StandardOutPath`／`StandardErrorPath` 指到了 TCC 保護區
+  （典型是 `~/Documents` 底下）。改指到 `~/Library/Logs/...` 之類不受保護
+  的路徑。
+- **log 裡看到 `getcwd: Operation not permitted` 接著
+  `No rule to make target`**：`ProgramArguments` 第一項不是經過
+  Full Disk Access 授權的 launcher（例如又改回直接放 `/usr/bin/make` 或
+  `/bin/bash`），launchd 直接生出來的子行程被 TCC 擋在 `~/Documents` 外面。
+  確認第一項是 `~/.claude/automation/kb-launcher` 而不是系統既有的
+  shell／make 執行檔本身。
 
 機器睡眠/關機時 launchd 排程不會補跑錯過的那次——這正是上面「資料無法
 回填」那條限制在排程層面的體現，不是 launchd 設定的問題。
