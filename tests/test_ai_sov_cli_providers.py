@@ -187,6 +187,41 @@ class TestRunCli:
         with pytest.raises(ProviderError, match="exit=1"):
             cli_providers._run_cli(["fake"], timeout=1, cwd=tmp_path)
 
+    def test_nonzero_exit_with_empty_stderr_says_so_explicitly(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """實跑撞到的真 bug：stderr 全是空白／換行時，原本的訊息在冒號後面
+        什麼都沒有，看不出 CLI 到底吐了什麼。改完至少要講清楚『stderr 為空』，
+        不能只留一個看起來像漏字的空白。"""
+
+        class FakeResult:
+            returncode = 1
+            stdout = ""
+            stderr = "\n\n  \n"
+
+        monkeypatch.setattr(cli_providers.subprocess, "run", lambda *a, **k: FakeResult())
+        with pytest.raises(ProviderError, match=r"exit=1.*stderr 為空"):
+            cli_providers._run_cli(["fake"], timeout=1, cwd=tmp_path)
+
+    def test_nonzero_exit_stderr_uses_tail_and_collapses_newlines(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """真正的錯誤原因常在 stderr 尾端（開頭常是 CLI 的既定噪音），且
+        多行 stderr 要摺成一行，log 才不會被換行拆成看起來斷掉的片段。"""
+
+        class FakeResult:
+            returncode = 1
+            stdout = ""
+            stderr = "noise line one\nnoise line two\n" + "x" * 400 + "\nreal-failure-tail-marker"
+
+        monkeypatch.setattr(cli_providers.subprocess, "run", lambda *a, **k: FakeResult())
+        with pytest.raises(ProviderError) as excinfo:
+            cli_providers._run_cli(["fake"], timeout=1, cwd=tmp_path)
+        message = str(excinfo.value)
+        assert "real-failure-tail-marker" in message
+        assert "\n" not in message
+        assert "noise line one" not in message
+
     def test_stdin_is_devnull(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         captured = {}
 
@@ -418,6 +453,27 @@ class TestCodexProviderAnswer:
         assert calls["n"] == 1
         assert waits == []
         assert not cli_providers._is_retryable_codex_error(payload)
+
+    def test_unstructured_failure_falls_back_to_stderr_tail(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """stdout 沒有可解析的 turn.failed／error 事件時（_codex_failure_detail
+        回 ("", None)），退回 stderr——同一個摺疊/取尾邏輯要跟 _run_cli 共用
+        （_stderr_tail），不能各自維護一套會不同步的截斷規則。"""
+
+        class FakeResult:
+            returncode = 1
+            stdout = "not jsonl at all\n"
+            stderr = "noise\n" + "y" * 400 + "\nreal-codex-stderr-tail"
+
+        monkeypatch.setattr(cli_providers.subprocess, "run", lambda *a, **k: FakeResult())
+        monkeypatch.setattr(cli_providers, "_read_codex_config_model", lambda: None)
+        provider = CodexProvider(model="gpt-5.4")
+        with pytest.raises(ProviderError) as excinfo:
+            provider.answer("q")
+        message = str(excinfo.value)
+        assert "real-codex-stderr-tail" in message
+        assert "\n" not in message
+        assert "noise" not in message
 
     def test_rate_limited_429_retries_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls = self._fake_run(

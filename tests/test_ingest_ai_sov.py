@@ -190,6 +190,48 @@ class TestRunPanel:
         assert len(rows) == 12 and failures == []
         assert sorted({r["repeat_idx"] for r in rows}) == [0, 1, 2]
 
+    def test_success_logs_progress_line_with_grounded_and_cited(
+            self, caplog: pytest.LogCaptureFixture) -> None:
+        """team-lead 2026-09-07 回報：本機 CLI provider 跑一小時看不到進度，
+        只有 WARNING 與最後總結。每次呼叫完成（成功）要印一行 INFO 進度，
+        帶 grounded/cited/tokens——這些欄位 ProviderAnswer 本來就有，不是
+        現湊的。"""
+        answer = ProviderAnswer(text="ok", citations=dedupe_citations(["https://vocus.cc/x"]),
+                                input_tokens=100, output_tokens=20)
+        provider = FakeProvider(scripted=[answer])
+        with caplog.at_level("INFO"):
+            ingest.run_panel(provider, self._prompts(1), repeats=1,
+                             target_domain="vocus.cc", week_start=WEEK, run_at=RUN_AT)
+        progress_lines = [r.message for r in caplog.records if "進度" in r.message]
+        assert len(progress_lines) == 1
+        line = progress_lines[0]
+        assert "進度 1/1" in line
+        assert "prompt=p0" in line and "repeat=0" in line
+        assert "grounded=yes" in line and "cited=yes" in line
+        assert "tokens=100/20" in line
+        assert "耗時=" in line
+
+    def test_failure_progress_line_does_not_fabricate_grounded_or_cited(
+            self, caplog: pytest.LogCaptureFixture) -> None:
+        """失敗沒有 answer，grounded/cited/tokens 沒有真的值可用，不能硬湊
+        （會是誤導性假資料）——進度行改印 status=failed。"""
+
+        class AlwaysFails:
+            name, model = "flaky", "m"
+
+            def answer(self, prompt: str) -> ProviderAnswer:
+                raise ProviderError("boom")
+
+        with caplog.at_level("INFO"):
+            ingest.run_panel(AlwaysFails(), self._prompts(1), repeats=1,
+                             target_domain="vocus.cc", week_start=WEEK, run_at=RUN_AT)
+        progress_lines = [r.message for r in caplog.records if "進度" in r.message]
+        assert len(progress_lines) == 1
+        line = progress_lines[0]
+        assert "進度 1/1" in line
+        assert "status=failed" in line
+        assert "grounded=" not in line and "cited=" not in line
+
     def test_provider_failure_produces_no_row_and_is_recorded(self) -> None:
         """失敗不得被記成『這次沒引用』——那會讓 API 故障偽裝成可見度下降。"""
 
@@ -287,6 +329,19 @@ class TestRunPanelConcurrent:
                                           target_domain="vocus.cc", week_start=WEEK, run_at=RUN_AT,
                                           concurrency=3)
         assert len(rows) == 12 and failures == []
+
+    def test_progress_lines_are_printed_in_concurrent_mode_too(
+            self, caplog: pytest.LogCaptureFixture) -> None:
+        """concurrent 模式（本機 CLI provider 用 --concurrency>1 縮短牆鐘
+        時間）也要看得到進度，不能只有循序模式有——這正是本機批次跑最久、
+        最需要進度回報的情境。"""
+        with caplog.at_level("INFO"):
+            rows, failures = ingest.run_panel(FakeProvider(), self._prompts(4), repeats=3,
+                                              target_domain="vocus.cc", week_start=WEEK,
+                                              run_at=RUN_AT, concurrency=3)
+        progress_lines = [r.message for r in caplog.records if "進度" in r.message]
+        assert len(progress_lines) == len(rows) + len(failures) == 12
+        assert all("/12" in line for line in progress_lines)
 
     def test_failures_are_recorded_not_dropped(self) -> None:
         import threading

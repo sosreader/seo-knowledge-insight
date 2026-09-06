@@ -37,19 +37,28 @@ source .venv/bin/activate
 ## 執行
 
 ```bash
-# 預設 codex、repeats=3、concurrency=2
+# 預設 claude-code、repeats=3、concurrency=2
 make ai-sov-local
 
 # 換 provider / 調參數
-make ai-sov-local PROVIDER=claude-code REPEATS=3 CONCURRENCY=1
+make ai-sov-local PROVIDER=codex REPEATS=3 CONCURRENCY=1
 
 # 直接呼叫腳本（等效，Makefile target 只是包了 log 導出與預設值）
 .venv/bin/python scripts/ingest_ai_sov.py --execute \
-  --provider codex --repeats 3 --concurrency 2
+  --provider claude-code --repeats 3 --concurrency 2
 ```
 
+預設 provider 是 `claude-code`（2026-09-07 使用者裁決長期用它）：`codex` 與
+`--provider openai`（`ai-sov-weekly.yml` workflow 用的那個）共用同一份
+OpenAI workspace 餘額，餘額歸零時 CodexProvider 會判 fatal 立即中止整條
+run（訊息含 `out of credits`，見下方「已知限制」的「Codex 額度耗盡應立即
+停止」一項）——claude-code 走的是另一個獨立帳戶的訂閱額度，不受這個共用
+餘額影響。
+
 log 會同時印到終端機、附加寫入 `output/ai-sov/<今天日期>.log`（`make` target
-自動 `mkdir -p output/ai-sov` 並用 `tee -a`）。
+自動 `mkdir -p output/ai-sov` 並用 `tee -a`）。進度看 log 的「進度 N/M」行
+（每題每次 repeat 完成即印一行，含 grounded/cited/tokens/耗時），不用等
+一小時起跳的整條 run 跑完才看得到走到哪。
 
 ### Smoke（不寫入 Supabase）
 
@@ -160,7 +169,7 @@ freshness gate 會每週紅（門檻與桶界線的推導見
     <string>-C</string>
     <string>/absolute/path/to/seo-knowledge-insight</string>
     <string>ai-sov-local</string>
-    <string>PROVIDER=codex</string>
+    <string>PROVIDER=claude-code</string>
     <string>REPEATS=3</string>
     <string>CONCURRENCY=2</string>
   </array>

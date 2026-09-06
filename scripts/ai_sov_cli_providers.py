@@ -221,6 +221,21 @@ def _subprocess_run(args: Sequence[str], *, timeout: int, cwd: Path,
         raise ProviderError(f"CLI 逾時（{timeout}s，未在時限內結束）") from exc
 
 
+def _stderr_tail(stderr: str, limit: int = 300) -> str:
+    """取 stderr 最後 limit 字元，摺疊所有空白（含換行）成單一空白。
+
+    實跑批次撞到的真 bug：一次 ClaudeCodeProvider 的 exit=1 失敗，log 只留下
+    「CLI 以非零碼結束（exit=1）：」，冒號後面看起來完全是空的——根因是原本
+    取 stderr **前** 500 字（`[:500]`），而多行 stderr 印進單行 log 時，換行字元
+    沒被處理，讓人誤以為 stderr 是空的（實際上可能只是被截斷在錯誤訊息之前，
+    或整段內容全部是空白／換行）。改取**尾端**（真正的錯誤原因常在尾端，
+    見 CodexProvider 對同一問題的既有處理，設計決定 7）並摺疊空白成一行，
+    摺疊後仍為空字串時由呼叫端補上明確的『空』標示，不留下容易誤讀的空白。
+    """
+    collapsed = " ".join(stderr.split())
+    return collapsed[-limit:] if collapsed else ""
+
+
 def _run_cli(args: Sequence[str], *, timeout: int, cwd: Path,
              unset_env: Sequence[str] = ()) -> str:
     """執行本機 CLI，回傳 stdout；非零 exit 直接拋 ProviderError（用 stderr 片段）。
@@ -230,8 +245,9 @@ def _run_cli(args: Sequence[str], *, timeout: int, cwd: Path,
     """
     result = _subprocess_run(args, timeout=timeout, cwd=cwd, unset_env=unset_env)
     if result.returncode != 0:
+        detail = _stderr_tail(result.stderr or "") or "(stderr 為空)"
         raise ProviderError(
-            f"CLI 以非零碼結束（exit={result.returncode}）：{(result.stderr or '')[:500]}"
+            f"CLI 以非零碼結束（exit={result.returncode}）：{detail}"
         )
     return result.stdout
 
@@ -529,7 +545,7 @@ class CodexProvider:
                 return parse_codex_output(result.stdout)
 
             display, payload = _codex_failure_detail(result.stdout)
-            last_detail = display or (result.stderr or "")[:500]
+            last_detail = display or _stderr_tail(result.stderr or "") or "(stderr 為空)"
             if _is_fatal_codex_error(payload) or _is_fatal_codex_message(last_detail):
                 raise ProviderFatalError(f"codex 呼叫失敗（不可重試）：{last_detail}")
             if not _is_retryable_codex_error(payload) or attempt == CODEX_MAX_ATTEMPTS - 1:

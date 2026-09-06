@@ -466,8 +466,11 @@ autoresearch-meeting-prep-baseline: ## AutoResearch meeting-prep baseline eval�
 
 # ── AI SoV 本機 provider（S6.2，訂閱額度，不走 OpenAI API 計費）──────
 
-# 可在呼叫時覆寫，例如：make ai-sov-local PROVIDER=claude-code CONCURRENCY=1
-PROVIDER ?= codex
+# 可在呼叫時覆寫，例如：make ai-sov-local PROVIDER=codex CONCURRENCY=1
+# 預設 claude-code：使用者已裁決長期用它跑（2026-09-07）——codex 與 OpenAI API
+# 共用同一份 workspace 餘額，餘額歸零時會判 fatal 立即中止（見
+# docs/ai-sov-local-runner.md「Codex 額度耗盡應立即停止」）。
+PROVIDER ?= claude-code
 REPEATS ?= 3
 CONCURRENCY ?= 2
 

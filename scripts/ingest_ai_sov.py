@@ -96,6 +96,7 @@ import logging
 import os
 import sys
 import threading
+import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
@@ -201,6 +202,30 @@ def summarize(rows: list[dict]) -> dict:
     }
 
 
+def _log_progress(done: int, total: int, prompt_id: str, repeat_idx: int, *,
+                   elapsed: float, answer: ProviderAnswer | None, target_domain: str) -> None:
+    """每題每次 repeat 完成（成功或失敗）印一行 INFO 進度。
+
+    team-lead 2026-09-07 回報：本機 CLI provider 一次批次跑一小時起跳，
+    跑動中只有 WARNING 與最後總結，一小時看不到走到哪。concurrent 模式
+    （_run_panel_concurrent）在主 thread 的 as_completed 迴圈裡呼叫本函式，
+    完成序號 done 因此天然序列遞增，不需要額外的鎖。
+
+    grounded / cited / tokens 只在有 answer（成功）時才印——失敗沒有
+    answer，硬湊這幾個欄位只會是誤導性的假資料，改印 status=failed。
+    """
+    parts = [f"進度 {done}/{total}", f"prompt={prompt_id}", f"repeat={repeat_idx}"]
+    if answer is not None:
+        rank = first_target_rank(answer.citations, target_domain)
+        parts.append(f"grounded={'yes' if answer.is_grounded else 'no'}")
+        parts.append(f"cited={'yes' if rank is not None else 'no'}")
+        parts.append(f"tokens={answer.input_tokens}/{answer.output_tokens}")
+    else:
+        parts.append("status=failed")
+    parts.append(f"耗時={elapsed:.1f}s")
+    logger.info("  " + " ".join(parts))
+
+
 # ══════════════════════════════════════════════════════════════════════
 # 執行 panel
 # ══════════════════════════════════════════════════════════════════════
@@ -236,23 +261,38 @@ def _run_panel_sequential(provider: Provider, prompts: tuple[PanelPrompt, ...], 
                           ) -> tuple[list[dict], list[str]]:
     rows: list[dict] = []
     failures: list[str] = []
+    total = len(prompts) * repeats
+    done = 0
     for prompt in prompts:
         for repeat_idx in range(repeats):
+            started = time.perf_counter()
             try:
                 answer = provider.answer(prompt.prompt)
             except ProviderFatalError as exc:
+                done += 1
                 failures.append(f"{prompt.id}#{repeat_idx}: {exc}")
                 logger.error("  %s repeat=%d 遇到不可重試錯誤，整條 run 立即中止（設計決定 4b）：%s",
                             prompt.id, repeat_idx, exc)
+                _log_progress(done, total, prompt.id, repeat_idx,
+                              elapsed=time.perf_counter() - started, answer=None,
+                              target_domain=target_domain)
                 return rows, failures
             except ProviderError as exc:
+                done += 1
                 failures.append(f"{prompt.id}#{repeat_idx}: {exc}")
                 logger.error("  %s repeat=%d 失敗：%s", prompt.id, repeat_idx, exc)
+                _log_progress(done, total, prompt.id, repeat_idx,
+                              elapsed=time.perf_counter() - started, answer=None,
+                              target_domain=target_domain)
                 continue
+            done += 1
             rows.append(build_row(
                 prompt, repeat_idx, answer, provider=provider.name, model=provider.model,
                 week_start=week_start, run_at=run_at, target_domain=target_domain,
             ))
+            _log_progress(done, total, prompt.id, repeat_idx,
+                          elapsed=time.perf_counter() - started, answer=answer,
+                          target_domain=target_domain)
     return rows, failures
 
 
@@ -262,38 +302,49 @@ def _run_panel_concurrent(provider: Provider, prompts: tuple[PanelPrompt, ...], 
     tasks = [(prompt, repeat_idx) for prompt in prompts for repeat_idx in range(repeats)]
     fatal_seen = threading.Event()
 
-    def call(prompt: PanelPrompt, repeat_idx: int) -> tuple[str, PanelPrompt, int, object]:
+    def call(prompt: PanelPrompt, repeat_idx: int) -> tuple[str, PanelPrompt, int, object, float]:
         if fatal_seen.is_set():
-            return "skipped", prompt, repeat_idx, None
+            return "skipped", prompt, repeat_idx, None, 0.0
+        started = time.perf_counter()
         try:
-            return "ok", prompt, repeat_idx, provider.answer(prompt.prompt)
+            answer = provider.answer(prompt.prompt)
+            return "ok", prompt, repeat_idx, answer, time.perf_counter() - started
         except ProviderFatalError as exc:
             fatal_seen.set()
-            return "fatal", prompt, repeat_idx, exc
+            return "fatal", prompt, repeat_idx, exc, time.perf_counter() - started
         except ProviderError as exc:
-            return "error", prompt, repeat_idx, exc
+            return "error", prompt, repeat_idx, exc, time.perf_counter() - started
 
     rows: list[dict] = []
     failures: list[str] = []
+    total = len(tasks)
+    done = 0
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures = [executor.submit(call, prompt, repeat_idx) for prompt, repeat_idx in tasks]
         for future in as_completed(futures):
-            kind, prompt, repeat_idx, payload = future.result()
+            kind, prompt, repeat_idx, payload, elapsed = future.result()
             if kind == "skipped":
                 continue
+            done += 1
             if kind == "fatal":
                 failures.append(f"{prompt.id}#{repeat_idx}: {payload}")
                 logger.error("  %s repeat=%d 遇到不可重試錯誤，不再送出新呼叫（設計決定 4b）：%s",
                             prompt.id, repeat_idx, payload)
+                _log_progress(done, total, prompt.id, repeat_idx, elapsed=elapsed, answer=None,
+                              target_domain=target_domain)
                 continue
             if kind == "error":
                 failures.append(f"{prompt.id}#{repeat_idx}: {payload}")
                 logger.error("  %s repeat=%d 失敗：%s", prompt.id, repeat_idx, payload)
+                _log_progress(done, total, prompt.id, repeat_idx, elapsed=elapsed, answer=None,
+                              target_domain=target_domain)
                 continue
             rows.append(build_row(
                 prompt, repeat_idx, payload, provider=provider.name, model=provider.model,
                 week_start=week_start, run_at=run_at, target_domain=target_domain,
             ))
+            _log_progress(done, total, prompt.id, repeat_idx, elapsed=elapsed, answer=payload,
+                          target_domain=target_domain)
     return rows, failures
 
 
