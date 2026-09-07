@@ -167,6 +167,20 @@ Access 的自製 launcher（`~/.claude/automation/kb-launcher`，行為是
 收進腳本本體，PROVIDER/REPEATS/CONCURRENCY 改用環境變數傳入（各自有預設值，
 見腳本內的 `${VAR:-預設}`）。
 
+⚠ **`StartCalendarInterval` 登記週一 5 個時段（09/11/14/17/20 點），不是
+只信一次。** 筆電有可能在排定時段剛好闔上睡著，單一時段的排程因此不可靠——
+照 `claude-reports` 既有的多時段重試做法，錯過一個時段還有下一個接手。
+`scripts/ai_sov_launchd_wrapper.sh` 因此加了「同一週只跑一次」的守門：
+成功寫入後在 `output/ai-sov/` 留一個 `.done-<week_start>` 標記檔（不進版控，
+`output/` 整個目錄已在 `.gitignore`），**第一個成功跑完的時段贏**，後面的
+時段一看到標記就印一行 `SKIP week_start=... 已跑過` 到 `launchd.out.log`
+然後直接結束，不會重複呼叫 provider、也不會把本週的 Supabase 資料 upsert
+第二次。想略過這個保護、強制重新跑一次本週（例如上一次的資料有問題想
+重測），設 `FORCE=1`：這會忽略標記，照樣呼叫 provider 並 upsert 覆寫本週
+已有的資料——**代價是本週原本那份資料會被蓋掉**，不是疊加，重跑前想清楚
+要不要保留舊的一份。`WEEK_START_OVERRIDE=YYYY-MM-DD` 是給測試用的，直接
+指定週標籤而不用真的等到週一。
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -193,14 +207,50 @@ Access 的自製 launcher（`~/.claude/automation/kb-launcher`，行為是
   </dict>
 
   <key>StartCalendarInterval</key>
-  <dict>
-    <key>Weekday</key>
-    <integer>1</integer>  <!-- 1 = 週一 -->
-    <key>Hour</key>
-    <integer>9</integer>  <!-- 台北 09:00 = UTC 週一 01:00，在 week_start 的桶界線之後 -->
-    <key>Minute</key>
-    <integer>0</integer>
-  </dict>
+  <array>
+    <!-- 週一登記 5 個時段（09/11/14/17/20 點），第一個成功跑完的贏，其餘
+         被 wrapper 的 .done-<week_start> 標記擋下印 SKIP，不是各自重跑一次。 -->
+    <dict>
+      <key>Weekday</key>
+      <integer>1</integer>  <!-- 1 = 週一 -->
+      <key>Hour</key>
+      <integer>9</integer>  <!-- 台北 09:00 = UTC 週一 01:00，在 week_start 的桶界線之後 -->
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key>
+      <integer>1</integer>
+      <key>Hour</key>
+      <integer>11</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key>
+      <integer>1</integer>
+      <key>Hour</key>
+      <integer>14</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key>
+      <integer>1</integer>
+      <key>Hour</key>
+      <integer>17</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key>
+      <integer>1</integer>
+      <key>Hour</key>
+      <integer>20</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+  </array>
 
   <key>StandardOutPath</key>
   <string>/Users/shiun/Library/Logs/cc.vocus.ai-sov-local/launchd.out.log</string>
@@ -242,11 +292,15 @@ launchctl kickstart -k gui/$(id -u)/cc.vocus.ai-sov-local
 ```
 
 觸發後看兩個地方：`~/Library/Logs/cc.vocus.ai-sov-local/launchd.{out,err}.log`
-只用來確認行程真的啟動、有沒有在最外層就整條掛掉；實際的批次進度（每題每次
-repeat 的「進度 N/M」行）在 repo 裡的 `output/ai-sov/<今天日期>.log`
-（wrapper 最終呼叫的 `make ai-sov-local` 會 `tee -a` 到這裡，這個路徑在
-`~/Documents` 底下但透過 kb-launcher 的權限鏈可以正常寫入，不受上面兩個
-TCC 坑影響）。
+用來確認行程真的啟動、有沒有在最外層就整條掛掉——wrapper 自己印的
+`START`／`SKIP`／`DONE` 這三行狀態也在這裡（不是在 `output/ai-sov/` 底下的
+批次 log，這三行是 wrapper 本體的 echo，走的是行程自己的 stdout）；實際的
+批次進度（每題每次 repeat 的「進度 N/M」行）在 repo 裡的
+`output/ai-sov/<今天日期>.log`（wrapper 最終呼叫的 `make ai-sov-local` 會
+`tee -a` 到這裡，這個路徑在 `~/Documents` 底下但透過 kb-launcher 的權限鏈
+可以正常寫入，不受上面兩個 TCC 坑影響）。一週跑到第二個以後的時段，
+`launchd.out.log` 會看到 `SKIP week_start=... 已跑過`，`output/ai-sov/`
+底下不會多出新的批次 log——這是預期行為，不是漏跑。
 
 ### 排錯
 
@@ -261,5 +315,9 @@ TCC 坑影響）。
   確認第一項是 `~/.claude/automation/kb-launcher` 而不是系統既有的
   shell／make 執行檔本身。
 
-機器睡眠/關機時 launchd 排程不會補跑錯過的那次——這正是上面「資料無法
-回填」那條限制在排程層面的體現，不是 launchd 設定的問題。
+**筆電睡眠**（閤蓋、不是關機）時若剛好錯過某個排定時段，launchd 會在
+**喚醒後**盡快補跑那次觸發——這正是週一排 5 個時段、而不是只信一次的前提：
+即使補跑的時間點跟原本排定的時段對不上，只要同一週還沒被 `.done-<week_start>`
+標記擋下，補跑仍然是一次有效的嘗試。**整台機器真的關機**（不是睡眠）
+期間錯過的時段則不會補跑，這才是上面「資料無法回填」那條限制在排程層面
+的體現——5 個時段能扛掉零星的睡眠，扛不掉整週都沒開機。
