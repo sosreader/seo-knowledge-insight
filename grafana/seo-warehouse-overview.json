@@ -348,7 +348,7 @@
           "type": "grafana-postgresql-datasource",
           "uid": "seo-warehouse"
         },
-        "description": "在這條管線之前沒有人看過這個數字。applebot 有近半數請求失敗（8,499 次 404，其中 6,482 次打在 /tags）；exasearchbot 拿到的是 406 Not Acceptable——那不是找不到，是我們主動拒絕它。錯誤率高不一定要修（爬蟲本來就會試舊網址），但「不知道」與「知道且決定不修」是兩回事。",
+        "description": "錯誤率 = 狀態碼 >= 400 的請求占比，**跟隨上方時間範圍**。2026-09-07 修正：原本整表累計、不吃時間篩選，所以已經修好的問題在這裡看起來還在（406 的修復就是這樣被蓋掉的）。\n\n拆出 404 / 406 / 5xx 才分得出性質：404 多半是爬蟲試舊網址，未必要修；406 是我們主動拒絕它（markdown content negotiation），可修；5xx 是我們自己壞掉，一定要修。錯誤率高不一定要修，但「不知道」與「知道且決定不修」是兩回事。\n\n零錯誤的爬蟲原本會算出 NULL 並被 ORDER BY ... DESC 排到第一列（Postgres 預設 NULLS FIRST），已用 coalesce + NULLS LAST 修掉。",
         "fieldConfig": {
           "defaults": {},
           "overrides": [
@@ -406,7 +406,7 @@
             "editorMode": "code",
             "format": "table",
             "rawQuery": true,
-            "rawSql": "SELECT ua_name AS \"爬蟲\",\n       sum(request_count)::bigint AS \"請求數\",\n       round((100.0 * sum(request_count) FILTER (WHERE status_code >= 400)\n              / NULLIF(sum(request_count), 0))::numeric, 1) AS \"錯誤率 %\"\nFROM crawl_daily\nWHERE ua_group <> 'human'\nGROUP BY 1 HAVING sum(request_count) > 100\nORDER BY 3 DESC",
+            "rawSql": "WITH ts AS (\n  SELECT (date::timestamp + (hour || ' hours')::interval) AT TIME ZONE 'UTC' AS t,\n         ua_name, status_code, request_count\n  FROM crawl_daily\n  WHERE ua_group <> 'human'\n)\nSELECT ua_name AS \"爬蟲\",\n       sum(request_count)::bigint AS \"請求數\",\n       round((100.0 * coalesce(sum(request_count) FILTER (WHERE status_code >= 400), 0)\n              / NULLIF(sum(request_count), 0))::numeric, 1) AS \"錯誤率 %\",\n       coalesce(sum(request_count) FILTER (WHERE status_code = 404), 0)::bigint AS \"404\",\n       coalesce(sum(request_count) FILTER (WHERE status_code = 406), 0)::bigint AS \"406\",\n       coalesce(sum(request_count) FILTER (WHERE status_code >= 500), 0)::bigint AS \"5xx\"\nFROM ts\nWHERE $__timeFilter(t)\nGROUP BY 1\nHAVING sum(request_count) > 100\nORDER BY 3 DESC NULLS LAST",
             "refId": "A"
           }
         ],
@@ -418,7 +418,7 @@
           "type": "grafana-postgresql-datasource",
           "uid": "seo-warehouse"
         },
-        "description": "/tags 是目前最大的一塊。判斷要不要處理之前，注意兩件已知的刻意決策：三個 /api/ 前綴開放檢索是刻意的、不得提議收攏；某次 PR 造成的三個 app-webview 路徑 404 也是刻意的，屬已知非 regression。",
+        "description": "**跟隨上方時間範圍**（2026-09-07 修正，原為整表累計，與左邊那張表口徑不一致）。\n\n判斷要不要處理之前，注意兩件已知的刻意決策：三個 /api/ 前綴開放檢索是刻意的、不得提議收攏；某次 PR 造成的三個 app-webview 路徑 404 也是刻意的，屬已知非 regression。",
         "fieldConfig": {
           "defaults": {},
           "overrides": []
@@ -440,12 +440,134 @@
             "editorMode": "code",
             "format": "table",
             "rawQuery": true,
-            "rawSql": "SELECT path_prefix AS \"路徑\", status_code AS \"狀態碼\",\n       sum(request_count)::bigint AS \"次數\"\nFROM crawl_daily\nWHERE ua_group <> 'human' AND status_code >= 400\nGROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15",
+            "rawSql": "WITH ts AS (\n  SELECT (date::timestamp + (hour || ' hours')::interval) AT TIME ZONE 'UTC' AS t,\n         path_prefix, status_code, request_count\n  FROM crawl_daily\n  WHERE ua_group <> 'human' AND status_code >= 400\n)\nSELECT path_prefix AS \"路徑\", status_code AS \"狀態碼\",\n       sum(request_count)::bigint AS \"次數\"\nFROM ts\nWHERE $__timeFilter(t)\nGROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15",
             "refId": "A"
           }
         ],
         "title": "爬蟲撞到錯誤的路徑（狀態碼 >= 400）",
         "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "6 小時滾動加權錯誤率（區間內 sum(4xx/5xx) / sum(全部請求)，不是逐小時比率的平均，所以請求量少的小時不會把曲線拉歪）。旁邊那張「各爬蟲的錯誤率」表是全表累計、不吃時間選擇器；這張吃 $__timeFilter，修好東西之後看得出下降。crawl_daily 目前只從 2026-09-01 06:00 UTC 起算。",
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "axisSoftMax": 100,
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 4,
+              "showPoints": "never",
+              "spanNulls": false
+            },
+            "decimals": 1,
+            "min": 0,
+            "unit": "percent"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 42
+        },
+        "id": 15,
+        "options": {
+          "legend": {
+            "calcs": [
+              "mean",
+              "lastNotNull"
+            ],
+            "displayMode": "table",
+            "placement": "right",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "time_series",
+            "rawQuery": true,
+            "rawSql": "WITH ts AS (\n  SELECT (date::timestamp + (hour || ' hours')::interval) AT TIME ZONE 'UTC' AS t,\n         ua_name, status_code, request_count\n  FROM crawl_daily WHERE ua_group <> 'human'\n),\ntop AS (\n  SELECT ua_name FROM ts\n  GROUP BY 1 ORDER BY sum(request_count) FILTER (WHERE status_code >= 400) DESC NULLS LAST\n  LIMIT 10\n),\nhourly AS (\n  SELECT t, ua_name,\n         sum(request_count) AS reqs,\n         coalesce(sum(request_count) FILTER (WHERE status_code >= 400), 0) AS errs\n  FROM ts WHERE ua_name IN (SELECT ua_name FROM top) AND $__timeFilter(t)\n  GROUP BY 1, 2\n)\nSELECT t AS time, ua_name AS metric,\n       round((100.0 * sum(errs) OVER w / NULLIF(sum(reqs) OVER w, 0))::numeric, 1) AS value\nFROM hourly\nWINDOW w AS (PARTITION BY ua_name ORDER BY t RANGE BETWEEN INTERVAL '5 hours' PRECEDING AND CURRENT ROW)\nORDER BY 1",
+            "refId": "A"
+          }
+        ],
+        "title": "各爬蟲錯誤率趨勢（每小時，錯誤量前 10 名）",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "同樣是 6 小時滾動加權比率。PR #8116（legacy 文章 markdown 轉換 + middleware 依 RFC 9110 解析 Accept q 值）於 2026-09-03 約 03:00 UTC 上 prod，這條線在該時點斷崖式下降即為修復生效的證據。claude-user 每小時平均只有 4 個請求，單獨拉線沒有統計意義，已併入「全部爬蟲合計」。",
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "axisSoftMax": null,
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 4,
+              "showPoints": "never",
+              "spanNulls": false
+            },
+            "decimals": 2,
+            "min": 0,
+            "unit": "percent"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 42
+        },
+        "id": 16,
+        "options": {
+          "legend": {
+            "calcs": [
+              "mean",
+              "lastNotNull"
+            ],
+            "displayMode": "table",
+            "placement": "right",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "time_series",
+            "rawQuery": true,
+            "rawSql": "WITH ts AS (\n  SELECT (date::timestamp + (hour || ' hours')::interval) AT TIME ZONE 'UTC' AS t,\n         ua_name, status_code, request_count\n  FROM crawl_daily WHERE ua_group <> 'human'\n),\nhourly AS (\n  SELECT t,\n         CASE WHEN ua_name IN ('exasearchbot', 'other-bot') THEN ua_name\n              ELSE '其他爬蟲' END AS metric,\n         sum(request_count) AS reqs,\n         coalesce(sum(request_count) FILTER (WHERE status_code = 406), 0) AS errs\n  FROM ts WHERE $__timeFilter(t)\n  GROUP BY 1, 2\n  UNION ALL\n  SELECT t, '全部爬蟲合計' AS metric,\n         sum(request_count) AS reqs,\n         coalesce(sum(request_count) FILTER (WHERE status_code = 406), 0) AS errs\n  FROM ts WHERE $__timeFilter(t)\n  GROUP BY 1\n)\nSELECT t AS time, metric,\n       round((100.0 * sum(errs) OVER w / NULLIF(sum(reqs) OVER w, 0))::numeric, 2) AS value\nFROM hourly\nWINDOW w AS (PARTITION BY metric ORDER BY t RANGE BETWEEN INTERVAL '5 hours' PRECEDING AND CURRENT ROW)\nORDER BY 1",
+            "refId": "A"
+          }
+        ],
+        "title": "markdown 協商 406 佔比趨勢（每小時）",
+        "type": "timeseries"
       },
       {
         "datasource": {
@@ -474,7 +596,7 @@
           "h": 9,
           "w": 12,
           "x": 0,
-          "y": 42
+          "y": 51
         },
         "id": 10,
         "options": {},
@@ -521,7 +643,7 @@
           "h": 9,
           "w": 12,
           "x": 12,
-          "y": 42
+          "y": 51
         },
         "id": 11,
         "options": {},
@@ -568,7 +690,7 @@
           "h": 9,
           "w": 12,
           "x": 0,
-          "y": 51
+          "y": 60
         },
         "id": 12,
         "options": {},
@@ -602,7 +724,7 @@
           "h": 9,
           "w": 12,
           "x": 12,
-          "y": 51
+          "y": 60
         },
         "id": 13,
         "options": {},
@@ -636,7 +758,7 @@
           "h": 9,
           "w": 24,
           "x": 0,
-          "y": 60
+          "y": 69
         },
         "id": 14,
         "options": {},
@@ -662,9 +784,9 @@
           "h": 1,
           "w": 24,
           "x": 0,
-          "y": 69
+          "y": 78
         },
-        "id": 15,
+        "id": 17,
         "panels": [],
         "title": "AI 答案能見度（AI SoV，週）",
         "type": "row"
@@ -674,12 +796,12 @@
           "type": "grafana-postgresql-datasource",
           "uid": "seo-warehouse"
         },
-        "description": "sov_pooled：把所有 grounded 回應倒進同一個池子算比例，依 provider/model 拆成多條線。頭條數字另見 migration 024 註解（sov_macro 才是各主題等權重的官方判讀口徑，此圖沿用 team-lead 指定的 sov_pooled 做每週趨勢）。",
+        "description": "sov_pooled：把所有 grounded 回應倒進同一個池子算比例，依 provider/model 拆成多條線。sov_macro 才是各主題等權重的官方判讀口徑（見 migration 024 註解），此圖用 sov_pooled 看每週趨勢。",
         "fieldConfig": {
           "defaults": {
-            "unit": "percent",
+            "max": 100,
             "min": 0,
-            "max": 100
+            "unit": "percent"
           },
           "overrides": []
         },
@@ -687,9 +809,9 @@
           "h": 9,
           "w": 14,
           "x": 0,
-          "y": 70
+          "y": 79
         },
-        "id": 16,
+        "id": 18,
         "options": {
           "legend": {
             "calcs": [
@@ -726,7 +848,7 @@
           "type": "grafana-postgresql-datasource",
           "uid": "seo-warehouse"
         },
-        "description": "跨所有 provider/model 彙總最新一週：SoV 與未搜尋比例用 sum(cited_responses)/sum(grounded_responses)（分別）重新聚合，不是直接挑某一個 provider 的 sov_pooled——本機同時跑 codex／claude-code 等多個 provider 時，同一週會有多列，直接挑一列會漏掉其他 provider 的樣本。回應數＝所有 provider 當週總回應數。",
+        "description": "跨所有 provider/model 彙總最新一週：SoV 與未搜尋比例用 sum(cited_responses)/sum(grounded_responses)（分別）重新聚合，不是直接挑某一個 provider 的 sov_pooled——同一週有多個 provider 時直接挑一列會漏掉其他樣本。回應數＝所有 provider 當週總回應數。",
         "fieldConfig": {
           "defaults": {
             "unit": "short"
@@ -762,22 +884,22 @@
           "h": 9,
           "w": 10,
           "x": 14,
-          "y": 70
+          "y": 79
         },
-        "id": 17,
+        "id": 19,
         "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
           "reduceOptions": {
-            "values": false,
             "calcs": [
               "lastNotNull"
             ],
-            "fields": ""
+            "fields": "",
+            "values": false
           },
-          "orientation": "auto",
-          "textMode": "auto",
-          "colorMode": "value",
-          "graphMode": "none",
-          "justifyMode": "auto"
+          "textMode": "auto"
         },
         "targets": [
           {
@@ -800,7 +922,7 @@
           "type": "grafana-postgresql-datasource",
           "uid": "seo-warehouse"
         },
-        "description": "引用率 % 直接沿用 ai_sov_weekly_prompt.cite_rate（分母是 grounded 回應數，不是回答次數），該題該週零 grounded 回應時為 NULL，不是 0——不要當成「有機會但沒被引用」。同一題若本機同時跑多個 provider，會依「模型」欄拆成多列，非重複資料。",
+        "description": "引用率 % 直接沿用 ai_sov_weekly_prompt.cite_rate（分母是 grounded 回應數，不是回答次數），該題該週零 grounded 回應時為 NULL，不是 0——不要當成「有機會但沒被引用」。同一題若同時跑多個 provider，會依「模型」欄拆成多列，非重複資料。",
         "fieldConfig": {
           "defaults": {},
           "overrides": []
@@ -809,9 +931,9 @@
           "h": 9,
           "w": 24,
           "x": 0,
-          "y": 79
+          "y": 88
         },
-        "id": 18,
+        "id": 20,
         "options": {},
         "targets": [
           {
@@ -845,39 +967,43 @@
     "timezone": "browser",
     "title": "SEO Warehouse — 倉儲總覽",
     "uid": "seo-warehouse-overview",
-    "version": 5
+    "version": 9
   },
   "meta": {
+    "type": "db",
+    "canSave": true,
+    "canEdit": true,
+    "canAdmin": true,
+    "canStar": true,
+    "canDelete": true,
+    "slug": "seo-warehouse-e28094-e58089-e584b2-e7b8bd-e8a6bd",
+    "url": "/d/seo-warehouse-overview/seo-warehouse-e28094-e58089-e584b2-e7b8bd-e8a6bd",
+    "expires": "0001-01-01T00:00:00Z",
+    "created": "2026-09-02T09:44:45Z",
+    "updated": "2026-09-08T04:42:25Z",
+    "updatedBy": "claude-mcp-readonly",
+    "createdBy": "claude-mcp-readonly",
+    "version": 9,
+    "hasAcl": false,
+    "isFolder": false,
+    "apiVersion": "v0alpha1",
+    "folderId": 75,
+    "folderUid": "frontend-folder",
+    "folderTitle": "Frontend",
+    "folderUrl": "/dashboards/f/frontend-folder/frontend",
+    "provisioned": false,
+    "provisionedExternalId": "",
     "annotationsPermissions": {
       "dashboard": {
         "canAdd": true,
-        "canDelete": true,
-        "canEdit": true
+        "canEdit": true,
+        "canDelete": true
       },
       "organization": {
         "canAdd": true,
-        "canDelete": true,
-        "canEdit": true
+        "canEdit": true,
+        "canDelete": true
       }
-    },
-    "apiVersion": "v0alpha1",
-    "canAdmin": true,
-    "canDelete": true,
-    "canEdit": true,
-    "canSave": true,
-    "canStar": true,
-    "created": "2026-09-02T09:44:45.000Z",
-    "createdBy": "claude-mcp-readonly",
-    "expires": "0001-01-01T00:00:00.000Z",
-    "folderId": 75,
-    "folderTitle": "Frontend",
-    "folderUid": "frontend-folder",
-    "folderUrl": "/dashboards/f/frontend-folder/frontend",
-    "slug": "seo-warehouse-e28094-e58089-e584b2-e7b8bd-e8a6bd",
-    "type": "db",
-    "updated": "2026-09-04T13:08:12.000Z",
-    "updatedBy": "claude-mcp-readonly",
-    "url": "/d/seo-warehouse-overview/seo-warehouse-e28094-e58089-e584b2-e7b8bd-e8a6bd",
-    "version": 5
+    }
   }
 }
