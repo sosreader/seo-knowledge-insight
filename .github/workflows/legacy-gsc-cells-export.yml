@@ -1,0 +1,106 @@
+name: 舊爬蟲 20 格等價匯出 (Legacy GSC Cells Export)
+
+# 用 Search Analytics API 重現舊爬蟲 seo-automation 讀 GSC 介面卡片的 20 個
+# 總點擊次數（G20~G34、G38~G42），供外部顧問拿與舊爬蟲同口徑的資料，也用來驗證
+# API 抽樣值與介面卡片值是否等價。細節見 docs/legacy-gsc-cells-export.md 與
+# scripts/export_legacy_gsc_cells.py 模組 docstring。
+#
+# 只手動觸發，不排程——這不是常駐管線，是按需的比對匯出。只讀 API，不寫
+# Supabase，因此不需要跟其他 gsc-*.yml 共用 concurrency group。
+#
+# 【config.mjs 讀不到本體，改讀 repo 內的快照】
+# seo-automation 是 private repo，本 repo 的 GITHUB_TOKEN 只對自己這個 repo 有效，
+# 沒有跨 repo checkout 權限，repo secrets 裡也沒有另外設定跨 repo 用的 PAT。改讀
+# data/legacy-cells/search-performance-config.snapshot.mjs——那份快照的來源與
+# 複製日期見檔案開頭註解。seo-automation 那邊的 SEARCH_PERFORMANCE／CELL 之後改了
+# （新增/刪除 pattern、換 cell 起始格號），要手動重新複製快照，這個 workflow
+# 不會自動偵測兩邊脫節。
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: '視窗起點 YYYY-MM-DD（留空則用 --days 7 --end-offset 3 推算；需與 end 同時給或都留空）'
+        required: false
+        default: ''
+      end:
+        description: '視窗終點 YYYY-MM-DD（留空則用 --days 7 --end-offset 3 推算；需與 start 同時給或都留空）'
+        required: false
+        default: ''
+      equals_control:
+        description: '是否對「保養」額外打一次 operator=equals 當關鍵字口徑對照組'
+        type: boolean
+        required: false
+        default: true
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        # google-auth 負責 service account 的 RS256 JWT 簽章與 token 交換；
+        # 它的 transport.requests 需要 requests。API 呼叫本身仍走 stdlib urllib。
+        run: pip install python-dotenv google-auth requests
+
+      - name: Export legacy 20 cells
+        id: export
+        env:
+          GSC_READONLY_KEY: ${{ secrets.GSC_READONLY_KEY }}
+          # workflow_dispatch 的 input 是使用者輸入，經 env 傳遞而非直接內插進 run:，
+          # 理由同 gsc-search-analytics.yml（shell 注入面）。腳本自己也會再驗一次
+          # 視窗合法性（--start/--end 必須成對）。
+          WINDOW_START: ${{ github.event.inputs.start }}
+          WINDOW_END: ${{ github.event.inputs.end }}
+          EQUALS_CONTROL: ${{ github.event.inputs.equals_control }}
+        run: |
+          set -euo pipefail
+          ARGS=(--execute --config data/legacy-cells/search-performance-config.snapshot.mjs --out-dir output/legacy-cells)
+          if [[ -n "$WINDOW_START" || -n "$WINDOW_END" ]]; then
+            ARGS+=(--start "$WINDOW_START" --end "$WINDOW_END")
+          fi
+          if [[ "$EQUALS_CONTROL" == "true" ]]; then
+            ARGS+=(--equals-control 保養)
+          fi
+          python scripts/export_legacy_gsc_cells.py "${ARGS[@]}"
+          OUT_JSON=$(ls output/legacy-cells/*.json)
+          END_DATE=$(basename "$OUT_JSON" .json)
+          echo "end_date=$END_DATE" >> "$GITHUB_OUTPUT"
+
+      - name: Write step summary
+        env:
+          END_DATE: ${{ steps.export.outputs.end_date }}
+        run: |
+          set -euo pipefail
+          FILE="output/legacy-cells/${END_DATE}.json"
+          {
+            jq -r '"# 舊爬蟲 20 格等價匯出 — " + .start + " ~ " + .end' "$FILE"
+            echo ""
+            echo "| cell | label | search_type | clicks |"
+            echo "|---|---|---|---|"
+            jq -r '.cells[] | "| " + .cell + " | " + .label + " | " + .search_type + " | " + (.clicks|tostring) + " |"' "$FILE"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$(jq '.controls | length' "$FILE")" -gt 0 ]]; then
+            {
+              echo ""
+              echo "## Equals 對照組"
+              echo ""
+              echo "| cell | label | operator | clicks |"
+              echo "|---|---|---|---|"
+              jq -r '.controls[] | "| " + .cell + " | " + .label + " | " + .operator + " | " + (.clicks|tostring) + " |"' "$FILE"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: legacy-cells-${{ steps.export.outputs.end_date }}
+          path: |
+            output/legacy-cells/${{ steps.export.outputs.end_date }}.json
+            output/legacy-cells/${{ steps.export.outputs.end_date }}.csv
+          retention-days: 30
