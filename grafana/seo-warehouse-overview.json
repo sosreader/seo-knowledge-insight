@@ -655,6 +655,179 @@
         ],
         "title": "Discover 曝光前 20 頁面（區間內）",
         "type": "table"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 69
+        },
+        "id": 15,
+        "panels": [],
+        "title": "AI 答案能見度（AI SoV，週）",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "sov_pooled：把所有 grounded 回應倒進同一個池子算比例，依 provider/model 拆成多條線。頭條數字另見 migration 024 註解（sov_macro 才是各主題等權重的官方判讀口徑，此圖沿用 team-lead 指定的 sov_pooled 做每週趨勢）。",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 14,
+          "x": 0,
+          "y": 70
+        },
+        "id": 16,
+        "options": {
+          "legend": {
+            "calcs": [
+              "mean",
+              "max"
+            ],
+            "displayMode": "table",
+            "placement": "right",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "time_series",
+            "rawQuery": true,
+            "rawSql": "SELECT week_start::timestamp AS time,\n       provider || '/' || model AS metric,\n       round((100*sov_pooled)::numeric, 1) AS value\nFROM ai_sov_weekly\nWHERE $__timeFilter(week_start::timestamp)\nORDER BY 1",
+            "refId": "A"
+          }
+        ],
+        "title": "vocus 被 AI 回答引用的比例（每週）",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "跨所有 provider/model 彙總最新一週：SoV 與未搜尋比例用 sum(cited_responses)/sum(grounded_responses)（分別）重新聚合，不是直接挑某一個 provider 的 sov_pooled——本機同時跑 codex／claude-code 等多個 provider 時，同一週會有多列，直接挑一列會漏掉其他 provider 的樣本。回應數＝所有 provider 當週總回應數。",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "本週 SoV %"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "percent"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "未搜尋比例 %"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "percent"
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 10,
+          "x": 14,
+          "y": 70
+        },
+        "id": 17,
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": ""
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto"
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT\n  round((100.0 * sum(cited_responses) / NULLIF(sum(grounded_responses), 0))::numeric, 1) AS \"本週 SoV %\",\n  sum(responses)::bigint AS \"回應數\",\n  round((100.0 * (1 - sum(grounded_responses)::numeric / NULLIF(sum(responses), 0)))::numeric, 1) AS \"未搜尋比例 %\"\nFROM ai_sov_weekly\nWHERE week_start = (SELECT max(week_start) FROM ai_sov_weekly)",
+            "refId": "A"
+          }
+        ],
+        "title": "本週 SoV／回應數／未搜尋比例",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "seo-warehouse"
+        },
+        "description": "引用率 % 直接沿用 ai_sov_weekly_prompt.cite_rate（分母是 grounded 回應數，不是回答次數），該題該週零 grounded 回應時為 NULL，不是 0——不要當成「有機會但沒被引用」。同一題若本機同時跑多個 provider，會依「模型」欄拆成多列，非重複資料。",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 24,
+          "x": 0,
+          "y": 79
+        },
+        "id": 18,
+        "options": {},
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "seo-warehouse"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT\n  prompt_id AS \"題目 ID\",\n  prompt_theme AS \"主題\",\n  provider || '/' || model AS \"模型\",\n  responses AS \"回答次數\",\n  cited_responses AS \"引用次數\",\n  round((100 * cite_rate)::numeric, 1) AS \"引用率 %\"\nFROM ai_sov_weekly_prompt\nWHERE week_start = (SELECT max(week_start) FROM ai_sov_weekly)\nORDER BY \"主題\", \"題目 ID\", \"模型\"",
+            "refId": "A"
+          }
+        ],
+        "title": "各主題／各題被引用情況（最新一週）",
+        "type": "table"
       }
     ],
     "refresh": "15m",
