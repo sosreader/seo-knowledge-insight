@@ -4,7 +4,9 @@ name: CWV Hourly Ingestion
 #
 # 為什麼不能漏跑：來源 Loki 的 retention_period 只有 168h（7 天）。這個作業安靜停擺
 # 超過 7 天，那段 CWV 序列就永久遺失且事後無法回填——compactor 已經把來源刪掉了。
-# 所以下面有兩個 job：ingest 負責寫，freshness 負責在 ingest 完全沒被觸發時叫出來。
+# 所以 ingest job 尾端接了一組資料品質 gate step（2026-09-10 之前是獨立的 freshness
+# job，為了消掉逐 job 計費的整分鐘進位稅而併入，語意逐條對照見該段註解）；
+# 「排程整個沒被觸發」這一層由獨立排程的 data-quality-watchdog.yml 負責。
 
 on:
   schedule:
@@ -55,38 +57,52 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/ingest_cwv_hourly.py --verify
 
-  # 資料新鮮度告警。
-  #
-  # S3.5：統一資料品質 gate（scripts/data_quality_gate.py），涵蓋新鮮度／空段／
-  # 靜默降級三類，取代原本只做新鮮度的 ingest_cwv_hourly.py --check-freshness。
-  # 條件刻意是「cwv_hourly（source=rum）最近一筆資料超過門檻」，不是「ingest job
-  # 有沒有失敗」——排程根本沒被觸發時（cron 語法錯、GitHub 因 repo 閒置自動停用
-  # schedule、有人手動關掉忘了開回來）不會產生任何失敗事件，失敗型告警在那種情況
-  # 下是靜音的。只有資料本身的缺席能證明作業沒在跑。
-  #
-  # needs: [ingest] + if: always()——2026-09-03 修正，理由與細節見
-  # cwv-crux-history.yml 同一段註解：完全不設 needs 會讓 freshness 與 ingest
-  # 平行起跑，可能讀到 ingest 還沒寫完的資料庫（在 CrUX 那條週頻管線上實測
-  # 幾乎每次都中，此處是同一個架構的預防性修正，hourly 週期短、目前尚未
-  # 觀察到實際觸發，但風險同構）。needs 保證順序，if: always() 保證
-  # ingest 失敗時 freshness 仍會跑（不會複製「新鮮度告警住在自己要監控的
-  # 作業裡看不到自己缺席」的病灶）；「workflow 整個沒被觸發」的涵蓋範圍
-  # 由獨立排程的 data-quality-watchdog.yml 負責，needs 管不到那一層也不需要管。
-  freshness:
-    runs-on: ubuntu-latest
-    needs: ingest
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install python-dotenv
+      # ── 資料品質 gate（2026-09-10 由獨立的 freshness job 併入本 job）──────────
+      #
+      # 為什麼併：GitHub Actions 逐 job 計費，每個 job 各自無條件進位到整分鐘。
+      # 實測 2026-09-02..09-08 一週，這條 gate 的 job 中位數只有 8~22 秒卻各收
+      # 整整 1 分鐘——cwv-hourly 一週真實計算 71.6 分鐘、計費 334 分鐘（4.66x）。
+      # 併成同 job 的 step 之後這一分鐘不再重複計。
+      #
+      # 原本兩個 job 的分工逐條對照，確認沒有語意損失：
+      #   needs: ingest        → 同 job 的後續 step，順序天然保證（原本要消掉的
+      #                          「讀到 ingest 還沒寫完的資料庫」競態一樣被消掉）
+      #   job 級 if: always()  → step 級 if: always()，語意相同：ingest 步驟失敗時
+      #                          這幾步照樣跑，不會複製「新鮮度告警住在它要監控的
+      #                          作業裡、看不到自己缺席」的病灶（S2.2）
+      #   事件類型篩選          → 原樣保留在每個 step 的 if 條件裡
+      #   「workflow 整個沒被觸發」→ 本來就不歸這裡管，由獨立排程的
+      #                          data-quality-watchdog.yml 負責，不受影響
+      #
+      # 唯一真正損失的覆蓋：runner 在 ingest 途中整個死掉（OOM／硬取消／基礎設施
+      # 故障）時，獨立 job 仍會被排上、合併後的 step 不會。實測該週 437 個 run 中
+      # 此類事件 0 次，且 data-quality-watchdog 每日一次已涵蓋（最遲 24h 發現，
+      # Loki 168h 保留期下仍有 144h 可用 --backfill-until 補回）。
+      #
+      # regression test 見 tests/test_workflow_job_ordering.py。
+      #
+      # ── 以下為原 freshness job 的註解，原樣保留（提到的 needs／job 級 if 指的是
+      #    併入之前的形狀，理由本身仍然成立）───────────────────────────────────
+      # 資料新鮮度告警。
+      #
+      # S3.5：統一資料品質 gate（scripts/data_quality_gate.py），涵蓋新鮮度／空段／
+      # 靜默降級三類，取代原本只做新鮮度的 ingest_cwv_hourly.py --check-freshness。
+      # 條件刻意是「cwv_hourly（source=rum）最近一筆資料超過門檻」，不是「ingest job
+      # 有沒有失敗」——排程根本沒被觸發時（cron 語法錯、GitHub 因 repo 閒置自動停用
+      # schedule、有人手動關掉忘了開回來）不會產生任何失敗事件，失敗型告警在那種情況
+      # 下是靜音的。只有資料本身的缺席能證明作業沒在跑。
+      #
+      # needs: [ingest] + if: always()——2026-09-03 修正，理由與細節見
+      # cwv-crux-history.yml 同一段註解：完全不設 needs 會讓 freshness 與 ingest
+      # 平行起跑，可能讀到 ingest 還沒寫完的資料庫（在 CrUX 那條週頻管線上實測
+      # 幾乎每次都中，此處是同一個架構的預防性修正，hourly 週期短、目前尚未
+      # 觀察到實際觸發，但風險同構）。needs 保證順序，if: always() 保證
+      # ingest 失敗時 freshness 仍會跑（不會複製「新鮮度告警住在自己要監控的
+      # 作業裡看不到自己缺席」的病灶）；「workflow 整個沒被觸發」的涵蓋範圍
+      # 由獨立排程的 data-quality-watchdog.yml 負責，needs 管不到那一層也不需要管。
 
       - name: Check cwv_hourly_rum quality (freshness / gap / degradation)
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -95,7 +111,7 @@ jobs:
       # 全域檢查（跨管線共用同一張 ingestion_run），刻意獨立成一個 step 且 if: always()——
       # 上一步失敗時這步仍要跑，job 才不會因為單一 pipeline 的問題而漏查殘留 running。
       - name: Check for stale running ingestion_run rows (global)
-        if: always()
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

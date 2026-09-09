@@ -12,8 +12,9 @@ migrate_to_supabase.py — 一次性將 qa_final.json + qa_embeddings.npy 遷移
 
 輸入：
   output/qa_final.json       -- QA metadata
-  output/qa_enriched.json    -- enriched QA（優先使用，有 synonyms/freshness）
-  output/qa_embeddings.npy   -- Float32Array [N x 1536]
+  output/qa_enriched.json    -- 僅合併與 final 內容一致的 enrichment
+    output/qa_embeddings.npy   -- Float32Array [N x 1536]
+  output/qa_embeddings_index.json -- QA ID 對應 embedding 列索引
 """
 
 from __future__ import annotations
@@ -36,6 +37,10 @@ logger = logging.getLogger(__name__)
 
 # Load .env from project root
 ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+from utils.embedding_manifest import validate_manifest
+
 load_dotenv(ROOT_DIR / ".env")
 
 BATCH_SIZE_DEFAULT = 100
@@ -43,17 +48,32 @@ OUTPUT_DIR = ROOT_DIR / "output"
 
 
 def _load_qa_data() -> list[dict[str, Any]]:
-    """Load QA items from enriched JSON (prefer) or final JSON."""
+    """Final 是唯一正文來源，舊 enriched 不得取代本次候選資料。"""
     enriched_path = OUTPUT_DIR / "qa_enriched.json"
     final_path = OUTPUT_DIR / "qa_final.json"
 
-    path = enriched_path if enriched_path.exists() else final_path
+    path = final_path
     logger.info("Loading QA data from %s", path)
 
     with path.open(encoding="utf-8") as f:
         data = json.load(f)
 
-    items = data.get("qa_database", [])
+    if not isinstance(data, dict) or not isinstance(data.get("qa_database"), list):
+        raise ValueError("Invalid QA database schema")
+    items = data["qa_database"]
+    if enriched_path.exists():
+        with enriched_path.open(encoding="utf-8") as f:
+            enriched = json.load(f)
+        candidates = enriched.get("qa_database", []) if isinstance(enriched, dict) else []
+        # 只接受完整一致的版本，避免部分舊資料悄悄混入。
+        if isinstance(candidates, list) and len(candidates) == len(items) and all(
+            isinstance(a, dict) and isinstance(b, dict)
+            and all(a.get(key) == b.get(key) for key in ("stable_id", "id", "question", "answer"))
+            for a, b in zip(items, candidates)
+        ):
+            items = [{**a, "_enrichment": b.get("_enrichment", {})} for a, b in zip(items, candidates)]
+        else:
+            logger.warning("Ignoring enriched data: candidate version does not match final")
     logger.info("Loaded %d QA items", len(items))
     return items
 
@@ -62,12 +82,68 @@ def _load_embeddings() -> np.ndarray | None:
     """Load embeddings from .npy file. Returns shape [N, 1536] or None."""
     npy_path = OUTPUT_DIR / "qa_embeddings.npy"
     if not npy_path.exists():
-        logger.warning("qa_embeddings.npy not found — embeddings will be NULL in Supabase")
+        logger.warning("qa_embeddings.npy missing — preflight will block migration")
         return None
 
     embeddings = np.load(str(npy_path)).astype(np.float32)
     logger.info("Loaded embeddings: shape %s", embeddings.shape)
     return embeddings
+
+
+def _validate_candidate(items: list[dict[str, Any]], embeddings: np.ndarray | None) -> dict[str, int]:
+    """在任何寫入前驗證整份候選資料與向量索引。"""
+    if embeddings is not None and embeddings.ndim > 0 and len(embeddings) != len(items):
+        raise ValueError(f"Count mismatch: {len(items)} items vs {len(embeddings)} embeddings")
+    if not items:
+        raise ValueError("QA candidate must not be empty")
+    if embeddings is None or embeddings.shape != (len(items), 1536) or not np.isfinite(embeddings).all():
+        raise ValueError("Embeddings must be finite with shape (QA count, 1536)")
+    ids = []
+    for qa in items:
+        if not isinstance(qa, dict) or any(
+            not isinstance(qa.get(key), str) or not qa[key].strip()
+            for key in ("stable_id", "question", "answer")
+        ):
+            raise ValueError("QA requires nonempty stable_id, question and answer")
+        if type(qa.get("id")) is not int or not isinstance(qa.get("_enrichment", {}), dict):
+            raise ValueError("Invalid QA sequence or enrichment schema")
+        _validate_metadata(qa)
+        ids.append(qa["stable_id"])
+    if len(set(ids)) != len(ids):
+        raise ValueError("Duplicate QA stable IDs")
+    index_path = OUTPUT_DIR / "qa_embeddings_index.json"
+    if not index_path.exists():
+        raise ValueError("Embedding index is required; regenerate candidate artifacts")
+    with index_path.open(encoding="utf-8") as f:
+        index = json.load(f)
+    if (not isinstance(index, dict) or set(index) != set(ids)
+            or any(type(value) is not int for value in index.values())
+            or set(index.values()) != set(range(len(items)))):
+        raise ValueError("Embedding index must map every QA ID to exactly one vector")
+    validate_manifest(OUTPUT_DIR, items, vectors=embeddings, index=index)
+    return index
+
+
+def _validate_metadata(qa: dict[str, Any]) -> None:
+    """檢查基本 metadata 型態，不宣稱涵蓋所有 production schema constraints。"""
+    string_fields = ("source_title", "source_date", "source_type", "source_collection",
+                     "source_url", "category", "difficulty", "extraction_model", "maturity_relevance")
+    for key in string_fields:
+        if qa.get(key) is not None and not isinstance(qa[key], str):
+            raise ValueError(f"Invalid QA metadata type: {key}")
+    for key in ("evergreen", "is_merged"):
+        if key in qa and type(qa[key]) is not bool:
+            raise ValueError(f"Invalid QA metadata type: {key}")
+    keywords = qa.get("keywords", [])
+    if not isinstance(keywords, list) or any(not isinstance(value, str) for value in keywords):
+        raise ValueError("Invalid QA keywords")
+    confidence = qa.get("confidence", 0)
+    if type(confidence) not in (int, float) or not np.isfinite(confidence) or not 0 <= confidence <= 1:
+        raise ValueError("Invalid QA confidence")
+    try:
+        json.dumps(qa, allow_nan=False)
+    except (ValueError, TypeError):
+        raise ValueError("QA metadata must be finite JSON") from None
 
 
 def _map_item(qa: dict[str, Any], embedding: list[float] | None) -> dict[str, Any]:
@@ -103,6 +179,31 @@ def _map_item(qa: dict[str, Any], embedding: list[float] | None) -> dict[str, An
     }
 
 
+def _validate_row(row: dict[str, Any]) -> None:
+    """驗證送出欄位型態；跨批次仍不是單一原子交易。"""
+    arrays = {"keywords", "synonyms", "categories", "intent_labels", "scenario_tags",
+              "retrieval_phrases", "evidence_scope", "booster_target_queries", "hard_negative_terms"}
+    for key, value in row.items():
+        if key == "embedding":
+            continue
+        if key in arrays:
+            valid = isinstance(value, list) and all(isinstance(item, str) for item in value)
+        elif key in {"seq", "search_hit_count"}:
+            valid = type(value) is int and -(2**31) <= value < 2**31
+        elif key in {"confidence", "freshness_score"}:
+            valid = type(value) in (int, float) and np.isfinite(value) and abs(value) <= np.finfo(np.float32).max
+        elif key in {"evergreen", "is_merged"}:
+            valid = type(value) is bool
+        elif key in {"extraction_model", "maturity_relevance"} and value is None:
+            valid = True
+        else:
+            valid = isinstance(value, str)
+        if not valid:
+            raise ValueError(f"Invalid mapped QA field: {key}")
+    if row["maturity_relevance"] not in (None, "L1", "L2", "L3", "L4"):
+        raise ValueError("Invalid mapped QA maturity_relevance")
+
+
 def _append_extended_fields(row: dict[str, Any], qa: dict[str, Any]) -> dict[str, Any]:
     """Optionally append retrieval-dimension fields for extended Supabase schemas."""
     return {
@@ -132,6 +233,7 @@ def _upsert_batch(
     url: str,
     service_key: str,
     rows: list[dict[str, Any]],
+    _depth: int = 0,
 ) -> tuple[int, int]:
     """
     Upsert a batch of rows into Supabase qa_items via REST API.
@@ -144,21 +246,31 @@ def _upsert_batch(
         "Prefer": "resolution=merge-duplicates,return=minimal",
     }
 
-    resp = requests.post(
-        f"{url}/rest/v1/qa_items",
-        headers=headers,
-        json=rows,
-        timeout=60,
-    )
-
-    if resp.status_code in (200, 201):
-        return len(rows), 0
-
-    logger.error(
-        "Upsert batch failed: status=%d body=%s",
-        resp.status_code,
-        resp.text[:500],
-    )
+    for attempt in range(2):
+        try:
+            resp = requests.post(f"{url}/rest/v1/qa_items", headers=headers, json=rows, timeout=60)
+        except requests.RequestException:
+            if attempt == 0:
+                time.sleep(0.5)
+                continue
+            logger.error("Upsert transport failure after bounded retry")
+            return 0, len(rows)
+        if resp.status_code in (200, 201):
+            return len(rows), 0
+        try:
+            body = resp.json()
+        except ValueError:
+            body = {}
+        if resp.status_code == 500 and isinstance(body, dict) and body.get("code") == "57014":
+            if len(rows) > 1 and _depth < 3:
+                midpoint = len(rows) // 2
+                success, failed = _upsert_batch(url, service_key, rows[:midpoint], _depth + 1)
+                if failed:
+                    return success, len(rows) - success
+                right_success, right_failed = _upsert_batch(url, service_key, rows[midpoint:], _depth + 1)
+                return success + right_success, right_failed
+        logger.error("Upsert batch failed: HTTP status=%d", resp.status_code)
+        break
     return 0, len(rows)
 
 
@@ -170,34 +282,26 @@ def migrate(
     include_extended_fields: bool = False,
 ) -> None:
     """Main migration logic."""
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
     items = _load_qa_data()
     embeddings = _load_embeddings()
 
-    if embeddings is not None and len(embeddings) != len(items):
-        raise ValueError(
-            "Count mismatch: "
-            f"{len(items)} items vs {len(embeddings)} embeddings. "
-            "Regenerate embeddings before migrating to avoid partial NULL embeddings."
-        )
+    index = _validate_candidate(items, embeddings)
 
     rows = []
-    for i, qa in enumerate(items):
-        emb = (
-            embeddings[i].tolist()
-            if embeddings is not None and i < len(embeddings)
-            else None
-        )
+    for qa in items:
+        emb = embeddings[index[qa["stable_id"]]].tolist()
         row = _map_item(qa, emb)
         if include_extended_fields:
             row = _append_extended_fields(row, qa)
+        _validate_row(row)
         rows.append(row)
 
     logger.info("Prepared %d rows for upsert", len(rows))
 
     if dry_run:
         logger.info("[DRY RUN] Would upsert %d rows in batches of %d", len(rows), batch_size)
-        sample = {k: v for k, v in rows[0].items() if k != "embedding"}
-        logger.info("Sample row (without embedding): %s", json.dumps(sample, ensure_ascii=False))
         return
 
     total_success = 0
@@ -212,6 +316,9 @@ def migrate(
         success, fail = _upsert_batch(supabase_url, service_key, batch)
         total_success += success
         total_fail += fail
+        if fail:
+            logger.error("Migration stopped: %d succeeded; remaining batches were not attempted", total_success)
+            sys.exit(1)
 
         # Brief pause to avoid overwhelming Supabase
         if batch_num < total_batches:
@@ -263,13 +370,16 @@ def main() -> None:
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     service_key = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
-    if not supabase_url or not service_key:
+    if (not args.dry_run or args.verify) and (not supabase_url or not service_key):
         logger.error("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in environment")
         logger.error("Set these in .env or export them before running this script")
         sys.exit(1)
 
     if args.verify:
         count = _verify_count(supabase_url, service_key)
+        if count < 0:
+            logger.error("Supabase row-count verification failed")
+            sys.exit(1)
         logger.info("qa_items count in Supabase: %d", count)
         return
 
@@ -283,6 +393,9 @@ def main() -> None:
 
     if not args.dry_run:
         count = _verify_count(supabase_url, service_key)
+        if count < 0:
+            logger.error("Post-migration row-count verification failed")
+            sys.exit(1)
         logger.info("Verification: %d rows in qa_items", count)
 
 

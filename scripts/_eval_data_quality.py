@@ -6,7 +6,7 @@ _eval_data_quality.py — Layer 1 Data Quality Evaluators（v2.13+）
 選擇性儲存至 Supabase eval_runs 表（需設定 SUPABASE_URL/SUPABASE_ANON_KEY）。
 
 指標（無 API 成本）：
-  qa_count_in_range   — QA 總數在 [100, 2000] 之間（1.0 = 合格，0.0 = 異常）
+  qa_count_in_range   — QA 總數在 [QA_COUNT_MIN, QA_COUNT_MAX] 之間（1.0 = 合格，0.0 = 異常）
   avg_confidence      — 平均信心分數（target ≥ 0.80）
   keyword_coverage    — 具備 ≥3 keywords 的 QA 比例（target ≥ 0.85）
   no_admin_content    — 無管理/模板類污染（1.0 = 乾淨，< 1.0 = 有污染）
@@ -43,8 +43,20 @@ QA_ENRICHED_PATH = ROOT / "output" / "qa_enriched.json"
 DEFAULT_GROUP = "data-quality"
 
 # 合格門檻（可調整）
-QA_COUNT_MIN = 100
-QA_COUNT_MAX = 2000
+#
+# QA_COUNT_MIN／MAX 是**異常偵測區間**，不是品質目標：低於下界代表萃取或遷移
+# 大規模掉資料，高於上界代表去重失效或重複灌入。
+#
+# 2026-09-10 重設（原值 100–2000）：舊值是資料量還很小時代留下的，沒有隨資料
+# 成長更新。實測正式庫已有 32,439 筆（ETL run 34106023623 的 Eval + Quality Gate
+# log：「Loaded 32439 QA items from Supabase」），這條指標因此**恆為 0.0**，
+# 等於一個永遠在 FAIL 的門檻。新值以實測規模為中心、上下各留一個數量級：
+#   下界 3,000   ≈ 現況的 1/10
+#   上界 300,000 ≈ 現況的 10 倍
+# 這是「數量級」門檻不是精準門檻——資料再成長一個數量級時要重設一次，
+# 但不該每次資料變動就微調，否則會退化成永遠貼著現況的指標而失去告警能力。
+QA_COUNT_MIN = 3_000
+QA_COUNT_MAX = 300_000
 CONFIDENCE_TARGET = 0.80
 KEYWORD_COVERAGE_TARGET = 0.85
 MIN_KEYWORDS_PER_QA = 3

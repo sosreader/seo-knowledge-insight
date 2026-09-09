@@ -412,15 +412,15 @@ class TestFetchPagesWithAnyImpressions:
     def test_single_page_of_results(self) -> None:
         response = _FakeResponse('[{"page": "https://vocus.cc/a"}, {"page": "https://vocus.cc/b"}]')
         with patch.dict("os.environ", SUPABASE_ENV), patch("urllib.request.urlopen", return_value=response):
-            assert fetch_pages_with_any_impressions() == {"https://vocus.cc/a", "https://vocus.cc/b"}
+            assert fetch_pages_with_any_impressions(pages=["https://vocus.cc/a", "https://vocus.cc/b"]) == {"https://vocus.cc/a", "https://vocus.cc/b"}
 
     def test_paginates_until_short_page(self) -> None:
-        full_page = json.dumps([{"page": f"https://vocus.cc/{i}"} for i in range(5000)])
+        full_page = json.dumps([{"page": f"https://vocus.cc/{i}"} for i in range(1000)])
         short_page = '[{"page": "https://vocus.cc/last"}]'
         with patch.dict("os.environ", SUPABASE_ENV), \
              patch("urllib.request.urlopen",
                    side_effect=[_FakeResponse(full_page), _FakeResponse(short_page)]) as opener:
-            result = fetch_pages_with_any_impressions()
+            result = fetch_pages_with_any_impressions(pages=["https://vocus.cc/last"])
         assert "https://vocus.cc/last" in result
         assert opener.call_count == 2
 
@@ -428,7 +428,7 @@ class TestFetchPagesWithAnyImpressions:
         with patch.dict("os.environ", SUPABASE_ENV), \
              patch("urllib.request.urlopen", side_effect=_http_error(500, "boom")):
             with pytest.raises(RuntimeError):
-                fetch_pages_with_any_impressions()
+                fetch_pages_with_any_impressions(pages=["https://vocus.cc/a"])
 
 
 class TestBuildControlSet:
@@ -481,13 +481,13 @@ class TestSplitZeroImpressionTiers:
 
 
 class TestBuildSample:
-    def test_control_set_has_priority(self) -> None:
+    def test_small_budget_keeps_control_and_article(self) -> None:
         sample = build_sample(["c1", "c2"], ["t1a", "t1b"], ["t2a"], budget=2)
-        assert sample == ["c1", "c2"]
+        assert sample == ["c1", "t1a"]
 
-    def test_fills_remaining_budget_from_tier1_then_tier2(self) -> None:
+    def test_three_calls_cover_all_available_cohorts(self) -> None:
         sample = build_sample(["c1"], ["t1a", "t1b"], ["t2a"], budget=3)
-        assert sample == ["c1", "t1a", "t1b"]
+        assert sample == ["c1", "t1a", "t2a"]
 
     def test_never_exceeds_budget(self) -> None:
         sample = build_sample(["c1", "c2", "c3"], ["t1a"] * 10, ["t2a"] * 10, budget=5)
