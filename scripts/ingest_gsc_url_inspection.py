@@ -1,6 +1,6 @@
 """ingest_gsc_url_inspection.py — 用 GSC URL Inspection API 抽樣查索引狀態，寫進 Supabase gsc_url_inspection
 
-資料流：sitemap（vocus.cc）+ gsc_daily_metrics（既有曝光資料）→ 抽樣挑 URL →
+資料流：sitemap（vocus.cc）+ gsc_page_daily（最近 28 天 Web 曝光）→ 抽樣挑 URL →
 urlInspection.index.inspect API（Google）→ Supabase upsert。取代 CrawledNotIndexedPanel
 目前「人工從 GSC 介面複製 TSV 貼上」的流程。
 
@@ -10,8 +10,8 @@ urlInspection.index.inspect API（Google）→ Supabase upsert。取代 CrawledN
 account 的 JSON **字串**，與 ingest_gsc_search_analytics.py 共用同一把唯讀 SA）、
 SUPABASE_URL / SUPABASE_SERVICE_KEY。
 
-倉儲只知道每頁拿到多少曝光，不知道零曝光的頁是「沒人搜」還是「Google 根本沒收錄」——
-兩者處置相反（內容/關鍵字問題 vs 技術 SEO 問題）。本管線補的是這個判別力，抽樣策略
+倉儲只觀測到部分頁面的曝光；缺席可能是明細截斷、需求不足或尚未收錄。
+各情況的處置不同。本管線用索引檢查補充判別證據，抽樣策略
 因此要服務這個目的，不是「隨機抽一些」，見下方「抽樣優先序」。
 
 ═══ 配額：2,000 QPD 綁在 property 本身（不是我們的 GCP 專案），重置機制未經證實 ═══
@@ -39,18 +39,19 @@ API 就算數」不是「寫庫才算數」——連 --dry-run 都會打真的 i
 
 ═══ 抽樣優先序 —— 為什麼這樣抽 ═══
 
-三層，依序遞補到 sample-size 或配額用完為止（① 保留優先席次，不被配額排擠掉）：
+三層按 20%／60%／20% 分配，空席遞補；每日 20 筆時為 4／12／4。
+對照組固定，文章按日期穩定洗牌。避免原本 20 筆全部被 20 個對照頁占滿。
 
   ① 對照組（固定不變）：從 sitemap-0.xml（vocus.cc 站台結構頁，實測 180 筆，見 KB
      S1.7 內鏈基線）取固定子集，**每次都查同一批**——沒有它就無法區分「這頁狀態
      變了」與「抽樣抽到不同頁」。子集用 URL 的 sha256 排序取前 N，不用字母序／
      抓取順序：字母序在 sitemap 增刪項目時會整批位移，hash 排序更穩固。
 
-  ② 零曝光舊頁：sitemap-articles-*.xml / article-news.xml（真實內容頁）裡 lastmod
-     超過 RECENT_THRESHOLD_DAYS 天、但 gsc_daily_metrics 從未出現過的 URL——頁面
-     存在夠久理應被爬過卻零曝光，是本管線要解答的核心問題。
+  ② 未觀測曝光舊頁：sitemap 文章裡 lastmod 超過 RECENT_THRESHOLD_DAYS 天，
+     最近 28 天同 property 的 Web page 明細未觀測曝光。GSC 只回 top rows，
+     不代表真實零曝光；需透過 inspect 區分索引狀態。
 
-  ③ 零曝光新頁：同上頁池但 lastmod 在門檻天數內，優先序排在②之後（剛發布還沒曝光
+  ③ 未觀測曝光新頁：同上頁池但 lastmod 在門檻天數內，席次少於②（剛發布還沒曝光
      本來就正常）。lastmod 缺失視為「無法確認是最近的」，保守歸進②。
 
   tags/sitemap.xml **刻意排除**：KB S1.7 實測死鏈率 50%，對診斷沒有價值，只會浪費配額。
@@ -59,7 +60,7 @@ API 就算數」不是「寫庫才算數」——連 --dry-run 都會打真的 i
 
 來源：KB S1.7 00-sampling-plan.md（2026-08-29 實測）。`/sitemap.xml` 404，正解是
 `/sitemap-index.xml`（200，15 個子 sitemap，合計 12,630 筆 URL，「近期滾動視窗」非
-全站清單，不影響本管線——只要「sitemap 有列、但零曝光」的子集）。不寫死 15 個子
+全站清單，不影響本管線——只取「sitemap 有列、倉儲未觀測曝光」子集）。不寫死 15 個子
 sitemap 檔名：先抓 index 拿 `<loc>` 清單再逐一抓（MAX_SUB_SITEMAPS 安全上限）。
 **唯一**會直接打 vocus.cc 的是這段抓 sitemap 樹（至多 1+MAX_SUB_SITEMAPS 次請求，
 對比 KB S1.7 實測 Envoy 24h 平均 98.44 RPS 不構成站台負擔）——URL Inspection 本身
@@ -110,7 +111,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.ingest_gsc_search_analytics import (
     HTTP_TIMEOUT_SECONDS,
-    PAGE_NOT_REQUESTED as PAGE_COMBO_SENTINEL,
     PROPERTY,
     GscQueryError,
     _supabase_request,
@@ -118,6 +118,7 @@ from scripts.ingest_gsc_search_analytics import (
     gsc_access_token,
     supabase_config,
 )
+from scripts.gsc_inspection_sampling import build_sample, fetch_pages_with_any_impressions
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("ingest_gsc_url_inspection")
@@ -334,44 +335,11 @@ def fetch_sitemap_pool() -> tuple[list[tuple[str, date | None]], list[tuple[str,
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 零曝光比對與抽樣分層
+# 倉儲未觀測曝光比對與抽樣分層
 # ══════════════════════════════════════════════════════════════════════
 
-GSC_DAILY_METRICS_TABLE = "gsc_daily_metrics"
-IMPRESSION_LOOKUP_PAGE_SIZE = 5000
 RECENT_THRESHOLD_DAYS = 14
 CONTROL_SET_SIZE = 20
-
-
-def fetch_pages_with_any_impressions() -> set[str]:
-    """gsc_daily_metrics 裡曾經出現過（page 組合）的全部 page 值，用來反推「從沒出現過」
-    的 sitemap URL。分頁抓 page 欄，本地用 set 去重——PostgREST 沒有 DISTINCT 關鍵字，
-    這張表目前資料量還小，可負擔用這個方式取代寫一支 RPC。"""
-    seen: set[str] = set()
-    offset = 0
-    url, key = supabase_config()
-    while True:
-        headers = {
-            "apikey": key, "Authorization": f"Bearer {key}", "User-Agent": USER_AGENT,
-            "Range-Unit": "items", "Range": f"{offset}-{offset + IMPRESSION_LOOKUP_PAGE_SIZE - 1}",
-        }
-        path = (f"/rest/v1/{GSC_DAILY_METRICS_TABLE}?select=page"
-                f"&page=neq.{urllib.parse.quote(PAGE_COMBO_SENTINEL, safe='')}")
-        request = urllib.request.Request(url + path, headers=headers, method="GET")
-        try:
-            with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
-                batch = json.loads(response.read().decode())
-        except urllib.error.HTTPError as exc:
-            raise RuntimeError(
-                f"查詢 {GSC_DAILY_METRICS_TABLE} 失敗：{exc.code} {exc.read().decode(errors='replace')[:200]}"
-            ) from exc
-        if not batch:
-            break
-        seen.update(row["page"] for row in batch)
-        if len(batch) < IMPRESSION_LOOKUP_PAGE_SIZE:
-            break
-        offset += IMPRESSION_LOOKUP_PAGE_SIZE
-    return seen
 
 
 def build_control_set(structural_entries: list[tuple[str, date | None]]) -> list[str]:
@@ -403,20 +371,6 @@ def split_zero_impression_tiers(
     return tier1, tier2
 
 
-def build_sample(control_set: list[str], tier1: list[str], tier2: list[str], budget: int) -> list[str]:
-    """依優先序組出本次要查的 URL 清單，總數不超過 budget。對照組保留優先席次
-    （見模組 docstring ①：不能被配額排擠掉），其餘依 ②→③ 順序遞補。"""
-    sample: list[str] = []
-    seen: set[str] = set()
-    for pool in (control_set, tier1, tier2):
-        for candidate_url in pool:
-            if len(sample) >= budget:
-                return sample
-            if candidate_url in seen:
-                continue
-            seen.add(candidate_url)
-            sample.append(candidate_url)
-    return sample
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -602,10 +556,12 @@ def _quota_gate(quota_budget: int) -> int:
     return remaining
 
 
-def _build_candidates(today: date) -> tuple[list[str], list[str], list[str]]:
+def _build_candidates(today: date, *, property: str = DEFAULT_PROPERTY) -> tuple[list[str], list[str], list[str]]:
     """回傳 (control_set, tier1, tier2)。三者皆空代表硬失敗，由呼叫端判斷（規則 (c)）。"""
     articles, structural = fetch_sitemap_pool()
-    has_impressions = fetch_pages_with_any_impressions()
+    has_impressions = fetch_pages_with_any_impressions(
+        pages=[url for url, _ in articles], today=today, property=property,
+    )
     control_set = build_control_set(structural)
     tier1, tier2 = split_zero_impression_tiers(articles, has_impressions, today)
     return control_set, tier1, tier2
@@ -652,14 +608,14 @@ def run_ingestion(
                     QUOTA_ROLLING_WINDOW_HOURS)
         return 0
 
-    control_set, tier1, tier2 = _build_candidates(now.date())
+    control_set, tier1, tier2 = _build_candidates(now.date(), property=property)
     if not (control_set or tier1 or tier2):
         logger.error("FAIL：sitemap 抽樣母體是空的，視為硬失敗（規則 (c)）。")
         return 1
 
     target_n = min(sample_size, remaining)
-    sample = build_sample(control_set, tier1, tier2, target_n)
-    logger.info("本次抽樣 %d 筆（對照組池 %d／零曝光舊頁池 %d／零曝光新頁池 %d，配額剩餘 %d，sample-size 上限 %d）",
+    sample = build_sample(control_set, tier1, tier2, target_n, today=now.date())
+    logger.info("本次抽樣 %d 筆（對照組池 %d／倉儲未觀測曝光舊頁池 %d／新頁池 %d，配額剩餘 %d，sample-size 上限 %d）",
                len(sample), len(control_set), len(tier1), len(tier2), remaining, sample_size)
 
     errors: list[str] = []

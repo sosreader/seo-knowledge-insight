@@ -1,7 +1,7 @@
 name: GSC URL Inspection Sampling
 
 # 用 URL Inspection API 對抽樣 URL 查索引狀態，寫進 Supabase gsc_url_inspection。
-# 抽樣三層優先序（對照組固定不變／零曝光舊頁／零曝光新頁）與配額守門的設計理由，
+# 抽樣三層配額（固定對照／倉儲未觀測曝光舊頁／新頁）與配額守門的設計理由，
 # 見 scripts/ingest_gsc_url_inspection.py 的模組 docstring。
 #
 # 與 gsc-search-analytics.yml 刻意分開：來源 API、配額模型（2,000 QPD／property 共用桶，
@@ -68,7 +68,8 @@ jobs:
           SAMPLE_SIZE: ${{ github.event.inputs.limit || '20' }}
           QUOTA_BUDGET: ${{ github.event.inputs.quota_budget || '500' }}
         run: |
-          if [ "$DRY_RUN" = "true" ]; then
+          # schedule 沒有 dispatch inputs，明確走寫入；手動仍預設 dry-run。
+          if [ "$GITHUB_EVENT_NAME" != "schedule" ] && [ "$DRY_RUN" != "false" ]; then
             python scripts/ingest_gsc_url_inspection.py \
               --dry-run --sample-size "$SAMPLE_SIZE" --quota-budget "$QUOTA_BUDGET"
           else
@@ -77,7 +78,7 @@ jobs:
           fi
 
       - name: Verify last write
-        if: github.event.inputs.dry_run != 'true'
+        if: github.event_name == 'schedule' || github.event.inputs.dry_run == 'false'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
