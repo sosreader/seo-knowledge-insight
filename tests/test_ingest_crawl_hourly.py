@@ -902,7 +902,11 @@ class TestFreshnessCheck:
             assert run_freshness_check() == 1
 
     def test_stale_data_fails(self) -> None:
-        stale = datetime.now(UTC) - timedelta(hours=9)
+        """門檻由 FRESHNESS_MAX_AGE_HOURS 導出，不寫死小時數——2026-09-10 降頻時
+        這裡原本寫死 9h，門檻從 3h 調到 10h 之後 9h 反而變成健康值。"""
+        from scripts.ingest_crawl_hourly import FRESHNESS_MAX_AGE_HOURS
+
+        stale = datetime.now(UTC) - timedelta(hours=FRESHNESS_MAX_AGE_HOURS + 1)
         with patch("scripts.ingest_crawl_hourly.latest_bucket_hour", return_value=stale):
             assert run_freshness_check() == 1
 
@@ -911,6 +915,30 @@ class TestFreshnessCheck:
         fresh = datetime.now(UTC) - timedelta(minutes=30)
         with patch("scripts.ingest_crawl_hourly.latest_bucket_hour", return_value=fresh):
             assert run_freshness_check() == 0
+
+    def test_threshold_covers_the_worst_case_implied_by_the_schedule(self) -> None:
+        """門檻必須蓋過「桶寬 + 執行落點 + 排程週期 + 超額延遲 + 寫入延遲」。
+
+        鎖的是這條關係式而不是數字 10——改排程頻率時該連動的就是它。
+        """
+        from scripts.ingest_crawl_hourly import (
+            FRESHNESS_MAX_AGE_HOURS,
+            SCHEDULE_EXCESS_DELAY_HOURS,
+            SCHEDULE_INTERVAL_HOURS,
+            WRITE_LAG_HOURS,
+        )
+
+        worst_case = (
+            1  # 桶寬：最新 bucket 是 H(t)-1，而新鮮度量的是它的起點
+            + 1  # 執行時刻可落在它那一小時的任何位置
+            + SCHEDULE_INTERVAL_HOURS
+            + SCHEDULE_EXCESS_DELAY_HOURS
+            + WRITE_LAG_HOURS
+        )
+        assert FRESHNESS_MAX_AGE_HOURS >= worst_case, (
+            f"門檻 {FRESHNESS_MAX_AGE_HOURS}h 蓋不住排程隱含的最壞 age "
+            f"{worst_case:.2f}h——資料健康時就會誤報。"
+        )
 
 
 class TestRunVerify:

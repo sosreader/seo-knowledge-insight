@@ -401,7 +401,10 @@ class TestFreshnessCheck:
             assert run_freshness_check() == 1
 
     def test_stale_data_fails(self) -> None:
-        stale = datetime.now(UTC) - timedelta(hours=5)
+        """門檻由 FRESHNESS_MAX_AGE_HOURS 導出，不寫死小時數（理由同 crawl 那支）。"""
+        from scripts.ingest_cwv_hourly import FRESHNESS_MAX_AGE_HOURS
+
+        stale = datetime.now(UTC) - timedelta(hours=FRESHNESS_MAX_AGE_HOURS + 1)
         with patch("scripts.ingest_cwv_hourly.latest_success_hour", return_value=stale):
             assert run_freshness_check() == 1
 
@@ -410,10 +413,25 @@ class TestFreshnessCheck:
         with patch("scripts.ingest_cwv_hourly.latest_success_hour", return_value=fresh):
             assert run_freshness_check() == 0
 
-    def test_threshold_is_multiple_of_hourly_schedule(self) -> None:
-        from scripts.ingest_cwv_hourly import FRESHNESS_MAX_AGE_HOURS
+    def test_threshold_covers_the_worst_case_implied_by_the_schedule(self) -> None:
+        """2026-09-10 改名並改鎖關係式：原本叫 ..._is_multiple_of_hourly_schedule、
+        只斷言 >= 2，那個「排程週期 × N」的框架本身就是誤報來源（見
+        scripts/ingest_gsc_search_analytics.py 同名常數的註解）。現在鎖的是
+        「門檻要蓋過排程隱含的最壞 age」，改頻率時會連動。
+        """
+        from scripts.ingest_cwv_hourly import (
+            FRESHNESS_MAX_AGE_HOURS,
+            SCHEDULE_EXCESS_DELAY_HOURS,
+            SCHEDULE_INTERVAL_HOURS,
+            WRITE_LAG_HOURS,
+        )
 
-        assert FRESHNESS_MAX_AGE_HOURS >= 2, "要容忍單次重試，但不容忍連續兩次靜默"
+        worst_case = (
+            1 + 1 + SCHEDULE_INTERVAL_HOURS + SCHEDULE_EXCESS_DELAY_HOURS + WRITE_LAG_HOURS
+        )
+        assert FRESHNESS_MAX_AGE_HOURS >= worst_case, (
+            f"門檻 {FRESHNESS_MAX_AGE_HOURS}h 蓋不住排程隱含的最壞 age {worst_case:.2f}h。"
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════
