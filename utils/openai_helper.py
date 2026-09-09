@@ -595,6 +595,11 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     return result
 
 
+def get_embedding_model_name() -> str:
+    """與 get_embeddings 相同的模式判定，供生成產物記錄來源。"""
+    return config.OPENAI_EMBEDDING_MODEL if _has_openai_key() else "local-embed-v1"
+
+
 # ──────────────────────────────────────────────────────
 # 合併重複 Q&A
 # ──────────────────────────────────────────────────────

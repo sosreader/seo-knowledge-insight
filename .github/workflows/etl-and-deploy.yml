@@ -58,6 +58,10 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python scripts/03_dedupe_classify.py
 
+      # 結構與向量對齊檢查，不取代後續的內容／檢索品質評估。
+      - name: Validate candidate artifacts before upload
+        run: python scripts/migrate_to_supabase.py --dry-run
+
       - name: Upload artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
@@ -66,6 +70,8 @@ jobs:
             output/qa_final.json
             output/qa_enriched.json
             output/qa_embeddings.npy
+            output/qa_embeddings_index.json
+            output/qa_embeddings_manifest.json
           retention-days: 7
 
   # ── Job 2: Migrate to Supabase ─────────────────────────────────────────────

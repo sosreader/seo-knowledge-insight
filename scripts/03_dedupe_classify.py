@@ -38,7 +38,8 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import config
 
-from utils.openai_helper import get_embeddings, merge_similar_qas, classify_qa
+from utils.openai_helper import get_embeddings, get_embedding_model_name, merge_similar_qas, classify_qa
+from utils.embedding_manifest import build_manifest, embedding_inputs, MANIFEST_NAME
 from utils.pipeline_deps import preflight_check, StepDependency
 from utils.observability import init_laminar, flush_laminar, observe
 from utils.pipeline_version import record_artifact
@@ -604,36 +605,34 @@ def _push_laminar_kb_snapshot(qa_pairs: list[dict]) -> None:
 
 def _persist_embeddings(qa_pairs: list[dict]) -> None:
     """計算並持久化 Q&A embedding，供 Step 4 語意搜尋直接載入。
-    同時產生 qa_embeddings_index.json（{stable_id|id: row_index}），
-    使增量更新不再依賴位置耦合。key 優先使用 stable_id，fallback 到 id（v2.0 格式）。
+    產生 qa_embeddings_index.json（{stable_id: row_index}）與來源 manifest。
+    生成前要求 unique stable_id；舊版僅流水號的資料須先完成 ID 遷移。
     """
     logger.info("持久化 embedding 向量 ...")
-    texts = [f"{qa['question']} {qa['answer']}" for qa in qa_pairs]
+    texts = embedding_inputs(qa_pairs)
+    model = get_embedding_model_name()
     embeddings = get_embeddings(texts)
     emb_array = np.array(embeddings)
+    if (emb_array.ndim != 2 or len(emb_array) != len(qa_pairs)
+            or not np.isfinite(emb_array).all() or model != get_embedding_model_name()):
+        raise ValueError("Invalid embedding generation result or changed model")
     emb_path = config.OUTPUT_DIR / "qa_embeddings.npy"
     np.save(emb_path, emb_array)
     logger.info("已儲存 %s 至 %s", emb_array.shape, emb_path)
 
-    # 產生 id → row_index 映射，供增量更新使用
-    # 優先使用 stable_id，fallback 到 id（v2.0 格式）
-    index = {}
-    for i, qa in enumerate(qa_pairs):
-        key = qa.get("stable_id") or qa.get("id")
-        if key is not None:
-            str_key = str(key)
-            if str_key in index:
-                logger.warning(
-                    "embedding index key collision: %s (row %d overwrites row %d)",
-                    str_key, i, index[str_key],
-                )
-            index[str_key] = i
+    index = {qa["stable_id"]: i for i, qa in enumerate(qa_pairs)}
     index_path = config.OUTPUT_DIR / "qa_embeddings_index.json"
     index_path.write_text(
         json.dumps(index, ensure_ascii=False),
         encoding="utf-8",
     )
     logger.info("已儲存 embedding index（%d 筆）至 %s", len(index), index_path)
+    # 最後寫 manifest；中途中斷留下的混批會由 migration hash 檢查擋下。
+    manifest = build_manifest(config.OUTPUT_DIR, qa_pairs, model=model, dimension=emb_array.shape[1],
+                              vectors=emb_array, index=index)
+    (config.OUTPUT_DIR / MANIFEST_NAME).write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8",
+    )
 
 
 def _export_readable_md(qa_pairs: list[dict]) -> None:

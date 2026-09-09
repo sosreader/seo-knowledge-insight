@@ -203,13 +203,24 @@ def test_migrate_dry_run_succeeds_with_matching_counts(monkeypatch: pytest.Monke
     monkeypatch.setattr(
         migrate_to_supabase,
         "_load_qa_data",
-        lambda: [{"id": 1, "question": "Q", "answer": "A", "source_title": "T"}],
+        lambda: [{"id": 1, "stable_id": "a", "question": "Q", "answer": "A", "source_title": "T"}],
     )
     monkeypatch.setattr(
         migrate_to_supabase,
         "_load_embeddings",
-        lambda: np.zeros((1, 3), dtype=np.float32),
+        lambda: np.zeros((1, 1536), dtype=np.float32),
     )
+    monkeypatch.setattr(migrate_to_supabase, "OUTPUT_DIR", tmp_path)
+    (tmp_path / "qa_embeddings_index.json").write_text('{"a": 0}')
+    np.save(tmp_path / "qa_embeddings.npy", np.zeros((1, 1536), dtype=np.float32))
+    from utils.embedding_manifest import build_manifest
+    import json
+    manifest = build_manifest(
+        tmp_path, migrate_to_supabase._load_qa_data(),
+        model="text-embedding-3-small", dimension=1536,
+        vectors=np.zeros((1, 1536)), index={"a": 0},
+    )
+    (tmp_path / "qa_embeddings_manifest.json").write_text(json.dumps(manifest))
 
     migrate_to_supabase.migrate(
         "https://example.supabase.co",
