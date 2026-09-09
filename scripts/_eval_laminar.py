@@ -20,6 +20,7 @@ _eval_laminar.py — Laminar 正式 Eval Run（v2.13，4 層評估框架）
     python scripts/_eval_laminar.py --group "retrieval-eval"
     python scripts/_eval_laminar.py --group "retrieval-enhancement"
     python scripts/_eval_laminar.py --mode report
+    python scripts/_eval_laminar.py --source supabase --group keyword-retrieval
 
 學術依據：
   MRR, Precision@K, Recall@K, F1@K — TREC / IR 標準（Voorhees）
@@ -33,6 +34,7 @@ import argparse
 import json
 import logging
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -48,7 +50,16 @@ from utils.observability import init_laminar  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-GOLDEN_RETRIEVAL_PATH = ROOT / "output" / "evals" / "golden_retrieval.json"
+# 版控中的 eval/ 才是 golden dataset 的正本：evals/eval_retrieval.py、
+# evals/eval_chat.py、evals/eval_enrichment.py 與 scripts/qa_tools.py 的
+# EVAL_DIR 全部指向這裡。本檔原本指向 output/evals/——但 output/ 在
+# .gitignore 第 15 行被整個排除，etl-and-deploy.yml 的 eval job 只
+# download-artifact 了 qa-output（qa_final / qa_enriched / qa_embeddings*），
+# 沒有任何一步會產生 output/evals/golden_retrieval.json。也就是說即使
+# --source 修好，這一行仍會讓同一個 step 立刻以「golden_retrieval.json
+# 不存在」退出。本機那份 output/evals/ 副本經比對是版控這份 40 筆的
+# 前 20 筆子集（內容逐筆相同），改指版控正本只會讓 case 數 20 → 40。
+GOLDEN_RETRIEVAL_PATH = ROOT / "eval" / "golden_retrieval.json"
 QA_FINAL_PATH = ROOT / "output" / "qa_final.json"
 QA_ENRICHED_PATH = ROOT / "output" / "qa_enriched.json"
 REPORTS_DIR = ROOT / "output"
@@ -68,10 +79,55 @@ KB_LINK_PATTERN = "/admin/seoInsight/"
 # ── 資料載入 ────────────────────────────────────────────────────────────────
 
 
-def _load_qas() -> list[dict]:
+def _load_qas(source: str = "local") -> list[dict]:
+    """依 --source 決定資料來源：local（本機 JSON）或 supabase（qa_items 表）。"""
+    if source == "supabase":
+        return _load_qas_supabase()
     path = QA_ENRICHED_PATH if QA_ENRICHED_PATH.exists() else QA_FINAL_PATH
     data = json.loads(path.read_text(encoding="utf-8"))
     return data["qa_database"]
+
+
+def _load_qas_supabase() -> list[dict]:
+    """從 Supabase qa_items 表載入 QA 資料（分頁）。
+
+    欄位清單比 _eval_data_quality.py 的同名函式寬：retrieval eval 除了
+    question/answer/keywords/category 之外，還要 synonyms 與 freshness_score
+    才能算 Layer 3 的同義詞與時效指標。
+    """
+    import requests
+
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_ANON_KEY", "")
+    if not url or not key:
+        raise ValueError("Missing SUPABASE_URL or SUPABASE_ANON_KEY for --source supabase")
+
+    headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+    all_rows: list[dict] = []
+    page_size = 500
+    offset = 0
+
+    while True:
+        resp = requests.get(
+            f"{url}/rest/v1/qa_items"
+            f"?select=id,seq,question,answer,keywords,confidence,category,difficulty,"
+            f"evergreen,source_title,source_date,source_type,source_collection,"
+            f"source_url,is_merged,extraction_model,synonyms,freshness_score,search_hit_count"
+            f"&order=seq.asc&limit={page_size}&offset={offset}",
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+        if not rows:
+            break
+        all_rows.extend(rows)
+        if len(rows) < page_size:
+            break
+        offset += page_size
+
+    logger.info("Loaded %d QA items from Supabase", len(all_rows))
+    return all_rows
 
 
 def _load_synonyms() -> dict[str, list[str]]:
@@ -368,6 +424,12 @@ def main() -> None:
             "retrieval-enhancement: Layer 3 synonym+freshness 指標（3 個 evaluators）"
         ),
     )
+    parser.add_argument(
+        "--source",
+        choices=["local", "supabase"],
+        default="local",
+        help="資料來源：local（qa_final.json／qa_enriched.json）或 supabase（qa_items 表）",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -416,7 +478,7 @@ def main() -> None:
         logger.error("golden_retrieval.json 應為非空 JSON array")
         sys.exit(1)
 
-    qas = _load_qas()
+    qas = _load_qas(args.source)
     top_k = args.top_k
 
     logger.info(
