@@ -181,21 +181,40 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         table="cwv_hourly",
         filters=(("source", "rum"),),
         timestamp_column="hour",
-        max_age_hours=3,  # 排程週期 1h 的 3 倍；來源 Loki retention 168h，見 ingest_cwv_hourly.py
-        # 「× 3」聽起來的安全邊際比實際的小——見 crawl_daily 同一個常數旁的完整
-        # 實測數字（GitHub Actions schedule trigger 本身的 jitter，不是這條管線
-        # 特有的），這裡不重複貼一次，只留指標。2026-09-03 team-lead 實測。
+        # 2026-09-10 排程由 1h 降為 6h（cwv-hourly.yml cron '35 0,6,12,18 * * *'），
+        # 這三個門檻一起重推。完整逐項推導見 crawl_daily 的同名欄位，兩條管線
+        # 同構、同一組實測輸入，這裡只記結果避免抄兩遍。
+        #   max_age_hours   1(桶寬) + 1(執行時刻落點) + 6(F) + 0.73(D) + 0.63(L)
+        #                   = 9.36h → 取 10h
+        max_age_hours=10,
+        # **cadence_hours 維持 1，不跟著排程走**：它是「資料點該有多密」，不是
+        # 「排程多久跑一次」。降頻只改「多久去抓一次」，抓回來的仍是逐小時的桶
+        # （BUCKET="1h"），每小時都該有一列。改成 6 會有兩個後果：
+        #   1. data_quality_gate._floor_to_cadence() 只認 1 / 24 / 168，
+        #      傳 6 直接 ValueError，gate 每次執行都掛
+        #   2. 就算補上支援，空段檢查也只會抽查每 6 小時一個點，
+        #      6 個小時裡缺 5 個都驗得過——把檢查弱化了
         cadence_hours=1,
         cadence_label="hourly",
-        gap_window_hours=24,
-        lag_buffer_hours=1.5,  # 桶關閉後的容忍期（見本檔尾端「lag_buffer_hours 的語意」註解），非「桶起點」算起
+        # 24 → 30：lag_buffer 從 1.5h 拉到 8h，實際被檢查的桶區間是
+        # [now-gap_window, now-lag_buffer]。維持原本約 22.5h 的檢查跨度需要
+        # 24 + (8 - 1.5) ≈ 30h，否則跨度會縮到 16h。
+        gap_window_hours=30,
+        # 桶關閉後容忍多久沒資料（見本檔尾端「lag_buffer_hours 的語意」註解，
+        # 非「桶起點」算起）。桶 [T, T+1h) 在 T+1h 關閉，最早由 t >= T+1h 的那次
+        # 執行寫入，而從任一時刻起算下一次觸發最遠是 F + D，再加寫入延遲 L：
+        #   F + D + L = 6 + 0.73 + 0.63 = 7.36h → 取 8h（餘裕 0.64h）
+        # 舊值 1.5h 對舊的 F=1 其實也偏緊（同式子算出 2.36h），降頻後不能再沿用。
+        lag_buffer_hours=8.0,
         ingestion_run_table_name="cwv_hourly",
         degradation=DegradationConfig(
             column="unknown_ratio", mode="ratio_column",
             max_ratio=0.05, min_sample=1, sample_limit=200,
         ),
-        schedule_note="門檻＝排程週期(1h)×3。RUM 時間戳跟著壁鐘走（無固有來源延遲），"
-                      "公式適用見 KB freshness-threshold-schedule-period-formula-ignores-source-inherent-lag。",
+        schedule_note="門檻＝桶寬(1h)+執行落點(1h)+排程週期(6h)+排程超額延遲(0.73h)+寫入延遲(0.63h)"
+                      "＝9.36h，取 10h。**不是**「排程週期×N」——那個公式漏掉前兩項與後兩項，"
+                      "見 KB freshness-threshold-schedule-period-formula-ignores-source-inherent-lag。"
+                      "RUM 時間戳跟著壁鐘走（無固有來源延遲），所以沒有來源延遲項。",
     ),
 
     # ── 2. CWV CrUX（Google CrUX History API，週序列）───────────────
@@ -236,7 +255,20 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         filters=(),
         extractor=_crawl_daily_extractor,
         select_columns=("date", "hour"),
-        max_age_hours=3,
+        # 2026-09-10 排程由 1h 降為 6h（crawl-hourly.yml cron '5 0,6,12,18 * * *'），
+        # 門檻按下面那組實測分布重推（正是舊註解交代「下次真的要調時」該做的事）。
+        # 量的是 now - 最新 bucket 的**起點**，逐項：
+        #   1h     桶寬——最新 bucket 是 H(t)-1，而我們讀它的起點
+        #   1h     執行時刻 t 可落在它那一小時的任何位置
+        #   6h     F，下一次排程寫進新資料之前 age 一路在長
+        #   0.73h  D，排程超額延遲（= 實測最大間隔 104 分 − 名目 60 分）
+        #   0.63h  L，寫入延遲上緣
+        #   ────────────────────────────────────────────────────────
+        #   最壞 9.36h → 取 10h（餘裕 0.64h）
+        # 舊值 3h 背後只算了「最大間隔 + 寫入延遲」≈ 2.4h，漏掉前兩項；照這套
+        # 完整算法舊設定的真實最壞是 4.36h > 3h——沒誤報只是最壞值沒同時發生。
+        max_age_hours=10,
+        # ── 以下為降頻前的實測記錄，原樣保留（它就是上面那組數字的出處）──
         # 「排程週期(1h) × 3」這個公式假設週期是準的——GitHub Actions 的 schedule
         # trigger 不是。2026-09-03 team-lead 實測 crawl-hourly.yml（cron 15 * * * *）
         # 最近 20 次 schedule 觸發（09-02 07:28..09-03 03:22）：
@@ -254,17 +286,20 @@ PIPELINES: tuple[PipelineConfig, ...] = (
         # 不要鎖魔術數字。cwv_hourly_rum（cron 5 * * * *）受同一個平台行為
         # 影響，數字量級相同（team-lead／pipeline-outages 2026-09-03 各自
         # 獨立驗證過），這裡不重複貼一次。
+        # cadence_hours 維持 1——是「資料點該有多密」不是「排程多久跑一次」，
+        # 理由與後果見 cwv_hourly_rum 同一欄位的註解。
         cadence_hours=1,
         cadence_label="hourly",
-        gap_window_hours=24,
-        lag_buffer_hours=1.5,  # 同 cwv_hourly_rum，見本檔尾端「lag_buffer_hours 的語意」註解
+        gap_window_hours=30,  # 同 cwv_hourly_rum：補回 lag_buffer 變大後縮掉的檢查跨度
+        lag_buffer_hours=8.0,  # F + D + L = 6 + 0.73 + 0.63 = 7.36 → 8；同 cwv_hourly_rum
         ingestion_run_table_name="crawl_daily",
         degradation=DegradationConfig(
             column="ua_group", mode="fallback_value", fallback_value="other-bot",
             weight_column="request_count",
             max_ratio=0.05, min_sample=1000, sample_limit=5000,
         ),
-        schedule_note="門檻＝排程週期(1h)×3，時間戳跟著壁鐘走。降級檢查看 ua_group='other-bot'"
+        schedule_note="門檻＝桶寬(1h)+執行落點(1h)+排程週期(6h)+超額延遲(0.73h)+寫入延遲(0.63h)＝9.36h，"
+                      "取 10h；時間戳跟著壁鐘走，無來源固有延遲項。降級檢查看 ua_group='other-bot'"
                       "（過濾樣式命中泛用 bot 標記但無法歸類到具名分群的殘餘桶，"
                       "見 scripts/crawl_taxonomy.py classify() 的 docstring）佔請求數的比例。",
     ),

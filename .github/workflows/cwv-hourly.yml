@@ -1,6 +1,10 @@
 name: CWV Hourly Ingestion
 
-# 每小時把 Loki 的 web-vitals RUM 聚合寫進 Supabase cwv_hourly。
+# 每 6 小時把 Loki 的 web-vitals RUM 聚合寫進 Supabase cwv_hourly。
+# 「每 6 小時」指的是抓取頻率；寫進去的資料粒度仍然是**逐小時**的桶——降頻不會少掉
+# 任何一小時的資料點，改變的只有「最新一筆有多新」：剛跑完仍是 <=2h，但下一輪之前
+# 最壞會到 9.36h（降頻前是 4.36h）。這個數字就是新鮮度門檻取 10h 的依據，
+# 逐項推導見 scripts/ingest_cwv_hourly.py 的 FRESHNESS_MAX_AGE_HOURS 註解。
 #
 # 為什麼不能漏跑：來源 Loki 的 retention_period 只有 168h（7 天）。這個作業安靜停擺
 # 超過 7 天，那段 CWV 序列就永久遺失且事後無法回填——compactor 已經把來源刪掉了。
@@ -10,13 +14,23 @@ name: CWV Hourly Ingestion
 
 on:
   schedule:
-    - cron: '5 * * * *'   # 每小時第 5 分鐘，讓上一個小時確定收完
+    # 每 6 小時的第 35 分鐘（00:35 / 06:35 / 12:35 / 18:35 UTC）。
+    # 2026-09-10 由每小時降頻而來。整點的選擇（0/6/12/18）與「為什麼是 6 小時」
+    # 的推導和 crawl-hourly.yml 共用，見該檔同一段註解，這裡不重複貼。
+    #
+    # 【為什麼是第 35 分、排在 crawl-hourly（第 5 分）之後】兩支查同一個 Loki，
+    # 降頻後視窗從 2h 變 14h、單次掃描量變大，錯開的必要性比降頻前更高。
+    # crawl 是長的那支（約 10.6 分鐘），排前面；本管線中位僅 14 秒（167 次排程
+    # 實測，2026-09-02..09-08），排在 30 分鐘後即使 crawl 吃滿 +44 分的延遲
+    # 也不會相交。名目間隔 30 分鐘，遠寬於降頻前的 10 分鐘。
+    # 第 35 分同樣滿足原本「第 5 分」的用意：讓上一個小時確定收完。
+    - cron: '35 0,6,12,18 * * *'
   workflow_dispatch:
     inputs:
       backfill_hours:
         description: '回填最近 N 個完整小時（上限 48）'
         required: false
-        default: '2'
+        default: '14'
 
 # 同時只跑一個，避免排程與手動回填互相覆寫。不取消進行中的那個——
 # 它可能正在寫入，取消會留下 status='running' 的孤兒列。
@@ -47,7 +61,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           # 經 env 傳遞而非直接內插進 run:——workflow_dispatch 的 input 是使用者輸入，
           # 內插進 shell 等於命令注入面。腳本自己也會再驗一次上限 48。
-          BACKFILL_HOURS: ${{ github.event.inputs.backfill_hours || '2' }}
+          BACKFILL_HOURS: ${{ github.event.inputs.backfill_hours || '14' }}
         run: |
           python scripts/ingest_cwv_hourly.py --execute --backfill-hours "$BACKFILL_HOURS"
 

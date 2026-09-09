@@ -25,9 +25,10 @@ current hour 是半滿的桶，不寫。每次執行取「當前整點之前的 
 「數字看起來正常、其實只有半小時樣本」的列——沒有任何欄位能表達這件事，
 下游算週趨勢時會把它當完整小時。寧可晚一小時，不要寫一個無法辨識的半桶。
 
-【2. 每次查前 2 小時（DEFAULT_LOOKBACK_HOURS），相鄰執行刻意重疊】
-排程每小時跑一次但只需 1 小時的新資料，多查一小時是為了自癒：
+【2. 每次查前 14 小時（DEFAULT_LOOKBACK_HOURS），相鄰執行刻意重疊】
+排程每 6 小時跑一次但只需 6 小時的新資料，多查一倍是為了自癒：
 單次執行失敗、GitHub Actions 排程延遲、Loki 短暫不可用，下一輪會補回來。
+視窗寬度不是隨手取的，是由排程間隔反推的——推導見 DEFAULT_LOOKBACK_HOURS 的註解。
 重疊的正確性靠 cwv_hourly_dim_uniq 的 upsert 冪等保證，不靠「剛好不重疊」。
 注意這只買到「小時」等級的容錯；Loki retention 只有 168h，靜默停擺超過 7 天
 資料永久遺失，那要靠 --check-freshness 的新鮮度告警擋。
@@ -132,7 +133,40 @@ USER_AGENT = "seo-knowledge-insight-cwv-ingest/1.0"
 SOURCE = "rum"
 BUCKET = "1h"
 STEP_SECONDS = 3600
-DEFAULT_LOOKBACK_HOURS = 2
+
+# ══ 排程耦合常數 ══════════════════════════════════════════════════════
+# 這一組的值全部由 .github/workflows/cwv-hourly.yml 的 cron 推導出來。
+# 改 cron 就一定要重跑下面的算式改這裡，反之亦然——
+# tests/test_ingest_window_covers_schedule_gap.py 會把兩邊對起來驗，只改一邊會紅。
+# 三個輸入值（F / D / L）的實測出處與 ingest_crawl_hourly.py 同一組，
+# 見 scripts/quality_gate_config.py 的 crawl_daily 註解；兩條管線受同一個
+# GitHub Actions 平台行為影響，數字量級相同（2026-09-03 各自獨立驗證過）。
+
+# 排程間隔 F。2026-09-10 由每小時降為每 6 小時（cron '35 0,6,12,18 * * *'）。
+SCHEDULE_INTERVAL_HOURS = 6
+# GitHub Actions schedule trigger 的超額延遲上限（實測 104 分 − 名目 60 分 = 44 分）。
+SCHEDULE_EXCESS_DELAY_HOURS = 0.73
+# 「該小時結束」到「該小時的列出現在 Supabase」的實測寫入延遲上緣。
+WRITE_LAG_HOURS = 0.63
+
+# 單次抓取視窗 W。推導與 ingest_crawl_hourly.py 的 DEFAULT_LOOKBACK_HOURS 相同：
+#
+#   一次執行在 t 覆蓋 complete_hours(t, W) = [H(t)-W, H(t)-1]；下一次在 t' 不留
+#   空洞需 W >= H(t')-H(t)，最壞分鐘對齊下等於 floor(t'-t)+1。容忍漏跑一次
+#   → t'-t <= 2F + D：
+#
+#       W >= floor(2*6 + 0.73) + 1 = 13   →  取 14，留 1 小時餘裕
+#
+# 這裡的頻率下限不像 crawl 那樣由 MAX_BACKFILL_HOURS 決定（48 換算 F <= 23h，
+# 很鬆），而是由 **Grafana proxy 的 ~30s wall clock** 決定：本腳本用 query_range
+# 一次涵蓋整個視窗（collect_rows() 的三個呼叫），視窗變寬 = 單次查詢變重。
+# W=2 時 ingest job 中位僅 14s（2026-09-02..09-08，167 次排程實測），
+# **W=14 的實際耗時尚未實測 → provisional**。web-vitals stream 每小時約 0.87MB
+# （見 classify_loki_error 的 bytes-limit 說明），14h 約 12MB，遠低於 3GB 的
+# max_query_bytes_read；但耗時要看實跑。撞到 30s 502 的話退回 F=4 / W=10
+# （floor(2*4+0.73)+1 = 9，取 10），省下的分鐘數幾乎一樣。
+DEFAULT_LOOKBACK_HOURS = 14
+
 MAX_BACKFILL_HOURS = 48  # 單次跨度上限，防打錯字（例如多打一個 0）
 
 # 【真正的安全門檻 — 絕對時間，不是跨度】
@@ -163,7 +197,21 @@ TABLE_CWV = "cwv_hourly"
 TABLE_RUN = "ingestion_run"
 CONFLICT_KEY = "source,environment,hour,metric,route_type,device"
 UPSERT_BATCH_SIZE = 500
-FRESHNESS_MAX_AGE_HOURS = 3  # 排程週期 1h 的 3 倍
+# 新鮮度門檻：量的是 now - 最新 bucket 的**起點**。刻意不是「排程週期 × N」——
+# 那個公式漏掉兩個與週期無關的加項，在資料健康時就誤報（見
+# scripts/ingest_gsc_search_analytics.py 的同名常數註解）。逐項：
+#
+#   1h    最新 bucket 是 H(t)-1，量的是起點，桶寬先吃掉 1h
+#   1h    執行時刻 t 可落在它那一小時的任何位置
+#   F     下一次排程寫進新資料之前 age 一路在長      = 6h
+#   D     排程超額延遲                                = 0.73h
+#   L     寫入延遲                                    = 0.63h
+#   ──────────────────────────────────────────────────────────
+#   最壞 age < 1 + 1 + 6 + 0.73 + 0.63 = 9.36h  →  取 10h（餘裕 0.64h）
+#
+# 代價：真的停擺時這道 gate 要 10h 才 FAIL（舊值 3h）；上限由
+# data-quality-watchdog 每日一次兜住，Loki 168h 下仍有 144h 補救 runway。
+FRESHNESS_MAX_AGE_HOURS = 10
 
 
 class LokiQueryError(RuntimeError):

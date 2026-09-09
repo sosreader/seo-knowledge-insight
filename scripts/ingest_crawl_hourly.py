@@ -169,14 +169,81 @@ HTTP_TIMEOUT_SECONDS = 90
 USER_AGENT = "seo-knowledge-insight-crawl-ingest/1.0"
 
 BUCKET = "1h"
-DEFAULT_LOOKBACK_HOURS = 2
+
+# ══ 排程耦合常數 ══════════════════════════════════════════════════════
+# 這一組的值全部由 .github/workflows/crawl-hourly.yml 的 cron 推導出來。
+# 改 cron 就一定要重跑下面的算式改這裡，反之亦然——
+# tests/test_ingest_window_covers_schedule_gap.py 會把兩邊對起來驗，只改一邊會紅。
+
+# 排程間隔 F。2026-09-10 由每小時降為每 6 小時（cron '5 0,6,12,18 * * *'）。
+SCHEDULE_INTERVAL_HOURS = 6
+
+# GitHub Actions schedule trigger 的**超額**延遲上限 D（不是絕對延遲——是相鄰兩次
+# 觸發的間隔比名目多出來的部分）。實測依據記在 scripts/quality_gate_config.py 的
+# crawl_daily 註解：2026-09-03 最近 20 次 schedule 觸發的相鄰間隔（分鐘）
+#   64 55 59 57 73 50 60 62 60 55 67 51 65 56 61 58 98 39 104
+# 最大 104 分、名目 60 分 → 超額 44 分 = 0.73h。
+SCHEDULE_EXCESS_DELAY_HOURS = 0.73
+
+# 從「該小時結束」到「該小時的列出現在 Supabase」的實測寫入延遲上緣
+# （0.40–0.63h，出處同上）。
+WRITE_LAG_HOURS = 0.63
+
+# 單次抓取視窗 W。要大到「完全漏跑一次」的下一輪還能把缺口補回來：
+#
+#   一次執行在 t 覆蓋 complete_hours(t, W) = [H(t)-W, H(t)-1]（H = 截到整點）。
+#   下一次在 t' 不留空洞的條件是 H(t')-W <= H(t)，即 W >= H(t')-H(t)。
+#   H(t')-H(t) 在最壞的分鐘對齊下可達 floor(t'-t)+1（t 落在 :59、t' 落在
+#   floor(t'-t)+1 格之後的 :00 剛過）。要容忍漏跑一次 → t'-t <= 2F + D。
+#
+#       W >= floor(2F + D) + 1 = floor(2*6 + 0.73) + 1 = floor(12.73) + 1 = 13
+#
+#   取 14，留 1 小時餘裕。
+#
+# 注意是離散的 floor()+1，不是連續式 ceil(2F+D)。目前 D=0.73、F 是整數，
+# 2F+D 永遠不是整數，兩式恰好同值——但那是巧合不是恆等式：D 是實測值，下次重量
+# 若得到 1.0 這種整數（或有人把 F 改成 0.5h），ceil 會少算一小時，而少算一小時
+# 就是每輪都在視窗邊界留一個不會有錯誤訊號的空洞。
+# tests/test_ingest_window_covers_schedule_gap.py 兩式都驗。改頻率時用上面那條
+# 式子重算，不要照抄 14。
+#
+# 頻率下限：W <= MAX_BACKFILL_HOURS=24 → floor(2F+0.73)+1 <= 24 → F <= 11
+# → **最低安全頻率是每 11 小時**，6h 在範圍內。（Loki 的 168h retention 不是這裡
+# 的約束：最壞情況 W+F+D = 24+11+0.73 = 35.7h << 168h。retention 約束的是
+# 「發現→修復」窗口，見下方 MAX_AGE_HOURS。）
+#
+# 順帶記一筆：降頻前的 F=1/W=2 只滿足「連續性」（floor(1+0.73)+1 = 2），
+# 並不容忍完整漏跑一次；改成 F=6/W=14 之後容錯等級是往上走的，不是往下。
+DEFAULT_LOOKBACK_HOURS = 14
+
 # 每小時 4 個查詢約 37s，24h 回填約 15 分鐘。這道門檻只防打錯字，
 # 真正的保留期防線是 MAX_AGE_HOURS（見 crawl_warehouse.py 設計決定 1）。
 MAX_BACKFILL_HOURS = 24
 RETENTION_SAFETY_MARGIN_HOURS = 24
 MAX_AGE_HOURS = LOKI_RETENTION_HOURS - RETENTION_SAFETY_MARGIN_HOURS  # 144
 
-FRESHNESS_MAX_AGE_HOURS = 3  # 排程週期 1h 的 3 倍
+# 新鮮度門檻：量的是 now - 最新 bucket 的**起點**。
+#
+# 刻意**不是**「排程週期 × N」——那個公式會漏掉兩個與週期無關的加項，在資料健康時
+# 就誤報（同一個坑的完整說明見 scripts/ingest_gsc_search_analytics.py 的
+# FRESHNESS_MAX_AGE_HOURS 註解）。逐項拆：
+#
+#   1h    最新 bucket 是 H(t)-1，而我們量的是它的起點——桶本身的寬度先吃掉 1h
+#   1h    執行時刻 t 可以落在它那一小時的任何位置（0 <= t - H(t) < 1h）
+#   F     下一次排程把新資料寫進來之前，age 一路在長          = 6h
+#   D     排程超額延遲                                        = 0.73h
+#   L     寫入延遲                                            = 0.63h
+#   ────────────────────────────────────────────────────────────────────
+#   最壞 age < 1 + 1 + 6 + 0.73 + 0.63 = 9.36h  →  取 10h（餘裕 0.64h）
+#
+# 這比舊值 3h 背後的帳更完整：舊註解只算了「最大間隔 + 寫入延遲」≈ 2.4h，
+# 沒算前兩項；照同一套算法舊設定的真實最壞是 4.36h > 3h，只是那幾個最壞值
+# 沒同時發生過而已。降頻後窗口變寬，這兩項不能再省略。
+#
+# 代價：管線真的停擺時，這道 gate 要 10h 才會 FAIL（舊值 3h）。上限仍由
+# data-quality-watchdog 每日一次兜住（最遲 24h 發現），Loki 168h 保留期下
+# 還有 144h 可以用 --backfill-until 手動補回。
+FRESHNESS_MAX_AGE_HOURS = 10
 
 # 被 __error__="" 濾掉的行數 ÷ 全流量請求數 的警戒線。超過就代表壞行不是零星
 # sidecar 雜訊、該停下來查，不能繼續濾。見設計決定 5。

@@ -1,6 +1,10 @@
 name: Crawl Hourly Ingestion
 
-# 每小時把 Loki 的 envoy access log 聚合成 crawler 流量分佈寫進 Supabase crawl_daily。
+# 每 6 小時把 Loki 的 envoy access log 聚合成 crawler 流量分佈寫進 Supabase crawl_daily。
+# 「每 6 小時」指的是抓取頻率；寫進去的資料粒度仍然是**逐小時**的桶——降頻不會少掉
+# 任何一小時的資料點，改變的只有「最新一筆有多新」：剛跑完仍是 <=2h，但下一輪之前
+# 最壞會到 9.36h（降頻前是 4.36h）。這個數字就是新鮮度門檻取 10h 的依據，
+# 逐項推導見 scripts/ingest_crawl_hourly.py 的 FRESHNESS_MAX_AGE_HOURS 註解。
 #
 # 為什麼不能漏跑：來源 Loki 的 retention_period 只有 168h（7 天）。這個作業安靜停擺
 # 超過 7 天，那段 crawler 序列就永久遺失且事後無法回填——compactor 已經把來源刪掉了。
@@ -14,16 +18,35 @@ name: Crawl Hourly Ingestion
 
 on:
   schedule:
-    # 每小時第 15 分鐘。刻意與 cwv-hourly（第 5 分）錯開：
-    # 兩者查的是同一個 Loki，envoy 這條 stream 單小時要掃 113MB，
-    # 疊在同一分鐘會讓兩邊都更接近 proxy 的 30s wall clock 上限。
-    - cron: '15 * * * *'
+    # 每 6 小時的第 5 分鐘（00:05 / 06:05 / 12:05 / 18:05 UTC）。
+    # 2026-09-10 由每小時降頻而來，三個選擇各有理由：
+    #
+    # 【為什麼是 6 小時】視窗 W 要能容忍完整漏跑一次，需 W >= floor(2F+D)+1；
+    #   W 受 MAX_BACKFILL_HOURS=24 上限，反推 F <= 11。取 6 留一倍餘裕。
+    #   完整推導在 scripts/ingest_crawl_hourly.py 的 DEFAULT_LOOKBACK_HOURS 註解。
+    #
+    # 【為什麼是 0/6/12/18 這組整點】其他組都會撞到既有的每日排程：
+    #   1,7,13,19 撞 gsc-search-analytics（07:20，實測跑 30 分鐘）
+    #   2,8,14,20 撞 update-freshness（週一 02:00）與 gsc-url-inspection（08:20）
+    #   3,9,15,21 撞 data-quality-watchdog（09:30）與週一 etl-and-deploy（09:00）
+    #   4,10,16,22 / 5,11,17,23 撞週一 etl-and-deploy 的尾巴（跑到約 10:44）
+    #   0,6,12,18 只在週二 06:00 與 cwv-crux-history 相鄰，而後者約 36 秒、
+    #   寫的是另一張表（cwv_hourly）、來源是 CrUX API 不是 Loki——降頻前每小時
+    #   都會發生的相鄰，不是新增的風險。
+    #
+    # 【為什麼放在第 5 分、比 cwv-hourly（第 35 分）早】兩者查同一個 Loki，
+    #   降頻後視窗從 2h 變 14h、單次掃描量跟著變大，錯開的必要性比降頻前更高。
+    #   本管線是長的那個（W=14 約 634s ≈ 10.6 分鐘；envoy stream 單小時 113MB），
+    #   排在前面才能在最壞延遲（+44 分，即 06:49 起跑、約 07:00 結束）下仍然
+    #   趕在 gsc-search-analytics（07:20）之前收工。cwv 那支中位僅 14 秒，
+    #   排在第 35 分綽綽有餘。名目間隔 30 分鐘，遠寬於降頻前的 10 分鐘。
+    - cron: '5 0,6,12,18 * * *'
   workflow_dispatch:
     inputs:
       backfill_hours:
         description: '回填最近 N 個完整小時（上限 24；每小時約 37 秒）'
         required: false
-        default: '2'
+        default: '14'
       backfill_until:
         description: >-
           選填。視窗新端的 ISO 時間（例如 2026-09-01T21:00:00Z），
@@ -62,7 +85,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           # 經 env 傳遞而非直接內插進 run:——workflow_dispatch 的 input 是使用者輸入，
           # 內插進 shell 等於命令注入面。腳本自己也會再驗一次上限 24。
-          BACKFILL_HOURS: ${{ github.event.inputs.backfill_hours || '2' }}
+          BACKFILL_HOURS: ${{ github.event.inputs.backfill_hours || '14' }}
           BACKFILL_UNTIL: ${{ github.event.inputs.backfill_until || '' }}
         run: |
           if [ -n "$BACKFILL_UNTIL" ]; then
