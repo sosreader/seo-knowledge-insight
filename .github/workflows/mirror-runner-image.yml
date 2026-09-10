@@ -95,6 +95,14 @@ jobs:
             fi
           fi
 
+          # 兩條路徑（自動探測／手動指定）都要過這關：拒絕 pre-release／RC、拒絕
+          # 用 latest 之類的別名頂替版號（latest 會讓 DST_VERSION_TAG 撞上下面
+          # 的移動 tag latest-amd64）、拒絕空值或任何非純 x.y.z 格式。
+          if ! printf '%s' "${VERSION}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::拒絕 mirror '${VERSION}'：不是純 x.y.z 正式版號（pre-release、latest、空值或格式錯誤皆拒絕）"
+            exit 1
+          fi
+
           AMD64_DIGESTS=$(crane manifest "${SRC_IMAGE}:${VERSION}" \
             | jq -r '[.manifests[] | select(.platform.os=="linux" and .platform.architecture=="amd64") | .digest] | unique | .[]')
           AMD64_DIGEST_COUNT=$(echo "${AMD64_DIGESTS}" | grep -c 'sha256:' || true)
