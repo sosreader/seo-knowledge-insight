@@ -1,0 +1,185 @@
+name: Mirror Runner Image
+
+# 為什麼需要這支 workflow：
+# ARC runner 節點位於 private subnet，出網一律走 NAT Gateway（$0.062/GB）。官方
+# actions-runner image 壓縮後約 517-522 MB；scale-to-zero 下幾乎每個 job 都落在
+# 快取全空的新節點，估計每月 1,559 次冷啟、約 795 GB，若直接從 ghcr.io 拉會是
+# 約 $49.3/月——比完全不遷移 ARC 的 gross 成本（$36.7/月）還貴。
+#
+# 解法不是「加回 Dockerfile 自建 image」，而是把官方 image 原封不動複製進 ECR：
+# 沒有 build、沒有內容決策，複製後的 digest 與上游 linux/amd64 child 完全一致，
+# 可用印出的 digest 回頭對驗。改從 ECR 拉之後，layer bytes 改走 VPC 的 S3 gateway
+# endpoint，$0。
+#
+# schedule 是承重的，不是方便：GitHub 對落後最新版本超過 30 天的 self-hosted
+# runner 會停用註冊；ARC 跑在 --disable-update 模式，runner pod 只有在這支
+# workflow 真的把 moving tag 往前推時才會撿到新版 image。只靠 workflow_dispatch
+# 不會推進 tag，看起來跟上了、實際上沒有。
+
+on:
+  schedule:
+    # 每週一 01:40 UTC。避開本 repo 現有排程（2026-09-10 逐一核對 .github/workflows/*.yml
+    # 的 cron 得出）：cwv-hourly 每小時 :05、crawl-hourly 每小時 :15、
+    # update-freshness 週一 02:00 UTC、etl-and-deploy 週一 09:00 UTC、
+    # cwv-crux-history 週二 06:00 UTC、gsc-search-analytics 每日 07:20 UTC、
+    # gsc-url-inspection 每日 08:20 UTC、data-quality-watchdog 每日 09:30 UTC。
+    - cron: "40 1 * * 1"
+  workflow_dispatch:
+    inputs:
+      runner_version:
+        description: "指定要 mirror 的版本（例如 2.337.0）。留空則自動探測上游最新版；同時也是回滾槓桿——指定舊版號可用來復原"
+        required: false
+        type: string
+        default: ""
+
+# 一個排程 run 若被下一個排程 run 取消，latest-amd64 可能停在「複製到一半」或
+# 舊版 digest 上，而不是乾淨地停在上一個成功版本——寧可讓它們排隊，也不要
+# cancel-in-progress。
+concurrency:
+  group: mirror-runner-image
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Mirror Runner Image To ECR
+    runs-on: ubuntu-latest
+    # 偏離本 repo 慣例（目前沒有任何 workflow 設定 timeout-minutes）：這是唯一一支
+    # 會在網路上搬約 1 GB 資料的 workflow，GitHub 預設 timeout 是 360 分鐘，
+    # 卡住時不該讓 job 掛整整 6 小時才被回收。
+    timeout-minutes: 20
+    permissions:
+      id-token: write
+      contents: read
+    # 刻意不加 environment:——加上會把 OIDC sub 從
+    # repo:sosreader/seo-knowledge-insight:ref:refs/heads/main
+    # 改寫成 repo:...:environment:<name>，導致 IAM role 信任條件比對失敗、認證直接壞掉。
+    # 未來若有人想加 approval environment，請先確認 IAM trust policy 同步更新。
+    steps:
+      - name: Install Crane
+        run: |
+          set -euo pipefail
+          CRANE_VERSION="v0.22.1"
+          CRANE_SHA256="0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0"
+          CRANE_TARBALL="go-containerregistry_Linux_x86_64.tar.gz"
+          curl -fsSL -o "${CRANE_TARBALL}" \
+            "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/${CRANE_TARBALL}"
+          echo "${CRANE_SHA256}  ${CRANE_TARBALL}" | sha256sum -c -
+          sudo tar -xzf "${CRANE_TARBALL}" -C /usr/local/bin crane
+          rm "${CRANE_TARBALL}"
+          crane version
+        # 不用 marketplace action 安裝 crane：這個 job 之後會持有 AWS 憑證，
+        # 第三方 action 的程式碼不該跑在同一個 job 裡。改用 curl + sha256sum 驗證 + tar 解壓。
+
+      - name: Resolve Runner Version And Upstream Digest
+        env:
+          INPUT_RUNNER_VERSION: ${{ inputs.runner_version }}
+        run: |
+          set -euo pipefail
+          SRC_IMAGE="ghcr.io/actions/actions-runner"
+
+          if [ -n "${INPUT_RUNNER_VERSION}" ]; then
+            VERSION="${INPUT_RUNNER_VERSION}"
+            echo "使用手動指定版本：${VERSION}（跳過 :latest 交叉檢查，這是刻意保留的回滾槓桿）"
+          else
+            VERSION=$(crane ls "${SRC_IMAGE}" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            if [ -z "${VERSION}" ]; then
+              echo "::error::自動探測版本失敗（crane ls 未回傳任何 x.y.z 格式版號），請手動指定 runner_version"
+              exit 1
+            fi
+
+            DISCOVERED_INDEX_DIGEST=$(crane digest "${SRC_IMAGE}:${VERSION}")
+            LATEST_INDEX_DIGEST=$(crane digest "${SRC_IMAGE}:latest")
+            if [ "${DISCOVERED_INDEX_DIGEST}" != "${LATEST_INDEX_DIGEST}" ]; then
+              echo "::error::探測到的最新版本 ${VERSION}（index digest ${DISCOVERED_INDEX_DIGEST}）與上游 :latest（${LATEST_INDEX_DIGEST}）不一致，可能是撤版或版號跳號，需人工指定 runner_version"
+              exit 1
+            fi
+          fi
+
+          AMD64_DIGESTS=$(crane manifest "${SRC_IMAGE}:${VERSION}" \
+            | jq -r '[.manifests[] | select(.platform.os=="linux" and .platform.architecture=="amd64") | .digest] | unique | .[]')
+          AMD64_DIGEST_COUNT=$(echo "${AMD64_DIGESTS}" | grep -c 'sha256:' || true)
+          if [ "${AMD64_DIGEST_COUNT}" -ne 1 ]; then
+            echo "::error::linux/amd64 manifest 數量不是 1（實際 ${AMD64_DIGEST_COUNT}），上游 index 結構可能變了，需要人工檢查"
+            exit 1
+          fi
+
+          {
+            echo "SRC_IMAGE=${SRC_IMAGE}"
+            echo "VERSION=${VERSION}"
+            echo "AMD64_DIGEST=${AMD64_DIGESTS}"
+          } >> "$GITHUB_ENV"
+          # 不用 GitHub Releases API 探測版本：release 建立與 image 發佈有時間差，
+          # releases/latest 可能指到還沒有對應 image 的版本。
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_RUNNER_IMAGE_ROLE_ARN }}
+          aws-region: ap-northeast-1
+          mask-aws-account-id: true
+          # 這個 SHA 釘住的版本，action.yml 明寫「By default the account ID will not
+          # be masked」——不主動設 true 的話，把 ARN 藏進 secret 是白做的，帳號 ID
+          # 照樣會印在 public repo 的 log 裡。
+
+      - name: Copy Image To ECR
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::${ACCOUNT_ID}"
+          REGISTRY="${ACCOUNT_ID}.dkr.ecr.ap-northeast-1.amazonaws.com"
+          echo "::add-mask::${REGISTRY}"
+          DST_REPO="${REGISTRY}/seo-knowledge-insight-arc-runner"
+          echo "::add-mask::${DST_REPO}"
+
+          aws ecr get-login-password --region ap-northeast-1 \
+            | crane auth login "${REGISTRY}" --username AWS --password-stdin
+
+          SRC_REF="${SRC_IMAGE}:${VERSION}"
+          DST_VERSION_TAG="${DST_REPO}:${VERSION}-amd64"
+
+          EXISTING_DIGEST=$(crane digest "${DST_VERSION_TAG}" 2>/dev/null || true)
+          if [ "${EXISTING_DIGEST}" = "${AMD64_DIGEST}" ]; then
+            echo "ECR 上 ${VERSION}-amd64 已是上游 digest，跳過複製，只重蓋移動 tag"
+          else
+            # --platform linux/amd64：上游 index 內另有兩個帶 subject/artifactType 的
+            # OCI 1.1 referrer（attestation），ECR 目前會拒收，所以不能整包 index 複製。
+            # crane copy 不重新序列化 manifest，所以複製後 digest 與上游 amd64 child 一致。
+            crane copy --platform linux/amd64 "${SRC_REF}" "${DST_VERSION_TAG}"
+          fi
+
+          crane tag "${DST_VERSION_TAG}" latest-amd64
+
+          echo "DST_REPO=${DST_REPO}" >> "$GITHUB_ENV"
+        # 不用 aws-actions/amazon-ecr-login：那是第二個持有 AWS 憑證的 marketplace
+        # action，且它的 registry output 本身就含帳號 ID。改用
+        # aws ecr get-login-password | crane auth login，帳號 ID 取得後立刻 add-mask。
+
+      - name: Verify ECR Tags Match Upstream Digest
+        run: |
+          set -euo pipefail
+          VERSION_DIGEST=$(crane digest "${DST_REPO}:${VERSION}-amd64")
+          LATEST_DIGEST=$(crane digest "${DST_REPO}:latest-amd64")
+
+          FAILED=0
+          if [ "${VERSION_DIGEST}" != "${AMD64_DIGEST}" ]; then
+            echo "::error::ECR ${VERSION}-amd64 digest（${VERSION_DIGEST}）與上游 amd64 digest（${AMD64_DIGEST}）不符"
+            FAILED=1
+          fi
+          if [ "${LATEST_DIGEST}" != "${AMD64_DIGEST}" ]; then
+            echo "::error::ECR latest-amd64 digest（${LATEST_DIGEST}）與上游 amd64 digest（${AMD64_DIGEST}）不符"
+            FAILED=1
+          fi
+          if [ "${FAILED}" -ne 0 ]; then
+            exit 1
+          fi
+
+          {
+            echo "### Mirror Runner Image 結果"
+            echo ""
+            echo "| 項目 | 值 |"
+            echo "|---|---|"
+            echo "| 上游 ref | \`${SRC_IMAGE}:${VERSION}\` |"
+            echo "| 上游 linux/amd64 digest | \`${AMD64_DIGEST}\` |"
+            echo "| ECR repo | \`seo-knowledge-insight-arc-runner\` |"
+            echo "| ECR tags | \`${VERSION}-amd64\`, \`latest-amd64\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
