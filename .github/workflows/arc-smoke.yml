@@ -1,0 +1,42 @@
+name: ARC Smoke Test
+
+# 這是 arc-seo-knowledge-insight-amd64 這個 ARC runner pool 的常駐健康探針，
+# 不是 cutover——不動任何 production workflow，也不切換任何既有管線去用這個
+# runner。只手動觸發。
+#
+# 一次成功的 dispatch 同時證明四件事：
+#   1. GitHub App 的 repo scope 對 seo-knowledge-insight 生效
+#   2. ARC listener 派得到工（scale set 真的在監聽）
+#   3. node role 能從新的 ECR repo（seo-knowledge-insight-arc-runner）拉 image
+#   4. job 真的跑得完（不是卡在 bash entrypoint，見 helmrelease 的 command 設定）
+#
+# 不要在 deployment-eks 的 arc-seo-knowledge-insight-amd64 HelmRelease PR 合併、
+# 且 Flux 顯示該 HelmRelease Ready 之前 dispatch 這支——job 會卡在 queued，
+# 因為根本沒有 listener 在監聽。
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  smoke:
+    runs-on: arc-seo-knowledge-insight-amd64
+    steps:
+      - name: Report Architecture
+        run: |
+          set -euo pipefail
+          uname -m
+
+      - name: Report OS Release
+        run: |
+          set -euo pipefail
+          cat /etc/os-release
+
+      - name: Report CPU And Memory
+        run: |
+          set -euo pipefail
+          nproc && free -m
+
+      - name: Report Runner Name
+        run: |
+          set -euo pipefail
+          echo "runner=$RUNNER_NAME"
