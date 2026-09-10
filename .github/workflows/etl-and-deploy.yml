@@ -130,7 +130,12 @@ jobs:
         env:
           LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          # 讀 qa_items（--source supabase）走 anon key；寫 eval_runs 走
+          # service key——eval_runs 的 RLS 只開放 SELECT 給 anon，INSERT
+          # 必須用 service key 才不會被擋下（見 _eval_data_quality.py 的
+          # _upsert_eval_run 註解，supabase/migrations/002_eval_runs.sql）。
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/_eval_data_quality.py --source supabase
 
       - name: Run retrieval eval
