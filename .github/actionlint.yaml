@@ -1,0 +1,6 @@
+# actionlint 不認識 ARC (gha-runner-scale-set) 的 scale set 名稱，需在此宣告
+# 為自建 self-hosted runner label。arc-smoke.yml 先用到；日後正式 cutover 遷移
+# 資料管線 workflow 去用這個 runner 時也需要同一筆設定。
+self-hosted-runner:
+  labels:
+    - arc-seo-knowledge-insight-amd64
