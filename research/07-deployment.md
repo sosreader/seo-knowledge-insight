@@ -536,6 +536,7 @@ CI 環境需要 `SUPABASE_URL` + `SUPABASE_ANON_KEY` secrets。
 | `SUPABASE_SERVICE_KEY`  | Supabase service key（bypass RLS）           | 沿用                     |
 | `NOTION_TOKEN`          | Notion API 認證（排程 ETL fetch）            | 生效（2026-07-03 設定） |
 | `NOTION_PARENT_PAGE_ID` | Notion Meeting Minutes 來源頁 ID              | 生效（2026-07-03 設定） |
+| `AWS_RUNNER_IMAGE_ROLE_ARN` | `mirror-runner-image.yml` 用 OIDC 認證的 IAM role ARN（見 21.7.2） | 待設定（PR 合併後由使用者新增） |
 
 **孤兒 secret（workflow 已不引用，待清理）**：`NOTION_API_KEY`、`NOTION_DATABASE_ID`（皆 2026-03-06 設定）。
 
@@ -566,6 +567,24 @@ CI 環境需要 `SUPABASE_URL` + `SUPABASE_ANON_KEY` secrets。
 - `lambda:GetFunction`
 
 > **注意**：Lambda 架構建立後不可更改。需更換架構時必須刪除函式後重建。
+
+**IAM Role -- `gha-seo-knowledge-insight-runner-image-builder`（`mirror-runner-image.yml` 用，2026-09-10 新增）**：
+
+跟上面的 `seo-insight-deployer` IAM User 是兩套完全獨立的認證機制，且用途不同——
+這個 role 不部署這支 API，只負責把官方 ARC runner image mirror 進 ECR
+（見 21.9/21.10 後的「ECR 現況更新」）。
+
+- **認證方式**：GitHub OIDC（`aws-actions/configure-aws-credentials` 的
+  `role-to-assume`），不是長期 access key。這是本 repo 第一支用 OIDC 的 workflow，
+  其餘 AWS 相關 workflow（本節的 Lambda 部署）仍用 21.6 的長期 `AWS_ACCESS_KEY_ID`。
+- **Secret**：`AWS_RUNNER_IMAGE_ROLE_ARN`（repo secret，存 role ARN；因為是 public repo，
+  刻意不把 AWS 帳號 ID 寫進 git 歷史）。
+- **信任條件（trust policy）**：`sub` 綁定 `repo:sosreader/seo-knowledge-insight:ref:refs/heads/main`——
+  只有跑在 `main` 分支上的 workflow（schedule／`workflow_dispatch`）能 assume，PR branch 無法認證。
+- **權限範圍**：只能對 ECR repo `seo-knowledge-insight-arc-runner`（ap-northeast-1）做
+  push／pull 相關操作，不含其他 AWS 服務。
+- role 名稱在 `deployment-eks` 端於同批工作中從 `gha-seoki-runner-image-builder` 改名而來
+  （terraform ForceNew：砍掉重建，`RoleLastUsed` 為空、從未被 assume 過，改名零風險）。
 
 ### 21.7.1 Production Recovery Snapshot（2026-03-14）
 
@@ -685,6 +704,12 @@ EC2 透過 volume mount 掛載資料檔，SSM 遠端執行部署命令。
 已於 2026-03-03 遷移至 App Runner。
 
 </details>
+
+> **ECR 現況更新（2026-09-10）**：上面兩節的「已淘汰」指的是**app 部署**不再用 ECR——
+> 現行架構是 21.2 的 Lambda + Function URL，跟 ECR 無關。但 ECR 本身**重新啟用**了，
+> 用途完全不同：`seo-knowledge-insight-arc-runner` repo 現在是 ARC self-hosted runner
+> image 的 mirror 目的地（見 21.7 的「IAM Role -- `gha-seo-knowledge-insight-runner-image-builder`」小節），
+> 不涉及這支 API 的部署路徑。
 
 ---
 
