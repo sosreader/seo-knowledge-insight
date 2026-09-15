@@ -43,7 +43,7 @@
 - [ ] **S0.3** — 本地驗證批後手動觸發 ETL 至全綠，驗 qa_final.json mtime/筆數 > 3,671 + Supabase count 一致
   - Files: scripts/01_fetch_notion.py, scripts/02_extract_qa.py, output/qa_final.json
   - Agent: `general-purpose`
-  - Action（workflow 已於 2026-09-15 移除，改本機執行）：依 research/15-pipeline-operations.md「本機執行完整 ETL」，`make check` → `make fetch-notion` → `make extract-qa-test` 驗證批 → `make extract-qa` → `make dedupe-classify` → `make migrate-supabase-dry` → `make migrate-supabase` → `make migrate-supabase-verify` → 兩個 eval → `python scripts/quality_gate.py --source supabase` 輸出 `Quality gate PASSED`（不假設綠）；Supabase 若 pause 先 resume + poll health 200。原 Action：`make fetch-notion` → `--limit 30` 驗證批 → `gh workflow run etl-and-deploy.yml` → `gh run watch` 至四 job 全綠
+  - Action（workflow 已於 2026-09-15 移除，改本機執行）：依 research/15-pipeline-operations.md「本機執行完整 ETL」，`make check` → `make fetch-notion` → `make extract-qa-test` 驗證批 → `make extract-qa` → `make dedupe-classify` → `make migrate-supabase-dry` → `make migrate-supabase` → `make migrate-supabase-verify` → 兩個 eval → `python scripts/quality_gate.py --source supabase` 輸出 `Quality gate PASSED`（不假設綠）；Supabase 若 pause 先 resume + poll health 200。原 Action：`make fetch-notion` → `--limit 30` 驗證批 → `gh workflow run etl-and-deploy.yml` → `gh run watch` 至四 job 全綠（不假設綠）；Supabase 若 pause 先 resume + poll health 200
   - Dependencies: S0.2
   - Why: 完成宣稱兩級門檻；extract 模式（OpenAI $ vs heuristic 偏態）在此步以 AskUserQuestion 確認
 
@@ -168,7 +168,7 @@
 
 ## Verification（端到端）
 
-1. **迴路驗證**（workflow 已於 2026-09-15 移除，改本機執行）：依 research/15-pipeline-operations.md「本機執行完整 ETL」在本機跑完，`python scripts/quality_gate.py --source supabase` 輸出 `Quality gate PASSED`，且 `make migrate-supabase-verify` 的筆數與 `output/qa_final.json` 一致。原條件：`gh run list --workflow=etl-and-deploy.yml --limit 1` = success；故意讓下次 schedule 前 dry-run 一次失敗路徑，確認通知會到（S0.4）
+1. **迴路驗證**（workflow 已於 2026-09-15 移除，改本機執行）：依 research/15-pipeline-operations.md「本機執行完整 ETL」在本機跑完，`python scripts/quality_gate.py --source supabase` 輸出 `Quality gate PASSED`，且 `make migrate-supabase-verify` 的筆數與 `output/qa_final.json` 一致。原條件：`gh run list --workflow=etl-and-deploy.yml --limit 1` = success；故意讓下次 schedule 前 dry-run 一次失敗路徑確認通知會到（S0.4）
 2. **量測驗證**：新 golden set 上各 eval 有非飽和分數（Hit Rate < 100% 有改進空間可量）；structure eval 對 accepted baseline PASS、壞樣本 FAIL
 3. **主線驗證**：下一份實際週報/meeting-prep 走 S3.4 一鍵流程產出且過 eval gate
 4. **機制驗證**：plans/active/ ≤4 份且都有 priority；CLAUDE.md 含疊代規則

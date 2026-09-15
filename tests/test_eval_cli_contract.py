@@ -77,7 +77,7 @@ def test_runbook_flags_are_accepted_by_script(script: str, flags: tuple[str, ...
     assert result.returncode == 0, f"{script} --help 失敗：{result.stderr[-500:]}"
     for flag in flags:
         assert flag in result.stdout, (
-            f"{script} 的 argparse 不認得 workflow 傳的 {flag}——"
+            f"{script} 的 argparse 不認得 runbook 寫的 {flag}——"
             f"這正是 commit e169788 造成 ETL Pipeline 六個月 0 成功的失敗模式。"
         )
 
