@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import json
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -769,21 +770,44 @@ class TestReapStaleRunning:
 
     def test_execute_patches_with_audit_fields(self) -> None:
         stale = [{"id": "abc", "age_hours": 40.0, "threshold_hours": 6.0, "started_at": "x"}]
-        with patch.object(gate, "_request", return_value=(204, "")) as mock_request:
+        with patch.object(
+            gate, "_request", return_value=(200, json.dumps([{"id": "abc", "status": "failed"}]))
+        ) as mock_request:
             results = gate.reap_stale_running(stale, dry_run=False, actor="test-actor")
         assert results[0]["action"] == "reaped"
-        _method, _path = mock_request.call_args.args
+        _method, path = mock_request.call_args.args
+        assert "status=eq.running" in path
         body = mock_request.call_args.kwargs["body"]
         assert body["status"] == "failed"
         assert body["reaped_by"] == "test-actor"
         assert body["reap_reason"]
         assert body["finished_at"]
+        assert mock_request.call_args.kwargs["extra_headers"]["Prefer"] == "return=representation"
 
     def test_execute_failure_reports_reap_failed(self) -> None:
         stale = [{"id": "abc", "age_hours": 40.0, "threshold_hours": 6.0, "started_at": "x"}]
         with patch.object(gate, "_request", return_value=(400, "bad")):
             results = gate.reap_stale_running(stale, dry_run=False)
         assert results[0]["action"] == "reap_failed"
+
+    def test_execute_zero_rows_matched_is_already_finished_not_failed(self) -> None:
+        """SELECT 到 PATCH 之間的空窗裡，這筆 run 可能已經自己正常收尾
+        （status 不再是 running）。status=eq.running 過濾條件會讓 PATCH
+        匹配不到列，PostgREST 回 200 + 空陣列——這不是失敗，是「已經有人
+        收尾了，略過」，不該覆寫成 failed，也不該算 reap_failed。"""
+        stale = [{"id": "abc", "age_hours": 40.0, "threshold_hours": 6.0, "started_at": "x"}]
+        with patch.object(gate, "_request", return_value=(200, "[]")):
+            results = gate.reap_stale_running(stale, dry_run=False)
+        assert results[0]["action"] == "already_finished"
+
+    def test_status_running_filter_prevents_overwriting_a_row_that_self_finished(self) -> None:
+        """回歸：PATCH 過濾條件只有 id 的舊版會覆寫掉已經正常收尾的列。"""
+        stale = [{"id": "abc", "age_hours": 40.0, "threshold_hours": 6.0, "started_at": "x"}]
+        with patch.object(gate, "_request", return_value=(200, "[]")) as mock_request:
+            gate.reap_stale_running(stale, dry_run=False)
+        _method, path = mock_request.call_args.args
+        assert "id=eq.abc" in path
+        assert "status=eq.running" in path
 
 
 # ══════════════════════════════════════════════════════════════════════
