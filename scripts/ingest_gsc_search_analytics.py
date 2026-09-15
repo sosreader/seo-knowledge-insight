@@ -131,6 +131,10 @@ from scripts.gsc_surfaces import (  # noqa: E402
     row_to_record,
     totals_record,
 )
+from scripts.ingestion_run_retry import (  # noqa: E402
+    finish_run_or_raise,
+    request_with_retry,
+)
 
 load_dotenv(ROOT_DIR / ".env")
 
@@ -368,34 +372,41 @@ def start_run(
 
 
 def finish_run(run_id: str | None, run_status: str, row_count: int) -> None:
+    """收尾 PATCH（by id，冪等）。重試用盡仍失敗會 raise，讓程式以非 0 結束——
+    見 ingestion_run_retry.finish_run_or_raise 的 docstring。"""
     if not run_id:
         return
-    status, body = _supabase_request(
-        "PATCH",
-        f"/rest/v1/{TABLE_RUN}?id=eq.{urllib.parse.quote(run_id)}",
-        body={
-            "status": run_status,
-            "row_count": row_count,
-            "finished_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        },
-        extra_headers={"Prefer": "return=minimal"},
+    finish_run_or_raise(
+        lambda: _supabase_request(
+            "PATCH",
+            f"/rest/v1/{TABLE_RUN}?id=eq.{urllib.parse.quote(run_id)}",
+            body={
+                "status": run_status,
+                "row_count": row_count,
+                "finished_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            },
+            extra_headers={"Prefer": "return=minimal"},
+        ),
+        run_id=run_id,
     )
-    if status not in (200, 204):
-        logger.error("收尾 ingestion_run 失敗：%s %s", status, body[:300])
 
 
 def upsert_rows(
     rows: Sequence[dict], table: str = TABLE_GSC, conflict_key: str = CONFLICT_KEY,
 ) -> tuple[int, int]:
-    """冪等 upsert。回傳 (成功列數, 失敗列數)。"""
+    """冪等 upsert（on_conflict + merge-duplicates，重試安全——連線層例外
+    現在會在這裡重試，不會直接穿出去。回傳 (成功列數, 失敗列數)。"""
     succeeded = failed = 0
     for offset in range(0, len(rows), UPSERT_BATCH_SIZE):
         batch = rows[offset : offset + UPSERT_BATCH_SIZE]
-        status, body = _supabase_request(
-            "POST",
-            f"/rest/v1/{table}?on_conflict={urllib.parse.quote(conflict_key)}",
-            body=list(batch),
-            extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+        status, body = request_with_retry(
+            lambda batch=batch: _supabase_request(
+                "POST",
+                f"/rest/v1/{table}?on_conflict={urllib.parse.quote(conflict_key)}",
+                body=list(batch),
+                extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+            ),
+            description="upsert",
         )
         if status in (200, 201, 204):
             succeeded += len(batch)
@@ -417,8 +428,10 @@ def write_totals(
     try:
         succeeded, failed = upsert_rows(records, TABLE_TOTALS, TOTALS_CONFLICT_KEY)
     except urllib.error.URLError:
-        # review S4.1 SF-3：upsert_rows 內的 _supabase_request 只擋 HTTPError，
-        # 網路層例外（DNS／連線重置／TLS）會穿出來——這裡的 run_id 已經是
+        # review S4.1 SF-3：upsert_rows 現在把連線層例外（DNS／連線重置／TLS）
+        # 交給 ingestion_run_retry.request_with_retry 重試，重試用盡後回傳
+        # 失敗計數而不是往外拋，所以這個 except 理論上不會再被這裡的 upsert_rows
+        # 觸發——保留是防禦性的：萬一之後改動讓例外又能穿出來，run_id 已經是
         # "running"，不收尾就會永遠卡住，讓上層 stale-run 告警去抓才發現。
         finish_run(run_id, "failed", 0)
         raise

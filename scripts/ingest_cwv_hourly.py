@@ -113,6 +113,15 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from dotenv import load_dotenv
 
+try:
+    # 直接執行 `python scripts/ingest_cwv_hourly.py` 時 sys.path[0] 是本檔
+    # 所在目錄（scripts/），flat import 會先成功。
+    import ingestion_run_retry as _run_retry
+except ImportError:
+    # pytest 以 `from scripts import ingest_cwv_hourly` 套件路徑匯入時，
+    # repo root 才在 sys.path，要改用套件路徑。
+    from scripts import ingestion_run_retry as _run_retry
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -501,32 +510,39 @@ def start_run(window_start: datetime, window_end: datetime) -> str | None:
 
 
 def finish_run(run_id: str | None, run_status: str, row_count: int) -> None:
+    """收尾 PATCH（by id，冪等）。重試用盡仍失敗會 raise，讓程式以非 0 結束——
+    見 ingestion_run_retry.finish_run_or_raise 的 docstring。"""
     if not run_id:
         return
-    status, body = _supabase_request(
-        "PATCH",
-        f"/rest/v1/{TABLE_RUN}?id=eq.{urllib.parse.quote(run_id)}",
-        body={
-            "status": run_status,
-            "row_count": row_count,
-            "finished_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        },
-        extra_headers={"Prefer": "return=minimal"},
+    _run_retry.finish_run_or_raise(
+        lambda: _supabase_request(
+            "PATCH",
+            f"/rest/v1/{TABLE_RUN}?id=eq.{urllib.parse.quote(run_id)}",
+            body={
+                "status": run_status,
+                "row_count": row_count,
+                "finished_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            },
+            extra_headers={"Prefer": "return=minimal"},
+        ),
+        run_id=run_id,
     )
-    if status not in (200, 204):
-        logger.error("收尾 ingestion_run 失敗：%s %s", status, body[:300])
 
 
 def upsert_rows(rows: Sequence[dict]) -> tuple[int, int]:
-    """冪等 upsert。回傳 (成功列數, 失敗列數)。"""
+    """冪等 upsert（on_conflict + merge-duplicates，重試安全）。回傳
+    (成功列數, 失敗列數)。"""
     succeeded = failed = 0
     for offset in range(0, len(rows), UPSERT_BATCH_SIZE):
         batch = rows[offset : offset + UPSERT_BATCH_SIZE]
-        status, body = _supabase_request(
-            "POST",
-            f"/rest/v1/{TABLE_CWV}?on_conflict={urllib.parse.quote(CONFLICT_KEY)}",
-            body=list(batch),
-            extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+        status, body = _run_retry.request_with_retry(
+            lambda batch=batch: _supabase_request(
+                "POST",
+                f"/rest/v1/{TABLE_CWV}?on_conflict={urllib.parse.quote(CONFLICT_KEY)}",
+                body=list(batch),
+                extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+            ),
+            description="upsert",
         )
         if status in (200, 201, 204):
             succeeded += len(batch)

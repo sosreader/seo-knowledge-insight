@@ -524,10 +524,39 @@ class TestIngestionRunLifecycle:
             finish_run(None, "success", 0)
         request.assert_not_called()
 
-    def test_finish_run_logs_failure(self, caplog: pytest.LogCaptureFixture) -> None:
-        with patch(f"{MODULE}._supabase_request", return_value=(500, "boom")):
-            finish_run("abc", "failed", 0)
+    def test_finish_run_raises_on_non_retryable_failure(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """收尾失敗不能只 log——要 raise 讓程式非 0 結束（見
+        ingestion_run_retry KB 背景：finish_run 只 log 是本次事故根因）。"""
+        from scripts.ingestion_run_retry import IngestionRunFinishError
+
+        with patch(f"{MODULE}._supabase_request", return_value=(500, "boom")) as request:
+            with pytest.raises(IngestionRunFinishError, match="abc"):
+                finish_run("abc", "failed", 0)
         assert "收尾 ingestion_run 失敗" in caplog.text
+        assert request.call_count == 1
+
+    def test_finish_run_retries_504_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from scripts import ingestion_run_retry
+
+        monkeypatch.setattr(ingestion_run_retry.time, "sleep", lambda _seconds: None)
+        with patch(
+            f"{MODULE}._supabase_request", side_effect=[(504, "gw"), (204, "")]
+        ) as request:
+            finish_run("abc", "success", 1)  # 不拋
+        assert request.call_count == 2
+
+    def test_finish_run_exhausts_retries_then_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from scripts import ingestion_run_retry
+
+        monkeypatch.setattr(ingestion_run_retry.time, "sleep", lambda _seconds: None)
+        with patch(f"{MODULE}._supabase_request", return_value=(504, "gw")) as request:
+            with pytest.raises(ingestion_run_retry.IngestionRunFinishError):
+                finish_run("abc", "success", 1)
+        assert request.call_count == 1 + ingestion_run_retry.MAX_RETRY_ATTEMPTS
 
 
 class TestUpsert:
@@ -542,6 +571,16 @@ class TestUpsert:
     def test_batch_failure_counts_as_failed(self) -> None:
         with patch(f"{MODULE}._supabase_request", return_value=(500, "boom")):
             assert upsert_rows([self.ROW]) == (0, 1)
+
+    def test_retries_504_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from scripts import ingestion_run_retry
+
+        monkeypatch.setattr(ingestion_run_retry.time, "sleep", lambda _seconds: None)
+        with patch(
+            f"{MODULE}._supabase_request", side_effect=[(504, "gw"), (201, "")]
+        ) as request:
+            assert upsert_rows([self.ROW]) == (1, 0)
+        assert request.call_count == 2
 
     def test_conflict_key_matches_dim_uniq_columns(self) -> None:
         with patch(f"{MODULE}._supabase_request", return_value=(200, "")) as request:

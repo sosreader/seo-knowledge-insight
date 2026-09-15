@@ -119,6 +119,7 @@ from scripts.ingest_gsc_search_analytics import (
     supabase_config,
 )
 from scripts.gsc_inspection_sampling import build_sample, fetch_pages_with_any_impressions
+from scripts.ingestion_run_retry import finish_run_or_raise, request_with_retry
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("ingest_gsc_url_inspection")
@@ -478,31 +479,37 @@ def start_url_inspection_run(window_start: datetime, window_end: datetime) -> st
 
 
 def finish_url_inspection_run(run_id: str | None, run_status: str, row_count: int) -> None:
+    """收尾 PATCH（by id，冪等）。重試用盡仍失敗會 raise，讓程式以非 0 結束——
+    見 ingestion_run_retry.finish_run_or_raise 的 docstring。"""
     if not run_id:
         return
-    status, body = _supabase_request(
-        "PATCH", f"/rest/v1/{TABLE_RUN}?id=eq.{urllib.parse.quote(run_id)}",
-        body={
-            "status": run_status, "row_count": row_count,
-            "finished_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        },
-        extra_headers={"Prefer": "return=minimal"},
+    finish_run_or_raise(
+        lambda: _supabase_request(
+            "PATCH", f"/rest/v1/{TABLE_RUN}?id=eq.{urllib.parse.quote(run_id)}",
+            body={
+                "status": run_status, "row_count": row_count,
+                "finished_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            },
+            extra_headers={"Prefer": "return=minimal"},
+        ),
+        run_id=run_id,
     )
-    if status not in (200, 204):
-        logger.error("收尾 ingestion_run 失敗：%s %s", status, body[:300])
 
 
 def upsert_url_inspections(rows: Sequence[dict]) -> tuple[int, int]:
-    """冪等 upsert（on_conflict 對到 gsc_url_inspection_uniq：property,url,inspected_on）。
-    inspected_on 是 GENERATED 欄位，不在 payload 裡，Postgres 會從 inspected_at 算出來
-    再判斷衝突。回傳 (成功列數, 失敗列數)。"""
+    """冪等 upsert（on_conflict 對到 gsc_url_inspection_uniq：property,url,inspected_on，
+    重試安全）。inspected_on 是 GENERATED 欄位，不在 payload 裡，Postgres 會從
+    inspected_at 算出來再判斷衝突。回傳 (成功列數, 失敗列數)。"""
     succeeded = failed = 0
     for offset in range(0, len(rows), UPSERT_BATCH_SIZE):
         batch = rows[offset: offset + UPSERT_BATCH_SIZE]
-        status, body = _supabase_request(
-            "POST", f"/rest/v1/{TABLE_URL_INSPECTION}?on_conflict={urllib.parse.quote(CONFLICT_KEY)}",
-            body=list(batch),
-            extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+        status, body = request_with_retry(
+            lambda batch=batch: _supabase_request(
+                "POST", f"/rest/v1/{TABLE_URL_INSPECTION}?on_conflict={urllib.parse.quote(CONFLICT_KEY)}",
+                body=list(batch),
+                extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+            ),
+            description="upsert",
         )
         if status in (200, 201, 204):
             succeeded += len(batch)

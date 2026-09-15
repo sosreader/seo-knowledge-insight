@@ -42,6 +42,15 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 
+try:
+    # 直接執行 `python scripts/ingest_ai_sov.py` 時 sys.path[0] 是本檔所在目錄
+    # （scripts/），flat import 會先成功。
+    import ingestion_run_retry as _run_retry
+except ImportError:
+    # pytest 以 `from scripts import ai_sov_warehouse` 套件路徑匯入時，repo root
+    # 才在 sys.path，要改用套件路徑。
+    from scripts import ingestion_run_retry as _run_retry
+
 logger = logging.getLogger(__name__)
 
 TABLE_SOV = "ai_sov_response"
@@ -143,32 +152,39 @@ def start_run(window_start: datetime, window_end: datetime) -> str | None:
 
 
 def finish_run(run_id: str | None, run_status: str, row_count: int) -> None:
+    """收尾 PATCH（by id，冪等）。重試用盡仍失敗會 raise，讓程式以非 0 結束——
+    見 ingestion_run_retry.finish_run_or_raise 的 docstring。"""
     if not run_id:
         return
-    status, body, _ = _request(
-        "PATCH", f"/rest/v1/{TABLE_RUN}?id=eq.{urllib.parse.quote(run_id)}",
-        body={
-            "status": run_status,
-            "row_count": row_count,
-            "finished_at": iso_z(datetime.now(timezone.utc)),
-        },
-        extra_headers={"Prefer": "return=minimal"},
+    _run_retry.finish_run_or_raise(
+        lambda: _request(
+            "PATCH", f"/rest/v1/{TABLE_RUN}?id=eq.{urllib.parse.quote(run_id)}",
+            body={
+                "status": run_status,
+                "row_count": row_count,
+                "finished_at": iso_z(datetime.now(timezone.utc)),
+            },
+            extra_headers={"Prefer": "return=minimal"},
+        ),
+        run_id=run_id,
     )
-    if status not in (200, 204):
-        logger.error("收尾 ingestion_run 失敗：%s %s", status, body[:300])
 
 
 def upsert_rows(rows: Sequence[dict], ingested_at: datetime) -> tuple[int, int]:
-    """冪等 upsert。ingested_at 明確進 payload，供 sweep_stale 判斷哪些列是舊的。"""
+    """冪等 upsert（on_conflict + merge-duplicates，重試安全）。ingested_at
+    明確進 payload，供 sweep_stale 判斷哪些列是舊的。"""
     stamped = dedupe_rows([dict(row, ingested_at=iso_z(ingested_at)) for row in rows])
     succeeded = failed = 0
     for offset in range(0, len(stamped), UPSERT_BATCH_SIZE):
         batch = stamped[offset : offset + UPSERT_BATCH_SIZE]
-        status, body, _ = _request(
-            "POST", f"/rest/v1/{TABLE_SOV}?on_conflict={urllib.parse.quote(CONFLICT_KEY)}",
-            body=list(batch),
-            extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
-        )
+        status, body = _run_retry.request_with_retry(
+            lambda batch=batch: _request(
+                "POST", f"/rest/v1/{TABLE_SOV}?on_conflict={urllib.parse.quote(CONFLICT_KEY)}",
+                body=list(batch),
+                extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+            ),
+            description="upsert",
+        )[:2]
         if status in (200, 201, 204):
             succeeded += len(batch)
         else:
