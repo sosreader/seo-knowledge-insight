@@ -968,6 +968,14 @@ class TestWarehouseIdempotency:
         assert "on_conflict=" in path
         assert request.call_args.kwargs["extra_headers"]["Prefer"].startswith("resolution=merge-duplicates")
 
+    def test_upsert_retries_504_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(wh._run_retry.time, "sleep", lambda _seconds: None)
+        with patch.object(
+            wh, "_request", side_effect=[(504, "gw", {}), (201, "", {})]
+        ) as request:
+            assert wh.upsert_rows([dict(TestRunIngestion.ROW)], datetime.now(UTC)) == (1, 0)
+        assert request.call_count == 2
+
     def test_duplicate_keys_are_removed_before_send(self) -> None:
         """整批裡有重複 key 時 PostgreSQL 會讓**整批** 500 列一起死。"""
         row_a = dict(TestRunIngestion.ROW, request_count=1)
@@ -1049,6 +1057,29 @@ class TestWarehouseRunBookkeeping:
             wh.finish_run("run-1", "partial", 7)
         assert request.call_args.kwargs["body"]["status"] == "partial"
         assert request.call_args.kwargs["body"]["row_count"] == 7
+
+    def test_finish_run_raises_on_non_retryable_failure(self) -> None:
+        """收尾失敗不能只 log——要 raise 讓程式非 0 結束（見
+        ingestion_run_retry KB 背景：finish_run 只 log 是本次事故根因）。"""
+        with patch.object(wh, "_request", return_value=(400, "bad", {})) as request:
+            with pytest.raises(wh._run_retry.IngestionRunFinishError, match="run-1"):
+                wh.finish_run("run-1", "success", 1)
+        assert request.call_count == 1
+
+    def test_finish_run_retries_504_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(wh._run_retry.time, "sleep", lambda _seconds: None)
+        with patch.object(
+            wh, "_request", side_effect=[(504, "gw", {}), (204, "", {})]
+        ) as request:
+            wh.finish_run("run-1", "success", 1)  # 不拋
+        assert request.call_count == 2
+
+    def test_finish_run_exhausts_retries_then_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(wh._run_retry.time, "sleep", lambda _seconds: None)
+        with patch.object(wh, "_request", return_value=(504, "gw", {})) as request:
+            with pytest.raises(wh._run_retry.IngestionRunFinishError):
+                wh.finish_run("run-1", "success", 1)
+        assert request.call_count == 1 + wh._run_retry.MAX_RETRY_ATTEMPTS
 
     def test_latest_bucket_hour_reconstructs_utc_timestamp(self) -> None:
         payload = json.dumps([{"date": "2026-09-01", "hour": 8}])

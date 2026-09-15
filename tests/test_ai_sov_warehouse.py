@@ -145,9 +145,26 @@ class TestIngestionRun:
         warehouse.finish_run(None, "success", 1)
         assert sent == []
 
-    def test_finish_run_logs_but_does_not_raise_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        _install_transport(monkeypatch, [(500, "boom")])
+    def test_finish_run_raises_on_non_retryable_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """500 不在可重試清單裡，第一次失敗就該 raise——收尾失敗不能只 log，
+        要讓程式非 0 結束（見 ingestion_run_retry KB 背景）。"""
+        sent = _install_transport(monkeypatch, [(500, "boom")])
+        with pytest.raises(warehouse._run_retry.IngestionRunFinishError, match="run-1"):
+            warehouse.finish_run("run-1", "success", 1)
+        assert len(sent) == 1
+
+    def test_finish_run_retries_504_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(warehouse._run_retry.time, "sleep", lambda _seconds: None)
+        sent = _install_transport(monkeypatch, [(504, "gw"), (204, "")])
         warehouse.finish_run("run-1", "success", 1)  # 不拋
+        assert len(sent) == 2
+
+    def test_finish_run_exhausts_retries_then_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(warehouse._run_retry.time, "sleep", lambda _seconds: None)
+        sent = _install_transport(monkeypatch, [(504, "gw")] * 4)
+        with pytest.raises(warehouse._run_retry.IngestionRunFinishError):
+            warehouse.finish_run("run-1", "success", 1)
+        assert len(sent) == 1 + warehouse._run_retry.MAX_RETRY_ATTEMPTS
 
 
 class TestUpsertRows:
@@ -176,6 +193,24 @@ class TestUpsertRows:
     def test_non_2xx_counts_as_failed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _install_transport(monkeypatch, [(400, "bad payload")])
         assert warehouse.upsert_rows([self._row(0)], RUN_AT) == (0, 1)
+
+    def test_retries_504_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """upsert 是 on_conflict + merge-duplicates，重送同一批等於覆蓋成同樣的值，
+        重試安全。"""
+        monkeypatch.setattr(warehouse._run_retry.time, "sleep", lambda _seconds: None)
+        sent = _install_transport(monkeypatch, [(504, "gw"), (201, "")])
+        assert warehouse.upsert_rows([self._row(0)], RUN_AT) == (1, 0)
+        assert len(sent) == 2
+
+    def test_exhausts_retries_then_counts_as_failed_without_raising(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """跟 finish_run 不同：一批 upsert 重試用盡只算這批失敗，不 raise——
+        部分失敗由呼叫端的 run_status='partial' 機制承接。"""
+        monkeypatch.setattr(warehouse._run_retry.time, "sleep", lambda _seconds: None)
+        sent = _install_transport(monkeypatch, [(503, "unavailable")] * 4)
+        assert warehouse.upsert_rows([self._row(0)], RUN_AT) == (0, 1)
+        assert len(sent) == 1 + warehouse._run_retry.MAX_RETRY_ATTEMPTS
 
     def test_batches_at_configured_size(self, monkeypatch: pytest.MonkeyPatch) -> None:
         rows = [self._row(i) for i in range(warehouse.UPSERT_BATCH_SIZE + 1)]

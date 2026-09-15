@@ -524,10 +524,39 @@ class TestIngestionRunLifecycle:
             finish_run(None, "success", 0)
         request.assert_not_called()
 
-    def test_finish_run_logs_failure(self, caplog: pytest.LogCaptureFixture) -> None:
-        with patch(f"{MODULE}._supabase_request", return_value=(500, "boom")):
-            finish_run("abc", "failed", 0)
+    def test_finish_run_raises_on_non_retryable_failure(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """收尾失敗不能只 log——要 raise 讓程式非 0 結束（見
+        ingestion_run_retry KB 背景：finish_run 只 log 是本次事故根因）。"""
+        from scripts.ingestion_run_retry import IngestionRunFinishError
+
+        with patch(f"{MODULE}._supabase_request", return_value=(500, "boom")) as request:
+            with pytest.raises(IngestionRunFinishError, match="abc"):
+                finish_run("abc", "failed", 0)
         assert "收尾 ingestion_run 失敗" in caplog.text
+        assert request.call_count == 1
+
+    def test_finish_run_retries_504_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from scripts import ingestion_run_retry
+
+        monkeypatch.setattr(ingestion_run_retry.time, "sleep", lambda _seconds: None)
+        with patch(
+            f"{MODULE}._supabase_request", side_effect=[(504, "gw"), (204, "")]
+        ) as request:
+            finish_run("abc", "success", 1)  # 不拋
+        assert request.call_count == 2
+
+    def test_finish_run_exhausts_retries_then_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from scripts import ingestion_run_retry
+
+        monkeypatch.setattr(ingestion_run_retry.time, "sleep", lambda _seconds: None)
+        with patch(f"{MODULE}._supabase_request", return_value=(504, "gw")) as request:
+            with pytest.raises(ingestion_run_retry.IngestionRunFinishError):
+                finish_run("abc", "success", 1)
+        assert request.call_count == 1 + ingestion_run_retry.MAX_RETRY_ATTEMPTS
 
 
 class TestUpsert:
@@ -542,6 +571,16 @@ class TestUpsert:
     def test_batch_failure_counts_as_failed(self) -> None:
         with patch(f"{MODULE}._supabase_request", return_value=(500, "boom")):
             assert upsert_rows([self.ROW]) == (0, 1)
+
+    def test_retries_504_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from scripts import ingestion_run_retry
+
+        monkeypatch.setattr(ingestion_run_retry.time, "sleep", lambda _seconds: None)
+        with patch(
+            f"{MODULE}._supabase_request", side_effect=[(504, "gw"), (201, "")]
+        ) as request:
+            assert upsert_rows([self.ROW]) == (1, 0)
+        assert request.call_count == 2
 
     def test_conflict_key_matches_dim_uniq_columns(self) -> None:
         with patch(f"{MODULE}._supabase_request", return_value=(200, "")) as request:
@@ -1003,6 +1042,27 @@ class TestRunIngestion:
         assert finish.call_count == 2  # 兩列都被收尾，不是只有一列
         finished = [(call.args[0], call.args[1]) for call in finish.call_args_list]
         assert finished == [("run-totals", "failed"), ("run-main", "failed")]
+
+    def test_write_totals_finish_failure_still_finishes_main_run_before_reraising(self) -> None:
+        """Regression（PR 69 follow-up，2026-09-15）：write_totals() 內部對 totals
+        子 run 收尾的 finish_run()，重試用盡時會 raise IngestionRunFinishError。
+        這個例外原本會直接穿出 run_ingestion，讓主 run（run_id，table_name=
+        gsc_daily_metrics）完全沒機會被收尾，變成第二個孤兒列且毫無訊號。
+        現在要求：主 run 一定先被 finish_run(..., "failed", ...) 收尾，例外
+        才繼續往外穿透（程式仍以非 0 結束，不吞掉原始例外）。"""
+        from scripts.ingestion_run_retry import IngestionRunFinishError
+
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals",
+                   side_effect=IngestionRunFinishError("totals 收尾重試用盡")), \
+             patch(f"{MODULE}.start_run", return_value="run-main") as start, \
+             patch(f"{MODULE}.finish_run") as finish, \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_one_record):
+            with pytest.raises(IngestionRunFinishError):
+                run_ingestion(execute=True, backfill_days=7, search_type="web")
+        assert start.call_count == 1  # 只有主 run 是這裡開的（totals run 在 write_totals 內部）
+        finish.assert_called_once_with("run-main", "failed", 0)
 
     def test_run_window_is_half_open_over_target_dates(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \

@@ -44,7 +44,36 @@ jobs:
       - name: Install dependencies
         run: pip install python-dotenv
 
+      # 排在 stale-running 檢查之前：把早於門檻（1h 節奏的表 6h／其餘 24h）的殘留
+      # running 列收尾成 failed，不用等人工跑 --execute。這條只會把 running 改成
+      # failed（不刪資料、不動已成功的列），跟既有 dry-run 安全閥同一套風險模型，
+      # 只是把「按下 --execute 的手」換成排程。背景見 KB
+      # session-2026-09-15-seo-insight-ci-stale-running-and-runner.md：
+      # finish_run() 收尾 PATCH 撞到 Supabase 暫時性 5xx 時會讓 run 永久卡在
+      # running，進而卡住下面這一步的全域 stale-running gate、讓所有 ingestion
+      # workflow 顯示 failure。加了收尾重試（ingestion_run_retry.py）後這裡只是
+      # 保險，處理重試也救不回來的殘留。
+      #
+      # 安全性：盤點過全部 workflow 的 timeout-minutes——只有 ai-sov-weekly.yml
+      # 的 ingest job 顯式設定 60 分鐘，其餘所有 ingestion job（含
+      # crawl-hourly.yml／cwv-hourly.yml／本檔自己等）都沒設，吃 GitHub
+      # Actions 預設的 360 分鐘（6h）平台上限——跟 6h 門檻的表完全對齊，
+      # 不會有「合法執行中」卻被提前 reap 的 race（詳見 PR 描述的
+      # timeout-minutes 盤點）。
+      - name: Reap stale running ingestion_run rows past their threshold
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/data_quality_gate.py --reap-stale-running --execute
+
+      # if: ${{ !cancelled() }}：reap 這步萬一失敗（例如 Supabase 當下又在
+      # 暫時性 5xx），全檢還是要照跑——不能因為 reap 沒跑成就連 stale-running
+      # 檢查一起跳過，那樣反而會讓 job 綠燈掩蓋掉真正的殘留 running 列。用
+      # !cancelled() 而不是 always()：workflow 被取消（例如手動 cancel 這次
+      # run）時，全檢不該還照跑——always() 連這種情況都會跑，!cancelled()
+      # 只在「失敗但沒被取消」時才跑，取消時仍會正確跳過。
       - name: Check all pipelines' data quality (independent of each pipeline's own schedule)
+        if: ${{ !cancelled() }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

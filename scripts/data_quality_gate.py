@@ -475,7 +475,18 @@ def check_stale_running(*, now: datetime | None = None) -> CheckResult:
 def reap_stale_running(
     stale_rows: list[dict], *, actor: str = DEFAULT_REAP_ACTOR, dry_run: bool = True,
 ) -> list[dict]:
-    """把死掉的 running 列標記成 failed，帶稽核欄位。唯一的寫入函式。"""
+    """把死掉的 running 列標記成 failed，帶稽核欄位。唯一的寫入函式。
+
+    PATCH 過濾條件除了 id 還加上 status=eq.running：find_stale_running() 的
+    SELECT 到這裡實際送出 PATCH 之間有一段空窗，如果那筆 run 剛好在空窗裡
+    自己正常收尾（例如 finish_run 重試後終於成功），status 已經不是
+    running——這裡若只憑 id 覆寫，會把一筆已經成功／失敗的列錯改成
+    failed，蓋掉真正的結果。加上 status=eq.running 後，已被自行收尾的列會
+    直接匹配不到（PostgREST 對 0 列匹配的 PATCH 回 200 + 空陣列，不是
+    錯誤），所以改用 `Prefer: return=representation` 讀回受影響列數，
+    才能分辨「真的 reap 到」還是「已自行收尾，略過」——不能只看 HTTP
+    status，200 兩種情況都會回。
+    """
     now = datetime.now(timezone.utc)
     results = []
     for row in stale_rows:
@@ -484,8 +495,9 @@ def reap_stale_running(
         if dry_run:
             results.append({"id": row["id"], "action": "would_reap", "reason": reason})
             continue
-        status, _body = _request(
-            "PATCH", f"/rest/v1/{TABLE_RUN}?id=eq.{urllib.parse.quote(row['id'])}",
+        status, body = _request(
+            "PATCH",
+            f"/rest/v1/{TABLE_RUN}?id=eq.{urllib.parse.quote(row['id'])}&status=eq.running",
             body={
                 "status": "failed",
                 "finished_at": _iso_z(now),
@@ -493,9 +505,16 @@ def reap_stale_running(
                 "reaped_by": actor,
                 "reap_reason": reason,
             },
-            extra_headers={"Prefer": "return=minimal"},
+            extra_headers={"Prefer": "return=representation"},
         )
-        action = "reaped" if status in (200, 204) else "reap_failed"
+        if status not in (200, 204):
+            action = "reap_failed"
+        else:
+            try:
+                affected_rows = json.loads(body) if body.strip() else []
+            except json.JSONDecodeError:
+                affected_rows = []
+            action = "reaped" if affected_rows else "already_finished"
         results.append({"id": row["id"], "action": action, "reason": reason, "http_status": status})
     return results
 
