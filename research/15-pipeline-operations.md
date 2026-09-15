@@ -181,7 +181,11 @@ python scripts/quality_gate.py --source supabase
 ```
 
 - 前兩行各寫一筆 `eval_runs`（group 分別是 `data-quality`、`keyword-retrieval`），第三行只讀。
-- gate 對每個 group 只取最新一筆，而且預設必須是 6 小時內寫入的。PR 70 另外提供 `--max-age-hours`（例如 48），用來回頭檢查較舊的某一次。**這個 flag 在 PR 70 合併前不存在**，所以暫時只寫在說明文字裡：放進程式碼區塊的話，本 PR 單獨合併時 contract 測試會紅。PR 70 合併後，請在上面的區塊補一行帶 `--max-age-hours 48` 的 gate 指令，讓測試納管。
+- gate 對每個 group 只取最新一筆，而且預設必須是 6 小時內寫入的。要回頭檢查較舊的某一次，用 `--max-age-hours` 放寬時間窗（例如 48 小時）：
+
+  ```bash
+  python scripts/quality_gate.py --source supabase --max-age-hours 48
+  ```
 - 2026-09-15 以 live 資料唯讀試算：hit_rate 1.0、mrr 0.8967、avg_confidence 0.7941、qa_count 32439，四項都過門檻；其中 avg_confidence 離門檻 0.75 只差 0.044。
 
 ---
