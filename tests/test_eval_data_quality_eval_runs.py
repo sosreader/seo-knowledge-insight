@@ -21,15 +21,13 @@
      錯誤視為暫時性，重試 _WRITE_MAX_ATTEMPTS 次後仍失敗才算數；憑證只設定
      一半（CI secret 漏掛的典型徵狀）視為設定不完整，直接失敗；憑證完全
      沒設定則視為刻意不接 Supabase（本機 --source local 情境），略過不算失敗。
-  3. etl-and-deploy.yml 的「Run data quality eval」step 真的把
-     SUPABASE_SERVICE_KEY 傳進去——否則第 1 點修對了程式碼，CI 還是會在
-     「環境設定不完整」那條路徑上失敗（見 TestWorkflowPassesServiceKey）。
+  3. （2026-09-15 移除）原本還鎖 etl-and-deploy.yml 的「Run data quality eval」
+     step 有帶 SUPABASE_SERVICE_KEY。該 workflow 已移除、改本機執行，env 需求
+     改記在 research/15-pipeline-operations.md「本機執行完整 ETL」步驟 7。
 """
 from __future__ import annotations
 
 import logging
-import re
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -199,26 +197,3 @@ class TestMainSurfacesPersistFailure:
         monkeypatch.setattr(edq, "_upsert_eval_run", Mock(return_value=None))
 
         edq.main()  # 不應該 raise SystemExit
-
-
-class TestWorkflowPassesServiceKey:
-    """etl-and-deploy.yml 的『Run data quality eval』step 必須帶
-    SUPABASE_SERVICE_KEY，否則即使程式碼改對了，CI 還是會在
-    「環境設定不完整」那條路徑上失敗——這正是本次要修的 CI secret 漏掛類問題。"""
-
-    def test_run_data_quality_eval_step_has_service_key(self) -> None:
-        workflow = (
-            Path(__file__).resolve().parent.parent
-            / ".github" / "workflows" / "etl-and-deploy.yml"
-        ).read_text(encoding="utf-8")
-
-        step_match = re.search(
-            r"- name: Run data quality eval\n(.*?)\n      - name:", workflow, re.DOTALL
-        )
-        assert step_match, "找不到「Run data quality eval」這個 step"
-        step_text = step_match.group(1)
-
-        assert "SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}" in step_text
-        assert "SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}" in step_text, (
-            "讀 qa_items 仍然要用 anon key，不要把整個 step 換成 service key"
-        )

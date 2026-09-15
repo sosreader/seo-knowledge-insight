@@ -541,6 +541,8 @@ CI 環境需要 `SUPABASE_URL` + `SUPABASE_ANON_KEY` secrets。
 **孤兒 secret（workflow 已不引用，待清理）**：`NOTION_API_KEY`、`NOTION_DATABASE_ID`（皆 2026-03-06 設定）。
 
 > 排程 ETL（`etl-and-deploy.yml`）曾因 secret 名稱與 workflow 引用 / script 讀取的 env key 不對映，自 2026-03-09 起連續 17 次全數失敗、從未成功；根因排查與修復記錄見 [research/15-pipeline-operations.md](./15-pipeline-operations.md#2026-07-03-notion-multi-source-api-400-判別與-ci-secret-排查方法論)。
+>
+> 後續（2026-09-15）：`etl-and-deploy.yml` 已移除（全歷史 31 failure／1 cancelled、0 success），ETL 改在本機執行，見 [research/15-pipeline-operations.md](./15-pipeline-operations.md#本機執行完整-etl)。`NOTION_TOKEN`、`NOTION_PARENT_PAGE_ID` 兩個 secret 從此沒有任何 workflow 引用，是否清理由使用者決定。
 
 ### 21.7 AWS 服務與 IAM 設定
 

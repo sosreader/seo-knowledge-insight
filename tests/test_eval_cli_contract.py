@@ -1,4 +1,4 @@
-"""回歸測試：workflow 傳給 scripts/*.py 的 CLI flag，腳本必須真的認得。
+"""回歸測試：本機 ETL runbook 傳給 scripts/*.py 的 CLI flag，腳本必須真的認得。
 
 背景（2026-09-10）：2026-03-10 的 commit e169788（訊息「Refactor code structure
 for improved readability and maintainability」）把 scripts/_eval_laminar.py 的
@@ -9,10 +9,14 @@ for improved readability and maintainability」）把 scripts/_eval_laminar.py �
 保留的 31 筆 run 沒有一次 success，這條路徑沉睡了六個月都沒人發現，因為
 沒有任何測試把「workflow 怎麼呼叫」與「腳本認得什麼」綁在一起。
 
-本檔就是那條綁定：從 workflow 的 run: 區塊抽出每一個 `python scripts/X.py`
-呼叫與它帶的長參數，實際跑一次 `X.py --help`，斷言每個參數都出現在 help 裡。
-用 --help 而不是解析原始碼，是因為它驗的是 argparse 實際接受什麼，而不是
-某個字串有沒有出現在檔案裡。
+原本這條綁定抽的是 etl-and-deploy.yml 的 run: 區塊。該 workflow 已於
+2026-09-15 移除（全歷史 31 failure／1 cancelled，改本機執行），呼叫方換成
+research/15-pipeline-operations.md 的「本機執行完整 ETL」一節——文件照舊寫、
+腳本改了 argparse 的漂移一樣會發生，所以綁定改指向那一節。
+
+作法不變：抽出每一個 `python scripts/X.py` 呼叫與它帶的長參數，實際跑一次
+`X.py --help`，斷言每個參數都出現在 help 裡。用 --help 而不是解析原始碼，
+是因為它驗的是 argparse 實際接受什麼，而不是某個字串有沒有出現在檔案裡。
 """
 from __future__ import annotations
 
@@ -24,19 +28,22 @@ from pathlib import Path
 import pytest
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-WORKFLOWS_DIR = ROOT_DIR / ".github" / "workflows"
-
-# 只掃這幾支：它們的 run: 是靜態的 `python scripts/X.py --flag` 形式。其他
-# workflow 把參數包在 shell 變數裡（BACKFILL_HOURS、DRY_RUN…），靜態抽不出來，
-# 那些 workflow 各自有專屬的 test_workflow_*.py 鎖語意。
-WORKFLOWS_WITH_STATIC_CLI = ["etl-and-deploy.yml"]
+RUNBOOK_PATH = ROOT_DIR / "research" / "15-pipeline-operations.md"
+# 只掃這一節：同一份文件其他段落（週報、評估）的指令另有用途，不在這條綁定的範圍。
+RUNBOOK_HEADING = "## 本機執行完整 ETL"
 
 _INVOCATION = re.compile(r"python\s+(scripts/[\w.]+\.py)((?:\s+--?[\w-]+(?:\s+[\w./=-]+)?)*)")
 _LONG_FLAG = re.compile(r"(?<!\S)(--[\w-]+)")
 
 
-def _static_invocations(workflow_name: str) -> list[tuple[str, tuple[str, ...]]]:
-    text = (WORKFLOWS_DIR / workflow_name).read_text(encoding="utf-8")
+def _runbook_section() -> str:
+    text = RUNBOOK_PATH.read_text(encoding="utf-8")
+    start = text.index(RUNBOOK_HEADING)
+    end = text.find("\n## ", start + len(RUNBOOK_HEADING))
+    return text[start:] if end == -1 else text[start:end]
+
+
+def _static_invocations(text: str) -> list[tuple[str, tuple[str, ...]]]:
     found: dict[str, set[str]] = {}
     for script, tail in _INVOCATION.findall(text):
         found.setdefault(script, set()).update(_LONG_FLAG.findall(tail))
@@ -44,25 +51,25 @@ def _static_invocations(workflow_name: str) -> list[tuple[str, tuple[str, ...]]]
 
 
 def _all_invocations() -> list[tuple[str, tuple[str, ...]]]:
-    return [inv for name in WORKFLOWS_WITH_STATIC_CLI for inv in _static_invocations(name)]
+    return _static_invocations(_runbook_section())
 
 
-def test_etl_workflow_still_passes_source_supabase() -> None:
-    """先鎖住前提：本測試的價值建立在 workflow 真的有傳 --source。
+def test_runbook_still_passes_source_supabase() -> None:
+    """先鎖住前提：本測試的價值建立在 runbook 真的有傳 --source。
 
     哪天有人改成不傳了，這條會先紅，提醒去更新下面那組參數化的預期，
     而不是讓參數化測試安靜地變成零斷言。
     """
-    invocations = dict(_static_invocations("etl-and-deploy.yml"))
+    invocations = dict(_all_invocations())
     assert "--source" in invocations["scripts/_eval_laminar.py"]
     assert "--source" in invocations["scripts/_eval_data_quality.py"]
     assert "--source" in invocations["scripts/quality_gate.py"]
 
 
 @pytest.mark.parametrize("script,flags", _all_invocations(), ids=lambda v: str(v))
-def test_workflow_flags_are_accepted_by_script(script: str, flags: tuple[str, ...]) -> None:
+def test_runbook_flags_are_accepted_by_script(script: str, flags: tuple[str, ...]) -> None:
     if not flags:
-        pytest.skip(f"{script} 在 workflow 裡沒帶任何長參數")
+        pytest.skip(f"{script} 在 runbook 裡沒帶任何長參數")
     result = subprocess.run(
         [sys.executable, str(ROOT_DIR / script), "--help"],
         capture_output=True, text=True, cwd=ROOT_DIR, timeout=120,
@@ -70,7 +77,7 @@ def test_workflow_flags_are_accepted_by_script(script: str, flags: tuple[str, ..
     assert result.returncode == 0, f"{script} --help 失敗：{result.stderr[-500:]}"
     for flag in flags:
         assert flag in result.stdout, (
-            f"{script} 的 argparse 不認得 workflow 傳的 {flag}——"
+            f"{script} 的 argparse 不認得 runbook 寫的 {flag}——"
             f"這正是 commit e169788 造成 ETL Pipeline 六個月 0 成功的失敗模式。"
         )
 

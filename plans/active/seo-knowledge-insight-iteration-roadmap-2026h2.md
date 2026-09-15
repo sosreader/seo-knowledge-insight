@@ -27,11 +27,12 @@
 ### Phase 0: 恢復回饋迴路（吸收原維運 plan，該版已過 19 項品質審查）
 
 - [ ] **S0.1** — 收集 ETL CI 失敗 live 證據並判定根因
-  - Files: .github/workflows/etl-and-deploy.yml
+  - Files: .github/workflows/etl-and-deploy.yml（2026-09-15 已移除）
   - Agent: `general-purpose`
   - Action: `gh run view <6/22、6/29 run id> --log-failed` 抓實際錯誤字串；`gh secret list` 區分 token 缺失 vs 過期；curl Supabase REST health 判斷 free-tier auto-pause（learned skill: managed-db-free-tier-pause-resume-gotcha）
   - Dependencies: []
   - Why: diagnostics 規則 — 先收證據再下結論
+  - 後續（2026-09-15）：workflow 已移除，改在本機執行（全歷史 31 failure／1 cancelled、0 success；見 research/15-pipeline-operations.md「本機執行完整 ETL」）。本步驟的 CI 證據收集不再適用。
 
 - [ ] **S0.2** — [HITL] 使用者提供新 Notion token；`gh secret set NOTION_TOKEN`（不 echo 不落檔）；integration 僅勾 Read content；舊 token revoke
   - Files: .env.example
@@ -42,14 +43,14 @@
 - [ ] **S0.3** — 本地驗證批後手動觸發 ETL 至全綠，驗 qa_final.json mtime/筆數 > 3,671 + Supabase count 一致
   - Files: scripts/01_fetch_notion.py, scripts/02_extract_qa.py, output/qa_final.json
   - Agent: `general-purpose`
-  - Action: `make fetch-notion` → `--limit 30` 驗證批 → `gh workflow run etl-and-deploy.yml` → `gh run watch` 至四 job 全綠（不假設綠）；Supabase 若 pause 先 resume + poll health 200
+  - Action（workflow 已於 2026-09-15 移除，改本機執行）：依 research/15-pipeline-operations.md「本機執行完整 ETL」，`make check` → `make fetch-notion` → `make extract-qa-test` 驗證批 → `make extract-qa` → `make dedupe-classify` → `make migrate-supabase-dry` → `make migrate-supabase` → `make migrate-supabase-verify` → 兩個 eval → `python scripts/quality_gate.py --source supabase` 輸出 `Quality gate PASSED`（不假設綠）；Supabase 若 pause 先 resume + poll health 200。原 Action：`make fetch-notion` → `--limit 30` 驗證批 → `gh workflow run etl-and-deploy.yml` → `gh run watch` 至四 job 全綠（不假設綠）；Supabase 若 pause 先 resume + poll health 200
   - Dependencies: S0.2
   - Why: 完成宣稱兩級門檻；extract 模式（OpenAI $ vs heuristic 偏態）在此步以 AskUserQuestion 確認
 
 - [ ] **S0.4** — 加 CI 失敗通知（本次 11 天無人知的直接對策）
-  - Files: .github/workflows/etl-and-deploy.yml
+  - Files: .github/workflows/etl-and-deploy.yml（2026-09-15 已移除）
   - Agent: `general-purpose`
-  - Action: schedule run 失敗時通知（GitHub notification 設定或 workflow 加 failure step，擇一最簡方案）；走 branch + PR
+  - Action（不再適用：workflow 已於 2026-09-15 移除，改本機執行；本機執行以各步驟的 exit code 與 runbook 的「失敗時」判定）。原 Action：schedule run 失敗時通知（GitHub notification 設定或 workflow 加 failure step，擇一最簡方案）；走 branch + PR
   - Dependencies: S0.3
   - Why: 沒有告警的自動化 = 靜默腐爛
 
@@ -167,7 +168,7 @@
 
 ## Verification（端到端）
 
-1. **迴路驗證**：`gh run list --workflow=etl-and-deploy.yml --limit 1` = success；故意讓下次 schedule 前 dry-run 一次失敗路徑確認通知會到（S0.4）
+1. **迴路驗證**（workflow 已於 2026-09-15 移除，改本機執行）：依 research/15-pipeline-operations.md「本機執行完整 ETL」在本機跑完，`python scripts/quality_gate.py --source supabase` 輸出 `Quality gate PASSED`，且 `make migrate-supabase-verify` 的筆數與 `output/qa_final.json` 一致。原條件：`gh run list --workflow=etl-and-deploy.yml --limit 1` = success；故意讓下次 schedule 前 dry-run 一次失敗路徑確認通知會到（S0.4）
 2. **量測驗證**：新 golden set 上各 eval 有非飽和分數（Hit Rate < 100% 有改進空間可量）；structure eval 對 accepted baseline PASS、壞樣本 FAIL
 3. **主線驗證**：下一份實際週報/meeting-prep 走 S3.4 一鍵流程產出且過 eval gate
 4. **機制驗證**：plans/active/ ≤4 份且都有 priority；CLAUDE.md 含疊代規則

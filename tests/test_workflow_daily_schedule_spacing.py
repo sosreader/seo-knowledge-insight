@@ -72,14 +72,6 @@ def test_url_inspection_finishes_before_the_watchdog_checks() -> None:
     )
 
 
-def test_url_inspection_does_not_collide_with_the_weekly_etl() -> None:
-    """etl-and-deploy 是週一 09:00 的 104 分鐘長工作，會對 Supabase 大量 upsert。"""
-    text = (WORKFLOWS_DIR / "etl-and-deploy.yml").read_text(encoding="utf-8")
-    match = re.search(r"- cron:\s*['\"](\d+)\s+(\d+)\s+\*\s+\*\s+(\d+)['\"]", text)
-    assert match, "etl-and-deploy.yml 的 cron 不是預期的每週形式"
-    etl_start = int(match.group(2)) * 60 + int(match.group(1))
-    insp = _daily_cron_minutes("gsc-url-inspection.yml")
-    assert insp + DAILY_CRON_JITTER_MIN + 5 <= etl_start, (
-        f"gsc-url-inspection（{insp // 60:02d}:{insp % 60:02d}）可能疊到週一的 "
-        f"etl-and-deploy（{etl_start // 60:02d}:{etl_start % 60:02d} 起跑、約 104 分鐘）。"
-    )
+# 原本還有 test_url_inspection_does_not_collide_with_the_weekly_etl，鎖住與週一
+# 09:00 etl-and-deploy 的間隔；該 workflow 已於 2026-09-15 移除（改本機執行），
+# 那條不變量不再存在，一併刪除。

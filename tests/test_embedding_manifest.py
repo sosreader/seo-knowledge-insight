@@ -69,11 +69,6 @@ def test_manifest_does_not_include_body(bundle):
     assert "問題" not in json.dumps(manifest, ensure_ascii=False)
 
 
-def test_workflow_uploads_manifest():
-    from pathlib import Path
-    assert "output/qa_embeddings_manifest.json" in Path(".github/workflows/etl-and-deploy.yml").read_text()
-
-
 def test_body_boundary_changes_rejected(bundle):
     path, items, _ = bundle
     original = [{**items[0], "question": "a b", "answer": "c"}]
