@@ -78,6 +78,36 @@ class TestRequestWithRetry:
         assert "connection refused" in body
         assert request_fn.call_count == 1 + retry_mod.MAX_RETRY_ATTEMPTS
 
+    def test_http_error_400_is_not_retried_and_status_is_the_real_code(self) -> None:
+        """Regression（PR 69 follow-up，2026-09-15）：urllib.error.HTTPError 是
+        urllib.error.URLError 的子類。如果 request_fn 用「raise HTTPError」
+        而不是回傳 (status, body) tuple 來表達 4xx（目前 6 個呼叫點都不會這樣
+        做，_request/_supabase_request 內部已經把 HTTPError 轉成 tuple，但這裡
+        要防禦性地擋住這個分類錯誤），舊版會被下面那個「catch 任何 URLError
+        都當連線層例外、一律重試」的分支誤判成可重試，變成把 400 這種客戶端
+        錯誤也重試 4 次。HTTPError 必須先被攔下來，用 exc.code 當真正的狀態碼
+        判斷可否重試。"""
+        request_fn = Mock(side_effect=urllib.error.HTTPError(
+            "https://x.test", 400, "bad request", {}, None
+        ))
+        sleep = Mock()
+        result = retry_mod.request_with_retry(request_fn, description="test", sleep=sleep)
+        status, _body = result
+        assert status == 400
+        assert request_fn.call_count == 1
+        sleep.assert_not_called()
+
+    @pytest.mark.parametrize("status", [502, 503, 504])
+    def test_http_error_with_retryable_code_is_retried_then_succeeds(self, status: int) -> None:
+        request_fn = Mock(side_effect=[
+            urllib.error.HTTPError("https://x.test", status, "gateway", {}, None),
+            (200, "ok"),
+        ])
+        sleep = Mock()
+        result = retry_mod.request_with_retry(request_fn, description="test", sleep=sleep)
+        assert result == (200, "ok")
+        assert request_fn.call_count == 2
+
     def test_timeout_error_is_retried_like_connection_error(self) -> None:
         request_fn = Mock(side_effect=[TimeoutError("timed out"), (200, "ok")])
         sleep = Mock()

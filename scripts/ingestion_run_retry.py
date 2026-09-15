@@ -86,6 +86,12 @@ def request_with_retry(
         try:
             result: tuple = request_fn()
             status = result[0]
+        except urllib.error.HTTPError as exc:
+            # HTTPError 是 URLError 的子類，必須先攔——否則會落進下面那個
+            # 「任何 URLError 都當連線層例外、一律重試」的分支，把 4xx 誤判成
+            # 可重試。用 exc.code 當真正的 HTTP 狀態碼，只有 502/503/504 可重試。
+            result = (exc.code, str(exc))
+            status = exc.code
         except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
             result = (_CONNECTION_ERROR_STATUS, str(exc))
             status = _CONNECTION_ERROR_STATUS
