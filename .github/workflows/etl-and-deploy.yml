@@ -142,7 +142,11 @@ jobs:
         env:
           LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          # 同上一個 step：讀 qa_items 走 anon key；hit_rate／mrr 寫進
+          # eval_runs（group=keyword-retrieval，Quality Gate 讀這一筆）走
+          # service key。少了它 _upsert_eval_run 會判「設定不完整」而失敗。
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/_eval_laminar.py --source supabase --group keyword-retrieval
 
       - name: Quality Gate
