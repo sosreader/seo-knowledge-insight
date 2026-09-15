@@ -11,12 +11,13 @@ eval_runs 為 0 筆）——ETL workflow 的 Quality Gate 從設計上不可能�
      passed 依 quality_gate 的門檻；寫入失敗時 Laminar 照推、process 最後 exit 1。
   3. retrieval-enhancement 不寫 eval_runs（gate 不讀它）。
   4. 寫入端寫的東西，gate 讀得到（writer → gate round-trip）。
-  5. workflow 的 Run retrieval eval step 帶 SUPABASE_SERVICE_KEY，且排在 gate 之前。
+
+etl-and-deploy.yml 已於 2026-09-15 移除（改本機執行，見 research/15-pipeline-operations.md
+「本機執行完整 ETL」），所以這裡不再鎖 workflow 的 step 內容。
 """
 from __future__ import annotations
 
 import json
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,8 +28,6 @@ import pytest
 from scripts import _eval_data_quality as edq
 from scripts import _eval_laminar as el
 from scripts import quality_gate as qg
-
-_WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "etl-and-deploy.yml"
 
 _QAS = [
     {"id": "1", "question": "canonical 設定", "answer": "說明", "keywords": ["canonical"], "category": "技術SEO"},
@@ -199,27 +198,3 @@ def test_gate_groups_and_metric_names_match_writers() -> None:
     dq_specs = {s.name for s in qg.METRIC_SPECS if s.group == qg.DATA_QUALITY_GROUP}
     # qa_count 由 _upsert_eval_run 從 metrics["total"] 寫到 eval_runs.qa_count 欄位
     assert dq_specs - {"qa_count"} <= set(dq_metrics) and "total" in dq_metrics
-
-
-class TestWorkflow:
-    @staticmethod
-    def _step(name: str) -> str:
-        workflow = _WORKFLOW.read_text(encoding="utf-8")
-        match = re.search(rf"- name: {re.escape(name)}\n(.*?)(?=\n      - name:|\Z)", workflow, re.DOTALL)
-        assert match, f"找不到「{name}」這個 step"
-        return match.group(1)
-
-    def test_run_retrieval_eval_step_has_service_key(self) -> None:
-        step = self._step("Run retrieval eval")
-        assert "SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}" in step
-        assert "SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}" in step, "讀 qa_items 仍走 anon key"
-        assert "--group keyword-retrieval" in step
-
-    def test_both_writers_run_before_the_gate(self) -> None:
-        workflow = _WORKFLOW.read_text(encoding="utf-8")
-        order = [workflow.index(f"- name: {n}\n") for n in ("Run data quality eval", "Run retrieval eval", "Quality Gate")]
-        assert order == sorted(order)
-
-    def test_gate_step_does_not_need_service_key(self) -> None:
-        """gate 只讀 eval_runs（anon SELECT 已開放），不該拿到寫入權限。"""
-        assert "SUPABASE_SERVICE_KEY" not in self._step("Quality Gate")
