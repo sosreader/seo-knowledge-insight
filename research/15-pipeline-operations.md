@@ -61,7 +61,7 @@
   - `LMNR_PROJECT_API_KEY`：選填，未設定只是不送 trace。
 - 預期輸出：`共 N 份待處理`（或 `所有檔案已處理完畢，無需重跑。`），最後是 `步驟 2 完成`、`本次處理: N 份`、`總計 Q&A: N 個`。
 - 失敗時：
-  - 出現 `錯誤: Error code: 429 ... insufficient_quota` 代表 OpenAI 額度用盡。**PR 70 合併前**，這種情況 step 仍然 exit 0 並產出 0 筆（2026-09-07、09-14 兩次都是這樣），所以要拿 `總計 Q&A` 跟上次比，不能只看 exit code。PR 70 合併後，遇到第一個 `insufficient_quota` 就會 exit 1；本次檔案全部失敗也會 exit 1。
+  - 出現 `錯誤: Error code: 429 ... insufficient_quota` 代表 OpenAI 額度用盡：遇到第一個 `insufficient_quota` 就會 exit 1；本次檔案全部失敗也會 exit 1。（2026-09-15 起，PR 70 之後；在那之前這種情況會 exit 0 並產出 0 筆，2026-09-07、09-14 兩次都是如此。）
   - 個別檔案有 `錯誤:`、其他檔案成功：失敗的那份會寫成「處理失敗」artifact，下次增量時自動重跑。
 
 ### 4. 去重＋分類（原 step：Deduplicate + Classify）
@@ -145,8 +145,8 @@
   ```
 
   `make eval-laminar` 讀的是本機 JSON，跟這一步不一樣。
-- env：`SUPABASE_URL`、`SUPABASE_ANON_KEY`、`LMNR_PROJECT_API_KEY`。PR 70 合併後另外需要 `SUPABASE_SERVICE_KEY`，用來把 hit_rate／mrr 寫進 `eval_runs`。
-- 預期輸出：`Eval run 完成，請至 Laminar Dashboard 查看結果（group='keyword-retrieval'）`。PR 70 合併後，還會多出 `keyword-retrieval 指標（40 cases，top-k=5）：{...}` 與 `Saved eval_run to Supabase`。
+- env：`SUPABASE_URL`、`SUPABASE_ANON_KEY`、`LMNR_PROJECT_API_KEY`、`SUPABASE_SERVICE_KEY`（用來把 hit_rate／mrr 寫進 `eval_runs`；2026-09-15 起，PR 70 之後才需要）
+- 預期輸出：依序是 `keyword-retrieval 指標（40 cases，top-k=5）：{...}`、`Saved eval_run to Supabase`，最後是 `Eval run 完成，請至 Laminar Dashboard 查看結果（group='keyword-retrieval'）`。
 - 失敗時：
   - `lmnr 未安裝`：重裝依賴（`make install`）。
   - `golden_retrieval.json 不存在`：確認 `eval/golden_retrieval.json` 在版控裡。
@@ -168,9 +168,9 @@
   `make quality-gate` 預設讀本機 `output/evals/`，跟這一步不一樣。
 - env：`SUPABASE_URL`、`SUPABASE_ANON_KEY`
 - 預期輸出：`Quality gate PASSED — all thresholds met`
-- 失敗時：**PR 70 合併前這一步一定 FAIL**，因為沒有任何程式把 `hit_rate`／`mrr` 寫進 `eval_runs`。PR 70 合併後，每一行 `QUALITY GATE FAILED:` 都會寫明是哪個指標、是缺值還是低於門檻，以及該由哪一步寫入。
+- 失敗時：每一行 `QUALITY GATE FAILED:` 都會寫明是哪個指標、是缺值還是低於門檻，以及該由哪一步寫入。（2026-09-15 起，PR 70 之後；在那之前 hit_rate／mrr 沒有寫入者，這一步一定 FAIL。）
 
-### PR 70 合併後在本機跑 quality gate
+### 本機只驗 quality gate
 
 只驗 gate、不重跑 ETL 時，依序執行步驟 7、8、9：
 
