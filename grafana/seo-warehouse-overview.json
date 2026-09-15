@@ -166,9 +166,11 @@
           "type": "grafana-postgresql-datasource",
           "uid": "seo-warehouse"
         },
-        "description": "資料源是 gsc_page_daily 視圖，不是底表。底表把「頁面×裝置」與「關鍵字×裝置」兩套維度存在一起，直接對底表加總會得到約兩倍的假數字，而且不報錯。（2026-09-04 補：本圖限定 search_type='web'，與 panel 11／12 的 googleNews／Discover 分開，避免 Discover page 列自 2026-09-04 起加入 gsc_page_daily 後與 web 混算出現階梯狀失真。）",
+        "description": "資料源是 gsc_page_daily 視圖，不是底表。底表把「頁面×裝置」與「關鍵字×裝置」兩套維度存在一起，直接對底表加總會得到約兩倍的假數字，而且不報錯。（2026-09-04 補：本圖限定 search_type='web'，與 panel 11／12 的 googleNews／Discover 分開，避免 Discover page 列自 2026-09-04 起加入 gsc_page_daily 後與 web 混算出現階梯狀失真。）\n\n2026-09-15 補：gsc_page_daily 是 page 維度的 API top-N 抽樣，不是全站數字。09-11 實測只覆蓋全站點擊 46.3%（67,227／145,277）、曝光 7.1%（551,989／7,749,813）。要看全站口徑數字，看 panel 10「全站每日點擊與曝光（GSC UI 同口徑）」。",
         "fieldConfig": {
-          "defaults": {},
+          "defaults": {
+            "min": 0
+          },
           "overrides": [
             {
               "matcher": {
@@ -179,6 +181,10 @@
                 {
                   "id": "custom.axisPlacement",
                   "value": "right"
+                },
+                {
+                  "id": "min",
+                  "value": 0
                 }
               ]
             }
@@ -205,7 +211,7 @@
             "refId": "A"
           }
         ],
-        "title": "Google 搜尋每日點擊與曝光",
+        "title": "Google 搜尋每日點擊與曝光（頁面抽樣，非全站）",
         "type": "timeseries"
       },
       {
@@ -501,7 +507,7 @@
             "editorMode": "code",
             "format": "time_series",
             "rawQuery": true,
-            "rawSql": "WITH ts AS (\n  SELECT (date::timestamp + (hour || ' hours')::interval) AT TIME ZONE 'UTC' AS t,\n         ua_name, status_code, request_count\n  FROM crawl_daily WHERE ua_group <> 'human'\n),\ntop AS (\n  SELECT ua_name FROM ts\n  GROUP BY 1 ORDER BY sum(request_count) FILTER (WHERE status_code >= 400) DESC NULLS LAST\n  LIMIT 10\n),\nhourly AS (\n  SELECT t, ua_name,\n         sum(request_count) AS reqs,\n         coalesce(sum(request_count) FILTER (WHERE status_code >= 400), 0) AS errs\n  FROM ts WHERE ua_name IN (SELECT ua_name FROM top) AND $__timeFilter(t)\n  GROUP BY 1, 2\n)\nSELECT t AS time, ua_name AS metric,\n       round((100.0 * sum(errs) OVER w / NULLIF(sum(reqs) OVER w, 0))::numeric, 1) AS value\nFROM hourly\nWINDOW w AS (PARTITION BY ua_name ORDER BY t RANGE BETWEEN INTERVAL '5 hours' PRECEDING AND CURRENT ROW)\nORDER BY 1",
+            "rawSql": "WITH ts AS (\n  SELECT (date::timestamp + (hour || ' hours')::interval) AT TIME ZONE 'UTC' AS t,\n         ua_name, status_code, request_count\n  FROM crawl_daily WHERE ua_group <> 'human'\n),\ntop AS (\n  SELECT ua_name FROM ts WHERE $__timeFilter(t)\n  GROUP BY 1 ORDER BY sum(request_count) FILTER (WHERE status_code >= 400) DESC NULLS LAST\n  LIMIT 10\n),\nhourly AS (\n  SELECT t, ua_name,\n         sum(request_count) AS reqs,\n         coalesce(sum(request_count) FILTER (WHERE status_code >= 400), 0) AS errs\n  FROM ts WHERE ua_name IN (SELECT ua_name FROM top) AND $__timeFilter(t)\n  GROUP BY 1, 2\n)\nSELECT t AS time, ua_name AS metric,\n       round((100.0 * sum(errs) OVER w / NULLIF(sum(reqs) OVER w, 0))::numeric, 1) AS value\nFROM hourly\nWINDOW w AS (PARTITION BY ua_name ORDER BY t RANGE BETWEEN INTERVAL '5 hours' PRECEDING AND CURRENT ROW)\nORDER BY 1",
             "refId": "A"
           }
         ],
