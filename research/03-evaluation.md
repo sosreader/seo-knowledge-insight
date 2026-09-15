@@ -2185,6 +2185,8 @@ flowchart LR
     S8 --> T_DATA
 ```
 
+> 後續（2026-09-15）：圖中的 `ETL_CI`（`etl-and-deploy.yml` 的 quality gate）已隨該 workflow 移除；quality gate 改在本機執行，見 [15-pipeline-operations.md](./15-pipeline-operations.md#本機執行完整-etl)。
+
 ### Eval Groups 速查表
 
 | Laminar Group            | 來源腳本                               | 觸發方式                                    | 評估對象                  | 指標                                                                                                                                  |

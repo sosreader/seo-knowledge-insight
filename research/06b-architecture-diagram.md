@@ -223,6 +223,8 @@ flowchart LR
     LAMBDA --> URL["Function URL\nhttps://...lambda-url...on.aws"]
 ```
 
+> 後續（2026-09-15）：圖中的 `etl-and-deploy.yml` 已移除，ETL 改在本機執行，見 [15-pipeline-operations.md](./15-pipeline-operations.md#本機執行完整-etl)。這包括本圖的 `CI_ETL` 與「3. 開發流程互動關係」的 `W3`；其中的 deploy Lambda job 更早在 2026-09-10 就已移除。
+
 ### 2. 本地開發流程
 
 ```mermaid

@@ -123,13 +123,6 @@ def test_index_alignment_and_successful_split(candidate, monkeypatch):
     assert post.call_count == 3
 
 
-def test_workflow_preflight_precedes_upload():
-    from pathlib import Path
-    workflow = Path(".github/workflows/etl-and-deploy.yml").read_text()
-    assert workflow.index("migrate_to_supabase.py --dry-run") < workflow.index("- name: Upload artifacts")
-    assert "output/qa_embeddings_index.json" in workflow
-
-
 def test_timeout_split_has_depth_limit(monkeypatch):
     response = Mock(status_code=500)
     response.json.return_value = {"code": "57014"}

@@ -20,7 +20,7 @@ on:
   schedule:
     # 每週一 01:40 UTC。避開本 repo 現有排程（2026-09-10 逐一核對 .github/workflows/*.yml
     # 的 cron 得出）：cwv-hourly 每小時 :05、crawl-hourly 每小時 :15、
-    # update-freshness 週一 02:00 UTC、etl-and-deploy 週一 09:00 UTC、
+    # update-freshness 週一 02:00 UTC、etl-and-deploy 週一 09:00 UTC（2026-09-15 已移除）、
     # cwv-crux-history 週二 06:00 UTC、gsc-search-analytics 每日 07:20 UTC、
     # gsc-url-inspection 每日 08:20 UTC、data-quality-watchdog 每日 09:30 UTC。
     - cron: "40 1 * * 1"

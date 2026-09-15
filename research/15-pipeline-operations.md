@@ -4,6 +4,115 @@
 
 ---
 
+## 本機執行完整 ETL
+
+> 2026-09-15 起，排程 workflow `etl-and-deploy.yml`（ETL Pipeline + Quality Gate）已移除：全歷史 32 次 run 為 31 failure／1 cancelled，一次都沒成功過。ETL 改在本機依本節執行。`qa_items` 的時效分數仍由 CI 的 Update Freshness Scores（`update-freshness.yml`，週一 02:00 UTC）維護。
+>
+> 本節逐步對應原 workflow 的每個 step，指令與 env 以原 workflow 的 `run:`／`env:` 為準，Makefile 有對應 target 時優先用 target。`tests/test_eval_cli_contract.py` 會掃描本節每一個 `scripts/*.py` 呼叫與它帶的長參數，確認腳本的 argparse 真的認得。改指令時，測試會一起把關。
+
+**前置**
+
+- Python 環境用 `.venv/bin/python`（Makefile 的 `PYTHON` 就是它）。各腳本會自動讀取 repo 根目錄的 `.env`；下列 env 只列名稱，值放在 `.env`，不要貼到終端機或文件裡。
+- 先跑 `make check`：只檢查依賴，不呼叫任何 API。
+- 本機會保留 `output/`（含 LLM content-addressed cache）與 `raw_data/`，所以萃取與分類是真正的增量。原 workflow 每次都從空的 `output/` 開始，等於每週全量重萃，08-31 那次光 ETL job 就跑了 4 小時 54 分。
+- 步驟 6～8 會寫入 prod Supabase（`qa_items`、`eval_runs`）。
+
+### 1. Notion 擷取（原 step：Fetch from Notion）
+
+- 指令：`make fetch-notion`。原 workflow 直接跑 `scripts/01_fetch_notion.py`，沒帶 `--filter SEO`；Makefile target 經 `run_pipeline.py` 帶上 `--filter SEO`，只抓 SEO 相關頁面。
+- env：`NOTION_TOKEN`、`NOTION_PARENT_PAGE_ID`
+- 預期輸出：`增量模式：只抓新增或有更新的頁面`、`預設增量 cutoff: last_edited_time >= <日期>`，最後是 `步驟 1 完成！`；新頁面寫進 `raw_data/markdown/`。
+- 失敗時：出現「環境變數未設定」時，先比對 env 名稱（見下方〈2026-07-03 Notion Multi-Source API 400 判別與 CI Secret 排查方法論〉），不要先懷疑 token 過期；Notion API 400 對照同一節的錯誤表。
+
+### 2. 外部文章（原 step：Fetch external articles，best-effort）
+
+- 指令：`python scripts/run_pipeline.py --step fetch-articles`（iThome + Google Cases，與原 workflow 相同）。要抓全部 10 個來源用 `make fetch-articles`，其中 Medium 需要 Playwright。
+- env：無
+- 預期輸出：各來源腳本自己的擷取紀錄，沒有統一的摘要行。
+- 失敗時：原 workflow 設 `continue-on-error: true`。來源網站擋爬蟲屬預期，失敗不阻斷後續步驟，核心資料迴路是 Notion。
+
+### 3. Q&A 萃取（原 step：Extract Q&A）
+
+- 指令：`make extract-qa`（增量，跳過已完成的檔案）。原 workflow 直接跑 `scripts/02_extract_qa.py`。想先試跑可用 `make extract-qa-test`（只處理前 3 份）。
+- env：
+  - `OPENAI_API_KEY`：未設定時會改走本機 heuristic（`extraction_model` = `claude-code-heuristic`），品質不同，正式跑請設定。
+  - `LMNR_PROJECT_API_KEY`：選填，未設定只是不送 trace。
+- 預期輸出：`共 N 份待處理`（或 `所有檔案已處理完畢，無需重跑。`），最後是 `步驟 2 完成`、`本次處理: N 份`、`總計 Q&A: N 個`。
+- 失敗時：
+  - 出現 `錯誤: Error code: 429 ... insufficient_quota` 代表 OpenAI 額度用盡。**PR 70 合併前**，這種情況 step 仍然 exit 0 並產出 0 筆（2026-09-07、09-14 兩次都是這樣），所以要拿 `總計 Q&A` 跟上次比，不能只看 exit code。PR 70 合併後，遇到第一個 `insufficient_quota` 就會 exit 1；本次檔案全部失敗也會 exit 1。
+  - 個別檔案有 `錯誤:`、其他檔案成功：失敗的那份會寫成「處理失敗」artifact，下次增量時自動重跑。
+
+### 4. 去重＋分類（原 step：Deduplicate + Classify）
+
+- 指令：`make dedupe-classify`。原 workflow 直接跑 `scripts/03_dedupe_classify.py`。
+- env：`OPENAI_API_KEY`（embeddings 與分類）、`LMNR_PROJECT_API_KEY`（選填）
+- 預期輸出：`去重後 Q&A 總數: N`、`分類統計：`；產出 `output/qa_final.json`、`output/qa_embeddings.npy`、`output/qa_embeddings_index.json`、`output/qa_embeddings_manifest.json`。
+- 失敗時：
+  - `ValueError: Embedding manifest requires nonempty candidates` 代表上游是 0 筆，要回頭查步驟 3，問題不在這一步。
+  - `qa_embeddings.npy` 與 `qa_final.json` 對不上時，用 `make rebuild-embeddings` 修。
+
+### 5. 上傳前檢查（原 step：Validate candidate artifacts before upload）
+
+- 指令：`make migrate-supabase-dry`，等同 `python scripts/migrate_to_supabase.py --dry-run`。
+- env：無（dry-run 不連 Supabase）
+- 預期輸出：`Prepared N rows for upsert`、`[DRY RUN] Would upsert N rows in batches of 100`。
+- 失敗時：結構或向量沒對齊（例如 manifest 不符）會在這一步 raise。**N 是 0 或明顯少於上次就停下**，不要進入步驟 6。2026-09-07 那次就是 0 筆一路綠到 migrate。
+
+### 6. 寫入 Supabase（原 job：Migrate to Supabase）
+
+- 指令：`make migrate-supabase`，完成後跑 `make migrate-supabase-verify`。
+- env：`SUPABASE_URL`、`SUPABASE_SERVICE_KEY`（**這一步會寫 prod 的 `qa_items`**）
+- 預期輸出：`Migration complete: N succeeded, 0 failed (total N)`、`Verification: M rows in qa_items`；`make migrate-supabase-verify` 會印 `qa_items count in Supabase: M`。
+- 失敗時：
+  - `57014 statement timeout`：程式會先把該批二分後重送（最多 3 層）。仍然失敗會印 `Migration stopped: ... remaining batches were not attempted` 並 exit 1，這時改用小批次重跑：`python scripts/migrate_to_supabase.py --batch-size 50`。upsert 用 `resolution=merge-duplicates`，重跑不會重複插入。
+  - `Missing SUPABASE_URL or SUPABASE_SERVICE_KEY` 代表 env 沒設。
+
+### 7. 資料品質 eval（原 step：Run data quality eval）
+
+- 指令：`python scripts/_eval_data_quality.py --source supabase`
+- env：
+  - `SUPABASE_URL`
+  - `SUPABASE_ANON_KEY`：讀 `qa_items`
+  - `SUPABASE_SERVICE_KEY`：寫 `eval_runs`
+  - `LMNR_PROJECT_API_KEY`：推 Laminar。加 `--dry-run` 就不推 Laminar，但**仍然會寫 `eval_runs`**。
+- 預期輸出：`=== Data Quality 指標（N 筆 QA）===` 與四項指標，接著是 `Saved eval_run to Supabase`。
+- 失敗時：
+  - `eval_runs 寫入失敗，HTTP 401` 代表用錯 key，寫入必須用 service key。
+  - 只設了 `SUPABASE_URL`、沒設 service key，會判定「環境設定不完整」並 exit 1。
+
+### 8. 檢索 eval（原 step：Run retrieval eval）
+
+- 指令：`python scripts/_eval_laminar.py --source supabase --group keyword-retrieval`。注意 `make eval-laminar` 讀的是本機 JSON，跟這一步不一樣。
+- env：`SUPABASE_URL`、`SUPABASE_ANON_KEY`、`LMNR_PROJECT_API_KEY`。PR 70 合併後另外需要 `SUPABASE_SERVICE_KEY`，用來把 hit_rate／mrr 寫進 `eval_runs`。
+- 預期輸出：`Eval run 完成，請至 Laminar Dashboard 查看結果（group='keyword-retrieval'）`。PR 70 合併後，還會多出 `keyword-retrieval 指標（40 cases，top-k=5）：{...}` 與 `Saved eval_run to Supabase`。
+- 失敗時：
+  - `lmnr 未安裝`：重裝依賴（`make install`）。
+  - `golden_retrieval.json 不存在`：確認 `eval/golden_retrieval.json` 在版控裡。
+
+### 9. Quality Gate（原 step：Quality Gate）
+
+- 指令：`python scripts/quality_gate.py --source supabase`。注意 `make quality-gate` 預設讀本機 `output/evals/`，跟這一步不一樣。
+- env：`SUPABASE_URL`、`SUPABASE_ANON_KEY`
+- 預期輸出：`Quality gate PASSED — all thresholds met`
+- 失敗時：**PR 70 合併前這一步一定 FAIL**，因為沒有任何程式把 `hit_rate`／`mrr` 寫進 `eval_runs`。PR 70 合併後，每一行 `QUALITY GATE FAILED:` 都會寫明是哪個指標、是缺值還是低於門檻，以及該由哪一步寫入。
+
+### PR 70 合併後在本機跑 quality gate
+
+只驗 gate、不重跑 ETL 時，依序執行步驟 7、8、9：
+
+```bash
+.venv/bin/python scripts/_eval_data_quality.py --source supabase
+.venv/bin/python scripts/_eval_laminar.py --source supabase --group keyword-retrieval
+.venv/bin/python scripts/quality_gate.py --source supabase
+```
+
+- 前兩行各寫一筆 `eval_runs`（group 分別是 `data-quality`、`keyword-retrieval`），第三行只讀。
+- gate 對每個 group 只取最新一筆，而且預設必須是 6 小時內寫入的。要回頭檢查較舊的某一次，可在第三行加 `--max-age-hours`（例如 48）。
+- 只想看結果、不想讓它 exit 1，就在第三行加 `--dry-run`。
+- 2026-09-15 以 live 資料唯讀試算：hit_rate 1.0、mrr 0.8967、avg_confidence 0.7941、qa_count 32439，四項都過門檻；其中 avg_confidence 離門檻 0.75 只差 0.044。
+
+---
+
 ## 步驟 4：每週 SEO 週報
 
 ### 操作流程
@@ -340,6 +449,7 @@ L4→L1: 7
   | `is a database, not a page` | endpoint 用錯 | 換成對應 database vs page endpoint |
 
 - **CI「環境變數未設定」排查法：先三方比對，非先懷疑 token 過期**（PR #48）：排程 ETL（`etl-and-deploy.yml`，每週一）自 2026-03-09 起 17 次全數失敗、從未成功。根因兩層：(1) workflow 引用 `secrets.NOTION_TOKEN` 但 repo 只有 `NOTION_API_KEY`（env 為空、`pipeline_deps` 檢查 exit 1）；(2) workflow 傳 `NOTION_DATABASE_ID` 但 `scripts/01_fetch_notion.py` 讀的是 `config.NOTION_PARENT_PAGE_ID`（`config.py` 無 `DATABASE_ID` key）。排查順序：先比對 ①workflow 的 `${{ secrets.NAME }}` 引用名、②`gh secret list` 實際存在的 secret 名、③script/config 實際讀取的 env key，三者對不上即是根因；「token 過期」是最後才考慮的假設。另需注意：資料最後更新日（本地跑的日期）不等於 CI 最後成功日；判斷 CI 健康要看 `gh run list -L 30` 完整歷史，不能只看資料新鮮度。
+  - 後續（2026-09-15）：`etl-and-deploy.yml` 已移除（全歷史 31 failure／1 cancelled、0 success），ETL 改在本機執行，見本文件開頭〈本機執行完整 ETL〉。
 
 - **Secret 設定不落檔法**：以 `gh secret set` 補齊 `NOTION_TOKEN`、`NOTION_PARENT_PAGE_ID` 時，值取自本地 `.env`、先經 Notion API `/v1/users/me` 200 驗證有效，再用「python 讀值 → stdout pipe → `gh secret set` stdin」全程不 echo、不落檔的方式設定；workflow L40 改為 `NOTION_PARENT_PAGE_ID: ${{ secrets.NOTION_PARENT_PAGE_ID }}`（PR #48 squash merged）。
 
