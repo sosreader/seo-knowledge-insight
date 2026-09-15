@@ -66,11 +66,14 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/data_quality_gate.py --reap-stale-running --execute
 
-      # if: always()：reap 這步萬一失敗（例如 Supabase 當下又在暫時性 5xx），
-      # 全檢還是要照跑——不能因為 reap 沒跑成就連 stale-running 檢查一起跳過，
-      # 那樣反而會讓 job 綠燈掩蓋掉真正的殘留 running 列。
+      # if: ${{ !cancelled() }}：reap 這步萬一失敗（例如 Supabase 當下又在
+      # 暫時性 5xx），全檢還是要照跑——不能因為 reap 沒跑成就連 stale-running
+      # 檢查一起跳過，那樣反而會讓 job 綠燈掩蓋掉真正的殘留 running 列。用
+      # !cancelled() 而不是 always()：workflow 被取消（例如手動 cancel 這次
+      # run）時，全檢不該還照跑——always() 連這種情況都會跑，!cancelled()
+      # 只在「失敗但沒被取消」時才跑，取消時仍會正確跳過。
       - name: Check all pipelines' data quality (independent of each pipeline's own schedule)
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
