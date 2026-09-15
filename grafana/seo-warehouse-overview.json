@@ -973,7 +973,7 @@
     "timezone": "browser",
     "title": "SEO Warehouse — 倉儲總覽",
     "uid": "seo-warehouse-overview",
-    "version": 9
+    "version": 10
   },
   "meta": {
     "type": "db",
@@ -986,10 +986,10 @@
     "url": "/d/seo-warehouse-overview/seo-warehouse-e28094-e58089-e584b2-e7b8bd-e8a6bd",
     "expires": "0001-01-01T00:00:00Z",
     "created": "2026-09-02T09:44:45Z",
-    "updated": "2026-09-08T04:42:25Z",
+    "updated": "2026-09-15T04:33:40Z",
     "updatedBy": "claude-mcp-readonly",
     "createdBy": "claude-mcp-readonly",
-    "version": 9,
+    "version": 10,
     "hasAcl": false,
     "isFolder": false,
     "apiVersion": "v0alpha1",
