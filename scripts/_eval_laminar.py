@@ -37,6 +37,7 @@ import math
 import os
 import sys
 from pathlib import Path
+from typing import Any, Callable
 
 # 確保 project root 在 import path
 ROOT = Path(__file__).resolve().parent.parent
@@ -47,6 +48,12 @@ from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
 
 from utils.observability import init_laminar  # type: ignore
+
+# eval_runs 寫入沿用 data-quality 那條已上線的路徑（service key、4xx 不重試、
+# 5xx 重試、失敗不吞），不另寫一份；門檻與 group 名稱以 quality_gate.py 為準，
+# 讓「寫入端寫什麼」與「gate 讀什麼」只有一個定義。
+from scripts._eval_data_quality import EvalRunPersistError, _upsert_eval_run  # noqa: E402
+from scripts.quality_gate import KEYWORD_RETRIEVAL_GROUP, THRESHOLDS  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -398,6 +405,93 @@ def report_overall_evaluator(output: str, target: dict) -> float:
     return (sc + kb + rc) / 3
 
 
+# ── keyword-retrieval → eval_runs（quality gate 的資料來源）──────────────────
+
+# keyword-retrieval 的 evaluator 組合只定義這一次：推 Laminar 與寫 eval_runs
+# 的本機計算共用同一份，兩邊的指標不會各自漂移。
+KEYWORD_RETRIEVAL_EVALUATORS: dict[str, Callable[[list[dict], dict], float]] = {
+    "precision": precision_evaluator,
+    "recall": recall_evaluator,
+    "f1": f1_evaluator,
+    "hit_rate": hit_rate_evaluator,
+    "mrr": mrr_evaluator,
+    "ndcg": ndcg_at_k_evaluator,
+    "top1_category_match": top1_category_match_evaluator,
+    "top5_category_coverage": top5_category_coverage_evaluator,
+}
+
+
+def compute_retrieval_metrics(golden_cases: list[dict], qas: list[dict], top_k: int) -> dict:
+    """在本機跑 keyword retrieval，回傳每個 evaluator 在全部 golden case 的平均分數。
+
+    與 Laminar 推送用同一個 _keyword_search 與同一組 evaluator，但不經過
+    Laminar：quality gate 要的是寫進 eval_runs 的數字，不能依賴外部
+    Dashboard 的回傳。檢索例外不吞（不像 safe_executor 回 []）——檢索本身
+    壞掉時，這一步就該失敗，而不是寫進一組偏低的指標。
+    """
+    if not golden_cases:
+        raise ValueError("golden_cases 不可為空——沒有 case 算不出平均")
+    outputs = [_keyword_search(case["query"], qas, top_k) for case in golden_cases]
+    averages = {
+        name: round(
+            sum(evaluator(out, case) for out, case in zip(outputs, golden_cases)) / len(golden_cases), 4
+        )
+        for name, evaluator in KEYWORD_RETRIEVAL_EVALUATORS.items()
+    }
+    # total → eval_runs.qa_count（_upsert_eval_run 從 metrics["total"] 取）：本次檢索的語料筆數
+    return {**averages, "cases": len(golden_cases), "top_k": top_k, "total": len(qas)}
+
+
+def _persist_keyword_retrieval(metrics: dict) -> bool:
+    """寫入 eval_runs（group=keyword-retrieval），passed 用 quality gate 同一組門檻。
+
+    回傳是否寫入成功；失敗只記錄不 raise，讓 Laminar 推送照常進行，
+    由 main() 最後以非 0 結束（與 _eval_data_quality.py 相同的處理順序）。
+    """
+    passed = (
+        metrics["hit_rate"] >= THRESHOLDS["hit_rate_min"]
+        and metrics["mrr"] >= THRESHOLDS["mrr_min"]
+    )
+    try:
+        _upsert_eval_run(metrics, KEYWORD_RETRIEVAL_GROUP, passed)
+    except EvalRunPersistError as exc:
+        logger.error("eval_runs 寫入失敗，此次執行最終會以非 0 結束：%s", exc)
+        return False
+    return True
+
+
+def _run_keyword_retrieval(
+    evaluate: Callable[..., Any],
+    eval_data: list[dict],
+    golden_cases: list[dict],
+    qas: list[dict],
+    top_k: int,
+) -> bool:
+    """keyword-retrieval：先算指標寫入 eval_runs，再推 Laminar。回傳 eval_runs 是否寫入成功。"""
+    metrics = compute_retrieval_metrics(golden_cases, qas, top_k)
+    logger.info(
+        "keyword-retrieval 指標（%d cases，top-k=%d）：%s",
+        metrics["cases"], top_k, {name: metrics[name] for name in KEYWORD_RETRIEVAL_EVALUATORS},
+    )
+    persisted = _persist_keyword_retrieval(metrics)
+
+    def safe_executor(d: dict) -> list[dict]:
+        try:
+            return _keyword_search(d["query"], qas, d["top_k"])
+        except Exception as exc:
+            logger.error("executor 失敗 query=%r: %s", d.get("query"), exc)
+            return []
+
+    evaluate(
+        data=eval_data,
+        executor=safe_executor,
+        evaluators=dict(KEYWORD_RETRIEVAL_EVALUATORS),
+        group_name=KEYWORD_RETRIEVAL_GROUP,
+        concurrency_limit=1,
+    )
+    return persisted
+
+
 # ── Main ────────────────────────────────────────────────────────────────────
 
 
@@ -491,6 +585,7 @@ def main() -> None:
         for c in golden_cases
     ]
 
+    eval_run_persisted = True  # 只有 keyword-retrieval 寫 eval_runs（quality gate 只讀它）
     if args.group == "retrieval-enhancement":
         synonyms = _load_synonyms()
         logger.info("載入同義詞詞典：%d 個術語", len(synonyms))
@@ -517,32 +612,13 @@ def main() -> None:
         )
 
     else:
-        # keyword-retrieval（預設）— Layer 2 完整 IR 指標套件
-        def safe_executor(d: dict) -> list[dict]:
-            try:
-                return _keyword_search(d["query"], qas, d["top_k"])
-            except Exception as exc:
-                logger.error("executor 失敗 query=%r: %s", d.get("query"), exc)
-                return []
-
-        evaluate(
-            data=eval_data,
-            executor=safe_executor,
-            evaluators={
-                "precision": precision_evaluator,
-                "recall": recall_evaluator,
-                "f1": f1_evaluator,
-                "hit_rate": hit_rate_evaluator,
-                "mrr": mrr_evaluator,
-                "ndcg": ndcg_at_k_evaluator,
-                "top1_category_match": top1_category_match_evaluator,
-                "top5_category_coverage": top5_category_coverage_evaluator,
-            },
-            group_name=args.group,
-            concurrency_limit=1,
-        )
+        # keyword-retrieval（預設）— Layer 2 完整 IR 指標套件；quality gate 讀這組寫進 eval_runs 的值
+        eval_run_persisted = _run_keyword_retrieval(evaluate, eval_data, golden_cases, qas, top_k)
 
     logger.info("Eval run 完成，請至 Laminar Dashboard 查看結果（group=%r）", args.group)
+
+    if not eval_run_persisted:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -254,6 +254,56 @@ def _rebuild_merged_from_per_meeting() -> dict:
     }
 
 
+# OpenAI 額度用盡不是暫時性錯誤：run 34827893748（2026-09-14）連續 835 次 429
+# insufficient_quota 跑了 36 分鐘，每一份照樣呼叫、照樣失敗，step 最後仍是
+# success，要到 dedupe 才以不相干的「Embedding manifest requires nonempty
+# candidates」炸掉；run 34106023623（09-07）更是一路 success 到 migrate 上傳 0 筆。
+_QUOTA_EXHAUSTED_CODE = "insufficient_quota"
+
+
+def _is_quota_exhausted(exc: BaseException) -> bool:
+    """openai.RateLimitError 的 .code 取自 response body（一般 rate limit 是 rate_limit_exceeded）。"""
+    return getattr(exc, "code", None) == _QUOTA_EXHAUSTED_CODE
+
+
+def _extract_files(md_files: list[Path]) -> tuple[int, int]:
+    """逐一萃取並寫出單份結果，回傳（處理份數, 失敗份數）。
+
+    單份失敗照舊寫成「處理失敗」artifact（_is_completed_qa_artifact 會讓它下次
+    重跑）；額度用盡則立刻中止——剩下的每一份只會同樣失敗。
+    """
+    total_files = len(md_files)
+    failed = 0
+    for i, md_path in enumerate(md_files, 1):
+        logger.info("[%d/%d]", i, total_files)
+
+        try:
+            result = process_single_meeting(md_path)
+        except Exception as e:
+            if _is_quota_exhausted(e):
+                logger.error(
+                    "OpenAI 額度用盡（%s），中止萃取，剩餘 %d 份未處理：%s",
+                    _QUOTA_EXHAUSTED_CODE, total_files - i + 1, e,
+                )
+                sys.exit(1)
+            logger.error("     錯誤: %s", e)
+            result = {"qa_pairs": [], "meeting_summary": f"處理失敗: {e}"}
+            failed += 1
+
+        # 存單份結果（依來源目錄決定輸出位置）
+        out_path = _canonical_qa_artifact_path(md_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        # 簡單的 rate limit 保護
+        time.sleep(1)
+
+    return total_files, failed
+
+
 def main(args: argparse.Namespace) -> None:
     init_laminar()
 
@@ -351,30 +401,15 @@ def main(args: argparse.Namespace) -> None:
     total_files = len(md_files)
     logger.info("共 %d 份待處理", total_files)
 
-    # 逐一處理
-    newly_processed = 0
-
-    for i, md_path in enumerate(md_files, 1):
-        logger.info("[%d/%d]", i, total_files)
-
-        try:
-            result = process_single_meeting(md_path)
-        except Exception as e:
-            logger.error("     錯誤: %s", e)
-            result = {"qa_pairs": [], "meeting_summary": f"處理失敗: {e}"}
-
-        # 存單份結果（依來源目錄決定輸出位置）
-        out_path = _canonical_qa_artifact_path(md_path)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(
-            json.dumps(result, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+    newly_processed, failed = _extract_files(md_files)
+    if failed == newly_processed:
+        logger.error(
+            "本次 %d 份全部萃取失敗（見上方「錯誤:」），視為步驟失敗——"
+            "不讓空結果以 success 流到 dedupe／migrate",
+            newly_processed,
         )
-
-        newly_processed += 1
-
-        # 簡單的 rate limit 保護
-        time.sleep(1)
+        flush_laminar()
+        sys.exit(1)
 
     # 從所有 per-meeting 結果重建合併檔（包含增量前已處理的）
     merged_output = _rebuild_merged_from_per_meeting()
