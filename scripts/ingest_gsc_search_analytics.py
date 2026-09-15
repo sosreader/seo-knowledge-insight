@@ -725,6 +725,18 @@ def run_ingestion(
         logger.error("Search Analytics 查詢失敗（系統性，中止整個 run）：%s", exc)
         finish_run(run_id, "failed", total_written)
         return 1
+    except Exception:
+        # _ingest_totals() → write_totals() 內部另開一個子 run（table_name=
+        # gsc_daily_totals），它自己的 finish_run() 重試用盡時會 raise
+        # IngestionRunFinishError——若這裡不接住，主 run（run_id，table_name=
+        # gsc_daily_metrics）永遠不會被收尾，變成第二個孤兒列，且沒有任何
+        # 訊號指出「主 run 其實也卡住了」。這裡先幫主 run 收尾成 failed，
+        # 再讓原例外繼續往外穿透——不吞掉，程式仍然以非 0 結束。
+        # 用 except Exception 而不是只抓 IngestionRunFinishError：跟上面
+        # S4.1 SF-3 同一個理由，任何在這個 try 區塊裡發生的未預期例外都不該
+        # 讓主 run 悄悄卡在 running。
+        finish_run(run_id, "failed", total_written)
+        raise
 
     return _finalize_run(run_id, execute=execute, errors=errors, warnings=warnings,
                          written=total_written, failed=total_failed, metrics_skipped=not combos)

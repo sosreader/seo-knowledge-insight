@@ -1043,6 +1043,27 @@ class TestRunIngestion:
         finished = [(call.args[0], call.args[1]) for call in finish.call_args_list]
         assert finished == [("run-totals", "failed"), ("run-main", "failed")]
 
+    def test_write_totals_finish_failure_still_finishes_main_run_before_reraising(self) -> None:
+        """Regression（PR 69 follow-up，2026-09-15）：write_totals() 內部對 totals
+        子 run 收尾的 finish_run()，重試用盡時會 raise IngestionRunFinishError。
+        這個例外原本會直接穿出 run_ingestion，讓主 run（run_id，table_name=
+        gsc_daily_metrics）完全沒機會被收尾，變成第二個孤兒列且毫無訊號。
+        現在要求：主 run 一定先被 finish_run(..., "failed", ...) 收尾，例外
+        才繼續往外穿透（程式仍以非 0 結束，不吞掉原始例外）。"""
+        from scripts.ingestion_run_retry import IngestionRunFinishError
+
+        with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
+             patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY])), \
+             patch(f"{MODULE}.write_totals",
+                   side_effect=IngestionRunFinishError("totals 收尾重試用盡")), \
+             patch(f"{MODULE}.start_run", return_value="run-main") as start, \
+             patch(f"{MODULE}.finish_run") as finish, \
+             patch(f"{MODULE}.collect_day_combo", side_effect=_one_record):
+            with pytest.raises(IngestionRunFinishError):
+                run_ingestion(execute=True, backfill_days=7, search_type="web")
+        assert start.call_count == 1  # 只有主 run 是這裡開的（totals run 在 write_totals 內部）
+        finish.assert_called_once_with("run-main", "failed", 0)
+
     def test_run_window_is_half_open_over_target_dates(self) -> None:
         with patch(f"{MODULE}.gsc_access_token", return_value="t"), \
              patch(f"{MODULE}.probe_totals", return_value=_probe_rows([DAY, DAY - timedelta(days=1)])), \
