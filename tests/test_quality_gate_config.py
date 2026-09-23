@@ -269,13 +269,15 @@ class TestAiSovPipeline:
         assert self.pipeline.gap_window_hours < PIPELINES_BY_KEY["cwv_hourly_crux"].gap_window_hours
 
     def test_lag_buffer_is_deliberately_zero_because_cron_runs_at_week_start(self) -> None:
-        """buffer 的語意是「桶**關閉**後容忍多久沒資料」。本管線 cron 排在週一 06:00，
-        資料在桶起點後 6h 就寫好、桶關閉時已就位約 162h，沒有需要容忍的延遲。
-        ⚠ 這個 0.0 綁在「cron 排在週初」這個前提上：排程若改到週末，這個值必須跟著改。"""
+        """buffer 的語意是「桶**關閉**後容忍多久沒資料」。本管線排程排在週一 06:00
+        起跑，資料在桶起點後 6h 就寫好、桶關閉時已就位約 162h，沒有需要容忍的延遲。
+        ⚠ 這個 0.0 綁在「排程排在週初」這個前提上：排程若改到週末，這個值必須跟著改。
+
+        2026-09-23：`.github/workflows/ai-sov-weekly.yml` 已移除（排程改走本機
+        launchd `cc.vocus.ai-sov-local`，每週一 07:00 本地時間，見
+        docs/ai-sov-local-runner.md），前提改綁在該 launchd plist 上，不再能從
+        本 repo 的 workflow 檔驗證，故這裡只鎖 pipeline 設定值本身。"""
         assert self.pipeline.lag_buffer_hours == 0.0
-        workflow = (Path(__file__).resolve().parent.parent
-                    / ".github" / "workflows" / "ai-sov-weekly.yml").read_text()
-        assert "cron: '0 6 * * 1'" in workflow, "排程已不在週初，lag_buffer_hours=0.0 的前提不再成立"
 
     def test_degradation_watches_ungrounded_share(self) -> None:
         """零 citation 的回應沒有引用任何人。把它算進 SoV 分母會讓 provider 端的
