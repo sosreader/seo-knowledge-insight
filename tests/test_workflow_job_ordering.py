@@ -20,7 +20,9 @@ gap FAIL——CrUX 幾乎每次成功執行都會中，等於一個永遠在叫�
   MERGED_WORKFLOWS   —— gate 已併成 ingest job 的 step，驗 step 級不變量
   SPLIT_WORKFLOWS    —— gate 仍是獨立 job，驗原本的 job 級不變量
 
-兩組加起來仍是原本那六支，沒有任何一支從測試涵蓋範圍裡消失。
+兩組加起來原本是六支。2026-09-23：ai-sov-weekly.yml 因排程改走本機 launchd
+（見 docs/ai-sov-local-runner.md）而被移除，SPLIT_WORKFLOWS 降為一支——不是
+覆蓋範圍縮水，是被驗證的 workflow 本身不存在了。
 
 本檔用純文字解析（不引入 pyyaml 依賴——requirements.txt 沒有 pyyaml，不必為
 一支 meta 測試新增依賴）。
@@ -48,13 +50,12 @@ MERGED_WORKFLOWS = [
 #     freshness 是跨六條腿的 fan-in。併進 ingest 會變成每個 surface 各跑一次
 #     gate，而且失去「等六個都寫完再檢查」的語意。
 #
-#   ai-sov-weekly.yml —— ingest 有 `timeout-minutes: 60`（36 prompt x 3 次帶
-#     web_search，刻意壓上限），job 級 timeout 觸發時 job 被取消，併進去的 step
-#     不保證會跑；而且這支自 2026-09-05 起 schedule 已註解掉、只剩
-#     workflow_dispatch，併了也省不到任何排程計費分鐘。
+#   ai-sov-weekly.yml 原本也在這裡（ingest 有 job 級 timeout，併入 step 不保證
+#   會跑），2026-09-23 該 workflow 已被移除（排程改走本機 launchd，見
+#   docs/ai-sov-local-runner.md），一併從本清單拿掉——需要時 `git revert` 補回
+#   workflow 後把它加回來即可。
 SPLIT_WORKFLOWS = [
     "gsc-search-analytics.yml",
-    "ai-sov-weekly.yml",
 ]
 
 EVENT_GATE_TOKENS = (
@@ -214,17 +215,12 @@ def test_freshness_job_still_gated_to_schedule_or_dispatch(workflow_name: str) -
 
 
 def test_split_workflows_have_a_documented_reason_not_to_merge() -> None:
-    """兩支例外各自的理由必須是結構性的、可從 workflow 本身驗證的。
+    """例外的理由必須是結構性的、可從 workflow 本身驗證的。
 
-    不是靠註解自述——matrix 與 job 級 timeout 都直接讀得出來。
+    不是靠註解自述——matrix 直接讀得出來。
     """
     gsc = (WORKFLOWS_DIR / "gsc-search-analytics.yml").read_text()
     assert "    strategy:" in gsc and "      matrix:" in gsc, (
         "gsc-search-analytics 的 ingest 不再是 matrix 了——不可併的理由消失，"
         "應該重新評估是否搬進 MERGED_WORKFLOWS。"
-    )
-    sov = (WORKFLOWS_DIR / "ai-sov-weekly.yml").read_text()
-    assert "    timeout-minutes:" in sov, (
-        "ai-sov-weekly 的 ingest 不再有 job 級 timeout——不可併的理由之一消失，"
-        "應該重新評估。"
     )
