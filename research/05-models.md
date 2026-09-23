@@ -4,11 +4,61 @@
 
 ---
 
+## 2026-09-23 模型盤點與更新
+
+本節以目前原始碼為準；下方早期實驗與 benchmark 屬歷史紀錄，不代表本次升級已完成品質評估。
+
+| 使用位置 | 設定／原模型 | 更新後 | 備註 |
+| --- | --- | --- | --- |
+| Python Q&A 萃取、合併 | `OPENAI_MODEL` / gpt-5.4-nano | `gpt-6-luna` | `utils/openai_helper.py`；cache 依模型隔離 |
+| Python 分類、L4 reality check | `CLASSIFY_MODEL` / gpt-5.4-nano | `gpt-6-luna` | `utils/openai_helper.py`、`utils/maturity_llm_judge.py` |
+| Python 週報候選 Q&A rerank | `EVAL_JUDGE_MODEL` / gpt-5.4-nano | `gpt-6-luna` | `scripts/04_generate_report.py`；目前此變數的實際呼叫僅在這裡 |
+| TypeScript 一般模型設定 | `OPENAI_MODEL` / gpt-5.4-nano | `gpt-6-luna` | `api/src/config.ts`；Chat 與週報使用各自的設定 |
+| TypeScript Chat、SSE、Agent | `CHAT_MODEL` / gpt-5.4-nano | `gpt-6-luna` | `rag-chat.ts`、`rag-chat-stream.ts`、`agent-loop.ts` |
+| Python／TypeScript 週報 | `REPORT_MODEL` / gpt-5.4 | `gpt-6-sol` | `04_generate_report.py`、`report-llm.ts` |
+| 語意向量 | `OPENAI_EMBEDDING_MODEL` | 保留 `text-embedding-3-small` | 不改向量空間與既有索引 |
+| Anthropic rerank、context relevance、context enrichment | 寫死模型 ID | 保留 `claude-haiku-4-5-20251001` | `reranker.ts`、`context-relevance.ts`、`_generate_context.py`；屬獨立供應商路徑 |
+| AI SOV OpenAI API CLI | `DEFAULT_MODEL`／workflow input | 保留 `gpt-5.4` | `ingest_ai_sov.py`；屬觀測對象，換模型會改變時序比較口徑。原每週 CI 已於 PR #73 移除 |
+| AI SOV Claude CLI | `DEFAULT_CLAUDE_CODE_MODEL` | 保留 `claude-sonnet-5` | `ai_sov_cli_providers.py`；此列為原始碼盤點，未驗證供應商可用性 |
+| AI SOV Codex CLI | 未指定時沿用 Codex 使用者設定 | 保留 | `codex-default` 是 metadata fallback label，非 API 型號 |
+| 無 OpenAI key 的 fallback | heuristic／本地 hash embedding | 保留 | `claude-code-heuristic`、`local-embed-v1` 是實作識別，不是遠端模型 |
+| Claude Code 語意指令 | session 模型 | 保留 | 不受 `OPENAI_MODEL` 等 env 控制 |
+
+### 選型依據與相容性
+
+官方標準價（美元／百萬 token，2026-09-23 查核）：
+
+| 任務層級 | 舊模型輸入／輸出 | 新模型輸入／輸出 |
+| --- | --- | --- |
+| 高量任務 | gpt-5.4-nano：0.20／1.25 | gpt-6-luna：0.10／0.50 |
+| 週報 | gpt-5.4：2.50／15.00 | gpt-6-sol：2.00／10.00 |
+
+此為單價比較；實際費用仍取決於輸入、輸出、cache write 與重試用量，不能直接當成每次任務的節省比例。
+
+- 新模型預設 reasoning effort 為 `medium`，原 5.4 / nano 為 `none`。兩端透過 `model_options.py`／`model-options.ts` 明確保留 `none`，沿用原 token budget、temperature 與 JSON schema。
+- Luna／Sol 在 Chat Completions 使用 function calling 需要 `reasoning_effort: none`；Agent 的工具回合與最後收斂請求均帶入。未切換 Responses API。
+- 相容參數僅套用精確 ID `gpt-6-luna`、`gpt-6-sol`；其他 env 覆寫維持原請求。若指定快照或其他模型，需另外核對其參數。
+- Python `.env` 的 `OPENAI_MODEL` 原本會覆蓋程式預設，本機已同步更新。TypeScript 載入順序為既有 process env → `api/.env` → 根目錄 `.env`；目前本機沒有 `api/.env`。
+- Lambda 與 CI 實際環境覆寫尚未查核；本次未部署。部署前需確認舊 env 不會蓋過新 defaults。
+- Python 週報 cache 以 REPORT_MODEL 與 EVAL_JUDGE_MODEL 的組合隔離，本地 fallback 使用獨立 scope；cache key 另含報告日期、weeks 與 QA 版本。切換模型時不會讀到舊模型報告。
+- 萃取、合併、分類、L4 與 embedding cache 依模型隔離；不重寫歷史 QA 的 `extraction_model`，不重跑全量萃取或向量建置。
+
+來源：[GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna)、[GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol)、[GPT-5.4 nano](https://developers.openai.com/api/docs/models/gpt-5.4-nano)、[GPT-5.4](https://developers.openai.com/api/docs/models/gpt-5.4)、[GPT-6 遷移指引](https://developers.openai.com/api/docs/guides/latest-model/gpt-6-astra.md#migration-quickstart)。
+
+### 驗證
+
+- Python 60 項相關測試通過：設定覆寫、模型參數、週報、分類、L4、cache、本地 fallback。
+- TypeScript 29 項相關測試通過：模型參數、週報、Chat、SSE、Agent；`pnpm typecheck` 通過。
+- 測試先確認缺少相容參數時失敗，再驗證修正後通過；mock 測試不代表真實 SEO 品質已提升。
+- 使用本機既有 API 憑證，各送一次僅要求回覆 OK 的短請求（`none`、32 completion tokens 上限）：Luna 與 Sol 均成功且回傳模型 ID 符合設定。未傳送專案資料；尚未執行完整 SEO 品質 A/B 評估。
+
+---
+
 ## 15. 模型選擇決策
 
 ### GPT-5 系列全為推理模型（2026-02-27 驗證）
 
-**重要發現**：gpt-5 整個系列（nano / mini / 5.2）**全部都是推理模型**，不存在非推理的 gpt-5 選項。
+以下為 2026-02-27 對舊版 nano / mini / 5.2 的觀察，不可推廣到所有後續型號；5.4 nano 與 GPT-6 Luna／Sol 均支援 `none` reasoning effort。
 
 ```python
 # 實驗驗證 gpt-5-nano：
@@ -27,7 +77,7 @@ reasoning_tokens = 100  # 全部用於推理，content=""
 
 ### 正確解法：調整 token budget，而非換模型
 
-所有 gpt-5 系列做 JSON 輸出時的必要設定：
+當時受測模型做 JSON 輸出的設定建議（新模型另依官方規格與任務測試）：
 
 ```python
 # 分類任務：max_completion_tokens 要夠（reasoning + JSON output 共享）
@@ -42,12 +92,12 @@ if "category_judgment" not in result:
 
 | 任務                  | 模型                   | 理由                         |
 | --------------------- | ---------------------- | ---------------------------- |
-| Q&A 萃取              | gpt-5.4-nano           | 低成本高效率，萃取品質足夠   |
-| Q&A 合併              | gpt-5.4-nano           | 合併多源資訊，延續 shared default |
-| Q&A 分類              | gpt-5.4-nano           | 結構化輸出，省成本           |
-| 週報生成              | gpt-5.4                | 需要深度分析                 |
-| RAG Chat / Agent      | gpt-5.4-nano           | 對話延遲與成本優先           |
-| LLM Judge（品質評估） | gpt-5.4-nano           | Judge + 分類驗證             |
+| Q&A 萃取              | gpt-6-luna           | 萃取預設；品質 A/B 待驗證   |
+| Q&A 合併              | gpt-6-luna           | 合併多源資訊，延續 shared default |
+| Q&A 分類              | gpt-6-luna           | 結構化輸出，省成本           |
+| 週報生成              | gpt-6-sol                | 需要深度分析                 |
+| RAG Chat / Agent      | gpt-6-luna           | 對話延遲與成本優先           |
+| 週報 Q&A rerank / L4 Judge | gpt-6-luna | 分別由 EVAL_JUDGE_MODEL / CLASSIFY_MODEL 控制 |
 | Retrieval Reranker    | claude-haiku-4-5-20251001 | 與 OpenAI 分流，獨立做 re-rank |
 | Embedding             | text-embedding-3-small | 語意向量計算                 |
 
@@ -83,7 +133,7 @@ if "category_judgment" not in result:
 
 ### 模型版本
 
-現用：`gpt-5-mini-2025-08-07`
+歷史實驗模型：`gpt-5-mini-2025-08-07`（非現行預設）
 
 ### reasoning_tokens 特性
 
@@ -145,18 +195,18 @@ is_reasoning = getattr(details, "reasoning_tokens", 0) > 0
 
 v2.22 起，`CHAT_MODEL` 環境變數獨立於 `OPENAI_MODEL`，讓 Chat 問答可使用不同模型：
 
-```python
-# config.py
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-nano")  # 萃取 / 合併
-REPORT_MODEL = os.getenv("REPORT_MODEL", "gpt-5.4")       # 週報生成
-CHAT_MODEL   = os.getenv("CHAT_MODEL", "gpt-5.4-nano")    # RAG Chat 問答
+```env
+# 現行預設；Python 設定見 config.py，Chat 設定見 api/src/config.ts
+OPENAI_MODEL=gpt-6-luna
+REPORT_MODEL=gpt-6-sol
+CHAT_MODEL=gpt-6-luna
 ```
 
 **用途**：Chat 問答可與萃取/合併分流配置，週報生成則用 `REPORT_MODEL` 獨立拉高能力上限。
 
 **影響範圍**：
 - `services/rag-chat.ts`：使用 `CHAT_MODEL`
-- `04_generate_report.py`：使用 `OPENAI_MODEL`
+- `04_generate_report.py`：生成使用 `REPORT_MODEL`，候選 Q&A rerank 使用 `EVAL_JUDGE_MODEL`
 - `02_extract_qa.py`：使用 `OPENAI_MODEL`
 - Cache key：`extraction_model` 記錄實際使用的模型名稱
 
@@ -176,18 +226,18 @@ CHAT_MODEL   = os.getenv("CHAT_MODEL", "gpt-5.4-nano")    # RAG Chat 問答
 
 | 層級 | 欄位 | 範例值 | 記錄位置 |
 |------|------|--------|---------|
-| QA 萃取 | `extraction_model` | `"gpt-5.4-nano"` | qa_all_raw.json |
+| QA 萃取 | `extraction_model` | `"gpt-6-luna"` | qa_all_raw.json |
 | QA 萃取 | `extraction_timestamp` | `"2026-03-05T..."` | qa_all_raw.json |
 | QA 合併 provenance | `extraction_provenance` | `{"source_models": ["claude-code", "local-heuristic"], "provenance_status": "mixed-source"}` | qa_final.json / qa_enriched.json |
 | Embedding | `embedding_model` | `"text-embedding-3-small"` | eval results |
-| 分類 | `classify_model` | `"gpt-5.4-nano"` | eval results |
+| 分類 | `classify_model` | `"gpt-6-luna"` | eval results |
 
 ### Model-Aware Cache
 
 切換模型時，快取 key 自動隔離：
 
 ```
-gpt-5.4-nano + 同一篇文章 → SHA256("gpt-5.4-nano::文章內容") → cache A
+gpt-6-luna + 同一篇文章 → SHA256("gpt-6-luna::文章內容") → cache A
 claude-code  + 同一篇文章 → SHA256("claude-code::文章內容")   → cache B
 ```
 
@@ -207,16 +257,16 @@ claude-code  + 同一篇文章 → SHA256("claude-code::文章內容")   → cac
 
 ## 模型使用政策（從 README 搬入）
 
-**一律使用 GPT-5 系列模型，禁止使用 GPT-4 系列（gpt-4o、gpt-4o-mini 等已淘汰）。**
+**OpenAI 任務使用下表指定的 GPT-5 / GPT-6 模型；禁止新增 GPT-4 系列。Anthropic 與本地 fallback 依各自路由。**
 
 | 用途      | 模型                     | 說明                               |
 | --------- | ------------------------ | ---------------------------------- |
-| Q&A 萃取  | `gpt-5.4-nano`           | 低成本高效率，萃取品質足夠         |
-| Q&A 合併  | `gpt-5.4-nano`           | 合併多源資訊                       |
-| 分類標籤  | `gpt-5.4-nano`           | 結構化輸出，省成本                 |
-| 週報生成  | `gpt-5.4`（REPORT_MODEL）| 需要深度分析與知識引用             |
-| RAG Chat  | `gpt-5.4-nano`（CHAT_MODEL） | 對話延遲與成本優先            |
-| 品質評估  | `gpt-5.4-nano`           | Judge + 分類驗證                   |
+| Q&A 萃取  | `gpt-6-luna`           | 萃取預設；品質 A/B 待驗證         |
+| Q&A 合併  | `gpt-6-luna`           | 合併多源資訊                       |
+| 分類標籤  | `gpt-6-luna`           | 結構化輸出，省成本                 |
+| 週報生成  | `gpt-6-sol`（REPORT_MODEL）| 需要深度分析與知識引用             |
+| RAG Chat  | `gpt-6-luna`（CHAT_MODEL） | 對話延遲與成本優先            |
+| 週報候選 rerank / L4 驗證 | `gpt-6-luna` | 分別使用 `EVAL_JUDGE_MODEL` / `CLASSIFY_MODEL` |
 | Reranker  | `claude-haiku-4-5-20251001` | Anthropic 獨立服務，不綁 OPENAI env |
 | Embedding | `text-embedding-3-small` | 去重與語意搜尋                     |
 

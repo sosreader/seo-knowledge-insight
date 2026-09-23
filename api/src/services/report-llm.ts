@@ -6,6 +6,7 @@
  */
 
 import OpenAI from "openai";
+import { reasoningOptions } from "../utils/model-options.js";
 import { config } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
 import { ensureQaStoreLoaded } from "../store/store-init.js";
@@ -313,6 +314,7 @@ export async function generateReportLlm(
 
   const response = await client.chat.completions.create({
     model,
+    ...reasoningOptions(model),
     messages: [
       { role: "system", content: REPORT_SYSTEM_PROMPT },
       { role: "user", content: userMsg },

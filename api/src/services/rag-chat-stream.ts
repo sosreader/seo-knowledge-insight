@@ -6,6 +6,7 @@
  */
 
 import OpenAI from "openai";
+import { reasoningOptions } from "../utils/model-options.js";
 import { config } from "../config.js";
 import { getEmbedding } from "./embedding.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
@@ -96,6 +97,7 @@ export async function ragChatStream(
     // 5. Stream GPT response
     const stream = await getOpenAI().chat.completions.create({
       model: config.CHAT_MODEL,
+      ...reasoningOptions(config.CHAT_MODEL),
       messages: messages as Array<{ role: "system" | "user" | "assistant"; content: string }>,
       temperature: 0.3,
       max_completion_tokens: 2000,
