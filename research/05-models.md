@@ -38,7 +38,7 @@
 - 新模型預設 reasoning effort 為 `medium`，原 5.4 / nano 為 `none`。兩端透過 `model_options.py`／`model-options.ts` 明確保留 `none`，沿用原 token budget、temperature 與 JSON schema。
 - Luna／Sol 在 Chat Completions 使用 function calling 需要 `reasoning_effort: none`；Agent 的工具回合與最後收斂請求均帶入。未切換 Responses API。
 - 相容參數僅套用精確 ID `gpt-6-luna`、`gpt-6-sol`；其他 env 覆寫維持原請求。若指定快照或其他模型，需另外核對其參數。
-- Python `.env` 的 `OPENAI_MODEL` 原本會覆蓋程式預設，本機已同步更新。TypeScript 載入順序為既有 process env → `api/.env` → 根目錄 `.env`；目前本機沒有 `api/.env`。
+- Python `.env` 的 `OPENAI_MODEL` 會覆蓋程式預設。TypeScript 載入順序為既有 process env → `api/.env` → 根目錄 `.env`；升級時需同步檢查這些覆寫值。
 - Lambda 與 CI 實際環境覆寫尚未查核；本次未部署。部署前需確認舊 env 不會蓋過新 defaults。
 - Python 週報 cache 以 REPORT_MODEL 與 EVAL_JUDGE_MODEL 的組合隔離，本地 fallback 使用獨立 scope；cache key 另含報告日期、weeks 與 QA 版本。切換模型時不會讀到舊模型報告。
 - 萃取、合併、分類、L4 與 embedding cache 依模型隔離；不重寫歷史 QA 的 `extraction_model`，不重跑全量萃取或向量建置。
@@ -49,8 +49,8 @@
 
 - Python 60 項相關測試通過：設定覆寫、模型參數、週報、分類、L4、cache、本地 fallback。
 - TypeScript 29 項相關測試通過：模型參數、週報、Chat、SSE、Agent；`pnpm typecheck` 通過。
-- 測試先確認缺少相容參數時失敗，再驗證修正後通過；mock 測試不代表真實 SEO 品質已提升。
-- 使用本機既有 API 憑證，各送一次僅要求回覆 OK 的短請求（`none`、32 completion tokens 上限）：Luna 與 Sol 均成功且回傳模型 ID 符合設定。未傳送專案資料；尚未執行完整 SEO 品質 A/B 評估。
+- 模型相容性測試涵蓋精確 ID 的 reasoning 參數、其他模型覆寫，以及 Agent 工具回合與最後收斂請求；mock 測試不代表真實 SEO 品質已提升。
+- 尚未執行完整 SEO 品質 A/B 評估；上述 mock 測試只能驗證請求參數、路由與快取行為。
 
 ---
 
