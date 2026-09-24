@@ -147,7 +147,7 @@
 | `generated_at` | ISO8601 | 生成時間 |
 | `generation_mode` | string | `"claude-code"` / `"openai"` / `"template"` |
 | `generation_label` | string | 顯示用標籤：`"Claude Code 語意推理"` / `"OpenAI 生成"` |
-| `model` | string \| null | OpenAI 模式填 `"gpt-5.4"`，Claude Code 模式填 `null` |
+| `model` | string \| null | OpenAI 模式填實際 `config.REPORT_MODEL`（預設 `"gpt-6-sol"`），Claude Code 模式填 `null` |
 | `snapshot_id` | string? | 對應 `output/metrics_snapshots/<id>.json`（選填）|
 | `experiment_tag` | string? | autoresearch 實驗標籤（選填）|
 

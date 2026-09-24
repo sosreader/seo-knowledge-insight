@@ -14,10 +14,10 @@ const envSchema = z.object({
   HOST: z.string().default("0.0.0.0"),
 
   OPENAI_API_KEY: z.string().default(""),
-  OPENAI_MODEL: z.string().default("gpt-5.4-nano"),
-  REPORT_MODEL: z.string().default("gpt-5.4"),
+  OPENAI_MODEL: z.string().default("gpt-6-luna"),
+  REPORT_MODEL: z.string().default("gpt-6-sol"),
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
-  CHAT_MODEL: z.string().default("gpt-5.4-nano"),
+  CHAT_MODEL: z.string().default("gpt-6-luna"),
 
   SEO_API_KEY: z.string().default(""),
 

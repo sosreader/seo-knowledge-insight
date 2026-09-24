@@ -9,7 +9,7 @@
 ### 1. 知識庫建構 Pipeline（步驟 1–3）
 
 - **多來源擷取** — Notion 增量擷取 + 9 個外部來源（Medium、iThome、Google Case Studies、Ahrefs、SEJ、Growth Memo、Google Search Central Blog、web.dev、Screaming Frog）
-- **AI 自動萃取** — 用 `gpt-5.4-nano` 將 Markdown 解析為結構化 Q&A（What/Why/How/Evidence）
+- **AI 自動萃取** — 用 `gpt-6-luna` 將 Markdown 解析為結構化 Q&A（What/Why/How/Evidence）
 - **Collection-Scoped 去重合併** — 各 collection 內部獨立去重，跨 collection 保留
 - **智能分類標籤** — 12 個分類 × 難度 × 時效性，雙層 metadata（source_type + source_collection）
 
@@ -87,7 +87,7 @@ cp .env.example .env
 NOTION_TOKEN=ntn_你的token
 NOTION_PARENT_PAGE_ID=你的母頁面ID
 OPENAI_API_KEY=sk-你的key
-OPENAI_MODEL=gpt-5.4-nano
+OPENAI_MODEL=gpt-6-luna
 ANTHROPIC_API_KEY=sk-ant-你的key  # 可選：用於 Reranker
 LMNR_PROJECT_API_KEY=your-laminar-key  # 可選：用於 Observability
 ```
@@ -207,18 +207,21 @@ cd api && pnpm install && pnpm dev   # 啟動開發伺服器
 
 ## 模型使用矩陣
 
-**一律使用 GPT-5 系列模型，禁止 GPT-4 系列。**
+**OpenAI 任務依下表設定 GPT-6 預設模型；AI SOV 觀測保留 GPT-5.4，Anthropic 與本地 fallback 使用各自路由。**
 
 | 用途 | 預設模型 | 設定來源 |
 | ---- | -------- | -------- |
-| Q&A 萃取 / 合併 | `gpt-5.4-nano` | `OPENAI_MODEL` |
-| 分類標籤 | `gpt-5.4-nano` | `CLASSIFY_MODEL` |
-| 週報生成 | `gpt-5.4` | `REPORT_MODEL` |
-| RAG Chat / Agent | `gpt-5.4-nano` | `CHAT_MODEL` |
+| Q&A 萃取 / 合併 | `gpt-6-luna` | `OPENAI_MODEL` |
+| 分類標籤 | `gpt-6-luna` | `CLASSIFY_MODEL` |
+| 週報生成 | `gpt-6-sol` | `REPORT_MODEL` |
+| RAG Chat / Agent | `gpt-6-luna` | `CHAT_MODEL` |
+| 週報候選 Q&A rerank | `gpt-6-luna` | `EVAL_JUDGE_MODEL` |
 | Embedding | `text-embedding-3-small` | `OPENAI_EMBEDDING_MODEL` |
 | Reranker | `claude-haiku-4-5-20251001` | Anthropic service |
 
 合併與回填流程不會把歷史 `extraction_model` 粗暴改寫成當前預設；多來源合併項目會額外保留 `extraction_provenance`。
+
+Luna／Sol 的 Chat Completions 請求明確設定 `reasoning_effort: none`；其他模型覆寫不附加此參數。環境變數優先於程式預設值。
 
 > 完整模型政策見 [research/05-models.md](research/05-models.md)
 

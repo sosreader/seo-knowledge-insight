@@ -8,7 +8,7 @@ vi.mock("../../src/config.js", () => ({
   config: {
     OPENAI_API_KEY: "test-key",
     OPENAI_EMBEDDING_MODEL: "text-embedding-3-small",
-    CHAT_MODEL: "gpt-4o-mini",
+    CHAT_MODEL: "gpt-6-luna",
     ANTHROPIC_API_KEY: "",
     CHAT_CONTEXT_K: 3,
     SUPABASE_URL: "",
@@ -111,6 +111,7 @@ describe("ragChatStream", () => {
     const { events, callbacks } = createCallbackTracker();
     await ragChatStream("test query", null, callbacks);
 
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({ model: "gpt-6-luna", reasoning_effort: "none" });
     const tokenEvents = events.filter((e) => e.type === "token");
     expect(tokenEvents.map((e) => e.data)).toEqual(["Hello", " world", "!"]);
 
