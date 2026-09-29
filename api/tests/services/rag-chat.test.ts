@@ -8,7 +8,7 @@ vi.mock("../../src/config.js", () => ({
   config: {
     OPENAI_API_KEY: "test-key",
     OPENAI_EMBEDDING_MODEL: "text-embedding-3-small",
-    CHAT_MODEL: "gpt-4o-mini",
+    CHAT_MODEL: "gpt-6-luna",
     ANTHROPIC_API_KEY: "",
     CHAT_CONTEXT_K: 3,
     SUPABASE_URL: "",
@@ -82,6 +82,7 @@ describe("ragChat", () => {
     });
 
     const result = await ragChat("What is LCP?");
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({ model: "gpt-6-luna", reasoning_effort: "none" });
     expect(result.answer).toBe("LCP measures loading performance.");
     expect(result.sources.length).toBe(2);
     expect(result.mode).toBe("rag");

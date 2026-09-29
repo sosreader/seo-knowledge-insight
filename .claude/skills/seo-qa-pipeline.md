@@ -84,10 +84,10 @@ Notion API → [步驟1] fetch → raw_data/notion_json/ + markdown/
 | 步驟 | 腳本                            | 功能                                                | 使用的模型                                  |
 | ---- | ------------------------------- | --------------------------------------------------- | ------------------------------------------- |
 | 1    | `scripts/01_fetch_notion.py`    | Notion 擷取 + Markdown 轉換                         | —                                           |
-| 2    | `scripts/02_extract_qa.py`      | 會議紀錄 → Q&A pairs                                | gpt-5.4-nano                                     |
-| 3    | `scripts/03_dedupe_classify.py` | embedding 去重 + LLM 合併 + 分類 + embedding 持久化 | text-embedding-3-small, gpt-5.4-nano             |
-| 4    | `scripts/04_generate_report.py` | 指標異常偵測 + Hybrid Search + RAG 週報             | text-embedding-3-small, gpt-5.4 (REPORT_MODEL)  |
-| 5    | `scripts/05_evaluate.py`        | Q&A 品質 + 分類 + Retrieval 評估                    | gpt-5.4-nano                                     |
+| 2    | `scripts/02_extract_qa.py`      | 會議紀錄 → Q&A pairs                                | gpt-6-luna                                     |
+| 3    | `scripts/03_dedupe_classify.py` | embedding 去重 + LLM 合併 + 分類 + embedding 持久化 | text-embedding-3-small, gpt-6-luna             |
+| 4    | `scripts/04_generate_report.py` | 指標異常偵測 + Hybrid Search + RAG 週報             | text-embedding-3-small, gpt-6-sol (REPORT_MODEL)  |
+| 5    | `scripts/_eval_laminar.py`      | Laminar 品質與檢索評估（`make evaluate-qa`） | keyword baseline，無 LLM 呼叫 |
 
 ### 工具模組（utils/）
 
@@ -106,8 +106,8 @@ Notion API → [步驟1] fetch → raw_data/notion_json/ + markdown/
 
 所有 API key 從 `.env` 讀取（參考 `.env.example`）。重要參數：
 
-- `OPENAI_MODEL`: gpt-5.4-nano（萃取與合併）
-- `REPORT_MODEL`: gpt-5.4（週報生成）
+- `OPENAI_MODEL`: gpt-6-luna（萃取與合併）
+- `REPORT_MODEL`: gpt-6-sol（週報生成）
 - `OPENAI_EMBEDDING_MODEL`: text-embedding-3-small
 - `MAX_TOKENS_PER_CHUNK`: 6000（長文分段閾值）
 - `SIMILARITY_THRESHOLD`: 0.88（去重 cosine similarity 閾值）
@@ -119,15 +119,15 @@ Notion API → [步驟1] fetch → raw_data/notion_json/ + markdown/
 
 ## 模型使用政策
 
-**一律使用 GPT-5 系列模型，禁止使用 GPT-4 系列（gpt-4o、gpt-4o-mini 等已淘汰）。**
+**OpenAI 任務使用下表指定的 GPT-5 / GPT-6 模型；禁止新增 GPT-4 系列。Anthropic 與本地 fallback 依各自路由。**
 
 | 用途      | 模型                     | 說明                               |
 | --------- | ------------------------ | ---------------------------------- |
-| Q&A 萃取  | `gpt-5.4-nano`           | 低成本高效率，萃取品質足夠         |
-| Q&A 合併  | `gpt-5.4-nano`           | 合併多源資訊                       |
-| 分類標籤  | `gpt-5.4-nano`           | 結構化輸出，省成本                 |
-| 週報生成  | `gpt-5.4`（REPORT_MODEL）| 需要深度分析與知識引用             |
-| 品質評估  | `gpt-5.4-nano`           | Judge + 分類驗證                   |
+| Q&A 萃取  | `gpt-6-luna`           | 萃取預設；品質 A/B 待驗證         |
+| Q&A 合併  | `gpt-6-luna`           | 合併多源資訊                       |
+| 分類標籤  | `gpt-6-luna`           | 結構化輸出，省成本                 |
+| 週報生成  | `gpt-6-sol`（REPORT_MODEL）| 需要深度分析與知識引用             |
+| 週報候選 rerank / L4 驗證 | `gpt-6-luna` | 分別使用 `EVAL_JUDGE_MODEL` / `CLASSIFY_MODEL` |
 | Embedding | `text-embedding-3-small` | 去重與語意搜尋                     |
 
 ---

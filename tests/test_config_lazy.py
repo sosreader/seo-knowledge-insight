@@ -17,6 +17,21 @@ import pytest
 class TestLazyEnvAccess:
     """PEP 562 __getattr__ for lazy env vars"""
 
+    @pytest.mark.parametrize("key,default", [
+        ("OPENAI_MODEL", "gpt-6-luna"),
+        ("CLASSIFY_MODEL", "gpt-6-luna"),
+        ("EVAL_JUDGE_MODEL", "gpt-6-luna"),
+        ("REPORT_MODEL", "gpt-6-sol"),
+    ])
+    def test_model_defaults_and_overrides(self, monkeypatch, key, default):
+        import config
+
+        monkeypatch.delenv(key, raising=False)
+        setting = config._LAZY_ATTRS[key]
+        assert config._LazyEnv(key, setting._default).resolve() == default
+        monkeypatch.setenv(key, "custom-model")
+        assert config._LazyEnv(key, setting._default).resolve() == "custom-model"
+
     def test_missing_required_env_raises_value_error(self, monkeypatch):
         """未設定 NOTION_TOKEN 時存取應拋出 ValueError"""
         monkeypatch.delenv("NOTION_TOKEN", raising=False)
@@ -33,7 +48,7 @@ class TestLazyEnvAccess:
         import config
 
         config._LAZY_ATTRS["OPENAI_MODEL"]._resolved = False
-        assert config.OPENAI_MODEL == "gpt-5.4-nano"
+        assert config.OPENAI_MODEL == "gpt-6-luna"
 
     def test_set_env_returns_value(self, monkeypatch):
         """已設定的 env var 應回傳設定值"""

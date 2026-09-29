@@ -67,6 +67,26 @@ describe("agent-loop", () => {
     vi.clearAllMocks();
   });
 
+  it("Luna 在工具呼叫與回合用盡後皆使用 none effort", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ finish_reason: "tool_calls", message: {
+        content: null,
+        tool_calls: [{ id: "call1", type: "function", function: { name: "list_categories", arguments: "{}" } }],
+      } }],
+    });
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ finish_reason: "stop", message: { content: "整理完成" } }],
+    });
+    await agentChat("列出分類", null, mockDeps(), {
+      model: "gpt-6-luna", maxTurns: 1, timeoutMs: 90000, temperature: 0.3,
+    });
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    for (const [request] of mockCreate.mock.calls) {
+      expect(request).toMatchObject({ model: "gpt-6-luna", reasoning_effort: "none" });
+    }
+    expect(mockCreate.mock.calls[0][0].tools.length).toBeGreaterThan(0);
+  });
+
   it("returns answer when LLM stops immediately (no tool calls)", async () => {
     mockCreate.mockResolvedValueOnce({
       choices: [{

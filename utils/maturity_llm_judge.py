@@ -1,7 +1,7 @@
 """
 maturity_llm_judge.py — LLM gate for L4 maturity validation.
 
-Rule-based classifier promotes some QAs to L4. This module asks gpt-5.4-nano
+Rule-based classifier promotes some QAs to L4. This module asks gpt-6-luna
 to verify the answer demonstrates leading-edge implementation, not just that it
 mentions trendy topics (AI Overview / GEO / cross-channel / predictive).
 
@@ -18,6 +18,7 @@ import os
 from typing import Iterable
 
 import config
+from utils.model_options import reasoning_options
 from utils.observability import observe
 
 _logger = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ def llm_validate_l4(
         client = _client()
         response = client.chat.completions.create(
             model=config.CLASSIFY_MODEL,
+            **reasoning_options(config.CLASSIFY_MODEL),
             messages=[
                 {"role": "system", "content": L4_JUDGE_SYSTEM_PROMPT},
                 {

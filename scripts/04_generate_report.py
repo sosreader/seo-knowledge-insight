@@ -63,6 +63,7 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import config
 
+from utils.model_options import reasoning_options
 from utils.openai_helper import get_embeddings, get_local_embeddings
 from utils.pipeline_deps import preflight_check, StepDependency
 from utils.observability import init_laminar, flush_laminar, observe
@@ -537,6 +538,7 @@ def _rerank_qas(
     try:
         resp = client.chat.completions.create(
             model=config.EVAL_JUDGE_MODEL,
+            **reasoning_options(config.EVAL_JUDGE_MODEL),
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             max_completion_tokens=256,
@@ -1055,6 +1057,7 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
         response = _retry(
             lambda: client.chat.completions.create(
                 model=config.REPORT_MODEL,
+                **reasoning_options(config.REPORT_MODEL),
                 messages=[
                     {"role": "system", "content": REPORT_SYSTEM_PROMPT},
                     {"role": "user", "content": user_msg},
@@ -1141,6 +1144,24 @@ def generate_report(metrics_summary: str, relevant_qas: list[dict], metrics_date
 # ──────────────────────────────────────────────────────
 # 主程式
 # ──────────────────────────────────────────────────────
+
+def _generate_report_cached(
+    metrics_summary: str, relevant_qas: list[dict], report_date: str,
+    weeks: int, qa_version_id: str, *, no_cache: bool = False,
+) -> str:
+    cache_model = (
+        f"{config.REPORT_MODEL}::{config.EVAL_JUDGE_MODEL}"
+        if _has_openai_key() else "local-report-v1"
+    )
+    cache_key = f"{metrics_summary}\n---QA_VER={qa_version_id}---DATE={report_date}---WEEKS={weeks}---"
+    cached = None if no_cache else cache_get("report", cache_key, model=cache_model)
+    if cached is not None:
+        logger.info("   [cache hit] 直接使用緩存報告")
+        return cached["report_text"]
+    report = generate_report(metrics_summary, relevant_qas, report_date, weeks=weeks)
+    cache_set("report", cache_key, {"report_text": report}, model=cache_model)
+    return report
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="產生每週 SEO 分析報告")
@@ -1353,17 +1374,13 @@ def main() -> None:
     logger.info(f"\n✍️  產生報告（日期：{report_date}）...")
 
     # ── Layer 1: Report cache ───────────────────────────────
-    # Key = metrics_summary + qa 版本 ID
+    # 模型、指標、QA 版本與報告期間皆隔離，避免升級後讀到舊模型產物。
     qa_ver = get_latest_version(3)
     qa_version_id = qa_ver["version_id"] if qa_ver else "no-qa"
-    report_cache_key = f"{metrics_summary}\n---QA_VER={qa_version_id}---"
-    cached_report = None if args.no_cache else cache_get("report", report_cache_key)
-    if cached_report is not None:
-        report_md = cached_report["report_text"]
-        logger.info("   [cache hit] 直接使用緩存報告")
-    else:
-        report_md = generate_report(metrics_summary, relevant_qas, report_date, weeks=args.weeks)
-        cache_set("report", report_cache_key, {"report_text": report_md})
+    report_md = _generate_report_cached(
+        metrics_summary, relevant_qas, report_date, args.weeks, qa_version_id,
+        no_cache=args.no_cache,
+    )
 
     # ── Pre-write validation (from claude-reports report_validate pattern) ──
     _validate_report(report_md, alerts)

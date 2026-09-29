@@ -19,6 +19,7 @@ from collections import Counter
 from openai import OpenAI
 
 import config
+from utils.model_options import reasoning_options
 
 _logger = logging.getLogger(__name__)
 from utils.observability import observe
@@ -449,6 +450,7 @@ def extract_qa_from_text(
 
     response = client.chat.completions.create(
         model=config.OPENAI_MODEL,
+        **reasoning_options(config.OPENAI_MODEL),
         messages=[
             {"role": "system", "content": EXTRACT_SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
@@ -696,6 +698,7 @@ def merge_similar_qas(
 
     response = client.chat.completions.create(
         model=config.OPENAI_MODEL,
+        **reasoning_options(config.OPENAI_MODEL),
         messages=[
             {"role": "system", "content": MERGE_SYSTEM_PROMPT},
             {"role": "user", "content": group_text},
@@ -898,7 +901,8 @@ def classify_qa(
     client = _client()
 
     response = client.chat.completions.create(
-        model=config.CLASSIFY_MODEL,  # 分類用小模型省成本，預設 gpt-5.4-nano，可透過 CLASSIFY_MODEL env 覆蓋
+        model=config.CLASSIFY_MODEL,  # 分類用小模型省成本，預設 gpt-6-luna，可透過 CLASSIFY_MODEL env 覆蓋
+        **reasoning_options(config.CLASSIFY_MODEL),
         messages=[
             {"role": "system", "content": CLASSIFY_SYSTEM_PROMPT},
             {"role": "user", "content": f"Q: {question}\n\nA: {answer}"},

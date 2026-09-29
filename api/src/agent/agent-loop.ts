@@ -5,6 +5,7 @@
  */
 
 import OpenAI from "openai";
+import { reasoningOptions } from "../utils/model-options.js";
 import { config } from "../config.js";
 import { getOpenAITools, type ToolName } from "./tool-definitions.js";
 
@@ -167,6 +168,7 @@ export async function agentChat(
 
     const resp = await getOpenAI().chat.completions.create({
       model: cfg.model,
+      ...reasoningOptions(cfg.model),
       messages,
       tools,
       temperature: cfg.temperature,
@@ -244,6 +246,7 @@ export async function agentChat(
   try {
     const finalResp = await getOpenAI().chat.completions.create({
       model: cfg.model,
+      ...reasoningOptions(cfg.model),
       messages: [
         ...messages,
         { role: "system", content: "你已收集到足夠的資訊。請根據已有的搜尋結果直接回答使用者的問題。" },
