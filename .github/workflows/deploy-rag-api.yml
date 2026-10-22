@@ -103,5 +103,7 @@ jobs:
             echo "- tag: \`${TAG}\`"
             echo "- digest: \`${DIGEST}\`"
             echo "- image: \`${REGISTRY}/${ECR_REPOSITORY}@${DIGEST}\`"
-            [ "$EXISTS" = "true" ] && echo "- 備註: tag 已存在，沿用既有 image（未重新 push）"
+            if [ "$EXISTS" = "true" ]; then
+              echo "- 備註: tag 已存在，沿用既有 image（未重新 push）"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
