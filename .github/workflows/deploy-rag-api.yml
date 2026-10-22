@@ -1,0 +1,99 @@
+# 只負責 build／push rag-api image 到 ECR，並把 image@digest 寫進 job summary。
+#
+# 不 checkout deployment-eks、不開 PR：runner 沒有跨 repo 憑證。把 digest 寫進 deployment-eks 的
+# kustomize 是本機動作（部署 manifests 見 S2.3）。
+#
+# 前置（merge 前必須完成，否則第一次 run 會失敗）：
+#   1. deployment-eks 的 terraform/vocus-warehouse 已 apply：ECR repo `vocus-warehouse-rag` 與
+#      OIDC role（trust 條件 repo:sosreader/seo-knowledge-insight:ref:refs/heads/main）
+#   2. 本 repo 設定 Actions variable `AWS_RAG_DEPLOY_ROLE_ARN` = terraform output `gha_rag_deploy_role_arn`
+#
+# 與 deploy-ts-api.yml 並存且互不干擾：那份部署 Lambda（access key），這份只推 container image（OIDC）。
+name: Deploy rag-api image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - ".github/workflows/deploy-rag-api.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-rag-api-image
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECR_REPOSITORY: vocus-warehouse-rag
+
+jobs:
+  build-push:
+    # arm64 native runner：image 是 arm64 only，不經 QEMU 模擬（public repo 的 arm runner 免費）
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_RAG_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      # ECR tag 為 IMMUTABLE：同一個 commit 重跑時 tag 已存在，改為沿用既有 digest，不重新 push
+      - id: tag
+        name: Resolve tag and existing digest
+        run: |
+          tag="main-${GITHUB_SHA::12}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          digest="$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$tag" \
+            --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+          if [ -n "$digest" ] && [ "$digest" != "None" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.tag.outputs.exists != 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - id: build
+        if: steps.tag.outputs.exists != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: api
+          file: api/Dockerfile
+          platforms: linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}
+
+      - name: Write image digest to job summary
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          DIGEST: ${{ steps.build.outputs.digest || steps.tag.outputs.digest }}
+          EXISTS: ${{ steps.tag.outputs.exists }}
+        run: |
+          if [ -z "$DIGEST" ]; then
+            echo "::error::找不到 image digest"
+            exit 1
+          fi
+          {
+            echo "## rag-api image"
+            echo
+            echo "- tag: \`${TAG}\`"
+            echo "- digest: \`${DIGEST}\`"
+            echo "- image: \`${REGISTRY}/${ECR_REPOSITORY}@${DIGEST}\`"
+            [ "$EXISTS" = "true" ] && echo "- 備註: tag 已存在，沿用既有 image（未重新 push）"
+          } >> "$GITHUB_STEP_SUMMARY"
