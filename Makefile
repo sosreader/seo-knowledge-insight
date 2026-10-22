@@ -375,6 +375,14 @@ sync-db-force: ## 強制覆寫遠端（仍受發布閘門限制）
 sync-db-dry: ## 同步試跑（零 HTTP，不需憑證）
 	$(PYTHON) scripts/sync_db.py upload --dry-run --type $(or $(TYPE),all)
 
+.PHONY: sync-db-import-ndjson
+sync-db-import-ndjson: ## 歷史匯入：Supabase 匯出的 *.ndjson.gz → vocus-warehouse（跳過發布閘門；DIR=匯出目錄；先查後送、遠端內容不同不覆寫、結尾讀回對帳）
+	$(PYTHON) scripts/sync_db.py upload --from-ndjson $(or $(DIR),$(error DIR=<匯出目錄> 必填)) --type $(or $(TYPE),all)
+
+.PHONY: sync-db-import-ndjson-dry
+sync-db-import-ndjson-dry: ## 歷史匯入試跑（零 HTTP，不需憑證；DIR=匯出目錄）
+	$(PYTHON) scripts/sync_db.py upload --from-ndjson $(or $(DIR),$(error DIR=<匯出目錄> 必填)) --dry-run --type $(or $(TYPE),all)
+
 # ── Eval 品質門禁 ────────────────────────────────────
 
 .PHONY: golden-from-feedback

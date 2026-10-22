@@ -8,6 +8,8 @@
 用法：
   python scripts/sync_db.py status [--type T]
   python scripts/sync_db.py upload [--type reports|meeting_prep|sessions|all] [--dry-run] [--force] [--no-readback]
+  python scripts/sync_db.py upload --from-ndjson <dir> [--type ...] [--dry-run] [--force]
+      歷史匯入：Supabase 匯出的三表 NDJSON（*.ndjson.gz）→ warehouse-api；跳過發布閘門，詳見 sync_db_import.py
   共同選項：--base-url（預設 https://warehouse-api.vocus.cc，只收 https）
 
 exit code：0 成功；1 閘門中止／HTTP 失敗／逐筆核對失敗；2 參數或憑證設定錯誤。
@@ -24,10 +26,11 @@ import httpx
 
 import sync_db_client as client_mod
 import sync_db_gate as gate
+import sync_db_import as history_import
 import sync_db_sources as sources
+from sync_db_import import EXIT_CONFIG, EXIT_FAIL, EXIT_OK
 from sync_db_readback import check_remote, print_remote_status, readback
 
-EXIT_OK, EXIT_FAIL, EXIT_CONFIG = 0, 1, 2
 TABLES = ("reports", "meeting_prep", "sessions")
 DOCUMENT_TABLES = frozenset({"reports", "meeting_prep"})
 TYPE_ALIASES = {"meeting-prep": "meeting_prep"}
@@ -64,7 +67,10 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("status", parents=[common], help="列本機候選、帳冊狀態、遠端是否已有")
     upload = sub.add_parser("upload", parents=[common], help="上傳（只送帳冊核准的版本）")
     upload.add_argument("--dry-run", action="store_true", help="只列出計畫，不送任何 HTTP 請求")
-    upload.add_argument("--force", action="store_true", help="遠端 hash 相同也覆寫（仍受閘門限制）")
+    upload.add_argument("--force", action="store_true",
+                        help="遠端 hash 相同也覆寫（仍受閘門限制）；--from-ndjson 時改為遠端內容不同的列也覆寫")
+    upload.add_argument("--from-ndjson", metavar="DIR", default=None,
+                        help="歷史匯入模式：讀 DIR 下 Supabase 匯出的 *.ndjson.gz（跳過發布閘門）")
     upload.add_argument("--no-readback", action="store_true", help="寫入後不讀回核對（不需 app-read 憑證）")
     return parser
 
@@ -189,6 +195,11 @@ def _post_all(client: client_mod.WarehouseClient, plans, batches, force: bool, i
 
 def _upload(args, root: Path, http_factory, environ: Mapping[str, str], io: Io) -> int:
     tables = _selected_tables(args.type)
+    if args.from_ndjson is not None:
+        if args.no_readback:
+            io.warn("--from-ndjson 一律做去重預檢與讀回對帳，不支援 --no-readback")
+            return EXIT_CONFIG
+        return history_import.run_import(args, http_factory, environ, io, tables)
     plans, code = _plan_or_exit(root, tables, io)
     if plans is None or code != EXIT_OK:
         return code
