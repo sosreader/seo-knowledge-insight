@@ -84,9 +84,17 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
           DIGEST: ${{ steps.build.outputs.digest || steps.tag.outputs.digest }}
           EXISTS: ${{ steps.tag.outputs.exists }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
         run: |
           if [ -z "$DIGEST" ]; then
-            echo "::error::找不到 image digest"
+            # build-push-action 的 digest output 有時為空（例如 provenance／manifest list），改查 ECR
+            DIGEST="$(aws ecr describe-images \
+              --repository-name "$ECR_REPOSITORY" \
+              --image-ids imageTag="$TAG" \
+              --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+          fi
+          if [ -z "$DIGEST" ] || [ "$DIGEST" = "None" ]; then
+            echo "::error::找不到 image digest（tag ${TAG}）"
             exit 1
           fi
           {
