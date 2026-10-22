@@ -5,7 +5,7 @@ Tests the full RAG chat pipeline end-to-end via the TypeScript Hono API:
 given a known SEO scenario, does the system return a relevant, sourced answer?
 
 Dataset:  eval/golden_retrieval.json (first 10 scenarios, cost-efficient)
-Requires: LMNR_PROJECT_API_KEY, running TS API (cd api && pnpm dev)
+Requires: LMNR_PROJECT_API_KEY, a chat/search API reachable at EVAL_API_BASE（repo 內 TS API 已於 2026-10 退役，需自備端點）
 
 Run:
     python evals/eval_chat.py

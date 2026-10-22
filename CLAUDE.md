@@ -143,7 +143,7 @@ make evaluate-meeting-prep-llm       # Meeting-Prep L3 LLM threshold gate（需�
 make evaluate-meeting-prep-web       # Meeting-Prep L4 S2 時效性驗證
 make evaluate-meeting-prep-full      # Meeting-Prep 完整 4 層（L1+L2+L3+L4）
 make evaluate-report REPORT=output/report_XXXXXXXX.md  # 週報品質評估 L1+L2（rule-based）
-make autoresearch-baseline  # AutoResearch baseline eval（需先啟動 API server）
+make autoresearch-meeting-prep-baseline  # AutoResearch meeting-prep baseline eval（rule-based，零 LLM）
 make help              # 顯示所有可用 targets
 ```
 
@@ -231,133 +231,17 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 
 - `/evaluate-qa` — Q&A 品質評估（LLM-as-Judge）+ 與基準線比較（本地替代：`/evaluate-qa-local`）
 
-### API 伺服器命令
+### API 伺服器（已退役）
 
-#### TypeScript Hono（v2.12+，port 8002）——當前主架構
+TypeScript Hono API（`api/`）與其 AWS Lambda 部署 `seo-insight-api`、GitHub Pages API 文件（`docs-site/`）已於 2026-10 退役並自 repo 移除，
+前端 vocus-web-ui 改接 vocus-warehouse。需要查舊實作時用 `git log -- api/`；退役前最後一版為 main 的 92ed520。
 
-開發環境（後端 API）：
+仍保留在本 repo 的資料面指令：
 
-```bash
-cd api
-pnpm install           # 首次安裝依賴
-pnpm dev               # 啟動開發伺服器（tsx watch，port 8002）
-```
+- `make sync-db*` / `scripts/sync_db.py` — 本地報告、會議準備、sessions 經 warehouse-api 推到 vocus-warehouse
+- `scripts/qa_tools.py` — 本地知識庫搜尋、pipeline 狀態、指標解析（取代舊 REST API 的對應端點）
 
-前端開發環境（vocus-web-ui）：
-
-```bash
-cd ../vocus-web-ui
-git checkout main  # feat/admin-seo-insight 已 merge，從主線開新分支
-pnpm install
-pnpm dev               # 啟動前端伺服器（http://localhost:3000）
-```
-
-測試（838 個測試，80% 覆蓋率）：
-
-```bash
-cd api
-pnpm test              # 執行所有 vitest 測試（838 tests, 67 files）
-pnpm test:watch       # 監視模式下執行測試
-pnpm test:coverage    # 生成測試覆蓋率報告
-```
-
-打包 / 部署：
-
-```bash
-cd api
-pnpm build             # 編譯 TypeScript 至 dist/（server）+ dist-lambda/（Lambda）
-pnpm start             # 執行 build 版本（node dist/index.js，port 8002）
-```
-
-Lambda 部署（arm64，~$0/月）：
-
-```bash
-cd api && pnpm build
-cd dist-lambda && echo '{"type":"module"}' > package.json
-zip -j ../lambda.zip lambda.js package.json
-aws lambda update-function-code --function-name seo-insight-api \
-  --zip-file fileb://../lambda.zip --region ap-northeast-1 --profile seo-deployer
-```
-
-Docker 執行（本地驗證用）：
-
-```bash
-docker-compose up      # 啟動 TypeScript (8002) API
-docker-compose logs seo-api-ts  # 監看 Hono 日誌
-```
-
-API 端點特性：
-
-- `GET /health` — 健康檢查（含 `capabilities` 物件：5 維度 runtime/llm/store/agent/caller；llm 為有效 LLM——Claude Code 呼叫且 server 無 OpenAI key 時回傳 `"claude-code"`，有 OpenAI key 回傳 `"openai"`，其餘 `"none"`）
-- `GET /openapi.json` — OpenAPI 3.1 規格（機器可讀，可匯入 Postman / Swagger）
-- `GET /docs` — Scalar 互動式 API 文件（瀏覽器直接測試）
-- GitHub Pages 文件：[sosreader.github.io/seo-knowledge-insight](https://sosreader.github.io/seo-knowledge-insight/)（Scalar CDN + Art Deco theme + Tailwind v4，雙語 zh-TW + EN，CI auto-deploy from `api/src/openapi.ts`）
-- 文件站結構：`docs-site/`（`index.html` Scalar API Reference + `style.css` + `guides/*.html` 5 頁雙語）
-- OpenAPI spec 匯出：`pnpm docs:export` → `api/scripts/export-openapi.ts`（CI 產生，不 commit `docs-site/openapi.json`）
-- 10 個路由器：qa（含 extraction_model filter）、search（含 extraction_model filter + search_hit_count tracking）、chat、reports、sessions、feedback、pipeline、synonyms、meeting-prep、health
-- Pipeline 端點：18 個（狀態、會議、來源文件、指標、快照、趨勢分析、LLM 用量、索引覆蓋率等）
-- 認證：`X-API-Key` header + 安全層（SSRF whitelist、auth fail-fast、HTTP security headers、session UUID validation）
-- 詳見 `api/README.md`
-
-QA API 端點（v2.6 多來源擴充）：
-
-- `GET /api/v1/qa` — 列表查詢（支援 source_type、source_collection、category、difficulty、evergreen、keyword 等 filter）
-- `GET /api/v1/qa/categories` — 所有分類
-- `GET /api/v1/qa/collections` — 所有 collection 清單（含 source_type + count）
-- `GET /api/v1/qa/{id}` — 單筆 Q&A（hex stable_id 或 integer seq）
-
-Reports API 端點：
-
-- `GET /api/v1/reports` — 列出所有週報
-- `GET /api/v1/reports/{date}` — 取得單篇週報內容（YYYYMMDD 格式）
-- `POST /api/v1/reports/generate` — 生成週報（支援三種模式）
-  - 本地模式：`snapshot_id` 參數指定已儲存的指標快照（無需 OpenAI API key）
-  - OpenAI 模式：`snapshot_id` + `use_openai` 參數（需 OpenAI API key，純 TypeScript `report-llm.ts`）
-  - Legacy OpenAI 模式：`metrics_url` 參數指定 Google Sheets URL + `weeks` 參數（需 OpenAI API key）
-
-Pipeline API 端點：
-
-- `GET /api/v1/pipeline/status` — 各步驟完成狀態（13 步驟：fetch-notion + 10 個外部來源 + extract-qa + dedupe-classify）
-- `GET /api/v1/pipeline/meetings` — 會議列表（含 metadata）
-- `GET /api/v1/pipeline/meetings/:id/preview` — Markdown 預覽
-- `GET /api/v1/pipeline/source-docs` — 列出所有來源文件（支援 source_type、source_collection、keyword、is_processed 等 filter + pagination）
-- `GET /api/v1/pipeline/source-docs/:collection/:file/preview` — 來源文件預覽（會議/文章均支援）
-- `GET /api/v1/pipeline/unprocessed` — 待處理的 Markdown 列表（含 source_collection）
-- `GET /api/v1/pipeline/logs` — Fetch 歷史日誌
-- `POST /api/v1/pipeline/fetch` — 觸發 Notion 增量擷取（不暴露 --force）
-- `POST /api/v1/pipeline/fetch-articles` — 觸發外部文章擷取（10 來源：Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo + Google Blog + Google Blog zh-TW + Web.dev + Screaming Frog）
-- `POST /api/v1/pipeline/extract-qa` — 觸發 Q&A 萃取
-- `POST /api/v1/pipeline/dedupe-classify` — 觸發去重 + 分類
-- `POST /api/v1/pipeline/metrics` — 取得 Pipeline metrics（解析 SEO 指標）
-- `POST /api/v1/pipeline/metrics/save` — 儲存指標快照（支援 source、tab、label、weeks metadata）
-- `GET /api/v1/pipeline/metrics/snapshots` — 列出指標快照清單（含 metadata）
-- `DELETE /api/v1/pipeline/metrics/snapshots/:id` — 刪除指定快照
-- `GET /api/v1/pipeline/metrics/trends` — Timeseries 異常偵測（MA deviation / consecutive decline / linear trend）
-- `GET /api/v1/pipeline/llm-usage` — LLM cost/latency monitoring
-- `POST /api/v1/pipeline/crawled-not-indexed` — 檢索未索引路徑分段分析（支援 `source` URL 模式和 `raw_tsv` 直接輸入模式）
-
-Synonyms API 端點（v2.11 新增）：
-
-- `GET /api/v1/synonyms` — 列出所有同義詞（靜態 + 自訂，含 source 標記）
-- `POST /api/v1/synonyms` — 新增自訂同義詞
-- `PUT /api/v1/synonyms/:term` — 更新自訂同義詞
-- `DELETE /api/v1/synonyms/:term` — 刪除自訂同義詞
-
-Meeting Prep API 端點（v3.3 新增 maturity-trend）：
-
-- `GET /api/v1/meeting-prep` — 列出所有會議準備報告（日期 + meta）；Supabase 模式直查 `meeting_prep` 表，無 Supabase 退回檔案系統
-- `GET /api/v1/meeting-prep/maturity-trend` — SEO 成熟度趨勢時間序列（data_points + summary）；Supabase 模式用 JSONB 查詢
-- `GET /api/v1/meeting-prep/:date` — 取得單篇會議準備報告（YYYYMMDD 或 YYYYMMDD_hash8 格式）；支援精確+模糊匹配
-
-環境變數（v2.11 新增，均可選）：
-
-```env
-ANTHROPIC_API_KEY=sk-ant-...     # Reranker（實驗性，auto 模式下自動偵測）
-CONTEXT_EMBEDDING_WEIGHT=0.6     # Contextual embedding 加權（預設 0.6）
-RERANKER_ENABLED=auto            # "auto"/"true"/"false"，預設 auto
-```
-
-Supabase 環境變數（v2.24，設定後自動切換至 pgvector 模式）：
+Supabase 環境變數（Python 腳本與 eval 仍使用）：
 
 ```env
 SUPABASE_URL=https://eqrlomuujichshkbtoat.supabase.co
@@ -365,28 +249,12 @@ SUPABASE_ANON_KEY=your_anon_key       # REST API 讀取（RLS SELECT）
 SUPABASE_SERVICE_KEY=your_service_key  # Migration 寫入（bypasses RLS，不可暴露前端）
 ```
 
-> `hasSupabase()` 偵測 `SUPABASE_URL` + `SUPABASE_ANON_KEY`，有設定則用 `SupabaseQAStore`（pgvector hybrid search），否則退回 `QAStore`（檔案模式）。
-> 新增 Tables: `meeting_prep`（v3.7，date_key PK + JSONB meta + RLS service_role only + updated_at trigger）— `SupabaseMeetingPrepStore` + `store-registry.ts` 註冊
-
-Agent 環境變數（v2.28 新增，v2.29 擴充 request-level mode，均可選）：
-
-```env
-AGENT_ENABLED=auto             # "auto"/"true"/"false"（auto=有 OpenAI key 就啟用 agent mode）
-AGENT_MAX_TURNS=5              # Agent loop 最大輪數（1-10，預設 5）
-AGENT_TIMEOUT_MS=90000         # Agent loop 總逾時（5000-300000，預設 90s）
-```
-
-> `isAgentEnabled()` 在 `utils/mode-detect.ts`，chat.ts 和 sessions.ts 共用。Agent mode 下 LLM 自主決定 tool calling（4 tools），多輪收集資訊後回答。
->
-> **Request-level mode（v2.29）**：`POST /chat` 和 `POST /sessions/:id/messages` 支援 `mode: "agent" | "rag"` 參數。優先順序：Request > Server `AGENT_ENABLED` > auto fallback。Response `mode` 值統一為 `"rag" | "context-only" | "agent"`（`"full"` 已廢棄）。
-
 ### Observability（v2.7 三路整合）
 
 | 路徑               | 追蹤方式                                                | 輸出              |
 | ------------------ | ------------------------------------------------------- | ----------------- |
 | CLI 腳本（Python） | Laminar `@observe` + `init_laminar()`                   | Laminar Dashboard |
 | Claude Code 指令   | `utils/execution_log.py` → `output/execution_log.jsonl` | JSONL 本地日誌    |
-| REST API（Hono）   | `@lmnr-ai/lmnr` JS SDK + `observe()` wrapper            | Laminar Dashboard |
 
 環境變數：`LMNR_PROJECT_API_KEY`（`.env`），未設定則靜默跳過。
 
@@ -403,18 +271,16 @@ AGENT_TIMEOUT_MS=90000         # Agent loop 總逾時（5000-300000，預設 90s
 借鑑 karpathy/autoresearch 的 Loop-Forever 模式，agent 在隔離分支自主循環調參 → eval → keep/discard。
 
 ```bash
-# 前置：啟動 API server（需 rate limit bypass）
-cd api && RATE_LIMIT_DEFAULT=9999 pnpm dev
-
 # 建立實驗分支 + 跑 baseline
 git checkout -b autoresearch/<tag>
-make autoresearch-baseline
+make autoresearch-meeting-prep-baseline
 
 # Agent 自主循環（讀 program.md 開始）
-# 詳見 autoresearch/program.md
+# 詳見 autoresearch/meeting-prep/program.md
 ```
 
-可修改：`search-engine.ts`（19 params）+ `query-term-utils.ts`（6 params）+ `keyword-boost.ts`（bigram prefix）的數值權重。詳見 `research/06-project-architecture.md` Section 24。
+> `autoresearch/retrieval/`（調 TS 版 `search-engine.ts` 權重）隨 TS API 退役，已無可調標的，`make autoresearch-baseline` 已移除；
+> 目錄只留實驗紀錄供查。詳見 `research/06-project-architecture.md` Section 24。
 
 ### Claude Code 模式 vs OpenAI 模式
 
@@ -422,12 +288,11 @@ make autoresearch-baseline
 | ----------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- |
 | Q&A 萃取          | `gpt-5.4-nano` API                                           | Claude Code 直接讀 Markdown                                           |
 | 去重 + 分類       | `text-embedding-3-small` + `gpt-5.4-nano`                    | 語意理解取代向量                                                      |
-| 指標解析          | `metrics-parser.ts`（純 TS，v2.26）                          | `qa_tools.py load-metrics`                                            |
+| 指標解析          | `utils/metrics_parser.py`                                    | `qa_tools.py load-metrics`                                            |
 | 知識庫搜尋        | `text-embedding-3-small` + cosine                            | `qa_tools.py search`（關鍵字加權）                                    |
-| 週報生成          | `report-llm.ts` + `gpt-5.4`（純 TS，v2.26）                  | `/generate-report` 指令（對齊 `scripts/04_generate_report.py`；`OPENAI_API_KEY` 設定時走 OpenAI，未設定時 fallback 到本地 metrics summary） |
+| 週報生成          | `scripts/04_generate_report.py` + OpenAI                     | `/generate-report` 指令（對齊 `scripts/04_generate_report.py`；`OPENAI_API_KEY` 設定時走 OpenAI，未設定時 fallback 到本地 metrics summary） |
 | Q&A 品質評估      | `gpt-5.4-nano`                                               | `/evaluate-qa-local`（Claude Code 作為 Judge）                        |
 | Provider 品質評估 | 無對應                                                       | `/evaluate-provider`（Claude Code 作為 Judge，評估任何 LLM Provider） |
-| API 伺服器        | `cd api && pnpm dev`（Hono, port 8002，需要 OPENAI_API_KEY） | `cd api && pnpm dev`（Hono, port 8002）                               |
 | 需要 API key      | OPENAI_API_KEY                                               | 不需要                                                                |
 
 ---

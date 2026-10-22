@@ -2,6 +2,8 @@
 
 > 補充 [06-project-architecture.md](./06-project-architecture.md) 中 retrieval metadata 與 Supabase schema fallback 的細節。重點不是再講一次 hybrid search，而是說清楚「除了 embedding similarity 之外，系統還用哪些欄位把結果排得更像真實 SEO 問題」。
 
+> **[2026-10 退役註記]** 本文提到的 TypeScript API（`api/`）、Lambda `seo-insight-api` 與 `docs-site/` 已自 repo 移除，下文相關路徑、指令與數據皆為退役前的歷史記錄，不再可執行。需要原始碼用 `git show 92ed520:<路徑>` 查閱。
+
 ---
 
 ## 1. 問題定義

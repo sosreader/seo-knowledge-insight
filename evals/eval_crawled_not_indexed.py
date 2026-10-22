@@ -9,7 +9,7 @@ Tests whether the POST /api/v1/pipeline/crawled-not-indexed endpoint:
 - Achieves a minimum overall score
 
 Dataset:  eval/golden_crawled_not_indexed.json
-Requires: LMNR_PROJECT_API_KEY
+Requires: LMNR_PROJECT_API_KEY, an API reachable at EVAL_API_BASE（repo 內 TS API 已於 2026-10 退役，需自備端點）
 
 Run:
     python evals/eval_crawled_not_indexed.py

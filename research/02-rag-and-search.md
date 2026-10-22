@@ -2,6 +2,8 @@
 
 > 屬於 [research/](./README.md)。涵蓋 RAG 架構、Hybrid Search、框架比較、Retrieval 指標。
 
+> **[2026-10 退役註記]** 本文提到的 TypeScript API（`api/`）、Lambda `seo-insight-api` 與 `docs-site/` 已自 repo 移除，下文相關路徑、指令與數據皆為退役前的歷史記錄，不再可執行。需要原始碼用 `git show 92ed520:<路徑>` 查閱。
+
 ---
 
 ## 8. RAG：讓 AI 查資料再回答

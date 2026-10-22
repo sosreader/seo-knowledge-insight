@@ -29,7 +29,7 @@ API_KEY="${SEO_API_KEY:-}"
 
 if ! curl -sf "${API_BASE}/health" > /dev/null 2>&1; then
     echo "ERROR: Server not reachable at ${API_BASE}" >&2
-    echo "Start with: cd api && RATE_LIMIT_DEFAULT=9999 pnpm dev" >&2
+    echo "TS API（api/）已於 2026-10 退役並移除；此 runner 需自備相容 /api/v1/search 的端點（EVAL_API_BASE）" >&2
     exit 2
 fi
 

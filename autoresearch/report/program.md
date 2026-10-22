@@ -49,9 +49,7 @@ To set up a new experiment, work with the user to:
 - `scripts/_eval_report.py` — evaluation functions
 - `eval/fixtures/reports/` — golden fixtures
 - `output/metrics_snapshots/` — input data
-- `api/src/services/report-evaluator*.ts` — TypeScript evaluator
-- Any test files (`*.test.ts`, `test_*.py`)
-- Any API routes or services
+- Any test files (`test_*.py`)
 
 ## The experiment loop
 
@@ -190,9 +188,7 @@ Once the experiment loop has begun, do NOT pause to ask the human if you should 
 | 前端顯示未來時間 | `generated_at` 用本地時間加 `Z` 後綴，前端 `new Date()` 再加 UTC+8 | **必須用 `date -u`** 取得真正 UTC 時間 |
 | sync-db 抓不到報告 | 檔名格式不符 `report_YYYYMMDD(_hash8)?.md` | 重命名為正確格式再上傳 |
 | sync-db 顯示 `excluded:missing_review` | 2026-10-22 起 `/sync-db` 只上傳 `data/content-publication-review.json` 登記為 approved 且 sha256 相符的版本 | 審核後把檔名與 `shasum -a 256` 結果登記進帳冊，再跑 `make sync-db` |
-| Detail API 缺欄位 | `parseReportMeta` 只取已知欄位，`experiment_tag` 被丟棄 | 已修正 `report-file.ts`，新欄位會透傳 |
 | meta JSONB vs content 不一致 | `sync-db` 從 content 解析 meta 寫入 JSONB，但直接 SQL UPDATE meta 不會同步 content | 更新 meta 時必須同時更新 content 嵌入 meta |
-| Detail API 返回舊 meta | `reports.ts` 優先用 `parseReportMeta(content)` 覆蓋 Supabase meta | 已修正為 `result.summary.meta ?? parseReportMeta(content)` |
 
 ### report_meta 格式規範
 

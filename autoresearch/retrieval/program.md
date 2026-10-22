@@ -1,5 +1,9 @@
 # autoresearch: Retrieval Quality Optimization
 
+> **[2026-10 退役]** 本實驗調的是 TypeScript API 的 `api/src/store/search-engine.ts` 等檔，該 API 已隨 Lambda `seo-insight-api` 退役並移除，
+> 本目錄的 `runner.sh`、`eval_local.py`、下文指令都已無可執行的標的，只保留實驗紀錄（`experiment_log.md`、`results.tsv`、`baseline.json`）供查。
+> 原始碼用 `git show 92ed520:api/src/store/search-engine.ts` 查閱。
+
 This is an experiment to have the LLM autonomously optimize search retrieval quality.
 
 ## Setup

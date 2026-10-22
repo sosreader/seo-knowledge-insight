@@ -2,6 +2,8 @@
 
 > 屬於 [research/](./README.md)。涵蓋 LLM-as-Judge、Reasoning Model、評估維度、Judge 設計原則。
 
+> **[2026-10 退役註記]** 本文提到的 TypeScript API（`api/`）、Lambda `seo-insight-api` 與 `docs-site/` 已自 repo 移除，下文相關路徑、指令與數據皆為退役前的歷史記錄，不再可執行。需要原始碼用 `git show 92ed520:<路徑>` 查閱。
+
 ---
 
 ## 10. LLM-as-Judge：用 AI 評估 AI

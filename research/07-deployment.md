@@ -2,6 +2,8 @@
 
 > 屬於 [research/](./README.md)。涵蓋 Hono TypeScript API 架構、Lambda + Function URL 部署、Supabase 資料層。
 >
+> **[2026-10 退役]** Lambda `seo-insight-api`、`api/` 原始碼、`deploy-ts-api.yml` 與 GitHub Pages 文件站皆已退役並自 repo 移除，前端改接 vocus-warehouse。本文為退役前部署的歷史記錄，不再可執行；原始碼用 `git show 92ed520:<路徑>` 查閱。
+>
 > **v2.24**（2026-03-06）：Lambda + Function URL 部署。v2.3 從 FastAPI 遷移至 Hono TypeScript。
 
 ---
@@ -246,7 +248,7 @@ aws lambda update-function-code --function-name seo-insight-api
     |
 Lambda Function URL（自動 HTTPS）
     |
-https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/
+<Lambda Function URL，已退役>
 ```
 
 ### 21.3 Lambda 架構設計

@@ -6,7 +6,7 @@ For "should_merge" pairs, both should map to similar search results.
 For "should_not_merge" pairs, they should return distinct results.
 
 Dataset:  eval/golden_dedup.json (40 pairs: 20 merge + 20 no-merge)
-Requires: LMNR_PROJECT_API_KEY, running TS API (cd api && pnpm dev)
+Requires: LMNR_PROJECT_API_KEY, a chat/search API reachable at EVAL_API_BASE（repo 內 TS API 已於 2026-10 退役，需自備端點）
 
 Run:
     python evals/eval_dedup.py

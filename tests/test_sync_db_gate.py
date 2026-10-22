@@ -1,4 +1,4 @@
-"""scripts/sync_db_gate.py：發布閘門（語意對齊 api/src/sync/publication-gate.ts 備份版）。"""
+"""scripts/sync_db_gate.py：發布閘門（語意對齊已移除的 TS 版 publication-gate.ts 備份版）。"""
 from __future__ import annotations
 
 import hashlib

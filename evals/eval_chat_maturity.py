@@ -5,7 +5,7 @@ Tests whether RAG chat responses are appropriately tailored to the
 client's maturity level (L1 = basic, L3 = advanced).
 
 Dataset:  eval/golden_chat_maturity.json (10 scenarios: 5 queries × L1/L3)
-Requires: LMNR_PROJECT_API_KEY, running TS API (cd api && pnpm dev), OPENAI_API_KEY
+Requires: LMNR_PROJECT_API_KEY, a chat/search API reachable at EVAL_API_BASE（repo 內 TS API 已於 2026-10 退役，需自備端點）, OPENAI_API_KEY
 
 Run:
     python evals/eval_chat_maturity.py

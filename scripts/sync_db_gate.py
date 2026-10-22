@@ -1,6 +1,6 @@
 """sync_db_gate.py — /sync-db 的發布閘門（fail-closed）。
 
-語意移植自 api/src/sync/publication-gate.ts（2026-09-12 本地版）：
+語意移植自已移除的 TS 版 publication-gate.ts（2026-09-12 本地版；隨 Lambda 退役刪除，見 git history）：
   - 帳冊 data/content-publication-review.json 以 filename＋SHA-256 綁定「被核准的那個版本」。
   - 只有 status=approved 且檔案 hash 與帳冊相符才可發布；pending／historical／未登記／hash 漂移
     一律擋下，帳冊破損或讀不到時整體關閉。

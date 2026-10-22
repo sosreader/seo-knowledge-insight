@@ -1,6 +1,6 @@
 # SEO Q&A 知識庫建構 Pipeline
 
-從 Notion 上累積兩年的 SEO 顧問會議紀錄與多來源文章中，自動萃取結構化的問答知識庫。當前 pipeline 涵蓋 **10 個來源**（Notion + 9 個外部來源），提供 REST API、語意搜尋、RAG 問答與自動化品質評估。
+從 Notion 上累積兩年的 SEO 顧問會議紀錄與多來源文章中，自動萃取結構化的問答知識庫。當前 pipeline 涵蓋 **10 個來源**（Notion + 9 個外部來源），提供本地語意搜尋、RAG 問答（Claude Code 指令）與自動化品質評估；對外查詢由 vocus-warehouse 承接。
 
 ---
 
@@ -30,13 +30,12 @@
 > 評估維度詳見 [research/03-evaluation.md](research/03-evaluation.md)
 > 操作細節見 [research/15-pipeline-operations.md](research/15-pipeline-operations.md)
 
-### 4. REST API 服務（Hono + TypeScript）
+### 4. 資料同步與查詢
 
-- **語意搜尋** — hybrid search（有 OpenAI）/ keyword search（自動降級）
-- **RAG 問答** — Agent mode / Full RAG / Context-only 三模式 + SSE streaming
-- **42+ 個 API operations** — 10 routers：qa / search / chat / reports / sessions / feedback / pipeline / synonyms / meeting-prep / health
+- **本地搜尋** — `scripts/qa_tools.py search`（keyword 加權）與 `/search`、`/chat`、`/chat-agent` 指令
+- **vocus-warehouse 同步** — `make sync-db*` 把週報、會議準備、sessions 經 warehouse-api 推到 vocus-warehouse，前端改讀該處
 
-> 完整端點文件見 [api/README.md](api/README.md) 或啟動 `pnpm dev` 後存取 [`/docs`](http://localhost:8002/docs)
+> 舊的 TypeScript REST API（Lambda `seo-insight-api`）與 GitHub Pages API 文件已於 2026-10 退役並移除，歷史實作見 git history。
 
 ### 5. Claude Code / AI 工具模式
 
@@ -88,7 +87,6 @@ NOTION_TOKEN=ntn_你的token
 NOTION_PARENT_PAGE_ID=你的母頁面ID
 OPENAI_API_KEY=sk-你的key
 OPENAI_MODEL=gpt-6-luna
-ANTHROPIC_API_KEY=sk-ant-你的key  # 可選：用於 Reranker
 LMNR_PROJECT_API_KEY=your-laminar-key  # 可選：用於 Observability
 ```
 
@@ -132,24 +130,24 @@ python scripts/run_pipeline.py --dry-run
 
 ### Pipeline 建構
 
-| 功能                   | CLI 腳本               | Claude Code 指令          | REST API                                |
-| ---------------------- | ---------------------- | ------------------------- | --------------------------------------- |
-| Step 1a — Notion 擷取  | `make fetch-notion`    | 由 `/pipeline-local` 整合 | `POST /api/v1/pipeline/fetch`           |
-| Step 1b-j — 外部文章擷取（9 來源） | `make fetch-articles`  | 先執行 `make fetch-articles`，再接 `/extract-qa` | `POST /api/v1/pipeline/fetch-articles`  |
-| Step 2 — Q&A 萃取      | `make extract-qa`      | `/extract-qa`             | `POST /api/v1/pipeline/extract-qa`      |
-| Step 3 — 去重 + 分類   | `make dedupe-classify` | `/dedupe-classify`        | `POST /api/v1/pipeline/dedupe-classify` |
-| Step 4 — 週報生成      | `make generate-report` | `/generate-report <URL>`  | `POST /api/v1/reports/generate`         |
-| Step 5 — 品質評估      | `make evaluate-qa`     | `/evaluate-qa-local`      | —                                       |
-| Steps 1–3 — Notion-core Pipeline | `make pipeline`        | `/pipeline-local`         | —                                       |
-| Full-data refresh — Notion + 9 外部來源 | `make fetch-all && make extract-qa && make dedupe-classify` | 先擷取外部來源，再執行 `/extract-qa` + `/dedupe-classify` | `POST /api/v1/pipeline/fetch` → `POST /api/v1/pipeline/fetch-articles` → `POST /api/v1/pipeline/extract-qa` → `POST /api/v1/pipeline/dedupe-classify` |
+| 功能                   | CLI 腳本               | Claude Code 指令          |
+| ---------------------- | ---------------------- | ------------------------- |
+| Step 1a — Notion 擷取  | `make fetch-notion`    | 由 `/pipeline-local` 整合 |
+| Step 1b-j — 外部文章擷取（9 來源） | `make fetch-articles`  | 先執行 `make fetch-articles`，再接 `/extract-qa` |
+| Step 2 — Q&A 萃取      | `make extract-qa`      | `/extract-qa`             |
+| Step 3 — 去重 + 分類   | `make dedupe-classify` | `/dedupe-classify`        |
+| Step 4 — 週報生成      | `make generate-report` | `/generate-report <URL>`  |
+| Step 5 — 品質評估      | `make evaluate-qa`     | `/evaluate-qa-local`      |
+| Steps 1–3 — Notion-core Pipeline | `make pipeline`        | `/pipeline-local`         |
+| Full-data refresh — Notion + 9 外部來源 | `make fetch-all && make extract-qa && make dedupe-classify` | 先擷取外部來源，再執行 `/extract-qa` + `/dedupe-classify` |
 
 ### 搜尋與問答
 
-| 功能             | CLI 腳本                                          | Claude Code 指令 | REST API              |
-| ---------------- | ------------------------------------------------- | ---------------- | --------------------- |
-| 知識庫搜尋       | `python scripts/qa_tools.py search --query "..."` | `/search <問題>` | `POST /api/v1/search` |
-| RAG 問答         | —                                                 | `/chat`          | `POST /api/v1/chat`   |
-| Agentic RAG 問答 | —                                                 | `/chat-agent`    | `POST /api/v1/chat`   |
+| 功能             | CLI 腳本                                          | Claude Code 指令 |
+| ---------------- | ------------------------------------------------- | ---------------- |
+| 知識庫搜尋       | `python scripts/qa_tools.py search --query "..."` | `/search <問題>` |
+| RAG 問答         | —                                                 | `/chat`          |
+| Agentic RAG 問答 | —                                                 | `/chat-agent`    |
 
 ### 前端 SEO 修正（vocus-web-ui hotfix workflow）
 
@@ -163,16 +161,12 @@ python scripts/run_pipeline.py --dry-run
 
 ### 資料查詢
 
-| 功能          | REST API                     |
-| ------------- | ---------------------------- |
-| Q&A 列表查詢  | `GET /api/v1/qa`             |
-| 單筆 Q&A 詳情 | `GET /api/v1/qa/{id}`        |
-| 所有分類      | `GET /api/v1/qa/categories`  |
-| 資料集列表    | `GET /api/v1/qa/collections` |
-| 週報列表      | `GET /api/v1/reports`        |
+| 功能          | CLI 腳本                                            |
+| ------------- | --------------------------------------------------- |
+| Q&A 列表查詢  | `python scripts/qa_tools.py search --query "..."`   |
+| Pipeline 狀態 | `python scripts/qa_tools.py pipeline-status`        |
 
 > 離線評估工具見 [research/03-evaluation.md](research/03-evaluation.md)
-> Pipeline 監控端點見 [CLAUDE.md](CLAUDE.md)
 
 ---
 
@@ -204,22 +198,6 @@ Notion + 9 個外部來源
 
 ---
 
-## REST API
-
-TypeScript Hono（port 8002），38 paths / 42+ operations、838 tests、80%+ coverage。
-
-```bash
-cd api && pnpm install && pnpm dev   # 啟動開發伺服器
-```
-
-- [`/docs`](http://localhost:8002/docs) — Scalar 互動式文件
-- [`/openapi.json`](http://localhost:8002/openapi.json) — OpenAPI 3.1 規格
-- [GitHub Pages 文件](https://sosreader.github.io/seo-knowledge-insight/) — Scalar 線上託管文件（Art Deco theme，雙語 zh-TW + EN）
-
-> 完整端點清單、安全機制、部署架構見 [api/README.md](api/README.md)
-
----
-
 ## 模型使用矩陣
 
 **OpenAI 任務依下表設定 GPT-6 預設模型；AI SOV 觀測保留 GPT-5.4，Anthropic 與本地 fallback 使用各自路由。**
@@ -229,10 +207,8 @@ cd api && pnpm install && pnpm dev   # 啟動開發伺服器
 | Q&A 萃取 / 合併 | `gpt-6-luna` | `OPENAI_MODEL` |
 | 分類標籤 | `gpt-6-luna` | `CLASSIFY_MODEL` |
 | 週報生成 | `gpt-6-sol` | `REPORT_MODEL` |
-| RAG Chat / Agent | `gpt-6-luna` | `CHAT_MODEL` |
 | 週報候選 Q&A rerank | `gpt-6-luna` | `EVAL_JUDGE_MODEL` |
 | Embedding | `text-embedding-3-small` | `OPENAI_EMBEDDING_MODEL` |
-| Reranker | `claude-haiku-4-5-20251001` | Anthropic service |
 
 合併與回填流程不會把歷史 `extraction_model` 粗暴改寫成當前預設；多來源合併項目會額外保留 `extraction_provenance`。
 
@@ -246,8 +222,7 @@ Luna／Sol 的 Chat Completions 請求明確設定 `reasoning_effort: none`；�
 
 | 文件                                                                             | 說明                                         |
 | -------------------------------------------------------------------------------- | -------------------------------------------- |
-| [CLAUDE.md](CLAUDE.md)                                                           | Claude Code 指令速查、Pipeline CLI、API 啟動 |
-| [api/README.md](api/README.md)                                                   | REST API 完整端點、安全機制、部署架構        |
+| [CLAUDE.md](CLAUDE.md)                                                           | Claude Code 指令速查、Pipeline CLI |
 | [research/02-rag-and-search.md](research/02-rag-and-search.md)                   | RAG 迭代改進（Phase 2–4）、評估基準線        |
 | [research/03-evaluation.md](research/03-evaluation.md)                           | 評估維度、Laminar Eval Groups、離線評估      |
 | [research/05-models.md](research/05-models.md)                                   | 模型選擇決策、Embedding 比較                 |
@@ -255,7 +230,7 @@ Luna／Sol 的 Chat Completions 請求明確設定 `reasoning_effort: none`；�
 | [research/06a-architecture-changelog.md](research/06a-architecture-changelog.md) | 架構變更紀錄                                 |
 | [research/06b-architecture-diagram.md](research/06b-architecture-diagram.md)     | Mermaid 架構圖、工作流程圖                   |
 | [research/06c-backend-onboarding.md](research/06c-backend-onboarding.md)         | 後端入門、Troubleshooting、開發指南          |
-| [research/07-deployment.md](research/07-deployment.md)                           | Lambda 部署、Supabase 遷移                   |
+| [research/07-deployment.md](research/07-deployment.md)                           | 部署歷史（Lambda 已退役）、Supabase 遷移     |
 | [research/15-pipeline-operations.md](research/15-pipeline-operations.md)         | Pipeline 操作手冊、成本估算                  |
 | [research/16-data-schema.md](research/16-data-schema.md)                         | 資料結構（5 種 JSON 格式 + 分類標籤）        |
 | [research/README.md](research/README.md)                                         | Research 知識庫索引                          |
@@ -276,12 +251,8 @@ python scripts/run_pipeline.py --dry-run
 make pipeline          # Notion-core 流程（需要 OpenAI）
 make extract-qa-test   # 小量驗證（--limit 3）
 
-# 4. API 開發
-cd api && pnpm install && pnpm dev    # port 8002
-pnpm test                              # 838 tests
-
-# 5. 部署
-git push origin main   # 自動觸發 GitHub Actions → Lambda
+# 4. 測試
+make test              # pytest tests/
 ```
 
 > 完整開發指南見 [research/06c-backend-onboarding.md](research/06c-backend-onboarding.md)

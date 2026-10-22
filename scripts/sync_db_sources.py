@@ -33,7 +33,7 @@ DOCUMENT_PATTERNS = {
     "reports": re.compile(r"^report_(\d{8}(?:_[0-9a-f]{8})?)\.md$"),
     "meeting_prep": re.compile(r"^meeting_prep_(\d{8}_[0-9a-f]{8})\.md$"),
 }
-# 與 api/src/sync/session-sync.ts 相同：只收 UUID v4
+# 沿用已移除的 TS 版 session-sync.ts 規則：只收 UUID v4
 # 伺服器 SessionItem.title max_length；超過整批 400，因此本機先逐筆排除
 MAX_SESSION_TITLE_LENGTH = 200
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")

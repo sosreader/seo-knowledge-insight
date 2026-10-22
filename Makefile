@@ -160,18 +160,6 @@ generate-report-local: ## 週報生成（使用本機 TSV 指標，INPUT=path/to
 evaluate-qa: ## 品質評估（Laminar eval push，keyword baseline）
 	$(PYTHON) scripts/_eval_laminar.py
 
-.PHONY: evaluate-qa-full
-evaluate-qa-full: ## Semantic + Reranker Retrieval Eval（比較 keyword/hybrid/rerank 三種模式）
-	cd api && npx tsx scripts/eval-semantic.ts
-
-.PHONY: eval-semantic
-eval-semantic: ## Semantic + Reranker Retrieval Eval（比較 keyword/hybrid/rerank 三種模式）
-	cd api && npx tsx scripts/eval-semantic.ts
-
-.PHONY: eval-semantic-k3
-eval-semantic-k3: ## 同上，top-k=3
-	cd api && npx tsx scripts/eval-semantic.ts --top-k 3
-
 .PHONY: eval-laminar
 eval-laminar: ## Laminar 正式 Eval Run（keyword baseline，推送至 Dashboard）
 	$(PYTHON) scripts/_eval_laminar.py
@@ -185,20 +173,6 @@ test: ## 執行所有測試
 .PHONY: test-unit
 test-unit: ## 只執行核心邏輯單元測試
 	$(PYTHON) -m pytest tests/test_core.py -v
-
-.PHONY: test-api
-test-api: ## 執行 API 測試
-	$(PYTHON) -m pytest tests/test_api_chat.py tests/test_api_qa.py tests/test_api_search.py -v
-
-# ── API 伺服器（開發用） ──────────────────────────────
-
-.PHONY: api
-api: ## 啟動 TypeScript API 開發伺服器（port 8002）
-	cd api && pnpm dev
-
-.PHONY: api-test
-api-test: ## 執行 TypeScript API 測試（224 tests）
-	cd api && pnpm test
 
 # ── Pipeline 狀態（AI 工具輔助） ──────────────────────
 
@@ -385,14 +359,6 @@ sync-db-import-ndjson-dry: ## 歷史匯入試跑（零 HTTP，不需憑證；DIR
 
 # ── Eval 品質門禁 ────────────────────────────────────
 
-.PHONY: golden-from-feedback
-golden-from-feedback: ## 從使用者回饋生成 golden dataset 候選（需人工審核）
-	cd api && npx tsx scripts/feedback-to-golden.ts
-
-.PHONY: check-ai-crawlers
-check-ai-crawlers: ## 檢查網站 AI 爬蟲可讀性（URL=https://example.com）
-	cd api && npx tsx scripts/ai-crawler-checker.ts $(URL)
-
 .PHONY: evaluate-retrieval-by-model
 evaluate-retrieval-by-model: ## 按 extraction_model 分群評估檢索品質（MODEL=claude-code）
 	$(PYTHON) evals/eval_retrieval.py --model $(MODEL)
@@ -445,7 +411,7 @@ evaluate-maturity-classification: ## 成熟度分類準確度評估（rule-based
 	$(PYTHON) evals/eval_maturity_classification.py
 
 .PHONY: evaluate-chat-maturity
-evaluate-chat-maturity: ## Chat 成熟度適切性評估（需 API server + OpenAI）
+evaluate-chat-maturity: ## Chat 成熟度適切性評估（需自備 chat API：EVAL_API_BASE；repo 內 TS API 已退役）
 	$(PYTHON) evals/eval_chat_maturity.py
 
 # ── 會議準備 ──────────────────────────────────────
@@ -463,10 +429,6 @@ meeting-prep-topics-json: ## 最近 3 份會議的主題詞（JSON）
 	$(PYTHON) scripts/meeting_prep_helper.py extract-recent-topics --json
 
 # ── AutoResearch（自主循環優化）──────────────────────
-
-.PHONY: autoresearch-baseline
-autoresearch-baseline: ## AutoResearch retrieval baseline eval（需先啟動 API server + RATE_LIMIT_DEFAULT=9999）
-	bash autoresearch/retrieval/runner.sh "baseline"
 
 .PHONY: autoresearch-meeting-prep-baseline
 autoresearch-meeting-prep-baseline: ## AutoResearch meeting-prep baseline eval（rule-based composite，零 LLM）

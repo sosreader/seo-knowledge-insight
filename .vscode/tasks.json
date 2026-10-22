@@ -96,16 +96,6 @@
 			"problemMatcher": []
 		},
 		{
-			"label": "Pipeline: evaluate-qa-full — 完整評估 (100 筆 + Retrieval)",
-			"type": "shell",
-			"command": "make evaluate-qa-full",
-			"presentation": {
-				"reveal": "always",
-				"panel": "shared"
-			},
-			"problemMatcher": []
-		},
-		{
 			"label": "Test: All",
 			"type": "shell",
 			"command": ".venv/bin/python -m pytest tests/ -v",
@@ -149,37 +139,6 @@
 					"endsPattern": "Application startup complete"
 				}
 			}
-		},
-		{
-			"label": "API: Start TS Dev Server (port 8002)",
-			"type": "shell",
-			"command": "pnpm",
-			"args": [
-				"dev"
-			],
-			"isBackground": true,
-			"group": "build"
-		},
-		{
-			"label": "API: Start TS Dev Server (port 8002, api dir)",
-			"type": "shell",
-			"command": "cd api && pnpm dev",
-			"isBackground": true,
-			"group": "build"
-		},
-		{
-			"label": "API: Start TS Dev Server (port 8003, api dir)",
-			"type": "shell",
-			"command": "cd api && PORT=8003 pnpm dev",
-			"isBackground": true,
-			"group": "build"
-		},
-		{
-			"label": "API: Restart TS Dev Server (port 8002, api dir)",
-			"type": "shell",
-			"command": "cd api && PORT=8002 pnpm dev",
-			"isBackground": true,
-			"group": "build"
 		}
 	]
 }

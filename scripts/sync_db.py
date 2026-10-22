@@ -1,6 +1,6 @@
 """sync_db.py — /sync-db：把本機 reports／meeting_prep／sessions 經 warehouse-api 推到 vocus-warehouse。
 
-取代 api/scripts/sync-db.ts（寫 Supabase）。資料流：
+取代已移除的 TS 版 sync-db（寫 Supabase；隨 Lambda 退役刪除）。資料流：
   output/report_*.md、output/meeting_prep_*.md ─(發布閘門)─┐
   output/sessions/*.json ──────────────────────────────────┴─> POST https://warehouse-api.vocus.cc/internal/sync/{table}
   寫入後以 GET /internal/app/{route}/{key}（app-read token）讀回核對。
