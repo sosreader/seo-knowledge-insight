@@ -221,7 +221,7 @@ make dry-run   # 輸出 ✅ 設定檢查通過 才可繼續
 - `/evaluate-crawled-not-indexed-local` — 檢索未索引分析品質評估（12 golden cases，rule-based）
 - `/evaluate-meeting-prep-quality` — Meeting-Prep 內容品質評估（6 維度，Claude Code 作為 Judge，不需要 OpenAI）
 - `/evaluate-report-quality` — SEO 週報內容品質 L3 評估（3 維度：推理深度/可操作性/洞察原創性，Claude Code 作為 Judge，不需要 OpenAI）
-- `/sync-db` — 本地 Reports + Sessions + Meeting-Prep 上傳至 Supabase（`make sync-db` / `make sync-db-status` / `make sync-db-force`；支援 `--type reports|sessions|meeting-prep|all`）
+- `/sync-db` — 本地 Reports + Meeting-Prep（只送發布帳冊核准版本）+ Sessions 經 warehouse-api 推到 vocus-warehouse（`make sync-db` / `make sync-db-status` / `make sync-db-dry` / `make sync-db-force`；`TYPE=reports|meeting_prep|sessions|all`）
 - `/backfill-extraction-model` — 追溯回填 Supabase qa_items 的 extraction_model（`--dry-run` / `--execute`）
 - `/update-freshness` — 批次更新 freshness_score 指數衰減（`--dry-run` / `--execute`）
 - `/evaluate-retrieval-by-model` — 按 extraction_model 分群評估檢索品質
