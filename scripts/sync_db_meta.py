@@ -38,12 +38,26 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _reject_constant(name: str) -> Any:
+    raise ValueError(f"non-standard JSON constant {name}")
+
+
 def _load_object(text: str) -> dict[str, Any] | None:
+    """JSON.parse 等價：NaN／Infinity 視為語法錯（Python 預設接受，之後 allow_nan=False 序列化會炸）。"""
     try:
-        value = json.loads(text)
+        value = json.loads(text, parse_constant=_reject_constant)
     except ValueError:
         return None
     return value if isinstance(value, dict) else None
+
+
+def _js_truthy(value: Any) -> bool:
+    """JS 的 truthiness：{}、[] 為真；None、False、0、"" 為假。"""
+    if value is None or value is False:
+        return False
+    if isinstance(value, (int, float, str)) and not isinstance(value, bool):
+        return bool(value)
+    return True
 
 
 def parse_report_meta(content: str) -> dict[str, Any] | None:
@@ -68,8 +82,9 @@ def parse_report_meta(content: str) -> dict[str, Any] | None:
 
 def _eeat(raw: dict[str, Any]) -> dict[str, Any]:
     canonical = _as_dict(raw.get("scores")).get("eeat")
-    if isinstance(canonical, dict):
-        return {field: _num_or(canonical.get(field), 0) for field in EEAT_FIELDS}
+    if _js_truthy(canonical):
+        source = _as_dict(canonical)
+        return {field: _num_or(source.get(field), 0) for field in EEAT_FIELDS}
     if any(_is_number(raw.get(key)) for key in EEAT_SHORTHAND):
         return {field: _num_or(raw.get(key), 0) for field, key in zip(EEAT_FIELDS, EEAT_SHORTHAND)}
     avg = _num_or(raw.get("eeat_avg"), 0)
@@ -93,11 +108,12 @@ def _source_report_date(raw: dict[str, Any]) -> str | None:
     return None
 
 
-def _raw_meeting_prep_meta(content: str) -> dict[str, Any] | None:
+def _raw_meeting_prep_meta(content: str) -> Any:
+    """回原始值（可能不是 dict）；與 TS 相同：JSON 區塊的值為 truthy 就不再退回 HTML 註解。"""
     block = MEETING_PREP_JSON_BLOCK_RE.search(content)
     if block:
         wrapped = _load_object(block.group(1))
-        if wrapped is not None and isinstance(wrapped.get("meeting_prep_meta"), dict):
+        if wrapped is not None and _js_truthy(wrapped.get("meeting_prep_meta")):
             return wrapped["meeting_prep_meta"]
     comment = MEETING_PREP_HTML_COMMENT_RE.search(content)
     if comment:
@@ -107,7 +123,7 @@ def _raw_meeting_prep_meta(content: str) -> dict[str, Any] | None:
 
 def parse_meeting_prep_meta(content: str) -> dict[str, Any] | None:
     raw = _raw_meeting_prep_meta(content)
-    if raw is None or not isinstance(raw.get("date"), str):
+    if not isinstance(raw, dict) or not isinstance(raw.get("date"), str):
         return None
     question_count = raw.get("question_count")
     if not _is_number(question_count):

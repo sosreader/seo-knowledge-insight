@@ -82,6 +82,15 @@ class TestBlockReason:
         manifest = _manifest(_entry(**override))
         assert gate.publication_block_reason(manifest, FILENAME, CONTENT) == "invalid_review_manifest"
 
+    @pytest.mark.parametrize("override", [
+        {"filename": FILENAME + "\n"}, {"sha256": "a" * 64 + "\n"}, {"reviewed_at": "2026-09-12\n"},
+    ])
+    def test_trailing_newline_closes_manifest_like_ts(self, override):
+        assert gate.publication_block_reason(_manifest(_entry(**override)), FILENAME, CONTENT) == "invalid_review_manifest"
+
+    def test_trailing_newline_target_filename_is_invalid(self):
+        assert gate.publication_block_reason(_manifest(_entry()), FILENAME + "\n", CONTENT) == "invalid_filename"
+
     def test_duplicate_filenames_close_manifest(self):
         assert gate.publication_block_reason(_manifest(_entry(), _entry()), FILENAME, CONTENT) == "invalid_review_manifest"
 

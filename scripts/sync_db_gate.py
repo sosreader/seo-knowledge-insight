@@ -26,6 +26,7 @@ MANIFEST_VERSION = 1
 FILENAME_RE = re.compile(r"^(?:report_\d{8}(?:_[0-9a-f]{8})?|meeting_prep_\d{8}_[0-9a-f]{8})\.md$")
 HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# 正規式一律用 fullmatch：Python 的 `$` 會接受結尾換行，JS 不會（TS 版遇到會讓帳冊失效）
 STATUSES = frozenset({"approved", "pending", "historical"})
 
 
@@ -62,7 +63,7 @@ def _nonempty(value: Any) -> bool:
 
 
 def _valid_day(value: Any) -> bool:
-    if not isinstance(value, str) or not DAY_RE.match(value):
+    if not isinstance(value, str) or not DAY_RE.fullmatch(value):
         return False
     try:
         return date.fromisoformat(value).isoformat() == value
@@ -74,9 +75,9 @@ def _parse_entry(raw: Any) -> ReviewEntry | None:
     if not isinstance(raw, dict):
         return None
     filename, sha256, status = raw.get("filename"), raw.get("sha256"), raw.get("status")
-    if not (isinstance(filename, str) and FILENAME_RE.match(filename)):
+    if not (isinstance(filename, str) and FILENAME_RE.fullmatch(filename)):
         return None
-    if not (isinstance(sha256, str) and HASH_RE.match(sha256)):
+    if not (isinstance(sha256, str) and HASH_RE.fullmatch(sha256)):
         return None
     if not (isinstance(status, str) and status in STATUSES):
         return None
@@ -118,7 +119,7 @@ def load_manifest(path: Path) -> tuple[ReviewEntry, ...]:
 
 def evaluate(entries: tuple[ReviewEntry, ...], filename: str, content: bytes) -> GateDecision:
     sha256 = hashlib.sha256(content).hexdigest()
-    if not FILENAME_RE.match(filename):
+    if not FILENAME_RE.fullmatch(filename):
         return GateDecision(filename, sha256, "invalid_filename", None)
     entry = next((item for item in entries if item.filename == filename), None)
     if entry is None:
@@ -131,7 +132,7 @@ def evaluate(entries: tuple[ReviewEntry, ...], filename: str, content: bytes) ->
 
 def publication_block_reason(manifest: Any, filename: str, content: bytes) -> str | None:
     """與 publication-gate.ts 的 publicationBlockReason 同語意的純函式。"""
-    if not FILENAME_RE.match(filename):
+    if not FILENAME_RE.fullmatch(filename):
         return "invalid_filename"
     entries = parse_manifest(manifest)
     if entries is None:

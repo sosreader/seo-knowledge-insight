@@ -54,6 +54,10 @@ class TestReportMeta:
     def test_missing_or_broken_returns_none(self, content):
         assert src.parse_report_meta(content) is None
 
+    @pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+    def test_nan_rejected_like_json_parse(self, constant):
+        assert src.parse_report_meta(f'<!-- report_meta {{"weeks": {constant}}} -->') is None
+
 
 class TestMeetingPrepMeta:
     def _wrap(self, meta: dict) -> str:
@@ -99,6 +103,24 @@ class TestMeetingPrepMeta:
         assert parsed["scores"]["eeat"] == {"experience": 0, "expertise": 0, "authoritativeness": 0,
                                             "trustworthiness": 0}
 
+    def test_truthy_non_object_eeat_yields_zeros_like_ts(self):
+        meta = {"date": "d", "scores": {"eeat": 5}, "eeat_e": 4}
+        parsed = src.parse_meeting_prep_meta(self._wrap(meta))
+        assert parsed["scores"]["eeat"] == {"experience": 0, "expertise": 0, "authoritativeness": 0,
+                                            "trustworthiness": 0}
+
+    def test_empty_object_eeat_is_truthy_like_js(self):
+        parsed = src.parse_meeting_prep_meta(self._wrap({"date": "d", "scores": {"eeat": {}}, "eeat_avg": 3}))
+        assert parsed["scores"]["eeat"]["experience"] == 0
+
+    def test_truthy_non_object_meta_does_not_fall_back(self):
+        content = '```json\n{"meeting_prep_meta": "x"}\n```\n<!-- meeting_prep_meta {"date": "d2"} -->'
+        assert src.parse_meeting_prep_meta(content) is None
+
+    def test_falsy_meta_falls_back_to_html_comment(self):
+        content = '```json\n{"meeting_prep_meta": null}\n```\n<!-- meeting_prep_meta {"date": "d3"} -->'
+        assert src.parse_meeting_prep_meta(content)["date"] == "d3"
+
     def test_legacy_html_comment(self):
         content = '<!-- meeting_prep_meta {"date": "d"} -->'
         assert src.parse_meeting_prep_meta(content)["date"] == "d"
@@ -140,10 +162,29 @@ class TestListLocal:
         (tmp_path / "d.json").write_text(json.dumps({**good, "messages": "x"}), encoding="utf-8")
         (tmp_path / "e.json").write_text(json.dumps({**good, "updated_at": "2026-10-02T00:00:00"}), encoding="utf-8")
         (tmp_path / "f.json").write_text(json.dumps([1]), encoding="utf-8")
+        (tmp_path / "g.json").write_text(json.dumps({**good, "id": UUID + "\n"}), encoding="utf-8")
         (tmp_path / "skip.txt").write_text("x", encoding="utf-8")
         sessions, skipped = src.list_sessions(tmp_path)
         assert [s.id for s in sessions] == [UUID]
-        assert sorted(name for name, _ in skipped) == ["b.json", "c.json", "d.json", "e.json", "f.json"]
+        assert sorted(name for name, _ in skipped) == ["b.json", "c.json", "d.json", "e.json", "f.json", "g.json"]
+
+    def test_lone_surrogate_title_is_skipped_not_crash(self, tmp_path):
+        # JS 的 "ab😀".slice(0, 3) 存檔後是 "ab\ud83d"
+        raw = '{"id": "%s", "title": "ab\\ud83d", "messages": [], "created_at": "2026-10-01T00:00:00Z",' \
+              ' "updated_at": "2026-10-01T00:00:00Z"}' % UUID
+        (tmp_path / "s.json").write_text(raw, encoding="utf-8")
+        sessions, skipped = src.list_sessions(tmp_path)
+        assert sessions == () and skipped == (("s.json", "unencodable_text"),)
+
+    def test_title_over_200_is_skipped(self, tmp_path):
+        data = {"id": UUID, "title": "&quot;" * 40, "messages": [], "created_at": "2026-10-01T00:00:00Z",
+                "updated_at": "2026-10-01T00:00:00Z"}
+        (tmp_path / "s.json").write_text(json.dumps(data), encoding="utf-8")
+        assert src.list_sessions(tmp_path) == ((), (("s.json", "title_too_long"),))
+
+    def test_document_filename_with_trailing_newline_ignored(self, tmp_path):
+        (tmp_path / "report_20261012.md\n").write_text("c", encoding="utf-8")
+        assert src.list_documents(tmp_path, "reports") == ()
 
 
 class TestBuildItems:

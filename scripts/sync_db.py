@@ -80,7 +80,10 @@ def _document_plan(root: Path, table: str, entries: tuple[gate.ReviewEntry, ...]
     for doc in docs:
         decision = gate.evaluate(entries, doc.filename, doc.content)
         if decision.reason is None:
-            items.append(sources.build_item(doc, decision.entry))
+            try:
+                items.append(sources.build_item(doc, decision.entry))
+            except UnicodeDecodeError:
+                blocked.append(gate.GateDecision(doc.filename, decision.sha256, "invalid_utf8", decision.entry))
         elif decision.reason in ("content_changed", "invalid_filename"):
             blocked.append(decision)
         else:
@@ -137,7 +140,7 @@ def _plan_or_exit(root: Path, tables: tuple[str, ...], io: Io) -> tuple[tuple[Ta
     for plan in plans:
         _print_plan(plan, io)
     if any(plan.blocked for plan in plans):
-        io.warn("[閘門] 有檔案與帳冊核准的版本不符，整批中止；請重新審核並更新帳冊 sha256 後再跑")
+        io.warn("[閘門] 有檔案與帳冊核准的版本不符（或無法解碼），整批中止；請重新審核並更新帳冊 sha256 後再跑")
         return plans, EXIT_FAIL
     return plans, EXIT_OK
 
@@ -151,6 +154,9 @@ def _batch_plans(plans: tuple[TablePlan, ...], io: Io) -> dict[str, tuple] | Non
             key = _key(plan.table, plan.items[exc.index])
             io.warn(f"[上限] {plan.table} {key} 單筆 {exc.size} bytes 超過單批上限 {exc.limit} bytes，整批中止")
             return None
+        except ValueError as exc:
+            io.warn(f"[序列化] {plan.table} 無法編成 JSON（{type(exc).__name__}），整批中止")
+            return None
     return batches
 
 
@@ -163,7 +169,7 @@ def _load_creds(path: Path, label: str, io: Io, hint: str = "") -> client_mod.Cr
 
 
 def _post_all(client: client_mod.WarehouseClient, plans, batches, force: bool, io: Io):
-    succeeded: list[tuple[str, dict[str, Any]]] = []
+    succeeded: list[tuple[str, dict[str, Any], str]] = []
     errors = 0
     for plan in plans:
         for batch in batches[plan.table]:
@@ -177,7 +183,7 @@ def _post_all(client: client_mod.WarehouseClient, plans, batches, force: bool, i
                     io.warn(f"  [error] {plan.table} {outcome.key}: {outcome.error}")
                 else:
                     io.say(f"  [{outcome.result}] {plan.table} {outcome.key}")
-                    succeeded.append((plan.table, item))
+                    succeeded.append((plan.table, item, outcome.result))
     return tuple(succeeded), errors
 
 

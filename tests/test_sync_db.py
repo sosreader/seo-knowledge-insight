@@ -230,6 +230,21 @@ class TestDryRun:
         assert "20261012_900a1937" in text and "20261009_0fc3dcbc" in text and UUID_A in text
         assert "dry-run" in text
 
+    def test_non_utf8_approved_file_blocks(self, repo, wh):
+        path = repo.root / "output" / REPORT
+        path.write_bytes(b"\xff\xfe")
+        repo.entries.append({"filename": REPORT, "sha256": _sha(b"\xff\xfe"), "status": "approved",
+                             "reviewed_by": "r", "reviewed_at": "2026-10-12", "reason": "x"})
+        repo.write_manifest()
+        code, text = run(repo, wh, "upload", "--dry-run")
+        assert code == 1 and "invalid_utf8" in text and wh.requests == []
+
+    def test_unserialisable_item_aborts(self, repo, wh, monkeypatch):
+        repo.doc(REPORT, "r")
+        monkeypatch.setattr(client_mod, "encode_body", lambda items: (_ for _ in ()).throw(ValueError("nan")))
+        code, text = run(repo, wh, "upload", "--type", "reports")
+        assert code == 1 and "序列化" in text and wh.requests == []
+
     def test_dry_run_with_drift_still_fails(self, repo, wh):
         repo.doc(REPORT, "new", ledger_content="old")
         code, _ = run(repo, wh, "upload", "--dry-run")
@@ -411,9 +426,16 @@ class TestReadback:
 
     def test_session_soft_deleted_is_warning_only(self, repo, wh):
         repo.session(UUID_A)
+        wh.store[("sessions", UUID_A)] = {"id": UUID_A}  # 既有列 → POST 回 updated
         wh.get_override = lambda req: httpx.Response(404, json={"error": "Session not found"})
         code, text = run(repo, wh, "upload", "--type", "sessions")
-        assert code == 0 and "軟刪除" in text
+        assert code == 0 and "軟刪除" in text and "[updated]" in text
+
+    def test_created_session_missing_on_readback_is_error(self, repo, wh):
+        repo.session(UUID_A)
+        wh.get_override = lambda req: httpx.Response(404, json={"error": "Session not found"})
+        code, text = run(repo, wh, "upload", "--type", "sessions")
+        assert code == 1 and "readback_session_mismatch" in text
 
     def test_readback_http_error_is_error(self, repo, wh):
         repo.doc(REPORT, "r")
@@ -535,8 +557,10 @@ class TestCli:
 
     def test_meeting_prep_dash_alias(self, repo, wh):
         repo.doc(PREP, "p")
-        code, _ = run(repo, wh, "upload", "--type", "meeting-prep", "--dry-run")
+        repo.doc(REPORT, "r")
+        code, text = run(repo, wh, "upload", "--type", "meeting-prep", "--dry-run")
         assert code == 0
+        assert "== meeting_prep ==" in text and "== reports ==" not in text and "== sessions ==" not in text
 
     def test_rejects_non_https_base_url(self, repo, wh):
         out, err = io.StringIO(), io.StringIO()
