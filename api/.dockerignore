@@ -1,0 +1,15 @@
+# build context 是 api/（本檔位於 context 根；repo 根目錄的 .dockerignore 不適用）
+node_modules/
+dist/
+dist-lambda/
+coverage/
+.env
+.env.*
+!.env.example
+
+# image 只需要 package 檔、tsconfig、tsup.config.ts、src/
+tests/
+scripts/
+vitest.config.ts
+*.md
+.git/
