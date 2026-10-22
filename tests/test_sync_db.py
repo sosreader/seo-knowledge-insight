@@ -356,6 +356,50 @@ class TestResponse:
         assert code == 1 and needle in text
         assert wh.gets == []
 
+    @pytest.mark.parametrize("method", ["POST", "GET"])
+    def test_edge_403_html_is_readable_not_json_error(self, repo, wh, method):
+        repo.doc(REPORT, "r")
+        page = httpx.Response(403, headers={"content-type": "text/html; charset=UTF-8"},
+                              text="<!DOCTYPE html><title>Forbidden</title>")
+        if method == "POST":
+            wh.post_override = lambda req: page
+        else:
+            wh.get_override = lambda req: page
+        code, text = run(repo, wh, "upload", "--type", "reports")
+        assert code == 1
+        assert "access_html" in text and "HTTP 403" in text
+        assert "JSONDecodeError" not in text and "Traceback" not in text and "<!DOCTYPE" not in text
+
+    def test_non_json_error_body_without_html_shows_status(self, repo, wh):
+        repo.doc(REPORT, "r")
+        wh.post_override = lambda req: httpx.Response(403, text="error code: 1020")
+        code, text = run(repo, wh, "upload", "--type", "reports")
+        assert code == 1 and "http_403" in text and "HTTP 403" in text and "error code: 1020" not in text
+
+    def test_non_json_success_body_shows_status(self, repo, wh):
+        repo.doc(REPORT, "r")
+        wh.post_override = lambda req: httpx.Response(200, text="not json")
+        code, text = run(repo, wh, "upload", "--type", "reports")
+        assert code == 1 and "malformed_response" in text and "HTTP 200" in text
+
+    def test_status_remote_html_403_is_readable(self, repo, wh):
+        repo.doc(REPORT, "r")
+        wh.get_override = lambda req: httpx.Response(403, headers={"content-type": "text/html"}, text="<html>x</html>")
+        code, text = run(repo, wh, "status", "--type", "reports")
+        assert code == 1 and "access_html" in text and "HTTP 403" in text
+
+    def test_readback_recomputes_hash_from_content_without_hash_field(self, repo, wh):
+        repo.doc(REPORT, "r")
+
+        def shaped(req):
+            if "/internal/app/reports/" in req.url.path:  # 讀取路由實際形狀：沒有 content_hash 欄位
+                return httpx.Response(200, json={"data": {"date": "20261012_900a1937", "filename": REPORT,
+                                                          "content": "r", "size_bytes": 1}})
+            return None
+        wh.get_override = shaped
+        code, text = run(repo, wh, "upload", "--type", "reports")
+        assert code == 0 and "[verified] reports 20261012_900a1937" in text
+
     def test_transport_error_is_reported(self, repo, wh):
         repo.doc(REPORT, "r")
 

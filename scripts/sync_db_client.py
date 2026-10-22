@@ -165,15 +165,20 @@ def _error_detail(response: httpx.Response) -> str:
 
 def _json_data(response: httpx.Response) -> Any:
     if 300 <= response.status_code < 400:
-        raise SyncHttpError("access_redirect", response.status_code, "（Access 憑證被拒或過期）")
+        raise SyncHttpError("access_redirect", response.status_code,
+                            f"HTTP {response.status_code}（Access 憑證被拒或過期，被導向登入頁）")
     if "text/html" in response.headers.get("content-type", ""):
-        raise SyncHttpError("access_html", response.status_code, "（回應是 HTML，多半是 Access 登入頁）")
+        raise SyncHttpError("access_html", response.status_code,
+                            f"HTTP {response.status_code}（回應是 HTML 不是 JSON，多半是 Cloudflare edge 擋下："
+                            "token 錯誤或 token 的 AUD 不屬於這條路徑）")
     if response.status_code >= 400:
-        raise SyncHttpError(_error_code(response), response.status_code, _error_detail(response))
+        detail = " ".join(part for part in (f"HTTP {response.status_code}", _error_detail(response)) if part)
+        raise SyncHttpError(_error_code(response), response.status_code, detail)
     try:
         payload = response.json()
     except ValueError:
-        raise SyncHttpError("malformed_response", response.status_code) from None
+        raise SyncHttpError("malformed_response", response.status_code,
+                            f"HTTP {response.status_code}（回應不是 JSON）") from None
     if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
         raise SyncHttpError("malformed_response", response.status_code)
     return payload["data"]
