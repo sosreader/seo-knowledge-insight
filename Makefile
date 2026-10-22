@@ -360,20 +360,20 @@ quality-gate: ## ETL 品質門檻檢查（hit_rate/mrr/qa_count）
 # ── Supabase 同步 ────────────────────────────────────
 
 .PHONY: sync-db
-sync-db: ## 上傳 reports + sessions + meeting-prep 到 Supabase（跳過已存在）
-	cd api && npx tsx scripts/sync-db.ts upload
+sync-db: ## 經 warehouse-api 上傳 reports + meeting_prep + sessions 到 vocus-warehouse（只送帳冊核准版本；hash 相同略過）
+	$(PYTHON) scripts/sync_db.py upload --type $(or $(TYPE),all)
 
 .PHONY: sync-db-status
-sync-db-status: ## 檢視本地 vs Supabase 差異
-	cd api && npx tsx scripts/sync-db.ts status
+sync-db-status: ## 列本機候選、發布帳冊狀態、遠端是否已有（只讀）
+	$(PYTHON) scripts/sync_db.py status --type $(or $(TYPE),all)
 
 .PHONY: sync-db-force
-sync-db-force: ## 強制上傳（覆蓋已存在項目）
-	cd api && npx tsx scripts/sync-db.ts upload --force
+sync-db-force: ## 強制覆寫遠端（仍受發布閘門限制）
+	$(PYTHON) scripts/sync_db.py upload --force --type $(or $(TYPE),all)
 
 .PHONY: sync-db-dry
-sync-db-dry: ## 同步試跑（不寫入）
-	cd api && npx tsx scripts/sync-db.ts upload --dry-run
+sync-db-dry: ## 同步試跑（零 HTTP，不需憑證）
+	$(PYTHON) scripts/sync_db.py upload --dry-run --type $(or $(TYPE),all)
 
 # ── Eval 品質門禁 ────────────────────────────────────
 

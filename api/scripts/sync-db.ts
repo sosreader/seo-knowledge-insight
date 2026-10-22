@@ -1,4 +1,7 @@
 /**
+ * 已由 scripts/sync_db.py 取代（2026-10-22，改經 warehouse-api 推到 vocus-warehouse）。
+ * Makefile 的 sync-db* target 已不再呼叫本檔；本檔保留到 S3.2 統一退役，勿再新增功能。
+ *
  * sync-db.ts — Upload local reports, sessions & meeting-prep to Supabase.
  *
  * Usage:
