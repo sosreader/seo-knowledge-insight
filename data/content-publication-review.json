@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "filename": "report_20260904_9d41f7b2.md",
+      "sha256": "1c5cdde99089eea6bd27f90aa6b2d067f28d0010b0e5d337aa62da34c59f5811",
+      "status": "historical",
+      "reviewed_by": "Codex 本地稽核",
+      "reviewed_at": "2026-09-12",
+      "reason": "正文已釐清缺口，歷史metadata不是本期驗證分數；維持禁止同步與發布。依research/17-reverse-audit-2026-09-07.md第26節。"
+    },
+    {
+      "filename": "meeting_prep_20260904_c7a2e9f1.md",
+      "sha256": "769b86763c16c23f4781b3d6c07925798be597efdf0aef1540881e92aff75cd3",
+      "status": "historical",
+      "reviewed_by": "Codex 本地稽核",
+      "reviewed_at": "2026-09-12",
+      "reason": "健康、E-E-A-T、人本及成熟度未評估，隱藏metadata僅供歷史追溯；不得同步或發布。依research/17-reverse-audit-2026-09-07.md第26節。"
+    },
+    {
+      "filename": "report_20260911_961c2c5f.md",
+      "sha256": "58faa1e7822d0e3152688294bb71ebbfdab34db31bdd103a1eb4f27e385ce9ef",
+      "status": "approved",
+      "reviewed_by": "使用者明確同步授權；Codex 本地內容限制及結構核對",
+      "reviewed_at": "2026-09-12",
+      "reason": "使用者指示 fix it and sync db；僅限本次兩稿帶限制同步，評估未全通過與null評分保留，不表示事實或SEO成效已驗證。"
+    },
+    {
+      "filename": "meeting_prep_20260911_26011fa2.md",
+      "sha256": "4ddfb2c9eda0fbe0fbc2896d5ea46330fb2aef676a41b9f140dfe15baa4e8b40",
+      "status": "approved",
+      "reviewed_by": "使用者明確同步授權；Codex 本地內容限制及結構核對",
+      "reviewed_at": "2026-09-12",
+      "reason": "使用者指示 fix it and sync db；僅限本次兩稿帶限制同步，評估未全通過與null評分保留，不表示事實或SEO成效已驗證。"
+    },
+    {
+      "filename": "report_20260925_3c8aebea.md",
+      "sha256": "90715803b300fdabe0ed1f7d800a44f744d4f81a0bbba10ef76c6587bd4f5fd0",
+      "status": "approved",
+      "reviewed_by": "使用者執行 /sync-db 同步授權；Claude Code 本地查核（fresh-context 事實查核兩輪，第二輪 PASS）",
+      "reviewed_at": "2026-09-29",
+      "reason": "僅限本次週報與會議稿兩份同步；composite_v2 0.9703，未納入資料窗內的 9/24 spam update 等外部事件（會議稿已補），不表示事實或SEO成效已驗證。"
+    },
+    {
+      "filename": "meeting_prep_20260925_1950ec0b.md",
+      "sha256": "ac0bbdf69781573db4dc95c72ed0a01c202a151e5ffb9d152acdb750089327f9",
+      "status": "approved",
+      "reviewed_by": "使用者執行 /sync-db 同步授權；Claude Code 本地查核（fresh-context 事實查核三輪，最後一輪修正未再複驗）",
+      "reviewed_at": "2026-09-29",
+      "reason": "僅限本次週報與會議稿兩份同步；依使用者裁示部分評分，E-E-A-T四維、人本四要素、Strategy與Process為null，structure eval 4項因此刻意FAIL；不表示事實或SEO成效已驗證。"
+    },
+    {
+      "filename": "report_20261012_900a1937.md",
+      "sha256": "3f1b76eff0b5edf745ea26a1ec92da3b6392f9b9bc0fde2c7bbad85b02cd31ad",
+      "status": "approved",
+      "reviewed_by": "使用者執行 /sync-db 同步授權；Claude Code 本地查核（fresh-context 事實查核一輪，修正後重新評分）",
+      "reviewed_at": "2026-10-12",
+      "reason": "僅限本次週報與會議稿兩份同步；composite_v2 0.9694；10/9 欄 GSC 成效數字可能因 Search Console 延遲而被回補，週報未標註此點（會議稿已補）；不表示事實或SEO成效已驗證。10/12 同步時 Supabase 因 exceed_db_size_quota 被限制，尚未寫入。 2026-10-12 使用者指示補入 PR 8266（AMP 修正上 prod）段落，取代舊版 report_20261012_bc65e45b.md；修訂後重評分無新增 FAIL，修訂段落經 fresh-context 查核一輪（4 處修正、2 處微調皆已套用），修正後未再複驗。"
+    },
+    {
+      "filename": "meeting_prep_20261009_0fc3dcbc.md",
+      "sha256": "1a5d2bf3c1dacb5cd5191e58b9e1d495918c8ecb50bc635fa03886212c4bc013",
+      "status": "approved",
+      "reviewed_by": "使用者執行 /sync-db 同步授權；Claude Code 本地查核（fresh-context 事實查核一輪，修正後未再複驗）",
+      "reviewed_at": "2026-10-12",
+      "reason": "僅限本次週報與會議稿兩份同步；延續部分評分，E-E-A-T四維、人本四要素、Strategy與Process為null，structure eval 4項因此刻意FAIL，grounding s4 為已知漂移；不表示事實或SEO成效已驗證。10/12 同步時 Supabase 因 exceed_db_size_quota 被限制，尚未寫入。 2026-10-12 使用者指示補入 PR 8266（AMP 修正上 prod）段落，取代舊版 meeting_prep_20261009_b65a866d.md；修訂後重評分無新增 FAIL，修訂段落經 fresh-context 查核一輪（4 處修正、2 處微調皆已套用），修正後未再複驗。"
+    }
+  ]
+}
