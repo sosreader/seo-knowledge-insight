@@ -128,7 +128,7 @@ evaluate(
 |------------|-----------|------------|------------|
 | Retrieval (keyword search) | `evals/eval_retrieval.py` | `retrieval_quality` | keyword_hit_rate, top1_category_match, top5_category_coverage |
 | Q&A extraction | `evals/eval_extraction.py` | `extraction_quality` | qa_count_in_range, keyword_coverage, no_admin_content, avg_confidence |
-| RAG chat (E2E) | `evals/eval_chat.py` | `chat_quality` | has_answer, has_sources, answer_keyword_coverage, top_source_in_expected_category |
+| RAG chat (E2E，需自備 `EVAL_API_BASE`；TS API 已退役) | `evals/eval_chat.py` | `chat_quality` | has_answer, has_sources, answer_keyword_coverage, top_source_in_expected_category |
 | LLM judge (05_evaluate.py) | (uses Laminar tracing only) | — | Existing `@observe` on `_llm_judge*` functions |
 
 ---

@@ -65,9 +65,6 @@ make update-freshness-verify
 ### Step 3: 驗證 + 測試
 
 ```bash
-# TypeScript API 測試（566 tests）
-cd api && pnpm test
-
 # 全量 eval（可選，需要 LMNR_PROJECT_API_KEY）
 python evals/eval_retrieval.py --model claude-code   # 按模型分群
 python evals/eval_retrieval.py                       # 全量（向下相容）
@@ -77,12 +74,11 @@ python evals/eval_retrieval.py                       # 全量（向下相容）
 
 ## search_hit_count（自動追蹤）
 
-此欄位無需手動操作。搜尋 API 命中時自動遞增（fire-and-forget，僅在 Supabase 模式下啟用）。
+此欄位原由 TypeScript 搜尋 API 命中時自動遞增（fire-and-forget）。該 API（Lambda `seo-insight-api`）已於 2026-10 退役並移除，
+欄位不再有自動寫入來源，現有數值停在退役當時。
 
-相關程式碼：
-- `api/src/routes/search.ts` — `trackHits()` 函式
-- `api/src/store/supabase-qa-store.ts` — `incrementSearchHitCount()` 方法
-- Supabase RPC — `increment_search_hit_count(qa_ids TEXT[])`
+歷史實作：`git show 92ed520:api/src/routes/search.ts`（`trackHits()`）、`api/src/store/supabase-qa-store.ts`（`incrementSearchHitCount()`）；
+Supabase RPC `increment_search_hit_count(qa_ids TEXT[])` 仍在資料庫中，但已無呼叫方。
 
 ---
 

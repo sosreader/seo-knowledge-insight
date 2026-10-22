@@ -52,7 +52,6 @@ To set up a new experiment, work with the user to:
 - `evals/eval_meeting_prep_*.py` — evaluation layer functions
 - `eval/golden_meeting_prep.json` — golden fixtures
 - `eval/fixtures/meeting_prep/` — input fixtures
-- `api/src/` — any API code
 - Any test files
 
 ## The experiment loop

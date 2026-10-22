@@ -2,6 +2,8 @@
 
 > 屬於 [research/](./README.md)。涵蓋 Pipeline 全景、技術決策、架構圖、Changelog。
 
+> **[2026-10 退役註記]** 本文提到的 TypeScript API（`api/`）、Lambda `seo-insight-api` 與 `docs-site/` 已自 repo 移除，下文相關路徑、指令與數據皆為退役前的歷史記錄，不再可執行。需要原始碼用 `git show 92ed520:<路徑>` 查閱。
+
 ---
 
 ## 12. 本專案完整架構與決策
@@ -250,7 +252,7 @@ Notion 會議紀錄（89 份，2023–2026）
     - qa / search / chat / feedback / report / session / pipeline / synonyms / meeting-prep / api-response
   測試：Vitest（67 個 test files，838 tests passing）
   部署：Lambda + Function URL（arm64，~$0/月）/ docker-compose（本地開發）
-            ↓ http://localhost:8002 (開發) 或 https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws/ (生產)
+            ↓ http://localhost:8002 (開發) 或 Lambda Function URL (生產；已於 2026-10 退役)
 
 ### Retrieval Data Dimensions 架構增量（2026-03-15）
 
@@ -1865,7 +1867,7 @@ output/qa_final.md
 
 ```
 seo-knowledge-insight/
-├── api/                         # Hono TypeScript API（v2.12+，主架構）
+├── api/                         # [已於 2026-10 移除] Hono TypeScript API（v2.12+，退役前主架構）
 │   ├── src/
 │   │   ├── index.ts             # 入口（middleware + route mount）
 │   │   ├── config.ts            # Zod 驗證環境變數

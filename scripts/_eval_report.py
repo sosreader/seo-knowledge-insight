@@ -1,8 +1,8 @@
 """
 _eval_report.py — 週報品質評估 + Laminar trace（v3.7）
 
-L1: 複製 api/src/services/report-evaluator.ts 邏輯（結構護欄）
-L2: 複製 api/src/services/report-evaluator-l2.ts 邏輯（連續指標）
+L1: 結構護欄（原 TS 版 report-evaluator.ts 已隨 Lambda 退役移除，邏輯以本檔為準）
+L2: 連續指標（原 TS 版 report-evaluator-l2.ts 已移除，邏輯以本檔為準）
 composite_v2: L1+L2 加權合併（L3 由 Claude Code /evaluate-report-quality 外部執行）
 
 使用：

@@ -1,4 +1,4 @@
-"""sync_db_meta.py — 從報告內文解析 metadata（移植 api/src/utils/{report-file,meeting-prep-file}.ts）。
+"""sync_db_meta.py — 從報告內文解析 metadata（移植自已移除的 TS 版 report-file／meeting-prep-file，見 git history）。
 
 舊版 sync-db.ts 上傳時就是用這兩個函式算 `meta` 欄位；倉儲讀取路由與 maturity-trend
 依賴同一個形狀，因此逐欄照搬，包含預設值（weeks=1、maturity 缺值補 L1 等）。

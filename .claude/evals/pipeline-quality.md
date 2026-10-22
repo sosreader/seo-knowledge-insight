@@ -102,6 +102,8 @@
 | `retrieval-enhancement` | 3 | — | synonym-expanded keyword | `scripts/_eval_laminar.py --group retrieval-enhancement` | 同上 |
 | `report-quality-eval` | 4 | — | identity（批量報告）| `scripts/_eval_laminar.py --mode report` | 同上 |
 
+> **[2026-10 退役註記]** 上表標示 API-first／API-backed 的 group（`chat_quality`、`qa_classification_quality`、`dedup_quality`、`crawled_not_indexed_quality`，以及 `retrieval_quality` 的 API 路徑）原打本機 TypeScript API；該 API 已隨 Lambda `seo-insight-api` 退役移除。`retrieval_quality` 會自動退回本地 naive search（CI 一向如此）；其餘四個需自備 `EVAL_API_BASE` 端點才能執行，否則回報 API not reachable。
+
 > **主要 group**：`retrieval_quality`（API-backed, 8 指標, 35 scenarios）+ `chat_quality`（API-backed, 4 指標）是最完整的端對端 eval。`qa_classification_quality` 和 `dedup_quality` 為 v2.26 新增。`crawled_not_indexed_quality` 為 v2.31 新增。`keyword-retrieval` 保留為 naive baseline 對照。
 
 ### Golden Dataset 總覽（v2.31）

@@ -33,18 +33,8 @@ output/.versions/step*/
 # Local screenshots
 laminar-*.png
 
-# Node.js (api/)
-node_modules/
-api/dist/
-api/dist-lambda/
-api/coverage/
-api/lambda.zip
-
 # Supabase CLI temp files
 supabase/.temp/
-
-# Generated docs (built by CI from openapi.ts)
-docs-site/openapi.json
 
 # Tooling artifacts (do not commit)
 .playwright-cli/

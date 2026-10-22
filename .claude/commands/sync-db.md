@@ -2,7 +2,7 @@
 
 把本機的週報、會議準備與 sessions 經 warehouse-api（Cloudflare Access 保護）寫進 vocus-warehouse 的
 `app_report`／`app_meeting_prep`／`app_session`。單向（local → 倉儲）。2026-10-22 起取代舊版
-「寫 Supabase」的 `api/scripts/sync-db.ts`。
+「寫 Supabase」的 TypeScript 版 `sync-db`（隨 Lambda `seo-insight-api` 退役，已自 repo 移除，見 git history）。
 
 ## 用法
 

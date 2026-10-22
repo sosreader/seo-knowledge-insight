@@ -55,26 +55,9 @@
 
 ### Step 3.5：自動上傳 DB
 
-回答生成後，**自動**透過 API 將問答存入 Supabase，讓前端 chat 頁面可見。
+回答生成後，**自動**將問答存入 Supabase `sessions` 表（Supabase 的去留另案處理）。
 
-執行以下步驟（用 Bash）：
-
-```bash
-# 1. 讀取 API key 和 Lambda URL
-API_KEY=$(grep SEO_API_KEY .env | cut -d= -f2)
-API_BASE="https://pu4fsreadnjcsqnfuqpyzndm4m0nctua.lambda-url.ap-northeast-1.on.aws"
-
-# 2. 建立 session（title 取使用者問題前 40 字）
-SESSION=$(curl -s -X POST "$API_BASE/api/v1/sessions" \
-  -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
-  -d '{"title":"使用者問題前40字..."}')
-SESSION_ID=$(echo "$SESSION" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])")
-
-# 3. 發送 message（觸發 context-only 或 full mode 回答，但我們要存的是 chat-agent 的回答）
-#    直接用 Supabase SQL 插入 user + assistant messages（避免 API 重新產生回答）
-```
-
-**實際做法**：用 `mcp__supabase__execute_sql` 直接寫入，因為 chat-agent 的回答已經產生，不需要 API 重新跑 RAG。
+**做法**：用 `mcp__supabase__execute_sql` 直接寫入，因為 chat-agent 的回答已經產生，不需要重新跑 RAG。（舊的 Lambda `seo-insight-api` 已退役，不再經 REST API 建立 session。）
 
 ```sql
 -- 建立 session

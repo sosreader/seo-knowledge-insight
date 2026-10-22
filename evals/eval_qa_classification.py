@@ -5,7 +5,7 @@ Tests whether the QA knowledge base correctly classifies items by category,
 difficulty, and evergreen status, using golden_qa.json as ground truth.
 
 Dataset:  eval/golden_qa.json (48 scenarios)
-Requires: LMNR_PROJECT_API_KEY, running TS API (cd api && pnpm dev)
+Requires: LMNR_PROJECT_API_KEY, a chat/search API reachable at EVAL_API_BASE（repo 內 TS API 已於 2026-10 退役，需自備端點）
 
 Run:
     python evals/eval_qa_classification.py

@@ -2,6 +2,8 @@
 
 > 屬於 [research/](./README.md)。給沒碰過後端的人，從零理解本專案 API 架構的學習路線。
 
+> **[2026-10 退役註記]** 本文提到的 TypeScript API（`api/`）、Lambda `seo-insight-api` 與 `docs-site/` 已自 repo 移除，下文相關路徑、指令與數據皆為退役前的歷史記錄，不再可執行。需要原始碼用 `git show 92ed520:<路徑>` 查閱。
+
 ---
 
 ## 1. 先跑起來

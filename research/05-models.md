@@ -2,6 +2,8 @@
 
 > 屬於 [research/](./README.md)。涵蓋 GPT 系列決策、Embedding 模型比較與升級時機。
 
+> **[2026-10 退役註記]** 本文提到的 TypeScript API（`api/`）、Lambda `seo-insight-api` 與 `docs-site/` 已自 repo 移除，下文相關路徑、指令與數據皆為退役前的歷史記錄，不再可執行。需要原始碼用 `git show 92ed520:<路徑>` 查閱。
+
 ---
 
 ## 2026-09-23 模型盤點與更新
@@ -13,9 +15,7 @@
 | Python Q&A 萃取、合併 | `OPENAI_MODEL` / gpt-5.4-nano | `gpt-6-luna` | `utils/openai_helper.py`；cache 依模型隔離 |
 | Python 分類、L4 reality check | `CLASSIFY_MODEL` / gpt-5.4-nano | `gpt-6-luna` | `utils/openai_helper.py`、`utils/maturity_llm_judge.py` |
 | Python 週報候選 Q&A rerank | `EVAL_JUDGE_MODEL` / gpt-5.4-nano | `gpt-6-luna` | `scripts/04_generate_report.py`；目前此變數的實際呼叫僅在這裡 |
-| TypeScript 一般模型設定 | `OPENAI_MODEL` / gpt-5.4-nano | `gpt-6-luna` | `api/src/config.ts`；Chat 與週報使用各自的設定 |
-| TypeScript Chat、SSE、Agent | `CHAT_MODEL` / gpt-5.4-nano | `gpt-6-luna` | `rag-chat.ts`、`rag-chat-stream.ts`、`agent-loop.ts` |
-| Python／TypeScript 週報 | `REPORT_MODEL` / gpt-5.4 | `gpt-6-sol` | `04_generate_report.py`、`report-llm.ts` |
+| Python 週報 | `REPORT_MODEL` / gpt-5.4 | `gpt-6-sol` | `04_generate_report.py`（TypeScript 版 `report-llm.ts` 已隨 Lambda 退役移除） |
 | 語意向量 | `OPENAI_EMBEDDING_MODEL` | 保留 `text-embedding-3-small` | 不改向量空間與既有索引 |
 | Anthropic rerank、context relevance、context enrichment | 寫死模型 ID | 保留 `claude-haiku-4-5-20251001` | `reranker.ts`、`context-relevance.ts`、`_generate_context.py`；屬獨立供應商路徑 |
 | AI SOV OpenAI API CLI | `DEFAULT_MODEL`／workflow input | 保留 `gpt-5.4` | `ingest_ai_sov.py`；屬觀測對象，換模型會改變時序比較口徑。原每週 CI 已於 PR #73 移除 |
@@ -38,7 +38,7 @@
 - 新模型預設 reasoning effort 為 `medium`，原 5.4 / nano 為 `none`。兩端透過 `model_options.py`／`model-options.ts` 明確保留 `none`，沿用原 token budget、temperature 與 JSON schema。
 - Luna／Sol 在 Chat Completions 使用 function calling 需要 `reasoning_effort: none`；Agent 的工具回合與最後收斂請求均帶入。未切換 Responses API。
 - 相容參數僅套用精確 ID `gpt-6-luna`、`gpt-6-sol`；其他 env 覆寫維持原請求。若指定快照或其他模型，需另外核對其參數。
-- Python `.env` 的 `OPENAI_MODEL` 會覆蓋程式預設。TypeScript 載入順序為既有 process env → `api/.env` → 根目錄 `.env`；升級時需同步檢查這些覆寫值。
+- Python `.env` 的 `OPENAI_MODEL` 會覆蓋程式預設；升級時需同步檢查這些覆寫值。（TypeScript API 的載入順序與 `CHAT_MODEL` 設定已隨退役移除。）
 - Lambda 與 CI 實際環境覆寫尚未查核；本次未部署。部署前需確認舊 env 不會蓋過新 defaults。
 - Python 週報 cache 以 REPORT_MODEL 與 EVAL_JUDGE_MODEL 的組合隔離，本地 fallback 使用獨立 scope；cache key 另含報告日期、weeks 與 QA 版本。切換模型時不會讀到舊模型報告。
 - 萃取、合併、分類、L4 與 embedding cache 依模型隔離；不重寫歷史 QA 的 `extraction_model`，不重跑全量萃取或向量建置。
@@ -48,7 +48,7 @@
 ### 驗證
 
 - Python 60 項相關測試通過：設定覆寫、模型參數、週報、分類、L4、cache、本地 fallback。
-- TypeScript 29 項相關測試通過：模型參數、週報、Chat、SSE、Agent；`pnpm typecheck` 通過。
+- （升級當時 TypeScript 29 項相關測試通過；該 API 已於 2026-10 退役移除。）
 - 模型相容性測試涵蓋精確 ID 的 reasoning 參數、其他模型覆寫，以及 Agent 工具回合與最後收斂請求；mock 測試不代表真實 SEO 品質已提升。
 - 尚未執行完整 SEO 品質 A/B 評估；上述 mock 測試只能驗證請求參數、路由與快取行為。
 
@@ -196,7 +196,7 @@ is_reasoning = getattr(details, "reasoning_tokens", 0) > 0
 v2.22 起，`CHAT_MODEL` 環境變數獨立於 `OPENAI_MODEL`，讓 Chat 問答可使用不同模型：
 
 ```env
-# 現行預設；Python 設定見 config.py，Chat 設定見 api/src/config.ts
+# 現行預設；Python 設定見 config.py
 OPENAI_MODEL=gpt-6-luna
 REPORT_MODEL=gpt-6-sol
 CHAT_MODEL=gpt-6-luna
