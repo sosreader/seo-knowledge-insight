@@ -161,3 +161,15 @@ describe("Scalar Docs", () => {
     expect(contentType).toContain("text/html");
   });
 });
+
+describe("OpenAPI feature gates (501)", () => {
+  it("documents llm_disabled on LLM routes and run_locally on pipeline triggers", async () => {
+    const { buildOpenAPISpec } = await import("../src/openapi.js");
+    const spec = buildOpenAPISpec() as { paths: Record<string, Record<string, { responses: Record<string, { description: string }> }>> };
+    expect(spec.paths["/api/v1/chat"]!.post!.responses["501"]!.description).toContain("llm_disabled");
+    expect(spec.paths["/api/v1/search"]!.post!.responses["501"]!.description).toContain("llm_disabled");
+    expect(spec.paths["/api/v1/chat/stream"]!.post!.responses["501"]!.description).toContain("Lambda");
+    expect(spec.paths["/api/v1/pipeline/fetch"]!.post!.responses["501"]!.description).toContain("run_locally");
+    expect(spec.paths["/api/v1/pipeline/meetings/{id}/preview"]!.get!.responses["501"]!.description).toContain("run_locally");
+  });
+});

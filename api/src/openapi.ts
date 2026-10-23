@@ -5,6 +5,8 @@
  * Each path matches the routes in src/routes/*.ts.
  */
 
+import { RUN_LOCALLY_ROUTES } from "./routes/pipeline-gates.js";
+
 export const API_VERSION = "3.6.0";
 
 type OpenAPISpec = Record<string, unknown>;
@@ -520,6 +522,12 @@ const paths: Record<string, Record<string, unknown>> = {
               enum: ["L1", "L2", "L3", "L4"],
               description: "提升符合此成熟度等級的結果排序 / Boost results matching this maturity level",
             },
+            mode: {
+              type: "string",
+              enum: ["hybrid", "semantic", "keyword"],
+              description:
+                "hybrid／semantic 需要 LLM（查詢 embedding），LLM 關閉時回 501 llm_disabled；未指定時 LLM 可用走 hybrid，否則退 keyword。/ hybrid and semantic need an LLM (query embedding) and return 501 llm_disabled when it is off; omitted → hybrid if available, else keyword.",
+            },
           },
         },
         "Search parameters",
@@ -532,6 +540,7 @@ const paths: Record<string, Record<string, unknown>> = {
               results: { type: "array", items: ref("SearchResult") },
               total: { type: "integer" },
               mode: { type: "string", enum: ["hybrid", "keyword"] },
+              llm_disabled: { type: "boolean", description: "線上未啟用 LLM（meta 也帶同名欄位）" },
             },
           }),
         ),
@@ -1574,6 +1583,50 @@ const paths: Record<string, Record<string, unknown>> = {
   },
 };
 
+const FEATURE_UNAVAILABLE_SCHEMA = {
+  type: "object",
+  properties: {
+    data: { type: "null" },
+    error: { type: "string", enum: ["llm_disabled", "run_locally"] },
+    message: { type: "string" },
+    meta: ref("ApiResponseMeta"),
+  },
+};
+
+/** 501 的路由：LLM 類（線上無 key）與 rag-api 不執行的 pipeline 路由（見 routes/pipeline-gates.ts）。 */
+const LLM_GATED: ReadonlyArray<readonly [string, string]> = [
+  ["/api/v1/search", "post"],
+  ["/api/v1/chat", "post"],
+  ["/api/v1/chat/stream", "post"],
+  ["/api/v1/sessions/{session_id}/messages", "post"],
+];
+
+function toOpenApiPath(path: string): string {
+  return `/api/v1/pipeline${path.replace(/:([a-z_]+)/g, "{$1}")}`;
+}
+
+function add501(target: Record<string, any>, path: string, method: string, description: string): void {
+  const op = target[path]?.[method];
+  if (!op) return;
+  const existing = op.responses?.["501"]?.description;
+  const merged = existing ? `${existing}；${description}` : description;
+  target[path] = {
+    ...target[path],
+    [method]: { ...op, responses: { ...op.responses, "501": jsonContent(FEATURE_UNAVAILABLE_SCHEMA, merged) } },
+  };
+}
+
+function withFeatureGates(source: Record<string, any>): Record<string, any> {
+  const target = { ...source };
+  for (const [path, method] of LLM_GATED) {
+    add501(target, path, method, "llm_disabled：線上未啟用 LLM（無 OPENAI_API_KEY 且無 LLM_BASE_URL）");
+  }
+  for (const { method, path } of RUN_LOCALLY_ROUTES) {
+    add501(target, toOpenApiPath(path), method.toLowerCase(), "run_locally：rag-api 不執行此流程，請在本機用 make pipeline");
+  }
+  return target;
+}
+
 export function buildOpenAPISpec(): OpenAPISpec {
   return {
     openapi: "3.1.0",
@@ -1610,7 +1663,7 @@ export function buildOpenAPISpec(): OpenAPISpec {
           "顧問會議準備報告。rag-api（vocus-warehouse 模式）一律回 410 `not_available_in_rag_api`，改經 warehouse-api `/internal/app/meeting-prep` 讀取；僅本機檔案模式可用。\n\nConsulting meeting preparation reports. In rag-api every route returns 410 `not_available_in_rag_api`; use warehouse-api `/internal/app/meeting-prep`. Local file mode only.",
       },
     ],
-    paths,
+    paths: withFeatureGates(paths),
     components: {
       schemas,
       securitySchemes: {
