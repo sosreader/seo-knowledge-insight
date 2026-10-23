@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -32,10 +31,11 @@ logger = logging.getLogger(__name__)
 
 from lmnr import evaluate  # type: ignore[import]
 
+from evals import rag_client  # noqa: E402
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
-_API_BASE = os.environ.get("EVAL_API_BASE", "http://localhost:8002")
-_API_KEY = os.environ.get("SEO_API_KEY", "")
+# Target: RAG_API_BASE + CF Access / SEO_API_KEY auth, see evals/rag_client.py
 
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
@@ -67,17 +67,12 @@ def chat_executor(data: dict) -> dict:
     """Call the TS Hono chat API and return answer + sources."""
     question: str = data["question"]
 
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if _API_KEY:
-        headers["X-API-Key"] = _API_KEY
-
     try:
-        resp = requests.post(
-            f"{_API_BASE}/api/v1/chat",
-            json={"message": question, "history": []},
-            headers=headers,
-            timeout=30,
+        resp = rag_client.post_json(
+            "/chat", {"message": question, "history": []}, timeout=30
         )
+        if rag_client.response_is_llm_disabled(resp):
+            return {"answer": "", "sources": [], "source_count": 0, "mode": "llm_disabled"}
         if resp.status_code == 200:
             body = resp.json()
             result = body.get("data", {})
@@ -92,7 +87,10 @@ def chat_executor(data: dict) -> dict:
             }
         logger.warning("[eval_chat] API returned %s: %s", resp.status_code, resp.text[:200])
     except requests.ConnectionError:
-        logger.error("[eval_chat] API not reachable at %s — is the server running?", _API_BASE)
+        logger.error(
+            "[eval_chat] API not reachable at %s — is the server running?",
+            rag_client.rag_api_base(),
+        )
     except Exception as e:
         logger.warning("[eval_chat] API call failed: %s", e)
 
@@ -149,6 +147,9 @@ def top_source_in_expected_category(output: dict, target: dict) -> float:
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────
+
+# 線上 rag-api 未啟用 LLM（501 llm_disabled）時視為 skip，不讓 workflow 紅
+rag_client.skip_if_llm_disabled("eval_chat")
 
 evaluate(
     data=_dataset,

@@ -352,47 +352,45 @@ class TestExtractPathSegments:
 # ── executor target (env) ─────────────────────────────────────────────────────
 
 
-class TestEndpointUrl:
-    def test_defaults_to_local_api_v1(self):
-        assert mod._endpoint_url({}) == "http://localhost:8002/api/v1/pipeline/crawled-not-indexed"
-
-    def test_rag_api_base_and_prefix(self):
-        env = {"EVAL_API_BASE": "https://warehouse-api.vocus.cc/", "EVAL_API_PREFIX": "internal/rag/"}
-        assert mod._endpoint_url(env) == "https://warehouse-api.vocus.cc/internal/rag/pipeline/crawled-not-indexed"
-
-
-class TestBuildHeaders:
-    def test_no_auth_headers_by_default(self):
-        assert mod._build_headers({}) == {"Content-Type": "application/json"}
-
-    def test_api_key_header(self):
-        assert mod._build_headers({"SEO_API_KEY": "k"})["X-API-Key"] == "k"
-
-    def test_cf_access_service_token_needs_both_values(self):
-        assert "CF-Access-Client-Id" not in mod._build_headers({"CF_ACCESS_CLIENT_ID": "id"})
-        headers = mod._build_headers({"CF_ACCESS_CLIENT_ID": "id", "CF_ACCESS_CLIENT_SECRET": "s"})
-        assert headers["CF-Access-Client-Id"] == "id"
-        assert headers["CF-Access-Client-Secret"] == "s"
-
-
 class TestExecutorTarget:
-    def test_posts_raw_tsv_to_env_target(self, monkeypatch):
-        monkeypatch.setenv("EVAL_API_BASE", "https://warehouse-api.vocus.cc")
-        monkeypatch.setenv("EVAL_API_PREFIX", "/internal/rag")
+    def test_posts_raw_tsv_to_rag_api_with_cf_access_headers(self, monkeypatch):
+        monkeypatch.setenv("RAG_API_BASE", "https://warehouse-api.vocus.cc/internal/rag")
         monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "id")
         monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "s")
         monkeypatch.delenv("SEO_API_KEY", raising=False)
         response = MagicMock(status_code=200)
         response.json.return_value = {"data": {"markdown": "ok"}}
-        with patch.object(mod.requests, "post", return_value=response) as post:
+        with patch.object(mod.rag_client.requests, "post", return_value=response) as post:
             assert mod.executor({"raw_tsv": "a\tb"}) == {"markdown": "ok"}
         url = post.call_args.args[0]
         assert url == "https://warehouse-api.vocus.cc/internal/rag/pipeline/crawled-not-indexed"
         assert post.call_args.kwargs["headers"]["CF-Access-Client-Id"] == "id"
         assert post.call_args.kwargs["json"] == {"raw_tsv": "a\tb"}
 
+    def test_local_api_key_mode(self, monkeypatch):
+        monkeypatch.setenv("RAG_API_BASE", "http://localhost:8080")
+        monkeypatch.delenv("CF_ACCESS_CLIENT_ID", raising=False)
+        monkeypatch.delenv("CF_ACCESS_CLIENT_SECRET", raising=False)
+        monkeypatch.setenv("SEO_API_KEY", "k")
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"data": {}}
+        with patch.object(mod.rag_client.requests, "post", return_value=response) as post:
+            mod.executor({"raw_tsv": "x"})
+        assert post.call_args.args[0] == "http://localhost:8080/pipeline/crawled-not-indexed"
+        assert post.call_args.kwargs["headers"]["X-API-Key"] == "k"
+
     def test_non_200_returns_error(self, monkeypatch):
-        monkeypatch.delenv("EVAL_API_BASE", raising=False)
+        monkeypatch.delenv("RAG_API_BASE", raising=False)
         response = MagicMock(status_code=501, text="llm_disabled")
-        with patch.object(mod.requests, "post", return_value=response):
+        with patch.object(mod.rag_client.requests, "post", return_value=response):
             assert mod.executor({"raw_tsv": "x"}) == {"error": "API returned 501"}
+
+    def test_connection_error(self):
+        with patch.object(
+            mod.rag_client.requests, "post", side_effect=mod.requests.ConnectionError()
+        ):
+            assert mod.executor({"raw_tsv": "x"}) == {"error": "API not reachable"}
+
+    def test_unexpected_error(self):
+        with patch.object(mod.rag_client.requests, "post", side_effect=RuntimeError("boom")):
+            assert mod.executor({"raw_tsv": "x"}) == {"error": "boom"}

@@ -16,11 +16,8 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from pathlib import Path
-
-import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -33,10 +30,11 @@ logger = logging.getLogger(__name__)
 
 from lmnr import evaluate  # type: ignore[import]
 
+from evals import rag_client  # noqa: E402
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
-_API_BASE = os.environ.get("EVAL_API_BASE", "http://localhost:8002")
-_API_KEY = os.environ.get("SEO_API_KEY", "")
+# Target: RAG_API_BASE + CF Access / SEO_API_KEY auth, see evals/rag_client.py
 
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
@@ -69,22 +67,7 @@ _dataset = [
 
 def _search(query: str) -> list[dict]:
     """Call search API and return top-5 results."""
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if _API_KEY:
-        headers["X-API-Key"] = _API_KEY
-
-    try:
-        resp = requests.post(
-            f"{_API_BASE}/api/v1/search",
-            json={"query": query, "top_k": 5},
-            headers=headers,
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            return resp.json().get("data", {}).get("results", [])
-    except Exception as e:
-        logger.warning("[eval_dedup] API call failed: %s", e)
-    return []
+    return rag_client.search_results(query, top_k=5, timeout=10) or []
 
 
 def dedup_executor(data: dict) -> dict:

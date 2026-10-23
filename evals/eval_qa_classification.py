@@ -15,11 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from pathlib import Path
-
-import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -32,10 +29,11 @@ logger = logging.getLogger(__name__)
 
 from lmnr import evaluate  # type: ignore[import]
 
+from evals import rag_client  # noqa: E402
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
-_API_BASE = os.environ.get("EVAL_API_BASE", "http://localhost:8002")
-_API_KEY = os.environ.get("SEO_API_KEY", "")
+# Target: RAG_API_BASE + CF Access / SEO_API_KEY auth, see evals/rag_client.py
 
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
@@ -66,34 +64,16 @@ def qa_search_executor(data: dict) -> dict:
     """Search for the question via API and return the best matching QA item."""
     question: str = data["question"]
 
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if _API_KEY:
-        headers["X-API-Key"] = _API_KEY
-
-    try:
-        resp = requests.post(
-            f"{_API_BASE}/api/v1/search",
-            json={"query": question, "top_k": 3},
-            headers=headers,
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            body = resp.json()
-            results = body.get("data", {}).get("results", [])
-            if results:
-                top = results[0]
-                return {
-                    "category": top.get("category", ""),
-                    "difficulty": top.get("difficulty", ""),
-                    "evergreen": top.get("evergreen"),
-                    "question": top.get("question", ""),
-                    "result_count": len(results),
-                }
-        logger.warning("[eval_qa_class] API returned %s", resp.status_code)
-    except requests.ConnectionError:
-        logger.error("[eval_qa_class] API not reachable at %s", _API_BASE)
-    except Exception as e:
-        logger.warning("[eval_qa_class] API call failed: %s", e)
+    results = rag_client.search_results(question, top_k=3, timeout=10)
+    if results:
+        top = results[0]
+        return {
+            "category": top.get("category", ""),
+            "difficulty": top.get("difficulty", ""),
+            "evergreen": top.get("evergreen"),
+            "question": top.get("question", ""),
+            "result_count": len(results),
+        }
 
     return {"category": "", "difficulty": "", "evergreen": None, "question": "", "result_count": 0}
 

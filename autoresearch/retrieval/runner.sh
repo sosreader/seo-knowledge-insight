@@ -16,7 +16,9 @@ BASELINE_JSON="$SCRIPT_DIR/baseline.json"
 EVAL_SCRIPT="$SCRIPT_DIR/eval_local.py"
 PYTHON="${PROJECT_ROOT}/.venv/bin/python"
 
-API_BASE="${EVAL_API_BASE:-http://localhost:8002}"
+# Target: online rag-api by default; local rag-api: RAG_API_BASE=http://localhost:8080
+API_BASE="${RAG_API_BASE:-https://warehouse-api.vocus.cc/internal/rag}"
+API_BASE="${API_BASE%/}"
 DESCRIPTION="${1:-no description}"
 
 # Load API key from .env if not already set
@@ -25,11 +27,19 @@ if [ -z "${SEO_API_KEY:-}" ] && [ -f "$PROJECT_ROOT/.env" ]; then
 fi
 API_KEY="${SEO_API_KEY:-}"
 
-# ── 1. Check server health ───────────────────────────────────────────────────
+# ── 1. Check server reachability (+ auth) ────────────────────────────────────
+# Auth headers come from env (CF Access pair preferred, else SEO_API_KEY); never echoed.
 
-if ! curl -sf "${API_BASE}/health" > /dev/null 2>&1; then
-    echo "ERROR: Server not reachable at ${API_BASE}" >&2
-    echo "Start with: cd api && RATE_LIMIT_DEFAULT=9999 pnpm dev" >&2
+AUTH_ARGS=()
+if [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+    AUTH_ARGS=(-H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}")
+elif [ -n "$API_KEY" ]; then
+    AUTH_ARGS=(-H "X-API-Key: ${API_KEY}")
+fi
+
+if ! curl -sf ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} "${API_BASE}/qa?limit=1" > /dev/null 2>&1; then
+    echo "ERROR: rag-api not reachable or unauthorized at ${API_BASE}" >&2
+    echo "Online: set CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET. Local: RAG_API_BASE=http://localhost:8080" >&2
     exit 2
 fi
 
