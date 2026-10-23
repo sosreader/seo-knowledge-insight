@@ -73,4 +73,21 @@ describe.skipIf(!pgAvailable)("PgSynonymsStore against app_synonym_custom (wareh
     const { rowCount } = await fx.admin().query("SELECT 1 FROM app_synonym_custom WHERE term = 'robots'");
     expect(rowCount).toBe(0);
   });
+
+  it("create／update return the row read back from the DB", async () => {
+    const store = new PgSynonymsStore();
+    await store.load();
+    const created = await store.create("讀回", ["x"]);
+    expect(created).toEqual({ term: "讀回", synonyms: ["x"], source: "custom" });
+    const updated = await store.update("讀回", ["y", "z"]);
+    expect(updated).toEqual({ term: "讀回", synonyms: ["y", "z"], source: "custom" });
+  });
+
+  it("delete reports false when another writer already removed the row", async () => {
+    const store = new PgSynonymsStore();
+    await store.create("已被刪", ["x"]);
+    await fx.admin().query("DELETE FROM app_synonym_custom WHERE term = '已被刪'");
+    expect(await store.delete("已被刪")).toBe(false);
+    expect(store.isCustom("已被刪")).toBe(false);
+  });
 });

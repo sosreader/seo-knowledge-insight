@@ -121,17 +121,22 @@ describe("learning-store (PG mode)", () => {
     expect(appendFileSync).not.toHaveBeenCalled();
   });
 
-  it("recordFeedback swallows DB errors gracefully", async () => {
-    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("recordFeedback returns the row read back from vocus-warehouse", async () => {
+    const stored = {
+      id: "42",
+      query: "test",
+      qa_id: "id1",
+      feedback: "ok",
+      top_score: null,
+      created_at: "2026-10-23T00:00:00.000Z",
+    };
+    vi.mocked(recordFeedbackPg).mockResolvedValue(stored);
+    await expect(recordFeedback({ query: "test", qa_id: "id1", feedback: "ok" })).resolves.toEqual(stored);
+  });
+
+  it("recordFeedback propagates DB errors (route maps them to 503/504)", async () => {
     vi.mocked(recordFeedbackPg).mockRejectedValue(new Error("network"));
-    recordFeedback({ query: "test", qa_id: "id1", feedback: "ok" });
-    // Wait for the .catch() to fire
-    await new Promise((r) => setTimeout(r, 10));
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to record feedback"),
-      expect.any(Error),
-    );
-    consoleSpy.mockRestore();
+    await expect(recordFeedback({ query: "test", qa_id: "id1", feedback: "ok" })).rejects.toThrow("network");
   });
 
   it("recordMiss swallows DB errors gracefully", async () => {

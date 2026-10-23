@@ -3,7 +3,14 @@ import { Hono } from "hono";
 
 // Mock learning store
 vi.mock("../../src/store/learning-store.js", () => ({
-  recordFeedback: vi.fn(),
+  recordFeedback: vi.fn(async (p: { query: string; qa_id: string; feedback: string; top_score?: number }) => ({
+    id: null,
+    query: p.query,
+    qa_id: p.qa_id,
+    feedback: p.feedback,
+    top_score: p.top_score ?? null,
+    created_at: "2026-10-23T00:00:00.000Z",
+  })),
   recordMiss: vi.fn(),
 }));
 
