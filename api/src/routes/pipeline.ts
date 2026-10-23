@@ -27,7 +27,9 @@ import { scoreEvent } from "../utils/laminar-scoring.js";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
 import { ensureQaStoreLoaded } from "../store/store-init.js";
-import { hasSupabase, supabaseSelect } from "../store/supabase-client.js";
+import { hasPg } from "../store/pg-client.js";
+import { listLLMUsageSince } from "../store/pg-llm-usage-store.js";
+import { storeFailure } from "../middleware/error-handler.js";
 import { snapshotStore } from "../store/store-registry.js";
 import type { SourceDocEntry } from "../schemas/pipeline.js";
 import {
@@ -85,7 +87,7 @@ export const pipelineRoute = new Hono();
 
 // GET /status
 pipelineRoute.get("/status", async (c) => {
-  // Supabase 模式下的 step 數字由 qaStore 推導；未載入會靜默回檔案系統的空值
+  // PG 模式下的 step 數字由 qaStore 推導；未載入會靜默回檔案系統的空值
   await ensureQaStoreLoaded();
   const status = buildPipelineStatus();
   return c.json(ok(status));
@@ -466,8 +468,8 @@ pipelineRoute.post("/metrics/save", async (c) => {
   if (snapshotStore) {
     try {
       await snapshotStore.save(snapshot);
-    } catch {
-      return c.json(fail("Failed to save snapshot"), 500);
+    } catch (err) {
+      return storeFailure(c, err) ?? c.json(fail("Failed to save snapshot"), 500);
     }
     return c.json(ok({ id, created_at, label }), 201);
   }
@@ -619,10 +621,12 @@ pipelineRoute.post("/crawled-not-indexed", async (c) => {
   }
 });
 
+const LLM_USAGE_LIMIT = 1000;
+
 // GET /llm-usage — LLM cost/latency monitoring
 pipelineRoute.get("/llm-usage", async (c) => {
-  if (!hasSupabase()) {
-    return c.json(fail("Supabase not configured"), 503);
+  if (!hasPg()) {
+    return c.json(fail("vocus-warehouse not configured"), 503);
   }
 
   const daysParam = c.req.query("days") ?? "30";
@@ -630,19 +634,7 @@ pipelineRoute.get("/llm-usage", async (c) => {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   try {
-    interface UsageRow {
-      readonly endpoint: string;
-      readonly model: string;
-      readonly input_tokens: number;
-      readonly output_tokens: number;
-      readonly latency_ms: number;
-      readonly created_at: string;
-    }
-
-    const rows = await supabaseSelect<UsageRow>(
-      "llm_usage",
-      `?select=endpoint,model,input_tokens,output_tokens,latency_ms,created_at&created_at=gte.${since}&order=created_at.desc&limit=1000`,
-    );
+    const rows = await listLLMUsageSince(since, LLM_USAGE_LIMIT);
 
     // Aggregate by endpoint + model
     const groups = new Map<string, { calls: number; input_tokens: number; output_tokens: number; total_latency_ms: number }>();
@@ -670,8 +662,10 @@ pipelineRoute.get("/llm-usage", async (c) => {
 
     return c.json(ok({ days, total_calls: rows.length, summary }));
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return c.json(fail(`LLM usage query failed: ${msg}`), 500);
+    const mapped = storeFailure(c, e);
+    if (mapped) return mapped;
+    console.error("LLM usage query failed:", e instanceof Error ? e.message : String(e));
+    return c.json(fail("LLM usage query failed"), 500);
   }
 });
 
@@ -684,7 +678,7 @@ pipelineRoute.get("/llm-usage", async (c) => {
  */
 pipelineRoute.get("/metrics/trends", async (c) => {
   if (!snapshotStore) {
-    return c.json(fail("Supabase not configured"), 503);
+    return c.json(fail("vocus-warehouse not configured"), 503);
   }
 
   const metricFilter = c.req.query("metric") ?? "";
@@ -739,7 +733,9 @@ pipelineRoute.get("/metrics/trends", async (c) => {
       anomalies,
     }));
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return c.json(fail(`Trend analysis failed: ${msg}`), 500);
+    const mapped = storeFailure(c, e);
+    if (mapped) return mapped;
+    console.error("Trend analysis failed:", e instanceof Error ? e.message : String(e));
+    return c.json(fail("Trend analysis failed"), 500);
   }
 });

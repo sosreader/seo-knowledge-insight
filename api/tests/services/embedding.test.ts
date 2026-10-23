@@ -8,8 +8,7 @@ vi.mock("../../src/config.js", () => ({
   config: {
     OPENAI_API_KEY: "test-key",
     OPENAI_EMBEDDING_MODEL: "text-embedding-3-small",
-    SUPABASE_URL: "",
-    SUPABASE_ANON_KEY: "",
+    VW_DB_SECRET_FILE_RAG: "",
     SEO_API_KEY: "",
     CORS_ORIGINS: ["*"],
     RATE_LIMIT_DEFAULT: 1000,

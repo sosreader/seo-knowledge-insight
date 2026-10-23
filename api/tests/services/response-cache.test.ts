@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { normalizeQuery, hashQuery, lookupCache, saveCache } from "../../src/services/response-cache.js";
 
-// Mock supabase-client
-vi.mock("../../src/store/supabase-client.js", () => ({
-  hasSupabase: vi.fn(() => true),
-  supabaseSelect: vi.fn(),
-  supabaseInsert: vi.fn(),
+// Mock pg-client（SQL 本身由 tests/store/pg-response-cache.test.ts 對真 PG 驗證）
+vi.mock("../../src/store/pg-client.js", () => ({
+  hasPg: vi.fn(() => true),
+  pgQuery: vi.fn(),
 }));
 
 // Mock laminar-scoring
@@ -13,15 +12,15 @@ vi.mock("../../src/utils/laminar-scoring.js", () => ({
   scoreEvent: vi.fn(),
 }));
 
-import { hasSupabase, supabaseSelect, supabaseInsert } from "../../src/store/supabase-client.js";
+import { hasPg, pgQuery } from "../../src/store/pg-client.js";
 
-const mockHasSupabase = vi.mocked(hasSupabase);
-const mockSelect = vi.mocked(supabaseSelect);
-const mockInsert = vi.mocked(supabaseInsert);
+const mockHasPg = vi.mocked(hasPg);
+const mockSelect = vi.mocked(pgQuery);
+const mockInsert = vi.mocked(pgQuery);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockHasSupabase.mockReturnValue(true);
+  mockHasPg.mockReturnValue(true);
 });
 
 describe("normalizeQuery", () => {
@@ -54,8 +53,8 @@ describe("hashQuery", () => {
 });
 
 describe("lookupCache", () => {
-  it("returns null when Supabase is not configured", async () => {
-    mockHasSupabase.mockReturnValue(false);
+  it("returns null when not in PG mode", async () => {
+    mockHasPg.mockReturnValue(false);
     const result = await lookupCache("abc123");
     expect(result).toBeNull();
     expect(mockSelect).not.toHaveBeenCalled();
@@ -68,8 +67,8 @@ describe("lookupCache", () => {
     const result = await lookupCache("abc123");
     expect(result).toEqual(cachedResponse);
     expect(mockSelect).toHaveBeenCalledWith(
-      "response_cache",
-      expect.stringContaining("query_hash=eq.abc123"),
+      expect.stringContaining("FROM app_response_cache WHERE query_hash = $1 AND expires_at > now()"),
+      ["abc123"],
     );
   });
 
@@ -87,8 +86,8 @@ describe("lookupCache", () => {
 });
 
 describe("saveCache", () => {
-  it("skips when Supabase is not configured", async () => {
-    mockHasSupabase.mockReturnValue(false);
+  it("skips when not in PG mode", async () => {
+    mockHasPg.mockReturnValue(false);
     await saveCache("test query", "hash123", { answer: "test" });
     expect(mockInsert).not.toHaveBeenCalled();
   });
@@ -98,19 +97,13 @@ describe("saveCache", () => {
     await saveCache("test query", "hash123", { answer: "test" }, 4);
 
     expect(mockInsert).toHaveBeenCalledWith(
-      "response_cache",
-      [expect.objectContaining({
-        query_hash: "hash123",
-        query_text: "test query",
-        response: { answer: "test" },
-        hit_count: 0,
-      })],
-      { upsert: true, onConflict: "query_hash" },
+      expect.stringContaining("ON CONFLICT (query_hash) DO UPDATE"),
+      ["hash123", "test query", JSON.stringify({ answer: "test" }), expect.any(String)],
     );
 
     // Check expires_at is approximately 4 hours from now
-    const row = mockInsert.mock.calls[0][1][0] as Record<string, unknown>;
-    const expiresAt = new Date(row.expires_at as string);
+    const params = mockInsert.mock.calls[0]![1] as unknown[];
+    const expiresAt = new Date(params[3] as string);
     const expectedMs = Date.now() + 4 * 60 * 60 * 1000;
     expect(Math.abs(expiresAt.getTime() - expectedMs)).toBeLessThan(5000);
   });

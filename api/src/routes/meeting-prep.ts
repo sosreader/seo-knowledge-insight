@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { ok, fail } from "../schemas/api-response.js";
 import { paths } from "../config.js";
 import { readTail } from "../utils/report-file.js";
-import { meetingPrepStore } from "../store/store-registry.js";
+import { ragApiGone } from "../middleware/rag-api-gone.js";
 import type {
   MeetingPrepMeta,
   MeetingPrepSummary,
@@ -19,14 +19,6 @@ const MEETING_PREP_PATTERN = /^meeting_prep_(\d{8})_([0-9a-f]{8})\.md$/;
 const MEETING_PREP_META_RE = /<!-- meeting_prep_meta ({[\s\S]*?}) -->/;
 
 const DATE_RE = /^\d{8}(?:_[0-9a-f]{8})?$/;
-
-/** Extract source report date from content header: 來源：`output/report_XXXXXXXX_XXXXXXXX.md` */
-const SOURCE_REPORT_RE = /來源：`?output\/report_([0-9a-zA-Z_]+)\.md`?/;
-
-function parseSourceReportDate(content: string): string | undefined {
-  const m = SOURCE_REPORT_RE.exec(content);
-  return m?.[1] ?? undefined;
-}
 
 /** Parse meeting_prep_meta JSON with field-by-field validation. */
 function parseMeetingPrepMeta(content: string): MeetingPrepMeta | undefined {
@@ -77,7 +69,7 @@ function isInsideDir(filepath: string, baseDir: string): boolean {
   return resolve(filepath).startsWith(resolve(baseDir));
 }
 
-/* ── Filesystem helpers (fallback when Supabase is not configured) ── */
+/* ── Filesystem helpers（本機檔案模式；rag-api 由 ragApiGone 回 410） ── */
 
 function listMeetingPrepFromFs(): readonly MeetingPrepSummary[] {
   const dir = paths.outputDir;
@@ -159,28 +151,10 @@ function getMeetingPrepFromFs(date: string): {
 
 export const meetingPrepRoute = new Hono();
 
-/** Enrich list items: inject source_report_date into meta from content, strip content from response. */
-function enrichSourceReportDate(
-  items: readonly (MeetingPrepSummary & { content: string })[],
-): MeetingPrepSummary[] {
-  return items.map(({ content, ...summary }) => {
-    if (summary.meta?.source_report_date) return summary;
-    const srcDate = parseSourceReportDate(content);
-    if (!srcDate || !summary.meta) return summary;
-    return { ...summary, meta: { ...summary.meta, source_report_date: srcDate } };
-  });
-}
+// rag-api（PG 模式）不提供會議準備：回 410，前端改走 warehouse-api /internal/app/meeting-prep
+meetingPrepRoute.use("*", ragApiGone("meeting-prep"));
 
 meetingPrepRoute.get("/", async (c) => {
-  if (meetingPrepStore) {
-    try {
-      const raw = await meetingPrepStore.listWithContent();
-      const items = enrichSourceReportDate(raw);
-      return c.json(ok({ items, total: items.length }));
-    } catch {
-      return c.json(fail("Store unavailable"), 503);
-    }
-  }
   const items = listMeetingPrepFromFs();
   return c.json(ok({ items, total: items.length }));
 });
@@ -209,18 +183,6 @@ function computeTrendSummary(
 }
 
 meetingPrepRoute.get("/maturity-trend", async (c) => {
-  if (meetingPrepStore) {
-    try {
-      const data_points = await meetingPrepStore.listWithMeta();
-      const summary = computeTrendSummary(data_points);
-      const response: MaturityTrendResponse = { data_points, summary, total: data_points.length };
-      return c.json(ok(response));
-    } catch {
-      return c.json(fail("Store unavailable"), 503);
-    }
-  }
-
-  // Filesystem fallback
   const all = listMeetingPrepFromFs();
   const withMeta = all.filter(
     (item): item is MeetingPrepSummary & { meta: MeetingPrepMeta } =>
@@ -260,29 +222,6 @@ meetingPrepRoute.get("/:date", async (c) => {
     return c.json(fail("Invalid date format, expected YYYYMMDD or YYYYMMDD_hash8"), 400);
   }
 
-  if (meetingPrepStore) {
-    try {
-      const result = await meetingPrepStore.getByDate(date);
-      if (!result) {
-        return c.json(fail(`Meeting prep report for ${date} not found`), 404);
-      }
-      const meta = result.summary.meta;
-      const enrichedMeta = meta && !meta.source_report_date
-        ? { ...meta, source_report_date: parseSourceReportDate(result.content) }
-        : meta;
-      return c.json(ok({
-        date: result.summary.date,
-        filename: result.summary.filename,
-        content: result.content,
-        size_bytes: result.summary.size_bytes,
-        meta: enrichedMeta,
-      }));
-    } catch {
-      return c.json(fail("Store unavailable"), 503);
-    }
-  }
-
-  // Filesystem fallback
   const result = getMeetingPrepFromFs(date);
   if (!result) {
     return c.json(fail(`Meeting prep report for ${date} not found`), 404);

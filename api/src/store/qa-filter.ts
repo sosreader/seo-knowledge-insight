@@ -1,6 +1,6 @@
 /**
  * Shared QA filtering, sorting, and aggregation logic.
- * Used by both QAStore (file-based) and SupabaseQAStore (pgvector).
+ * Used by both QAStore (file-based) and PgQAStore (vocus-warehouse pgvector).
  */
 
 import type { QAItem } from "./qa-store.js";

@@ -49,7 +49,7 @@ describe("GET /health", () => {
     expect(body.capabilities).toBeDefined();
     expect(body.capabilities.runtime).toMatch(/^(local-server|lambda)$/);
     expect(body.capabilities.llm).toMatch(/^(openai|claude-code|none)$/);
-    expect(body.capabilities.store).toMatch(/^(supabase|file)$/);
+    expect(body.capabilities.store).toMatch(/^(postgres|file)$/);
     expect(body.capabilities.agent).toMatch(/^(enabled|disabled)$/);
   });
 

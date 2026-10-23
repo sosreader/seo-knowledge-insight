@@ -14,7 +14,7 @@ import { evaluateReportV2 } from "../services/report-evaluator.js";
 import { scoreEvent } from "../utils/laminar-scoring.js";
 import { qaStore } from "../store/qa-store.js";
 import { ensureQaStoreLoaded } from "../store/store-init.js";
-import { reportStore, snapshotStore } from "../store/store-registry.js";
+import { ragApiGone } from "../middleware/rag-api-gone.js";
 import { parseReportMeta, listReportFiles } from "../utils/report-file.js";
 
 const execFileAsync = promisify(execFile);
@@ -24,11 +24,10 @@ const ALLOWED_URL_HOSTS = new Set(["docs.google.com", "sheets.google.com"]);
 
 export const reportsRoute = new Hono();
 
+// rag-api（PG 模式）不提供週報：回 410，前端改走 warehouse-api /internal/app/reports
+reportsRoute.use("*", ragApiGone("reports"));
+
 reportsRoute.get("/", async (c) => {
-  if (reportStore) {
-    const items = await reportStore.list();
-    return c.json(ok({ items, total: items.length }));
-  }
   const items = listReportFiles();
   return c.json(ok({ items, total: items.length }));
 });
@@ -37,15 +36,6 @@ reportsRoute.get("/:date", async (c) => {
   const date = c.req.param("date");
   if (!DATE_RE.test(date)) {
     return c.json(fail("Invalid date format, expected YYYYMMDD"), 400);
-  }
-
-  if (reportStore) {
-    const result = await reportStore.getByDate(date);
-    if (!result) {
-      return c.json(fail(`Report report_${date}.md not found`), 404);
-    }
-    const meta = result.summary.meta ?? parseReportMeta(result.content);
-    return c.json(ok({ date, filename: result.summary.filename, content: result.content, size_bytes: result.summary.size_bytes, meta }));
   }
 
   const filename = `report_${date}.md`;
@@ -69,43 +59,17 @@ reportsRoute.get("/:date/metrics", async (c) => {
   }
 
   // Get report to extract snapshot_id from meta
-  let meta: Record<string, unknown> | null = null;
-  if (reportStore) {
-    const result = await reportStore.getByDate(date);
-    if (!result) return c.json(fail(`Report not found`), 404);
-    meta = (result.summary.meta ?? parseReportMeta(result.content)) as unknown as Record<string, unknown> | null;
-  } else {
-    const filename = `report_${date}.md`;
-    const filepath = join(paths.outputDir, filename);
-    if (!existsSync(filepath)) return c.json(fail("Report not found"), 404);
-    meta = parseReportMeta(readFileSync(filepath, "utf-8")) as unknown as Record<string, unknown> | null;
-  }
+  const filename = `report_${date}.md`;
+  const filepath = join(paths.outputDir, filename);
+  if (!existsSync(filepath)) return c.json(fail("Report not found"), 404);
+  const meta = parseReportMeta(readFileSync(filepath, "utf-8")) as unknown as Record<string, unknown> | null;
 
   const snapshotId = meta?.snapshot_id as string | undefined;
   if (!snapshotId) {
     return c.json(fail("Report has no linked snapshot (generated before snapshot linking was added)"), 404);
   }
 
-  // Fetch snapshot metrics
-  if (snapshotStore) {
-    try {
-      const snapshot = await snapshotStore.getById(snapshotId);
-      if (!snapshot) return c.json(fail(`Snapshot ${snapshotId} not found`), 404);
-      return c.json(ok({
-        snapshot_id: snapshotId,
-        label: snapshot.label,
-        source: snapshot.source,
-        tab: snapshot.tab,
-        weeks: snapshot.weeks,
-        metrics: snapshot.metrics,
-        created_at: snapshot.created_at,
-      }));
-    } catch {
-      return c.json(fail("Store unavailable"), 503);
-    }
-  }
-
-  // File fallback
+  // 本機檔案模式：快照讀 output/metrics_snapshots/
   const snapshotPath = resolve(paths.metricsSnapshotsDir, `${snapshotId}.json`);
   if (!snapshotPath.startsWith(paths.metricsSnapshotsDir) || !existsSync(snapshotPath)) {
     return c.json(fail(`Snapshot ${snapshotId} not found`), 404);
@@ -136,30 +100,20 @@ reportsRoute.post("/generate", async (c) => {
       return c.json(fail("Invalid snapshot_id format"), 400);
     }
 
-    // Try Supabase first, then fall back to file system
-    if (snapshotStore) {
-      const found = await snapshotStore.getById(snapshotId);
-      if (!found) {
-        return c.json(fail("Snapshot not found"), 404);
-      }
-      snapshot = found as unknown as Record<string, unknown>;
-      snapshotMetrics = found.metrics as Record<string, unknown> | undefined ?? null;
-    } else {
-      snapshotPath = resolve(paths.metricsSnapshotsDir, `${snapshotId}.json`);
-      if (!snapshotPath.startsWith(paths.metricsSnapshotsDir)) {
-        return c.json(fail("Invalid snapshot path"), 400);
-      }
-      if (!existsSync(snapshotPath)) {
-        return c.json(fail("Snapshot not found"), 404);
-      }
-
-      try {
-        snapshot = JSON.parse(readFileSync(snapshotPath, "utf-8")) as Record<string, unknown>;
-      } catch {
-        return c.json(fail("Failed to read snapshot"), 500);
-      }
-      snapshotMetrics = snapshot.metrics as Record<string, unknown> | undefined ?? null;
+    snapshotPath = resolve(paths.metricsSnapshotsDir, `${snapshotId}.json`);
+    if (!snapshotPath.startsWith(paths.metricsSnapshotsDir)) {
+      return c.json(fail("Invalid snapshot path"), 400);
     }
+    if (!existsSync(snapshotPath)) {
+      return c.json(fail("Snapshot not found"), 404);
+    }
+
+    try {
+      snapshot = JSON.parse(readFileSync(snapshotPath, "utf-8")) as Record<string, unknown>;
+    } catch {
+      return c.json(fail("Failed to read snapshot"), 500);
+    }
+    snapshotMetrics = snapshot.metrics as Record<string, unknown> | undefined ?? null;
 
     if (!snapshotMetrics || typeof snapshotMetrics !== "object") {
       return c.json(fail("Snapshot has no metrics data"), 400);
@@ -187,27 +141,11 @@ reportsRoute.post("/generate", async (c) => {
       const hash8 = createHash("sha1").update(result.content).digest("hex").slice(0, 8);
       const dateKey = `${dateOnly}_${hash8}`;
 
-      if (reportStore) {
-        const exists = await reportStore.exists(dateKey);
-        if (!exists) {
-          const meta = parseReportMeta(result.content);
-          await reportStore.save(dateKey, result.content, meta);
-        }
-      } else {
-        const reportFilename = `report_${dateKey}.md`;
-        if (!existsSync(join(paths.outputDir, reportFilename))) {
-          saveReport(result.content, dateKey);
-        }
+      const reportFilename = `report_${dateKey}.md`;
+      if (!existsSync(join(paths.outputDir, reportFilename))) {
+        saveReport(result.content, dateKey);
       }
 
-      if (reportStore) {
-        const reports = await reportStore.list();
-        if (reports.length === 0) {
-          return c.json(fail("No report found after generation"), 500);
-        }
-        const latest = reports[0]!;
-        return c.json(ok({ date: latest.date, filename: latest.filename, size_bytes: latest.size_bytes }));
-      }
       const reports = listReportFiles();
       if (reports.length === 0) {
         return c.json(fail("No report found after generation"), 500);
@@ -264,18 +202,10 @@ reportsRoute.post("/generate", async (c) => {
       const dateOnly = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const hash8 = createHash("sha1").update(reportContent).digest("hex").slice(0, 8);
       const dateKey = `${dateOnly}_${hash8}`;
-      if (reportStore) {
-        cacheHit = await reportStore.exists(dateKey);
-        if (!cacheHit) {
-          const meta = parseReportMeta(reportContent);
-          await reportStore.save(dateKey, reportContent, meta);
-        }
-      } else {
-        const reportFilename = `report_${dateKey}.md`;
-        cacheHit = existsSync(join(paths.outputDir, reportFilename));
-        if (!cacheHit) {
-          saveReport(reportContent, dateKey);
-        }
+      const reportFilename = `report_${dateKey}.md`;
+      cacheHit = existsSync(join(paths.outputDir, reportFilename));
+      if (!cacheHit) {
+        saveReport(reportContent, dateKey);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -321,14 +251,6 @@ reportsRoute.post("/generate", async (c) => {
       })();
     }
 
-    if (reportStore) {
-      const reports = await reportStore.list();
-      if (reports.length === 0) {
-        return c.json(fail("No report found after generation"), 500);
-      }
-      const latest = reports[0]!;
-      return c.json(ok({ date: latest.date, filename: latest.filename, size_bytes: latest.size_bytes, cache_hit: cacheHit }));
-    }
     const reports = listReportFiles();
     if (reports.length === 0) {
       return c.json(fail("No report found after generation"), 500);

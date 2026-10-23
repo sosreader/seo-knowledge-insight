@@ -9,7 +9,7 @@ REST API 伺服器，主要架構採用 Hono 框架，支援雙模式執行（No
 - Rate limiting + API Key 認證（timingSafeEqual）
 - Zod schema validation（環境變數 + 請求參數）
 - Local Mode graceful degradation（無 OpenAI 時自動降級）
-- Supabase pgvector hybrid search（自動偵測，fallback 檔案模式）
+- vocus-warehouse（PostgreSQL＋pgvector）hybrid search，以 `warehouse_rag` 直連（設 `VW_DB_SECRET_FILE_RAG` 啟用，否則 fallback 檔案模式）
 - Lambda + Function URL 部署（arm64，~$0/月，production 採 buffered mode）
 - 純 TypeScript 架構——metrics-parser + report-llm 已消除 Lambda Python 依賴
 - 安全加固：SSRF whitelist (pipeline schema)、auth fail-fast (production 503)、HTTP security headers middleware、session UUID validation
@@ -65,7 +65,7 @@ pnpm start                   # node dist/index.js，port 8002
 Client → Function URL / localhost:8002
   → CORS → Security Headers → Request Logger（JSON log + X-Request-Id）
   → /health（直接回應，無 auth，不產生 log）
-  → /api/v1/* → Auth → Rate Limit → Route Handler → Service → Store → Supabase / File
+  → /api/v1/* → Auth → Rate Limit → Route Handler → Service → Store → vocus-warehouse (pg) / File
 ```
 
 **分層設計：**
@@ -75,11 +75,11 @@ Client → Function URL / localhost:8002
 | Middleware | `middleware/` | CORS、安全標頭、Request Logger、API Key 認證、Rate Limit、錯誤處理 |
 | Routes     | `routes/`     | 請求驗證（Zod schema）、回應格式化                                 |
 | Services   | `services/`   | 業務邏輯（RAG、embedding、週報生成、指標解析）                     |
-| Store      | `store/`      | 資料存取（Factory Pattern：Supabase pgvector vs 檔案模式）         |
+| Store      | `store/`      | 資料存取（Factory Pattern：vocus-warehouse PG vs 檔案模式）        |
 | Schemas    | `schemas/`    | Zod 驗證 schema（請求參數、API 回應）                              |
 | Utils      | `utils/`      | 純函式工具（cosine、CJK 分詞、keyword boost、sanitize）            |
 
-**雙模式資料層：** `hasSupabase()` 偵測環境變數，有設定走 `SupabaseQAStore`（pgvector hybrid search），否則 fallback 到檔案模式（JSON + `.npy` embedding）。
+**雙模式資料層：** `hasPg()` 偵測 `VW_DB_SECRET_FILE_RAG`，有設定走 `PgQAStore` 等 vocus-warehouse store（`pg` 連線池，角色 `warehouse_rag`），否則 fallback 到檔案模式（JSON + `.npy` embedding）。
 
 **雙模式執行：** 同一份 `app` 物件由 `index.ts`（Node.js server）和 `lambda.ts`（AWS Lambda handler）共用，`initStores()` 為 idempotent singleton promise。
 
@@ -219,6 +219,8 @@ Client → Function URL / localhost:8002
 
 ### 5. SEO 週報 (reports) — 3 個 endpoints
 
+> rag-api（vocus-warehouse 模式）不提供週報：以下路由一律回 **410** `not_available_in_rag_api`，前端改經 warehouse-api `/internal/app/reports` 讀取。只有本機檔案模式可用。
+
 | 方法 | 路由                       | 說明                                                 | 認證 | Rate Limit |
 | ---- | -------------------------- | ---------------------------------------------------- | ---- | ---------- |
 | GET  | `/api/v1/reports`          | 列出所有週報                                         | ✓    | 60/min     |
@@ -274,6 +276,8 @@ Client → Function URL / localhost:8002
 | DELETE | `/api/v1/synonyms/{term}` | 刪除自訂同義詞                | ✓    | 60/min     |
 
 ### 10. 顧問會議準備 (meeting-prep) — 3 個 endpoints
+
+> rag-api（vocus-warehouse 模式）一律回 **410** `not_available_in_rag_api`，改經 warehouse-api `/internal/app/meeting-prep` 讀取。只有本機檔案模式可用。
 
 | Method | Path                                  | Description                                             |
 | ------ | ------------------------------------- | ------------------------------------------------------- |
@@ -378,14 +382,17 @@ api/
 │   │   ├── qa-store.ts              # QAStore singleton + loadQaStore() factory
 │   │   ├── qa-fns.ts                # QAStore pure module functions（FP 重構）
 │   │   ├── query-term-utils.ts      # 查詢詞處理工具
-│   │   ├── store-registry.ts        # Store singleton registry（reportStore/snapshotStore）
-│   │   ├── supabase-client.ts       # Supabase REST thin client（no SDK）
-│   │   ├── supabase-qa-store.ts     # SupabaseQAStore（pgvector hybrid search）
-│   │   ├── supabase-session-store.ts # SupabaseSessionStore
-│   │   ├── supabase-report-store.ts  # SupabaseReportStore
-│   │   ├── supabase-snapshot-store.ts # SupabaseSnapshotStore
-│   │   ├── supabase-synonyms-store.ts # SupabaseSynonymsStore
-│   │   ├── supabase-learning-store.ts # SupabaseLearningStore
+│   │   ├── store-registry.ts        # Store singleton registry（snapshotStore）
+│   │   ├── store-errors.ts          # DbUnavailable(503)／DbTimeout(504)／NotAvailableInRagApi(410)
+│   │   ├── pg-client.ts             # pg 連線池（db-rag secret 檔、verify-full、statement_timeout 10s）
+│   │   ├── pg-qa-store.ts           # PgQAStore（app_qa_item＋match_qa_items）
+│   │   ├── qa-rerank.ts             # hybrid 重排純函式（自 Supabase 版原樣抽出）
+│   │   ├── pg-session-store.ts      # PgSessionStore（app_session，軟刪除）
+│   │   ├── session-content-hash.ts  # app_session.content_hash（與 sync_db.py 相同算法）
+│   │   ├── pg-snapshot-store.ts     # PgSnapshotStore（app_metrics_snapshot，軟刪除）
+│   │   ├── pg-synonyms-store.ts     # PgSynonymsStore（app_synonym_custom）
+│   │   ├── pg-learning-store.ts     # app_learning 寫入
+│   │   ├── pg-llm-usage-store.ts    # app_llm_usage 讀寫
 │   │   ├── search-engine.ts         # 搜尋引擎（hybrid + keyword）
 │   │   ├── qa-filter.ts             # 共用 QA filter 邏輯
 │   │   ├── session-store.ts         # 對話歷史儲存（file fallback）
@@ -445,7 +452,6 @@ api/
 ├── scripts/
 │   ├── ai-crawler-checker.ts  # AI crawler readiness CLI（GPTBot/ClaudeBot 等 10 bots）
 │   ├── feedback-to-golden.ts  # 使用者回饋 → golden dataset 候選
-│   ├── sync-db.ts             # Reports + Sessions + Meeting-Prep → Supabase 同步
 │   └── eval-semantic.ts       # Retrieval eval（keyword/hybrid/rerank）
 ├── tests/                      # 67 個測試檔案，838 tests
 ├── tsup.config.ts            # 雙重 build（server + Lambda）
@@ -466,9 +472,11 @@ api/
 SEO_API_KEY=your-secret-api-key
 PORT=8002
 
-# Supabase（設定後自動切換至 pgvector 模式）
-SUPABASE_URL=https://eqrlomuujichshkbtoat.supabase.co
-SUPABASE_ANON_KEY=your_anon_key
+# vocus-warehouse（設定後切換至 PG 模式；rag-api 由 K8s Secret vocus-warehouse-db-rag 掛載）
+# JSON 檔（username、password、host、port、dbname）或每個 key 一個檔的目錄
+VW_DB_SECRET_FILE_RAG=/var/run/secrets/db-rag
+# verify-full 的 CA bundle（image 內預設已有，不必設）
+# PGSSLROOTCERT=/etc/ssl/rds/global-bundle.pem
 
 # Optional
 OPENAI_API_KEY=sk-...          # 若無，則 search/chat 自動降級
@@ -488,17 +496,22 @@ LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 
 ## 資料層
 
-### Supabase pgvector 模式（預設）
+### vocus-warehouse 模式（rag-api）
 
-設定 `SUPABASE_URL` + `SUPABASE_ANON_KEY` 後自動啟用：
+設定 `VW_DB_SECRET_FILE_RAG` 後啟用（角色 `warehouse_rag`，權限見 vocus-warehouse `db/roles-matrix.md`）：
 
-- 啟動時 paginated fetch 所有 QA metadata（不含 embedding）
-- `hybridSearch()` 透過 pgvector RPC over-retrieve → TS re-rank
+- 啟動時一次 SELECT `app_qa_item` 全部 metadata（不含 embedding，statement_timeout 25s）
+- `hybridSearch()` 呼叫 `match_qa_items($1::vector, LEAST($2, 200), …)` over-retrieve → TS re-rank
 - `keywordSearch()` / `listQa()` / `getById()` 為 sync in-memory
+- 有 `deleted_at` 的表（`app_session`、`app_metrics_snapshot`）每個 SELECT 明寫 `deleted_at IS NULL`（VW 無 RLS）
+- secret 檔不在、TLS 驗證失敗、DB 連不上：路由回 503 `db_unavailable`，app 照常啟動；逾時回 504 `db_timeout`
+- `/reports`、`/meeting-prep` 回 410 `not_available_in_rag_api`
+
+本機跑整合測試需要 Docker（testcontainers 起 `pgvector/pgvector:pg17`，套 `tests/fixtures/schema/` 的 VW migration）；沒有 Docker 時設 `SKIP_PG_TESTS=1` 略過。
 
 ### 檔案模式（fallback）
 
-無 Supabase 設定時自動退回：
+未設 `VW_DB_SECRET_FILE_RAG` 時自動退回：
 
 - 從 `qa_final.json` + `qa_embeddings.npy` 載入
 - 全量 in-memory cosine similarity

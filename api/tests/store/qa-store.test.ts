@@ -12,11 +12,10 @@ import {
   createNpyBuffer,
 } from "../setup.js";
 
-// Mock config — file-based (no Supabase)
+// Mock config — file-based (no vocus-warehouse)
 vi.mock("../../src/config.js", () => ({
   config: {
-    SUPABASE_URL: "",
-    SUPABASE_ANON_KEY: "",
+    VW_DB_SECRET_FILE_RAG: "",
     SEO_API_KEY: "",
     CORS_ORIGINS: ["*"],
     RATE_LIMIT_DEFAULT: 1000,
@@ -34,12 +33,12 @@ vi.mock("../../src/config.js", () => ({
   },
 }));
 
-vi.mock("../../src/store/supabase-client.js", () => ({
-  hasSupabase: () => false,
+vi.mock("../../src/store/pg-client.js", () => ({
+  hasPg: () => false,
 }));
 
-vi.mock("../../src/store/supabase-qa-store.js", () => ({
-  SupabaseQAStore: class {},
+vi.mock("../../src/store/pg-qa-store.js", () => ({
+  PgQAStore: class {},
 }));
 
 import { QAStore } from "../../src/store/qa-store.js";
