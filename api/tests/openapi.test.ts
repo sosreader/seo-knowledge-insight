@@ -38,11 +38,6 @@ vi.mock("../src/utils/observability.js", () => ({
   observe: (name: string, fn: Function) => fn,
 }));
 
-vi.mock("../src/store/supabase-client.js", () => ({
-  hasSupabase: () => false,
-  getSupabaseClient: () => null,
-}));
-
 import app from "../src/index.js";
 import { buildOpenAPISpec } from "../src/openapi.js";
 

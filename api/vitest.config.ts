@@ -5,6 +5,9 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // PG 整合測試：一個 pgvector 容器＋VW migration template（SKIP_PG_TESTS=1 可略過）
+    globalSetup: ["tests/pg/global-setup.ts"],
+    hookTimeout: 60_000,
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],

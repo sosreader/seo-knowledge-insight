@@ -1,11 +1,12 @@
 /**
- * LLM usage logger — fire-and-forget write to Supabase `llm_usage` table.
+ * LLM usage logger — fire-and-forget 寫入 vocus-warehouse `app_llm_usage`。
  *
  * Records token usage, latency, and model per LLM call.
- * Gracefully no-ops when Supabase is unavailable.
+ * 非 PG 模式直接 no-op；寫入失敗不影響主流程。
  */
 
-import { hasSupabase, supabaseInsert } from "../store/supabase-client.js";
+import { hasPg } from "../store/pg-client.js";
+import { insertLLMUsage } from "../store/pg-llm-usage-store.js";
 
 export interface LLMUsageEntry {
   readonly endpoint: string;
@@ -19,17 +20,15 @@ export interface LLMUsageEntry {
  * Log a single LLM API call. Fire-and-forget — does not block the response.
  */
 export function logLLMUsage(entry: LLMUsageEntry): void {
-  if (!hasSupabase()) return;
+  if (!hasPg()) return;
 
-  supabaseInsert("llm_usage", [
-    {
-      endpoint: entry.endpoint,
-      model: entry.model,
-      input_tokens: entry.input_tokens,
-      output_tokens: entry.output_tokens,
-      latency_ms: entry.latency_ms,
-    },
-  ]).catch(() => {
+  insertLLMUsage({
+    endpoint: entry.endpoint,
+    model: entry.model,
+    input_tokens: entry.input_tokens,
+    output_tokens: entry.output_tokens,
+    latency_ms: entry.latency_ms,
+  }).catch(() => {
     // Usage logging failures must never crash the main path
   });
 }

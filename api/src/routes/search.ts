@@ -4,7 +4,7 @@ import { ok, fail } from "../schemas/api-response.js";
 import { getEmbedding } from "../services/embedding.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
 import { QUERY_CATEGORY_HINTS } from "../store/search-engine.js";
-import { SupabaseQAStore } from "../store/supabase-qa-store.js";
+import { PgQAStore } from "../store/pg-qa-store.js";
 import type { SearchMode } from "../utils/mode-detect.js";
 import { resolveCapabilities } from "../utils/capabilities.js";
 import { applyMaturityBoost, parseMaturityLevel } from "../utils/maturity.js";
@@ -13,7 +13,7 @@ import { applyMaturityBoost, parseMaturityLevel } from "../utils/maturity.js";
 const trackHits = (
   hits: ReadonlyArray<{ item: QAItem; score: number }>,
 ): void => {
-  if (qaStore instanceof SupabaseQAStore && hits.length > 0) {
+  if (qaStore instanceof PgQAStore && hits.length > 0) {
     const hitIds = hits.map((h) => h.item.id);
     qaStore.incrementSearchHitCount(hitIds).catch((err) => {
       console.warn("trackHits failed (non-fatal):", err);

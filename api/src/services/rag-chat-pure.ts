@@ -2,7 +2,7 @@
  * RAG Chat — Pure Functions (Functional Core).
  *
  * Zero I/O, zero side effects. All functions are pure and testable
- * without mocking OpenAI, Supabase, or any external service.
+ * without mocking OpenAI, the database, or any external service.
  */
 
 import type { QAItem } from "../store/qa-store.js";

@@ -25,6 +25,7 @@ import {
   ensureSynonymsLoaded,
 } from "./store/store-init.js";
 import { initLaminar, flushLaminar } from "./utils/observability.js";
+import { closePool } from "./store/pg-client.js";
 import { resolveServerCapabilities, formatCapabilityTag } from "./utils/capabilities.js";
 
 const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
@@ -104,7 +105,7 @@ const port = config.PORT;
 
 /**
  * Cold start 必做的最小初始化（Node.js server 與 Lambda 共用）。冪等。
- * 這裡不得加入任何會打 Supabase 資料表的動作——QA store 與 synonyms
+ * 這裡不得加入任何會打資料庫的動作——QA store 與 synonyms
  * 一律交給 store/store-init.ts 的 ensureXxxLoaded() 在需要時才載入。
  */
 let _corePromise: Promise<void> | null = null;
@@ -143,6 +144,7 @@ if (process.env.NODE_ENV !== "test" && !isLambda) {
 
   const shutdown = async () => {
     await flushLaminar();
+    await closePool().catch(() => undefined);
     process.exit(0);
   };
   process.on("SIGTERM", shutdown);

@@ -1,5 +1,5 @@
 /**
- * Tests for learning-store — factory pattern (Supabase vs local JSONL).
+ * Tests for learning-store — factory pattern (vocus-warehouse vs local JSONL).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -11,11 +11,10 @@ vi.mock("node:fs", () => ({
   mkdirSync: vi.fn(),
 }));
 
-// Default: Supabase disabled → local mode
+// Default: PG disabled → local mode
 vi.mock("../../src/config.js", () => ({
   config: {
-    SUPABASE_URL: "",
-    SUPABASE_ANON_KEY: "",
+    VW_DB_SECRET_FILE_RAG: "",
     SEO_API_KEY: "",
     CORS_ORIGINS: ["*"],
     RATE_LIMIT_DEFAULT: 1000,
@@ -27,18 +26,18 @@ vi.mock("../../src/config.js", () => ({
   paths: { outputDir: "/tmp/test-output" },
 }));
 
-const _hasSupabase = vi.fn(() => false);
-vi.mock("../../src/store/supabase-client.js", () => ({
-  hasSupabase: (...args: unknown[]) => _hasSupabase(...args),
+const _hasPg = vi.fn(() => false);
+vi.mock("../../src/store/pg-client.js", () => ({
+  hasPg: (...args: unknown[]) => _hasPg(...args),
 }));
 
-vi.mock("../../src/store/supabase-learning-store.js", () => ({
-  recordFeedbackSupabase: vi.fn(),
-  recordMissSupabase: vi.fn(),
+vi.mock("../../src/store/pg-learning-store.js", () => ({
+  recordFeedbackPg: vi.fn(),
+  recordMissPg: vi.fn(),
 }));
 
 import { recordFeedback, recordMiss } from "../../src/store/learning-store.js";
-import { recordFeedbackSupabase, recordMissSupabase } from "../../src/store/supabase-learning-store.js";
+import { recordFeedbackPg, recordMissPg } from "../../src/store/pg-learning-store.js";
 
 describe("learning-store (local mode)", () => {
   beforeEach(() => {
@@ -89,42 +88,42 @@ describe("learning-store (local mode)", () => {
   });
 });
 
-describe("learning-store (supabase mode)", () => {
+describe("learning-store (PG mode)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _hasSupabase.mockReturnValue(true);
-    vi.mocked(recordFeedbackSupabase).mockResolvedValue(undefined as never);
-    vi.mocked(recordMissSupabase).mockResolvedValue(undefined as never);
+    _hasPg.mockReturnValue(true);
+    vi.mocked(recordFeedbackPg).mockResolvedValue(undefined as never);
+    vi.mocked(recordMissPg).mockResolvedValue(undefined as never);
   });
 
   afterEach(() => {
-    _hasSupabase.mockReturnValue(false);
+    _hasPg.mockReturnValue(false);
   });
 
-  it("recordFeedback delegates to Supabase", () => {
+  it("recordFeedback delegates to vocus-warehouse", () => {
     recordFeedback({
       query: "What is SEO?",
       qa_id: "id1",
       feedback: "helpful",
       top_score: 0.9,
     });
-    expect(recordFeedbackSupabase).toHaveBeenCalledOnce();
+    expect(recordFeedbackPg).toHaveBeenCalledOnce();
     expect(appendFileSync).not.toHaveBeenCalled();
   });
 
-  it("recordMiss delegates to Supabase", () => {
+  it("recordMiss delegates to vocus-warehouse", () => {
     recordMiss({
       query: "Unknown",
       top_score: 0.1,
       context: "no match",
     });
-    expect(recordMissSupabase).toHaveBeenCalledOnce();
+    expect(recordMissPg).toHaveBeenCalledOnce();
     expect(appendFileSync).not.toHaveBeenCalled();
   });
 
-  it("recordFeedback swallows Supabase errors gracefully", async () => {
+  it("recordFeedback swallows DB errors gracefully", async () => {
     const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.mocked(recordFeedbackSupabase).mockRejectedValue(new Error("network"));
+    vi.mocked(recordFeedbackPg).mockRejectedValue(new Error("network"));
     recordFeedback({ query: "test", qa_id: "id1", feedback: "ok" });
     // Wait for the .catch() to fire
     await new Promise((r) => setTimeout(r, 10));
@@ -135,9 +134,9 @@ describe("learning-store (supabase mode)", () => {
     consoleSpy.mockRestore();
   });
 
-  it("recordMiss swallows Supabase errors gracefully", async () => {
+  it("recordMiss swallows DB errors gracefully", async () => {
     const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.mocked(recordMissSupabase).mockRejectedValue(new Error("network"));
+    vi.mocked(recordMissPg).mockRejectedValue(new Error("network"));
     recordMiss({ query: "test", top_score: 0.1, context: "x" });
     await new Promise((r) => setTimeout(r, 10));
     expect(consoleSpy).toHaveBeenCalledWith(

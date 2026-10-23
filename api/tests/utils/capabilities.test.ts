@@ -4,8 +4,7 @@ vi.mock("../../src/config.js", () => ({
   config: {
     OPENAI_API_KEY: "",
     AGENT_ENABLED: false,
-    SUPABASE_URL: "",
-    SUPABASE_ANON_KEY: "",
+    VW_DB_SECRET_FILE_RAG: "",
   },
 }));
 
@@ -24,8 +23,7 @@ describe("capabilities", () => {
   beforeEach(() => {
     (config as Record<string, unknown>).OPENAI_API_KEY = "";
     (config as Record<string, unknown>).AGENT_ENABLED = false;
-    (config as Record<string, unknown>).SUPABASE_URL = "";
-    (config as Record<string, unknown>).SUPABASE_ANON_KEY = "";
+    (config as Record<string, unknown>).VW_DB_SECRET_FILE_RAG = "";
     delete process.env.AWS_LAMBDA_FUNCTION_NAME;
     delete process.env.AWS_EXECUTION_ENV;
   });
@@ -63,16 +61,14 @@ describe("capabilities", () => {
       expect(caps.llm).toBe("openai");
     });
 
-    it("detects Supabase store backend", () => {
-      (config as Record<string, unknown>).SUPABASE_URL = "https://test.supabase.co";
-      (config as Record<string, unknown>).SUPABASE_ANON_KEY = "anon-key";
+    it("detects postgres (vocus-warehouse) store backend when the db-rag secret path is set", () => {
+      (config as Record<string, unknown>).VW_DB_SECRET_FILE_RAG = "/var/run/secrets/db-rag";
       const caps = resolveServerCapabilities();
-      expect(caps.store).toBe("supabase");
+      expect(caps.store).toBe("postgres");
     });
 
-    it("requires both URL and ANON_KEY for supabase store", () => {
-      (config as Record<string, unknown>).SUPABASE_URL = "https://test.supabase.co";
-      // SUPABASE_ANON_KEY is "" (from beforeEach)
+    it("treats a blank secret path as file mode", () => {
+      (config as Record<string, unknown>).VW_DB_SECRET_FILE_RAG = "   ";
       const caps = resolveServerCapabilities();
       expect(caps.store).toBe("file");
     });
@@ -98,18 +94,17 @@ describe("capabilities", () => {
       expect(caps.agent).toBe("disabled");
     });
 
-    it("handles full Lambda + OpenAI + Supabase + Agent combo", () => {
+    it("handles full Lambda + OpenAI + Postgres + Agent combo", () => {
       process.env.AWS_LAMBDA_FUNCTION_NAME = "seo-insight-api";
       (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test";
-      (config as Record<string, unknown>).SUPABASE_URL = "https://test.supabase.co";
-      (config as Record<string, unknown>).SUPABASE_ANON_KEY = "anon-key";
+      (config as Record<string, unknown>).VW_DB_SECRET_FILE_RAG = "/var/run/secrets/db-rag";
       (config as Record<string, unknown>).AGENT_ENABLED = true;
 
       const caps = resolveServerCapabilities();
       expect(caps).toEqual({
         runtime: "lambda",
         llm: "openai",
-        store: "supabase",
+        store: "postgres",
         agent: "enabled",
       });
     });
@@ -207,11 +202,11 @@ describe("capabilities", () => {
       const tag = formatCapabilityTag({
         runtime: "lambda",
         llm: "openai",
-        store: "supabase",
+        store: "postgres",
         agent: "enabled",
         caller: "browser",
       });
-      expect(tag).toBe("[runtime:lambda | llm:openai | store:supabase | agent:enabled | caller:browser]");
+      expect(tag).toBe("[runtime:lambda | llm:openai | store:postgres | agent:enabled | caller:browser]");
     });
 
     it("formats server capabilities without caller", () => {
@@ -228,7 +223,7 @@ describe("capabilities", () => {
       const tag = formatCapabilityTag({
         runtime: "local-server",
         llm: "openai",
-        store: "supabase",
+        store: "postgres",
         agent: "enabled",
         caller: "claude-code",
       });

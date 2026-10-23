@@ -1,17 +1,14 @@
 /**
  * Learning Store — JSONL append-only log for feedback and search misses.
  *
- * Factory pattern: uses Supabase when available, falls back to local JSONL.
+ * Factory pattern: vocus-warehouse app_learning in PG mode, local JSONL otherwise.
  */
 
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { paths } from "../config.js";
-import { hasSupabase } from "./supabase-client.js";
-import {
-  recordFeedbackSupabase,
-  recordMissSupabase,
-} from "./supabase-learning-store.js";
+import { hasPg } from "./pg-client.js";
+import { recordFeedbackPg, recordMissPg } from "./pg-learning-store.js";
 
 const LEARNINGS_PATH = resolve(paths.outputDir, "learnings.jsonl");
 
@@ -52,7 +49,7 @@ function recordMissLocal(params: {
   appendFileSync(LEARNINGS_PATH, JSON.stringify(record) + "\n", "utf-8");
 }
 
-/** Record feedback — Supabase or local JSONL. Fire-and-forget for Supabase. */
+/** Record feedback — vocus-warehouse or local JSONL. Fire-and-forget in PG mode. */
 export function recordFeedback(params: {
   query: string;
   qa_id: string;
@@ -60,24 +57,24 @@ export function recordFeedback(params: {
   feedback_category?: string;
   top_score?: number;
 }): void {
-  if (hasSupabase()) {
-    recordFeedbackSupabase(params).catch((err) =>
-      console.warn("Failed to record feedback to Supabase:", err),
+  if (hasPg()) {
+    recordFeedbackPg(params).catch((err) =>
+      console.warn("Failed to record feedback to vocus-warehouse:", err),
     );
     return;
   }
   recordFeedbackLocal(params);
 }
 
-/** Record search miss — Supabase or local JSONL. Fire-and-forget for Supabase. */
+/** Record search miss — vocus-warehouse or local JSONL. Fire-and-forget in PG mode. */
 export function recordMiss(params: {
   query: string;
   top_score: number;
   context: string;
 }): void {
-  if (hasSupabase()) {
-    recordMissSupabase(params).catch((err) =>
-      console.warn("Failed to record miss to Supabase:", err),
+  if (hasPg()) {
+    recordMissPg(params).catch((err) =>
+      console.warn("Failed to record miss to vocus-warehouse:", err),
     );
     return;
   }

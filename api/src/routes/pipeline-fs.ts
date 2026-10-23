@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { paths } from "../config.js";
 import { qaStore } from "../store/qa-store.js";
-import { hasSupabase } from "../store/supabase-client.js";
+import { hasPg } from "../store/pg-client.js";
 import type {
   MeetingEntry,
   UnprocessedItem,
@@ -296,7 +296,7 @@ function buildPipelineStatusFromFiles(): PipelineStatusResponse {
 }
 
 export function buildPipelineStatus(): PipelineStatusResponse {
-  if (hasSupabase() && qaStore.loaded) {
+  if (hasPg() && qaStore.loaded) {
     return buildPipelineStatusFromStore();
   }
   return buildPipelineStatusFromFiles();

@@ -336,8 +336,9 @@ const paths: Record<string, Record<string, unknown>> = {
                   },
                   store: {
                     type: "string",
-                    enum: ["supabase", "file"],
-                    description: "資料儲存後端 / Data store backend",
+                    enum: ["postgres", "file"],
+                    description:
+                      "資料儲存後端。postgres = vocus-warehouse（warehouse_rag）；file = 本機 output/。\n\nData store backend. `postgres` = vocus-warehouse; `file` = local output/.",
                   },
                   agent: {
                     type: "string",
@@ -1594,12 +1595,20 @@ export function buildOpenAPISpec(): OpenAPISpec {
       { name: "QA", description: "QA 知識庫 CRUD 操作\n\nQA knowledge base CRUD" },
       { name: "Search", description: "語意搜尋 / 關鍵字搜尋\n\nSemantic / keyword search" },
       { name: "Chat", description: "RAG 對話與 Agent 模式\n\nRAG chat and agent mode" },
-      { name: "Reports", description: "SEO 週報管理\n\nWeekly SEO reports" },
+      {
+        name: "Reports",
+        description:
+          "SEO 週報管理。rag-api（vocus-warehouse 模式）一律回 410 `not_available_in_rag_api`，週報改經 warehouse-api `/internal/app/reports` 讀取；僅本機檔案模式可用。\n\nWeekly SEO reports. In rag-api (vocus-warehouse mode) every route returns 410 `not_available_in_rag_api`; read reports via warehouse-api `/internal/app/reports`. Local file mode only.",
+      },
       { name: "Sessions", description: "多輪對話管理\n\nMulti-turn chat sessions" },
       { name: "Feedback", description: "搜尋相關性回饋\n\nSearch relevance feedback" },
       { name: "Synonyms", description: "同義詞管理\n\nSynonym management" },
       { name: "Pipeline", description: "ETL Pipeline 管理\n\nETL pipeline management" },
-      { name: "Meeting Prep", description: "顧問會議準備報告\n\nConsulting meeting preparation reports" },
+      {
+        name: "Meeting Prep",
+        description:
+          "顧問會議準備報告。rag-api（vocus-warehouse 模式）一律回 410 `not_available_in_rag_api`，改經 warehouse-api `/internal/app/meeting-prep` 讀取；僅本機檔案模式可用。\n\nConsulting meeting preparation reports. In rag-api every route returns 410 `not_available_in_rag_api`; use warehouse-api `/internal/app/meeting-prep`. Local file mode only.",
+      },
     ],
     paths,
     components: {

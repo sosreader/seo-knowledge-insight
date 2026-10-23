@@ -194,8 +194,8 @@ class SynonymsStore {
   }
 }
 
-import { hasSupabase } from "./supabase-client.js";
-import { SupabaseSynonymsStore } from "./supabase-synonyms-store.js";
+import { hasPg } from "./pg-client.js";
+import { PgSynonymsStore } from "./pg-synonyms-store.js";
 
 /**
  * Unified async synonyms store interface.
@@ -215,11 +215,11 @@ export interface AsyncSynonymsStore {
   getCustom(): Readonly<Record<string, string[]>>;
 }
 
-/** Factory: returns SupabaseSynonymsStore or file-based SynonymsStore. */
+/** Factory: returns PgSynonymsStore (vocus-warehouse) or file-based SynonymsStore. */
 export function createSynonymsStore(): AsyncSynonymsStore {
-  if (hasSupabase()) {
-    console.log("SynonymsStore: using Supabase");
-    return new SupabaseSynonymsStore();
+  if (hasPg()) {
+    console.log("SynonymsStore: using vocus-warehouse");
+    return new PgSynonymsStore();
   }
   console.log("SynonymsStore: using file-based");
   return new SynonymsStore();

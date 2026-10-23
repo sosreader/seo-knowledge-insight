@@ -33,8 +33,8 @@ import {
   collections as collectionsFn,
   type QAStoreData,
 } from "./qa-fns.js";
-import { hasSupabase } from "./supabase-client.js";
-import { SupabaseQAStore } from "./supabase-qa-store.js";
+import { hasPg } from "./pg-client.js";
+import { PgQAStore } from "./pg-qa-store.js";
 
 function shouldLoadEnrichedJson(
   jsonPath: string,
@@ -378,7 +378,7 @@ export class QAStore {
 
   /**
    * Hybrid search (semantic + keyword boost + synonym + freshness).
-   * Returns a Promise for interface compatibility with SupabaseQAStore.
+   * Returns a Promise for interface compatibility with PgQAStore.
    */
   async hybridSearch(
     query: string,
@@ -462,18 +462,16 @@ export class QAStore {
   }
 }
 
-// Module-level singleton — use Supabase backend when configured, file-based otherwise
-export const qaStore: QAStore | SupabaseQAStore = hasSupabase()
-  ? new SupabaseQAStore()
-  : new QAStore();
+// Module-level singleton — vocus-warehouse（PG）when VW_DB_SECRET_FILE_RAG is set, file-based otherwise
+export const qaStore: QAStore | PgQAStore = hasPg() ? new PgQAStore() : new QAStore();
 
 /**
  * Initialise the qa store.
- * - Supabase mode: async load from Supabase (no .npy needed)
+ * - PG mode: async load from vocus-warehouse app_qa_item (no .npy needed)
  * - File mode: sync load from qa_final.json + qa_embeddings.npy
  */
 export async function loadQaStore(): Promise<void> {
-  if (qaStore instanceof SupabaseQAStore) {
+  if (qaStore instanceof PgQAStore) {
     await qaStore.load();
   } else {
     qaStore.load();

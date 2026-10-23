@@ -1,15 +1,13 @@
 /**
  * Store Registry — centralized store singleton creation.
  *
- * Eliminates duplicate hasSupabase() + new SupabaseXxxStore() calls
- * scattered across route modules (reports.ts:21-22, pipeline.ts:46).
+ * rag-api（PG 模式）只有指標快照走 vocus-warehouse（app_metrics_snapshot）。
+ * 週報（app_report）與會議準備（app_meeting_prep）不在 warehouse_rag 權限內：
+ * PG 模式下 /reports、/meeting-prep 回 410 not_available_in_rag_api（見 middleware/rag-api-gone.ts），
+ * 前端改經 warehouse-api /internal/app 讀取。本機檔案模式仍讀 output/。
  */
 
-import { hasSupabase } from "./supabase-client.js";
-import { SupabaseReportStore } from "./supabase-report-store.js";
-import { SupabaseSnapshotStore } from "./supabase-snapshot-store.js";
-import { SupabaseMeetingPrepStore } from "./supabase-meeting-prep-store.js";
+import { hasPg } from "./pg-client.js";
+import { PgSnapshotStore } from "./pg-snapshot-store.js";
 
-export const reportStore = hasSupabase() ? new SupabaseReportStore() : null;
-export const snapshotStore = hasSupabase() ? new SupabaseSnapshotStore() : null;
-export const meetingPrepStore = hasSupabase() ? new SupabaseMeetingPrepStore() : null;
+export const snapshotStore = hasPg() ? new PgSnapshotStore() : null;

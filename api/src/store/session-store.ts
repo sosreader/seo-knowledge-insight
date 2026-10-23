@@ -188,8 +188,8 @@ export class FileSessionStore {
   }
 }
 
-import { hasSupabase } from "./supabase-client.js";
-import { SupabaseSessionStore } from "./supabase-session-store.js";
+import { hasPg } from "./pg-client.js";
+import { PgSessionStore } from "./pg-session-store.js";
 
 /**
  * Unified async session store interface.
@@ -215,11 +215,11 @@ function wrapFileStore(fs: FileSessionStore): AsyncSessionStore {
   };
 }
 
-/** Factory: returns SupabaseSessionStore or FileSessionStore (async wrapper). */
+/** Factory: returns PgSessionStore (vocus-warehouse) or FileSessionStore (async wrapper). */
 export function createSessionStore(): AsyncSessionStore {
-  if (hasSupabase()) {
-    console.log("SessionStore: using Supabase");
-    return new SupabaseSessionStore();
+  if (hasPg()) {
+    console.log("SessionStore: using vocus-warehouse");
+    return new PgSessionStore();
   }
   console.log("SessionStore: using file-based");
   return wrapFileStore(new FileSessionStore());

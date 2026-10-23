@@ -53,7 +53,7 @@ export function qaStoreLoadFailed(): boolean {
 
 /**
  * synonyms store 走動態 import：只有 /synonyms 需要它，
- * 靜態引用會把 config／supabase-client 拖進每個只要 QA 的模組的相依圖。
+ * 靜態引用會把 config／pg-client 拖進每個只要 QA 的模組的相依圖。
  */
 async function _doLoadSynonyms(): Promise<void> {
   const [{ synonymsStore }, { paths }] = await Promise.all([

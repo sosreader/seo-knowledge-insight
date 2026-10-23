@@ -1,12 +1,12 @@
 /**
  * Capabilities — explicit five-dimension capability detection.
  *
- * Replaces scattered hasOpenAI() / hasSupabase() / isAgentEnabled() checks
+ * Replaces scattered hasOpenAI() / hasPg() / isAgentEnabled() checks
  * with a single structured record that makes the execution context visible.
  */
 
 import { hasOpenAI, isAgentEnabled } from "./mode-detect.js";
-import { hasSupabase } from "../store/supabase-client.js";
+import { hasPg } from "../store/pg-client.js";
 
 /** Runtime environment. Server-level only returns "lambda" | "local-server".
  *  "cli" is reserved for Caller dimension (inferCaller), not server runtime. */
@@ -16,7 +16,7 @@ export type Runtime = "lambda" | "local-server" | "cli";
  *  "claude-code" is used by Python-layer (qa_tools.py, openai_helper.py)
  *  when Claude Code itself acts as the LLM engine. */
 export type LLMProvider = "openai" | "claude-code" | "none";
-export type StoreBackend = "supabase" | "file";
+export type StoreBackend = "postgres" | "file";
 export type AgentMode = "enabled" | "disabled";
 export type Caller = "browser" | "cli" | "claude-code" | "lambda" | "unknown";
 
@@ -40,7 +40,7 @@ export function resolveServerCapabilities(): Omit<Capabilities, "caller"> {
   return {
     runtime: isLambda ? "lambda" : "local-server",
     llm: hasOpenAI() ? "openai" : "none",
-    store: hasSupabase() ? "supabase" : "file",
+    store: hasPg() ? "postgres" : "file",
     agent: isAgentEnabled() ? "enabled" : "disabled",
   };
 }
