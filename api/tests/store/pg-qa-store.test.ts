@@ -123,6 +123,33 @@ describe.skipIf(!pgAvailable)("PgQAStore against app_qa_item (warehouse_rag)", (
     warn.mockRestore();
   });
 
+  it("reload() picks up freshness_score written by another process (update-freshness CronJob)", async () => {
+    const id = "0000000000000001";
+    await store.load();
+    const before = store.getById(id)!.freshness_score;
+    try {
+      await fx.admin().query("UPDATE app_qa_item SET freshness_score = 0.321 WHERE id = $1", [id]);
+      expect(store.getById(id)!.freshness_score).toBe(before);
+
+      const result = await store.reload();
+
+      expect(result).toEqual({ ok: true, count: 4 });
+      expect(store.getById(id)!.freshness_score).toBeCloseTo(0.321);
+      expect(store.getBySeq(2)!.freshness_score).toBeCloseTo(0.321);
+    } finally {
+      await fx.admin().query("UPDATE app_qa_item SET freshness_score = $2 WHERE id = $1", [id, before]);
+    }
+  });
+
+  it("reload() keeps the loaded data and reports db_unavailable when the DB is unreachable", async () => {
+    await store.load();
+    await _configurePgClientForTest({ secretFile: "" });
+    const result = await store.reload();
+    expect(result).toEqual({ ok: false, code: "db_unavailable" });
+    expect(store.count).toBe(4);
+    expect(store.getById("0000000000000001")).toBeDefined();
+  });
+
   it("load() propagates DbUnavailableError so ensureQaStoreLoaded can degrade", async () => {
     await _configurePgClientForTest({ secretFile: "" });
     await expect(new PgQAStore().load()).rejects.toMatchObject({ code: "db_unavailable" });

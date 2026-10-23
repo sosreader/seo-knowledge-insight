@@ -50,3 +50,13 @@ export function storeErrorResponse(
 ): { readonly status: 503 | 504 | 410; readonly code: string } | null {
   return isStoreError(err) ? { status: err.status, code: err.code } : null;
 }
+
+/** 定期重載單一 store 的結果；失敗時舊資料原封保留，只回固定代碼（不帶 DB 細節或憑證）。 */
+export type StoreReloadResult =
+  | { readonly ok: true; readonly count: number }
+  | { readonly ok: false; readonly code: string };
+
+/** 重載失敗的固定代碼：store 錯誤沿用其 code，其餘一律 reload_failed。 */
+export function reloadErrorCode(err: unknown): string {
+  return isStoreError(err) ? err.code : "reload_failed";
+}
