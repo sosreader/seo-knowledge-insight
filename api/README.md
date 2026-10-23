@@ -247,6 +247,8 @@ Client → Function URL / localhost:8002
 
 ### 8. Pipeline 管理 (pipeline) — 18 個 endpoints
 
+rag-api（PG 模式）下 `meetings`、`meetings/{id}/preview`、`unprocessed`、`logs`、四條 POST 觸發與 `source-docs/:collection/:file/preview` 回 501 `run_locally`，見「LLM 關閉時的行為」一節。
+
 | 方法   | 路由                                                     | 說明                                                             | 認證 | Rate Limit |
 | ------ | -------------------------------------------------------- | ---------------------------------------------------------------- | ---- | ---------- |
 | GET    | `/api/v1/pipeline/status`                                | 各步驟完成狀態                                                   | ✓    | 60/min     |
@@ -258,7 +260,7 @@ Client → Function URL / localhost:8002
 | POST   | `/api/v1/pipeline/fetch-articles`                        | 觸發外部文章擷取（10 來源：Medium + iThome + Google Cases + Ahrefs + SEJ + Growth Memo + Google Blog + Google Blog zh-TW + Web.dev + Screaming Frog；逐來源回報，允許 partial failure） | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/extract-qa`                            | 觸發 Q&A 萃取                                                    | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/dedupe-classify`                       | 觸發去重 + 分類                                                  | ✓    | 60/min     |
-| POST   | `/api/v1/pipeline/crawled-not-indexed`                   | 分析檢索未索引路徑（從 Google Sheet 解析 + 規則引擎 + LLM 分析） | ✓    | 60/min     |
+| POST   | `/api/v1/pipeline/crawled-not-indexed`                   | 分析檢索未索引路徑（Google Sheet 或 raw_tsv 解析 + 規則引擎，無 LLM、不寫表） | ✓    | 60/min     |
 | GET    | `/api/v1/pipeline/source-docs`                           | 列出所有來源文件（支援 filter + pagination）                     | ✓    | 60/min     |
 | GET    | `/api/v1/pipeline/source-docs/:collection/:file/preview` | 來源文件 Markdown 預覽                                           | ✓    | 60/min     |
 | POST   | `/api/v1/pipeline/metrics`                               | 取得 Pipeline metrics                                            | ✓    | 60/min     |
@@ -517,8 +519,13 @@ VW_DB_SECRET_FILE_RAG=/var/run/secrets/db-rag
 # verify-full 的 CA bundle（image 內預設已有，不必設）
 # PGSSLROOTCERT=/etc/ssl/rds/global-bundle.pem
 
+# LLM（OPENAI_API_KEY 與 LLM_BASE_URL 皆空 → LLM disabled，見「LLM 關閉時的行為」）
+OPENAI_API_KEY=sk-...          # 線上 rag-api 目前不設（2026-10-23 裁決）
+LLM_BASE_URL=                  # OpenAI 相容端點；空值 = OpenAI 官方；本機 Ollama：http://localhost:11434/v1
+LLM_CHAT_MODEL=                # 覆寫 CHAT_MODEL（例：qwen3:8b）
+LLM_EMBEDDING_MODEL=           # 覆寫 OPENAI_EMBEDDING_MODEL（例：nomic-embed-text）
+
 # Optional
-OPENAI_API_KEY=sk-...          # 若無，則 search/chat 自動降級
 OPENAI_MODEL=gpt-6-luna
 CHAT_MODEL=gpt-6-luna        # RAG Chat 問答模型（獨立於 OPENAI_MODEL）
 REPORT_MODEL=gpt-6-sol           # 週報生成模型（需要深度分析）
@@ -557,32 +564,64 @@ LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 
 ---
 
-## Local Mode（無 OpenAI 時的自動降級）
+## LLM 關閉時的行為（線上 rag-api 現況）
 
-### Search 端點
+`OPENAI_API_KEY` 與 `LLM_BASE_URL` 皆空時視為 LLM disabled（`src/services/llm-client.ts`）。決策見 KB `wiki/decisions/2026-10-23-rag-online-llm-disabled-local-ollama-for-eval.md`。
 
-**有 OpenAI：** Embedding + Cosine Similarity（語意搜尋）
+| 路由 | LLM disabled | 說明 |
+|---|---|---|
+| `POST /chat`、`POST /chat/stream` | 501 `llm_disabled` | 先過 rate limit，再於 QA 載入前擋下 |
+| `POST /sessions/:id/messages` | 501 `llm_disabled` | 寫入使用者訊息之前就擋下，不留半套對話 |
+| `POST /search` `mode: "hybrid"`／`"semantic"` | 501 `llm_disabled` | 需要查詢 embedding |
+| `POST /search` 未指定 `mode` | 200 keyword | `data` 與 `meta` 帶 `mode: "keyword"`、`llm_disabled: true` |
+| reranker、任何 embedding 呼叫 | 501 `llm_disabled` | 服務層拋 `FeatureUnavailableError`，error handler 轉 501 |
+| QA、keyword search、synonyms、feedback、metrics、sessions 讀與軟刪 | 200 | 不需要 LLM |
 
-**無 OpenAI：** Keyword-only 搜尋（CJK 分詞 + 關鍵字加權）
+501 回應格式：
 
-**Request 參數：**
+```json
+{ "data": null, "error": "llm_disabled", "message": "線上未啟用 LLM，請在本機模式執行", "meta": { "request_id": "…", "version": "1.0" } }
+```
 
-- `query`：搜尋字串（必填）
-- `top_k`：回傳筆數（選填，預設 5）
-- `category`：分類 filter（選填）
-- `extraction_model`：按 extraction_model 過濾結果（選填，例如 `"claude-code"`）
+`app_llm_usage` 只在實際呼叫 LLM 時寫入（chat、chat stream、agent、embedding），LLM disabled 時不會有列。
 
-**Response 欄位（每筆 hit）：**
+### pipeline 路由（rag-api，PG 模式）
 
-- 包含 `extraction_model` 欄位，方便前端依模型分群顯示
+觸發類（`fetch`、`extract-qa`、`dedupe-classify`、`fetch-articles`）與讀本機檔案的路由（`meetings`、`meetings/:id/preview`、`unprocessed`、`logs`、`source-docs/:collection/:file/preview`）回 501 `run_locally`，訊息「此流程在本機執行，請用 make pipeline」。清單在 `src/routes/pipeline-gates.ts`。本機檔案模式照舊執行。`/status`、`/source-docs` 從 `app_qa_item` 推導；metrics、crawled-not-indexed、llm-usage 照常。
 
-### Chat 端點
+## 本機 Ollama 模式
 
-**有 OpenAI：** RAG Pipeline（檢索 → GPT 生成）+ metadata（model、tokens、duration）
+eval 與 LLM 判斷在 Mac 本機跑：rag-api 指向本機 Ollama 的 OpenAI 相容端點。
 
-**無 OpenAI：** Context-only（僅回傳相關 Q&A，不生成回答）+ metadata（provider、retrieval_count、duration）
+```bash
+ollama serve                         # 預設 http://localhost:11434
+ollama pull qwen3:8b                 # 對話模型（依機器記憶體挑）
 
----
+cd api
+AUTH_MODE=api-key \
+SEO_API_KEY=local-dev \
+LLM_BASE_URL=http://localhost:11434/v1 \
+LLM_CHAT_MODEL=qwen3:8b \
+VW_DB_SECRET_FILE_RAG=$HOME/.config/vocus-warehouse/db-rag.json \
+pnpm dev
+```
+
+- `VW_DB_SECRET_FILE_RAG` 指向 JSON（`username`、`password`、`host`、`port`、`dbname`）或每個 key 一個檔的目錄，同 K8s Secret 格式。檔案放 repo 外，不要 commit。未設則走檔案模式（`output/qa_final.json`）。
+- 連線一律 `sslmode=verify-full`，會比對主機名。經 port-forward 連 RDS 時，secret 的 `host` 要寫 RDS endpoint，並在 `/etc/hosts` 把它指到 `127.0.0.1`（本 PR 未實測，provisional）。
+- **embedding 不相容**：`app_qa_item` 的向量是 `text-embedding-3-small`（1536 維）。本機 embedding 模型（例如 `nomic-embed-text`）維度與語意空間都不同，拿來查 `match_qa_items` 結果無意義。本機只用 keyword（`mode: "keyword"`），或另行用同一個本機模型重算全部向量後再做 hybrid。
+- `LLM_BASE_URL` 有值時 OpenAI SDK 仍要求非空 apiKey，程式以佔位字串 `local-llm-no-key` 帶入，Ollama 不驗證。
+- `app_llm_usage` 會記本機呼叫（model 為 Ollama 模型名）；與 OpenAI 時期的分數、成本不可比。
+
+### eval 打 rag-api
+
+`evals/eval_crawled_not_indexed.py` 讀以下 env，不改其他 eval：
+
+| env | 預設 | 用途 |
+|---|---|---|
+| `EVAL_API_BASE` | `http://localhost:8002` | 服務根網址；線上 rag-api 為 `https://warehouse-api.vocus.cc` |
+| `EVAL_API_PREFIX` | `/api/v1` | 路由前綴；rag-api 經 tunnel 為 `/internal/rag` |
+| `SEO_API_KEY` | 空 | 有值則帶 `X-API-Key`（api-key 模式） |
+| `CF_ACCESS_CLIENT_ID`、`CF_ACCESS_CLIENT_SECRET` | 空 | 兩者皆有值則帶 Cloudflare Access service token header |
 
 ## 部署架構
 
