@@ -8,9 +8,22 @@
 # 釘住的外部輸入（改版時一併更新註解日期）：
 #   - 基底：node:22-slim 的多架構 index digest，2026-10-23 以
 #     `docker buildx imagetools inspect node:22-slim` 取得（Debian bookworm，內含 linux/arm64 與 amd64）
+#   - RDS CA bundle global-bundle.pem 的 sha256：與 vocus-warehouse Dockerfile 相同（2026-10-15 計算，
+#     2026-10-23 重新下載比對一致）。bundle 輪替時兩邊一起更新。
 #
 # 不含 curl、不含任何 secret；執行期設定一律由環境變數注入。
+# DB 憑證由 K8s Secret vocus-warehouse-db-rag 掛載，env VW_DB_SECRET_FILE_RAG 指向（見 src/store/pg-client.ts）；
+# TLS 一律 verify-full，CA 用本 image 內的 /etc/ssl/rds/global-bundle.pem（PGSSLROOTCERT）。
 ARG NODE_IMAGE=node:22-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d
+
+# Stage 0: RDS CA bundle（node fetch 下載，sha256sum -c 驗證後才進 runtime image）
+FROM ${NODE_IMAGE} AS rds-ca
+
+ARG RDS_BUNDLE_URL=https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+ARG RDS_BUNDLE_SHA256=90a6f1a7978a1b1b096dca6c57511ca48d3b8cf052f8e704baf358f34ea2f21b
+
+RUN node -e "fetch(process.argv[1]).then(async (r) => { if (!r.ok) throw new Error('HTTP ' + r.status); require('node:fs').writeFileSync('/tmp/global-bundle.pem', Buffer.from(await r.arrayBuffer())); })" "${RDS_BUNDLE_URL}" \
+    && echo "${RDS_BUNDLE_SHA256}  /tmp/global-bundle.pem" | sha256sum -c -
 
 # Stage 1: 全部依賴 + build
 FROM ${NODE_IMAGE} AS builder
@@ -45,7 +58,8 @@ ARG APP_UID=10001
 
 # 預設 8080；docker-compose 會以 PORT=8002 覆寫
 ENV NODE_ENV=production \
-    PORT=8080
+    PORT=8080 \
+    PGSSLROOTCERT=/etc/ssl/rds/global-bundle.pem
 
 # 非 root。USER 用數字 uid，kubernetes runAsNonRoot 才能在不查 /etc/passwd 的情況下驗證
 RUN groupadd --gid "${APP_UID}" app \
@@ -57,6 +71,7 @@ WORKDIR /app
 COPY --chown=${APP_UID}:${APP_UID} package.json ./
 COPY --from=prod-deps --chown=${APP_UID}:${APP_UID} /app/node_modules ./node_modules
 COPY --from=builder --chown=${APP_UID}:${APP_UID} /app/dist ./dist
+COPY --from=rds-ca --chmod=0644 /tmp/global-bundle.pem /etc/ssl/rds/global-bundle.pem
 
 USER ${APP_UID}:${APP_UID}
 
