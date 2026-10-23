@@ -16,6 +16,7 @@ const tmpDir = mkdtempSync(join(tmpdir(), "rag-api-mode-"));
 vi.mock("../src/config.js", () => ({
   config: {
     SEO_API_KEY: "",
+    AUTH_MODE: "api-key",
     CORS_ORIGINS: ["*"],
     RATE_LIMIT_DEFAULT: 1000,
     RATE_LIMIT_CHAT: 1000,

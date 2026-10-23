@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("../../src/config.js", () => ({
   config: {
     SEO_API_KEY: "",
+    AUTH_MODE: "api-key",
     OPENAI_API_KEY: "",
     CORS_ORIGINS: ["*"],
     RATE_LIMIT_DEFAULT: 1000,

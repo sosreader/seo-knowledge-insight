@@ -19,7 +19,15 @@ const envSchema = z.object({
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
   CHAT_MODEL: z.string().default("gpt-6-luna"),
 
+  // Lambda 模式（AUTH_MODE=api-key，Lambda 預設）與本機 docker-compose 用的 X-API-Key。
   SEO_API_KEY: z.string().default(""),
+
+  // 驗證模式：cf-access（容器預設）｜api-key（Lambda 預設）。見 middleware/auth-mode.ts。
+  AUTH_MODE: z.string().default(""),
+  // Cloudflare Access team domain（可不含 scheme），ConfigMap vocus-warehouse-access 的 team_domain。
+  CF_ACCESS_TEAM_DOMAIN: z.string().default(""),
+  // 本服務接受的 Access AUD（逗號分隔），ConfigMap 的 rag_auds。空值 → 非 /health 路由一律 503。
+  RAG_AUDS: z.string().default(""),
 
   LMNR_PROJECT_API_KEY: z.string().default(""),
 
@@ -36,7 +44,9 @@ const envSchema = z.object({
   CHAT_CONTEXT_K: z.coerce.number().int().positive().default(5),
 
   RATE_LIMIT_DEFAULT: z.coerce.number().int().positive().default(60),
-  RATE_LIMIT_CHAT: z.coerce.number().int().positive().default(20),
+  // chat 類路由（/chat、/sessions/:id/messages）每身分共用：每分鐘 RATE_LIMIT_CHAT、每日 RATE_LIMIT_CHAT_DAILY
+  RATE_LIMIT_CHAT: z.coerce.number().int().positive().default(10),
+  RATE_LIMIT_CHAT_DAILY: z.coerce.number().int().positive().default(200),
   RATE_LIMIT_GENERATE: z.coerce.number().int().positive().default(5),
 
   ANTHROPIC_API_KEY: z.string().default(""),
