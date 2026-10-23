@@ -28,6 +28,7 @@ BASE = "https://warehouse.test"
 SYNC_ID, SYNC_SECRET = "sync-id.access", "sync-secret-value-DO-NOT-PRINT"
 READ_ID, READ_SECRET = "read-id.access", "read-secret-value-DO-NOT-PRINT"
 SOURCE = "supabase-2026-10-22"
+SESSIONS_WARNING = "會與 rag-api 寫入衝突，僅限初次匯入"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REPORT_META_COMMENT = ('<!-- report_meta {"weeks": 2, "generated_at": "2026-09-29", '
                        '"generation_mode": "claude-code-semantic", "generation_label": "週報"} -->')
@@ -266,8 +267,15 @@ class TestDryRun:
         assert code == 0 and wh.requests == []
         assert "歷史匯入模式，未經發布閘門" in text
         assert "dry-run" in text
-        for table in ("reports", "meeting_prep", "sessions"):
+        for table in ("reports", "meeting_prep"):
             assert table in text
+        assert "sessions" not in text and SESSIONS_WARNING not in text
+
+    def test_explicit_sessions_dry_run_warns_about_rag_api_conflict(self, tmp_path, wh):
+        directory = write_export(tmp_path / "x", sessions=[session_row()])
+        code, text = run(directory, wh, {}, "--dry-run", "--type", "sessions")
+        assert code == 0 and wh.requests == []
+        assert SESSIONS_WARNING in text and "== sessions ==" in text
 
     def test_dry_run_lists_batch_sizes(self, tmp_path, wh):
         directory = write_export(tmp_path / "x", sessions=[session_row() for _ in range(120)])
@@ -292,9 +300,15 @@ class TestUpload:
         assert code == 0
         assert "歷史匯入模式，未經發布閘門" in text
         assert "[created] reports 20260220" in text
-        assert "verified 4" in text and "mismatch 0" in text
+        assert "verified 3" in text and "mismatch 0" in text
         sent = wh.post_bodies("meeting_prep")[0][0]
         assert sent["filename"] == "meeting_prep_20260220_v33.md" and "approved_version" not in sent
+        assert ("sessions", "0192a6e4-0d00-463f-a3ab-dfa3ef098dc2") not in wh.store
+
+    def test_explicit_sessions_import_writes_source_metadata(self, tmp_path, wh, env):
+        directory = write_export(tmp_path / "x", sessions=[session_row("0192a6e4-0d00-463f-a3ab-dfa3ef098dc2")])
+        code, _ = run(directory, wh, env, "--type", "sessions")
+        assert code == 0
         assert wh.store[("sessions", "0192a6e4-0d00-463f-a3ab-dfa3ef098dc2")]["metadata"] == {"source": SOURCE}
 
     def test_requests_carry_sync_and_read_tokens_on_right_routes(self, tmp_path, wh, env):
@@ -504,9 +518,30 @@ class TestInputsAndConfig:
 
     def test_missing_table_file_exits_2(self, tmp_path, wh, env):
         directory = write_export(tmp_path / "x", reports=[report_row()])
+        (directory / "meeting_prep.ndjson.gz").unlink()
+        code, text = run(directory, wh, env)
+        assert code == 2 and "meeting_prep.ndjson.gz" in text and wh.requests == []
+
+    def test_default_all_does_not_read_or_require_sessions(self, tmp_path, wh, env):
+        directory = write_export(tmp_path / "x", reports=[report_row()], meeting_prep=[prep_row()],
+                                 sessions=[session_row()])
         (directory / "sessions.ndjson.gz").unlink()
         code, text = run(directory, wh, env)
-        assert code == 2 and "sessions.ndjson.gz" in text and wh.requests == []
+        assert code == 0 and SESSIONS_WARNING not in text
+        assert not any("/sessions" in r.url.path for r in wh.requests)
+
+    def test_default_all_with_sessions_present_never_posts_sessions(self, tmp_path, wh, env):
+        directory = write_export(tmp_path / "x", reports=[report_row()], meeting_prep=[prep_row()],
+                                 sessions=[session_row()])
+        code, _ = run(directory, wh, env)
+        assert code == 0 and wh.post_bodies("sessions") == []
+        assert wh.post_bodies("reports") and wh.post_bodies("meeting_prep")
+
+    def test_explicit_sessions_import_warns_and_still_works(self, tmp_path, wh, env):
+        directory = write_export(tmp_path / "x", sessions=[session_row()])
+        code, text = run(directory, wh, env, "--type", "sessions")
+        assert code == 0 and SESSIONS_WARNING in text
+        assert len(wh.post_bodies("sessions")) == 1
 
     def test_malformed_line_reports_line_number_without_content(self, tmp_path, wh, env):
         directory = write_export(tmp_path / "x", reports=[report_row()], manifest=False)

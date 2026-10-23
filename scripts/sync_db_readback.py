@@ -4,10 +4,8 @@
   - reports／meeting_prep：取回 content 重算 `sha256:` hash，與寫入端送出的 content_hash 比對；
     另外檢查回傳的 date 等於請求鍵，因為 meeting-prep 詳情在精確鍵找不到時會用 YYYYMMDD 前綴
     回「同日最新一筆」，不檢查會把別的版本誤判成已寫入。
-  - sessions：詳情路由會把 messages 過濾成白名單欄位（Lambda toDetail 的形狀），無法重算 hash，
-    只核對 id、title 與訊息筆數；寫入時的 content_hash 已由 POST 回應逐筆核對。
-    讀回 404 且 POST 結果為 updated／skipped 時，視為「已在前端軟刪除」（同步不復活被刪的 session），
-    只警告；POST 回 created 的新列不可能已被軟刪除，404 就算錯誤。
+  - sessions（只剩歷史匯入的預檢與對帳用 check_remote）：詳情路由會把 messages 過濾成白名單欄位，
+    無法重算 hash，只核對 id、title 與訊息筆數。日常 upload／status 已不處理 sessions（rag-api 為權威）。
 """
 from __future__ import annotations
 
@@ -53,7 +51,7 @@ def readback(client: client_mod.WarehouseClient,
     """逐筆讀回；succeeded 為 (table, item, POST 回的 result)。回傳錯誤數。"""
     io.say("讀回核對：")
     errors = 0
-    for table, item, result in succeeded:
+    for table, item, _result in succeeded:
         key = _key(table, item)
         try:
             state = check_remote(table, item, client.fetch(table, key))
@@ -63,12 +61,9 @@ def readback(client: client_mod.WarehouseClient,
             continue
         if state == SAME:
             io.say(f"  [verified] {table} {key}")
-        elif table == "sessions" and state == MISSING and result != "created":
-            io.warn(f"  [warn] sessions {key} 讀回 404：可能已於前端軟刪除（同步不會復活）")
         else:
             errors += 1
-            code = "readback_session_mismatch" if table == "sessions" else READBACK_ERRORS[state]
-            io.warn(f"  [error] {table} {key}: {code}")
+            io.warn(f"  [error] {table} {key}: {READBACK_ERRORS[state]}")
     return errors
 
 

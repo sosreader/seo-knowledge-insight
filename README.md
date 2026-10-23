@@ -178,7 +178,8 @@ python scripts/run_pipeline.py --dry-run
 
 ### 報告同步（/sync-db）
 
-把 `output/` 的週報、會議準備與 sessions 經 warehouse-api 推到 vocus-warehouse（取代舊的 Supabase 上傳）。
+把 `output/` 的週報與會議準備經 warehouse-api 推到 vocus-warehouse（取代舊的 Supabase 上傳）。
+Sessions 已由 rag-api 管理（vocus-warehouse 為權威），不再從本機同步。
 週報與會議準備只送 `data/content-publication-review.json` 登記為 approved 且 SHA-256 相符的版本。
 憑證放 `~/.config/vocus-warehouse/sync.env`（寫入）與 `app-read.env`（讀回核對），不放 `.env`。
 

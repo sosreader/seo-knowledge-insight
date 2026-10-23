@@ -1,8 +1,12 @@
-# /sync-db — 本地報告與 sessions 推送到 vocus-warehouse
+# /sync-db — 本地報告推送到 vocus-warehouse
 
-把本機的週報、會議準備與 sessions 經 warehouse-api（Cloudflare Access 保護）寫進 vocus-warehouse 的
-`app_report`／`app_meeting_prep`／`app_session`。單向（local → 倉儲）。2026-10-22 起取代舊版
+把本機的週報與會議準備經 warehouse-api（Cloudflare Access 保護）寫進 vocus-warehouse 的
+`app_report`／`app_meeting_prep`。單向（local → 倉儲）。2026-10-22 起取代舊版
 「寫 Supabase」的 `api/scripts/sync-db.ts`。
+
+**Sessions 不再同步**（S3.2）：chat 上線後 `app_session` 以 rag-api 為權威，本機 `output/sessions/` 不再上傳。
+`upload`／`status` 指定 `--type sessions` 會回「sessions 已由 rag-api 管理（vocus-warehouse 為權威），不再從本機同步」並 exit 2；
+`--type all` 只含 reports、meeting_prep。
 
 ## 用法
 
@@ -15,8 +19,8 @@ make sync-db-import-ndjson-dry DIR=<匯出目錄>   # 歷史匯入試跑（零 H
 make sync-db-import-ndjson DIR=<匯出目錄>       # 歷史匯入（跳過發布閘門，見下方「歷史匯入模式」）
 
 # 只同步單一類型
-make sync-db TYPE=reports        # 或 meeting_prep、sessions
-.venv/bin/python scripts/sync_db.py upload --type sessions --no-readback
+make sync-db TYPE=reports        # 或 meeting_prep
+.venv/bin/python scripts/sync_db.py upload --type meeting_prep --no-readback
 ```
 
 exit code：`0` 成功；`1` 閘門中止、HTTP 失敗或逐筆核對失敗；`2` 參數、憑證或匯出檔設定錯誤。
@@ -27,7 +31,6 @@ exit code：`0` 成功；`1` 閘門中止、HTTP 失敗或逐筆核對失敗；`
 |------|---------|---------|---------|----|
 | Reports | `output/report_*.md` | `POST /internal/sync/reports` | `GET /internal/app/reports/{date_key}` | `date_key` |
 | Meeting-Prep | `output/meeting_prep_*_<hash8>.md` | `POST /internal/sync/meeting_prep` | `GET /internal/app/meeting-prep/{date_key}` | `date_key` |
-| Sessions | `output/sessions/*.json` | `POST /internal/sync/sessions` | `GET /internal/app/sessions/{id}` | UUID `id` |
 
 Host 預設 `https://warehouse-api.vocus.cc`（`--base-url` 可改，只收 https）。每批 ≤50 筆且 body ≤2 MB，
 超過自動切批；單筆就超過 2 MB 時整批中止、不送任何請求。伺服器逐筆回 `created`／`updated`／`skipped`，
@@ -57,28 +60,30 @@ API 契約見 vocus-warehouse `docs/sync-api.md`。
 | 帳冊缺檔、破損、格式不合 | 整批中止（fail closed） |
 
 `--force` 只影響「遠端 hash 相同要不要覆寫」，不能略過閘門。新版本上傳前必須重新審核，把檔名與
-`shasum -a 256 output/<檔名>` 登記進帳冊。Sessions 沿用舊行為，不走閘門。
+`shasum -a 256 output/<檔名>` 登記進帳冊。
 
 ## content_hash 演算法
 
 - reports／meeting_prep：`sha256:` ＋ 檔案 UTF-8 位元組的 SHA-256 hex（與帳冊 `sha256` 同值）。
-- sessions：`sha256:` ＋ `{"title", "messages"}` 以 `sort_keys=True`、`separators=(",", ":")`、
-  `ensure_ascii=False` 序列化後 UTF-8 的 SHA-256 hex（不送也不納入 metadata，同舊版）。
+- sessions（僅歷史匯入使用）：`sha256:` ＋ `{"title", "messages"}` 以 `sort_keys=True`、`separators=(",", ":")`、
+  `ensure_ascii=False` 序列化後 UTF-8 的 SHA-256 hex（不納入 metadata）。
 
 ## 歷史匯入模式（`--from-ndjson`）
 
-一次性把 Supabase 匯出的 `reports.ndjson.gz`、`meeting_prep.ndjson.gz`、`sessions.ndjson.gz`（連同 `manifest.json`）
+一次性把 Supabase 匯出的 `reports.ndjson.gz`、`meeting_prep.ndjson.gz`（連同 `manifest.json`；sessions 的 `sessions.ndjson.gz` 需明示 `--type sessions` 才讀）
 搬進 vocus-warehouse。用法：
 
 ```bash
 make sync-db-import-ndjson-dry DIR=~/Documents/seo-knowledge-insight-backups/2026-10-22/supabase-app-tables
 make sync-db-import-ndjson DIR=...                  # 遠端已有且內容不同的列不覆寫，標紅列出並 exit 1
-make sync-db-import-ndjson DIR=... TYPE=sessions    # 只匯單一表
+make sync-db-import-ndjson DIR=... TYPE=reports     # 只匯單一表
+make sync-db-import-ndjson DIR=... TYPE=sessions    # sessions 必須明示（見下方警告）
 .venv/bin/python scripts/sync_db.py upload --from-ndjson DIR --force   # 確認以匯出檔為準後，覆寫內容不同的列
 ```
 
 | 項目 | 行為 |
 |------|------|
+| 預設範圍 | `--type all`（預設）只含 reports、meeting_prep，**不含 sessions**，也不要求匯出目錄有 `sessions.ndjson.gz`。明示 `--type sessions` 才匯 sessions，並輸出警告「匯入 sessions 會與 rag-api 寫入衝突，僅限初次匯入」；rag-api 上線後不應再跑 |
 | 發布閘門 | **跳過**（歷史列沒有帳冊，`approved_version` 不送，為 NULL）；輸出開頭固定印「歷史匯入模式，未經發布閘門」 |
 | 去重 | 先用讀取路由查遠端同鍵：內容相同 → 不送（`[skipped]`）；不同 → 不送、標紅 `[conflict]`、exit 1；`--force` 才覆寫（標紅 `[overwrite]`）。不直接送讓 endpoint 判斷，因為 hash 不同時 endpoint 會直接覆寫既有列（含 S2.2 已登記的 approved_version） |
 | 切批 | 每批 ≤50 筆且序列化後 ≤2 MB（依位元組）；單列 >2 MB 時列出全部超大的鍵並整批中止，零 HTTP |
