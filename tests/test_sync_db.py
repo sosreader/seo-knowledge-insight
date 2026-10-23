@@ -190,13 +190,6 @@ class TestGate:
         assert code == 1 and wh.requests == []
         assert "review_manifest_unavailable" in text and "secret-ish" not in text
 
-    def test_sessions_do_not_need_manifest(self, repo, wh):
-        repo.session(UUID_A)
-        (repo.root / "data" / "content-publication-review.json").unlink(missing_ok=True)
-        code, _ = run(repo, wh, "upload", "--type", "sessions")
-        assert code == 0
-        assert len(wh.posts) == 1 and wh.posts[0].url.path == "/internal/sync/sessions"
-
     def test_force_still_gated_and_sets_query(self, repo, wh):
         repo.doc(REPORT, "ok")
         repo.doc("report_20260904_9d41f7b2.md", "h", status="historical")
@@ -227,7 +220,8 @@ class TestDryRun:
         code, text = run(repo, wh, "upload", "--dry-run")
         assert code == 0
         assert wh.requests == []
-        assert "20261012_900a1937" in text and "20261009_0fc3dcbc" in text and UUID_A in text
+        assert "20261012_900a1937" in text and "20261009_0fc3dcbc" in text
+        assert UUID_A not in text and "== sessions ==" not in text
         assert "dry-run" in text
 
     def test_non_utf8_approved_file_blocks(self, repo, wh):
@@ -255,15 +249,16 @@ class TestDryRun:
 
 
 class TestBatching:
-    def test_sessions_split_into_batches_of_50(self, repo, wh):
-        ids = [f"0b3c8f4e-1d2a-4b5c-9d8e-{i:012x}" for i in range(120)]
-        for sid in ids:
-            repo.session(sid)
-        code, _ = run(repo, wh, "upload", "--type", "sessions", "--no-readback")
+    def test_documents_split_into_batches_of_50(self, repo, wh):
+        keys = [f"20261001_{i:08x}" for i in range(120)]
+        for key in keys:
+            name = f"report_{key}.md"
+            repo.doc(name, key)
+        code, _ = run(repo, wh, "upload", "--type", "reports", "--no-readback")
         assert code == 0
         assert [len(json.loads(r.content)) for r in wh.posts] == [50, 50, 20]
-        posted = [i["id"] for r in wh.posts for i in json.loads(r.content)]
-        assert sorted(posted) == sorted(ids)
+        posted = [i["date_key"] for r in wh.posts for i in json.loads(r.content)]
+        assert sorted(posted) == sorted(keys)
 
     def test_plan_batches_respects_byte_limit(self):
         items = [{"k": "x" * 600} for _ in range(5)]
@@ -411,7 +406,7 @@ class TestResponse:
 
     def test_one_failing_batch_does_not_hide_other_types(self, repo, wh):
         repo.doc(REPORT, "r")
-        repo.session(UUID_A)
+        repo.doc(PREP, "p")
 
         def override(req):
             if req.url.path.endswith("/reports"):
@@ -421,7 +416,7 @@ class TestResponse:
         code, text = run(repo, wh, "upload")
         assert code == 1
         assert "db_unavailable" in text
-        assert any(r.url.path.endswith("/sessions") for r in wh.posts)
+        assert any(r.url.path.endswith("/meeting_prep") for r in wh.posts)
 
 
 # ── 讀回核對 ─────────────────────────────────────────────
@@ -456,30 +451,6 @@ class TestReadback:
         wh.get_override = lambda req: httpx.Response(404, json={"error": "Report not found"})
         code, text = run(repo, wh, "upload", "--type", "reports")
         assert code == 1 and "readback_missing" in text
-
-    def test_session_readback_checks_title_and_message_count(self, repo, wh):
-        repo.session(UUID_A, title="t", messages=[{"role": "user", "content": "a"}])
-
-        def wrong(req):
-            if "/internal/app/sessions/" in req.url.path:
-                return httpx.Response(200, json={"data": {"id": UUID_A, "title": "t", "messages": []}})
-            return None
-        wh.get_override = wrong
-        code, text = run(repo, wh, "upload", "--type", "sessions")
-        assert code == 1 and "readback_session_mismatch" in text
-
-    def test_session_soft_deleted_is_warning_only(self, repo, wh):
-        repo.session(UUID_A)
-        wh.store[("sessions", UUID_A)] = {"id": UUID_A}  # 既有列 → POST 回 updated
-        wh.get_override = lambda req: httpx.Response(404, json={"error": "Session not found"})
-        code, text = run(repo, wh, "upload", "--type", "sessions")
-        assert code == 0 and "軟刪除" in text and "[updated]" in text
-
-    def test_created_session_missing_on_readback_is_error(self, repo, wh):
-        repo.session(UUID_A)
-        wh.get_override = lambda req: httpx.Response(404, json={"error": "Session not found"})
-        code, text = run(repo, wh, "upload", "--type", "sessions")
-        assert code == 1 and "readback_session_mismatch" in text
 
     def test_readback_http_error_is_error(self, repo, wh):
         repo.doc(REPORT, "r")
@@ -554,7 +525,8 @@ class TestStatus:
         repo.doc(REPORT, "r")
         repo.doc(PREP, "p")
         repo.doc("report_20260904_9d41f7b2.md", "h", status="historical")
-        repo.session(UUID_A)
+        repo.doc("report_20261005_0a1b2c3d.md", "m")  # 帳冊核准但遠端沒有
+        repo.session(UUID_A)  # 本機 sessions 不列入、不查遠端
         wh.store[("reports", "20261012_900a1937")] = {"date_key": "20261012_900a1937", "content": "r"}
         wh.store[("meeting_prep", "20261009_0fc3dcbc")] = {"date_key": "20261009_0fc3dcbc", "content": "OLD"}
         code, text = run(repo, wh, "status")
@@ -564,6 +536,8 @@ class TestStatus:
         assert "historical" in text
         assert all(r.headers["CF-Access-Client-Id"] == READ_ID for r in wh.gets)
         assert not any("9d41f7b2" in r.url.path for r in wh.gets)
+        assert "sessions" not in text and UUID_A not in text
+        assert not any("/sessions/" in r.url.path for r in wh.gets)
 
     def test_without_read_credentials_only_local(self, repo, wh):
         repo.doc(REPORT, "r")
@@ -593,11 +567,25 @@ class TestStatus:
 
 
 class TestCli:
-    def test_type_sessions_only(self, repo, wh):
+    @pytest.mark.parametrize("args", [
+        ("upload", "--type", "sessions"),
+        ("upload", "--type", "sessions", "--dry-run"),
+        ("upload", "--type", "sessions", "--force", "--no-readback"),
+        ("status", "--type", "sessions"),
+    ])
+    def test_type_sessions_is_rejected_with_clear_error(self, repo, wh, args):
+        repo.session(UUID_A)
+        code, text = run(repo, wh, *args)
+        assert code == 2
+        assert "sessions 已由 rag-api 管理（vocus-warehouse 為權威），不再從本機同步" in text
+        assert wh.requests == []
+
+    def test_type_all_never_includes_sessions(self, repo, wh):
         repo.doc(REPORT, "r")
         repo.session(UUID_A)
-        code, _ = run(repo, wh, "upload", "--type", "sessions")
-        assert code == 0 and {r.url.path for r in wh.posts} == {"/internal/sync/sessions"}
+        code, _ = run(repo, wh, "upload", "--type", "all")
+        assert code == 0 and {r.url.path for r in wh.posts} == {"/internal/sync/reports"}
+        assert not any("/sessions" in r.url.path for r in wh.requests)
 
     def test_meeting_prep_dash_alias(self, repo, wh):
         repo.doc(PREP, "p")

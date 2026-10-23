@@ -1,15 +1,18 @@
-"""sync_db.py — /sync-db：把本機 reports／meeting_prep／sessions 經 warehouse-api 推到 vocus-warehouse。
+"""sync_db.py — /sync-db：把本機 reports／meeting_prep 經 warehouse-api 推到 vocus-warehouse。
 
 取代 api/scripts/sync-db.ts（寫 Supabase）。資料流：
-  output/report_*.md、output/meeting_prep_*.md ─(發布閘門)─┐
-  output/sessions/*.json ──────────────────────────────────┴─> POST https://warehouse-api.vocus.cc/internal/sync/{table}
+  output/report_*.md、output/meeting_prep_*.md ─(發布閘門)─> POST https://warehouse-api.vocus.cc/internal/sync/{table}
   寫入後以 GET /internal/app/{route}/{key}（app-read token）讀回核對。
 
+sessions 不再從本機同步：chat 上線後 vocus-warehouse 的 app_session 以 rag-api 為權威（S3.2）。
+`upload`／`status` 指定 `--type sessions` 會直接 exit 2；只有 `--from-ndjson` 歷史匯入可明示 `--type sessions`。
+
 用法：
-  python scripts/sync_db.py status [--type T]
-  python scripts/sync_db.py upload [--type reports|meeting_prep|sessions|all] [--dry-run] [--force] [--no-readback]
-  python scripts/sync_db.py upload --from-ndjson <dir> [--type ...] [--dry-run] [--force]
-      歷史匯入：Supabase 匯出的三表 NDJSON（*.ndjson.gz）→ warehouse-api；跳過發布閘門，詳見 sync_db_import.py
+  python scripts/sync_db.py status [--type reports|meeting_prep|all]
+  python scripts/sync_db.py upload [--type reports|meeting_prep|all] [--dry-run] [--force] [--no-readback]
+  python scripts/sync_db.py upload --from-ndjson <dir> [--type reports|meeting_prep|sessions|all] [--dry-run] [--force]
+      歷史匯入：Supabase 匯出的 NDJSON（*.ndjson.gz）→ warehouse-api；跳過發布閘門，詳見 sync_db_import.py。
+      預設 all 只含 reports、meeting_prep；sessions 需明示 --type sessions（會與 rag-api 寫入衝突，僅限初次匯入）
   共同選項：--base-url（預設 https://warehouse-api.vocus.cc，只收 https）
 
 exit code：0 成功；1 閘門中止／HTTP 失敗／逐筆核對失敗；2 參數或憑證設定錯誤。
@@ -31,8 +34,11 @@ import sync_db_sources as sources
 from sync_db_import import EXIT_CONFIG, EXIT_FAIL, EXIT_OK
 from sync_db_readback import check_remote, print_remote_status, readback
 
-TABLES = ("reports", "meeting_prep", "sessions")
-DOCUMENT_TABLES = frozenset({"reports", "meeting_prep"})
+TABLES = ("reports", "meeting_prep")
+SESSIONS = "sessions"
+DOCUMENT_TABLES = frozenset(TABLES)
+SESSIONS_MANAGED_ERROR = "sessions 已由 rag-api 管理（vocus-warehouse 為權威），不再從本機同步"
+SESSIONS_IMPORT_WARNING = "[警告] 匯入 sessions 會與 rag-api 寫入衝突，僅限初次匯入"
 TYPE_ALIASES = {"meeting-prep": "meeting_prep"}
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -60,9 +66,9 @@ class Io:
 
 def _parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--type", default="all", choices=[*TABLES, "all", *TYPE_ALIASES])
+    common.add_argument("--type", default="all", choices=[*TABLES, SESSIONS, "all", *TYPE_ALIASES])
     common.add_argument("--base-url", default=client_mod.DEFAULT_BASE_URL)
-    parser = argparse.ArgumentParser(prog="sync_db.py", description="本機報告與 sessions 推送到 vocus-warehouse")
+    parser = argparse.ArgumentParser(prog="sync_db.py", description="本機報告推送到 vocus-warehouse（sessions 由 rag-api 管理）")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status", parents=[common], help="列本機候選、帳冊狀態、遠端是否已有")
     upload = sub.add_parser("upload", parents=[common], help="上傳（只送帳冊核准的版本）")
@@ -101,12 +107,6 @@ def _document_plan(root: Path, table: str, entries: tuple[gate.ReviewEntry, ...]
     return TablePlan(table, tuple(items), tuple(excluded), tuple(blocked), missing)
 
 
-def _session_plan(root: Path) -> TablePlan:
-    sessions, skipped = sources.list_sessions(root / "output" / "sessions")
-    items = tuple(sources.build_session_item(s) for s in sessions)
-    return TablePlan("sessions", items, skipped, (), ())
-
-
 def _build_plans(root: Path, tables: tuple[str, ...], io: Io) -> tuple[TablePlan, ...] | None:
     entries: tuple[gate.ReviewEntry, ...] = ()
     if DOCUMENT_TABLES.intersection(tables):
@@ -115,7 +115,7 @@ def _build_plans(root: Path, tables: tuple[str, ...], io: Io) -> tuple[TablePlan
         except gate.PublicationBlocked as exc:
             io.warn(f"[閘門] 發布帳冊無法使用：{exc.reason}（{gate.MANIFEST_RELPATH}），不上傳任何報告")
             return None
-    return tuple(_session_plan(root) if t == "sessions" else _document_plan(root, t, entries) for t in tables)
+    return tuple(_document_plan(root, t, entries) for t in tables)
 
 
 def _key(table: str, item: Mapping[str, Any]) -> str:
@@ -199,6 +199,8 @@ def _upload(args, root: Path, http_factory, environ: Mapping[str, str], io: Io) 
         if args.no_readback:
             io.warn("--from-ndjson 一律做去重預檢與讀回對帳，不支援 --no-readback")
             return EXIT_CONFIG
+        if SESSIONS in tables:
+            io.warn(SESSIONS_IMPORT_WARNING)
         return history_import.run_import(args, http_factory, environ, io, tables)
     plans, code = _plan_or_exit(root, tables, io)
     if plans is None or code != EXIT_OK:
@@ -252,6 +254,9 @@ def main(argv: list[str] | None = None, *, root: Path | None = None, http: httpx
     io = Io(out or sys.stdout, err or sys.stderr)
     if not client_mod.is_https(args.base_url):
         io.warn(f"--base-url 必須是 https：{args.base_url}")
+        return EXIT_CONFIG
+    if _selected_tables(args.type) == (SESSIONS,) and not getattr(args, "from_ndjson", None):
+        io.warn(SESSIONS_MANAGED_ERROR)
         return EXIT_CONFIG
     env = client_mod.default_environ() if environ is None else environ
     http_factory = (lambda: http) if http is not None else client_mod.build_http_client

@@ -360,7 +360,7 @@ quality-gate: ## ETL 品質門檻檢查（hit_rate/mrr/qa_count）
 # ── Supabase 同步 ────────────────────────────────────
 
 .PHONY: sync-db
-sync-db: ## 經 warehouse-api 上傳 reports + meeting_prep + sessions 到 vocus-warehouse（只送帳冊核准版本；hash 相同略過）
+sync-db: ## 經 warehouse-api 上傳 reports + meeting_prep 到 vocus-warehouse（只送帳冊核准版本；hash 相同略過；sessions 由 rag-api 管理，不再同步）
 	$(PYTHON) scripts/sync_db.py upload --type $(or $(TYPE),all)
 
 .PHONY: sync-db-status
@@ -376,7 +376,7 @@ sync-db-dry: ## 同步試跑（零 HTTP，不需憑證）
 	$(PYTHON) scripts/sync_db.py upload --dry-run --type $(or $(TYPE),all)
 
 .PHONY: sync-db-import-ndjson
-sync-db-import-ndjson: ## 歷史匯入：Supabase 匯出的 *.ndjson.gz → vocus-warehouse（跳過發布閘門；DIR=匯出目錄；先查後送、遠端內容不同不覆寫、結尾讀回對帳）
+sync-db-import-ndjson: ## 歷史匯入：Supabase 匯出的 *.ndjson.gz → vocus-warehouse（跳過發布閘門；DIR=匯出目錄；預設只含 reports、meeting_prep，sessions 需 TYPE=sessions 明示；先查後送、遠端內容不同不覆寫、結尾讀回對帳）
 	$(PYTHON) scripts/sync_db.py upload --from-ndjson $(or $(DIR),$(error DIR=<匯出目錄> 必填)) --type $(or $(TYPE),all)
 
 .PHONY: sync-db-import-ndjson-dry
