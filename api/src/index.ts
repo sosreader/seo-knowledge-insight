@@ -22,6 +22,7 @@ import { synonymsRoute } from "./routes/synonyms.js";
 import { meetingPrepRoute } from "./routes/meeting-prep.js";
 import { buildOpenAPISpec } from "./openapi.js";
 import { qaStoreReady, synonymsReady } from "./middleware/qa-ready.js";
+import { requireLlm } from "./middleware/feature-gates.js";
 import {
   ensureQaStoreLoaded,
   ensureSynonymsLoaded,
@@ -93,6 +94,12 @@ api.use("/synonyms", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/synonyms/*", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/meeting-prep", rateLimit(config.RATE_LIMIT_DEFAULT));
 api.use("/meeting-prep/*", rateLimit(config.RATE_LIMIT_DEFAULT));
+
+// LLM 類路由：線上未設 OPENAI_API_KEY／LLM_BASE_URL → 501 llm_disabled。
+// 排在 rate limit 之後（額度照算）、qaStoreReady 之前（功能沒開就不等 QA 載入）。
+api.use("/chat", requireLlm);
+api.use("/chat/*", requireLlm);
+api.use("/sessions/:session_id/messages", requireLlm);
 
 // Store-ready middleware — 只掛在真正需要該 store 的掛載點，
 // 其餘 route（/reports、/pipeline、/meeting-prep、/feedback、/sessions 列表）

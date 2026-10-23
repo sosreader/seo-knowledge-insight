@@ -31,6 +31,11 @@ vi.mock("openai", () => {
   };
 });
 
+const mockLogUsage = vi.fn();
+vi.mock("../../src/utils/llm-usage-logger.js", () => ({
+  logLLMUsage: (...args: unknown[]) => mockLogUsage(...args),
+}));
+
 import { agentChat } from "../../src/agent/agent-loop.js";
 import type { AgentDeps } from "../../src/agent/types.js";
 
@@ -285,5 +290,34 @@ describe("agent-loop", () => {
     expect(result.metadata.model).toBe("gpt-5.2");
     expect(result.metadata.mode).toBe("agent");
     expect(typeof result.metadata.duration_ms).toBe("number");
+  });
+});
+
+describe("agentChat app_llm_usage wiring", () => {
+  beforeEach(() => {
+    mockCreate.mockReset();
+    mockLogUsage.mockReset();
+  });
+
+  it("logs one usage row with the summed tokens when the LLM was called", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ finish_reason: "stop", message: { content: "ok", tool_calls: null } }],
+      usage: { prompt_tokens: 100, completion_tokens: 50 },
+      model: "gpt-5.2",
+    });
+    await agentChat("什麼是 SEO？", null, mockDeps());
+    expect(mockLogUsage).toHaveBeenCalledTimes(1);
+    expect(mockLogUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: "/api/v1/chat:agent", model: "gpt-5.2", input_tokens: 100, output_tokens: 50 }),
+    );
+  });
+
+  it("does not log when no tokens were consumed", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ finish_reason: "stop", message: { content: "ok", tool_calls: null } }],
+      model: "gpt-5.2",
+    });
+    await agentChat("什麼是 SEO？", null, mockDeps());
+    expect(mockLogUsage).not.toHaveBeenCalled();
   });
 });

@@ -32,6 +32,7 @@ import { listLLMUsageSince } from "../store/pg-llm-usage-store.js";
 import { storeFailure } from "../middleware/error-handler.js";
 import { snapshotStore } from "../store/store-registry.js";
 import type { SourceDocEntry } from "../schemas/pipeline.js";
+import { applyRunLocallyGates } from "./pipeline-gates.js";
 import {
   UUID_RE,
   SAFE_FILENAME_RE,
@@ -84,6 +85,9 @@ function buildSourceDocsFromStore(): readonly SourceDocEntry[] {
 // --- Route ---
 
 export const pipelineRoute = new Hono();
+
+// rag-api 不執行的觸發／本機檔案路由 → 501 run_locally（須在 handler 之前註冊）
+applyRunLocallyGates(pipelineRoute);
 
 // GET /status
 pipelineRoute.get("/status", async (c) => {
@@ -146,8 +150,8 @@ pipelineRoute.get("/source-docs", async (c) => {
 
   const { source_type, source_collection, keyword, is_processed, limit, offset } = parsed.data;
 
-  let docs = buildSourceDocs();
-  // Fallback: derive from qaStore when file-system returns empty (Lambda)
+  // rag-api（PG）沒有 raw_data/：一律從 app_qa_item 反推；本機檔案為空時同樣退回 qaStore
+  let docs = hasPg() ? buildSourceDocsFromStore() : buildSourceDocs();
   if (docs.length === 0 && qaStore.count > 0) {
     docs = buildSourceDocsFromStore();
   }
@@ -468,10 +472,13 @@ pipelineRoute.post("/metrics/save", async (c) => {
   if (snapshotStore) {
     try {
       await snapshotStore.save(snapshot);
+      // 寫入後讀回：回應以 DB 實際存下的值為準
+      const stored = await snapshotStore.getById(id);
+      if (!stored) return c.json(fail("Failed to save snapshot"), 500);
+      return c.json(ok({ id: stored.id, created_at: stored.created_at, label: stored.label }), 201);
     } catch (err) {
       return storeFailure(c, err) ?? c.json(fail("Failed to save snapshot"), 500);
     }
-    return c.json(ok({ id, created_at, label }), 201);
   }
 
   const dir = paths.metricsSnapshotsDir;

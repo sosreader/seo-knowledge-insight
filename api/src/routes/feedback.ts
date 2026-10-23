@@ -15,13 +15,16 @@ feedbackRoute.post("/", async (c) => {
 
   const { query, qa_id, feedback, feedback_category, top_score } = parsed.data;
 
-  recordFeedback({ query, qa_id, feedback, feedback_category, top_score });
+  // PG 模式 await 寫入並以 RETURNING 讀回；DB 不可用 → error handler 回 503／504（不再靜默吞掉）
+  const saved = await recordFeedback({ query, qa_id, feedback, feedback_category, top_score });
 
   return c.json(
     ok({
       recorded: true,
-      qa_id,
-      feedback,
+      id: saved.id,
+      created_at: saved.created_at,
+      qa_id: saved.qa_id,
+      feedback: saved.feedback,
       feedback_category,
     }),
   );

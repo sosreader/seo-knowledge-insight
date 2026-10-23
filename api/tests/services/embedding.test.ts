@@ -32,7 +32,13 @@ vi.mock("../../src/utils/observability.js", () => ({
   observe: (_name: string, fn: Function) => fn,
 }));
 
+const mockLogUsage = vi.fn();
+vi.mock("../../src/utils/llm-usage-logger.js", () => ({
+  logLLMUsage: (...args: unknown[]) => mockLogUsage(...args),
+}));
+
 import { getEmbedding } from "../../src/services/embedding.js";
+import { config } from "../../src/config.js";
 
 describe("getEmbedding", () => {
   beforeEach(() => {
@@ -65,5 +71,42 @@ describe("getEmbedding", () => {
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ input: "test" }),
     );
+  });
+
+  it("logs app_llm_usage for the embedding call", async () => {
+    mockCreate.mockResolvedValueOnce({
+      data: [{ embedding: [1, 0, 0] }],
+      model: "text-embedding-3-small",
+      usage: { prompt_tokens: 7 },
+    });
+    await getEmbedding("LCP");
+    expect(mockLogUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: "embedding", model: "text-embedding-3-small", input_tokens: 7, output_tokens: 0 }),
+    );
+  });
+
+  it("uses LLM_EMBEDDING_MODEL when set (local Ollama)", async () => {
+    const mutable = config as Record<string, unknown>;
+    mutable.LLM_EMBEDDING_MODEL = "nomic-embed-text";
+    mockCreate.mockResolvedValueOnce({ data: [{ embedding: [1, 0] }] });
+    try {
+      await getEmbedding("LCP");
+      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ model: "nomic-embed-text" }));
+    } finally {
+      mutable.LLM_EMBEDDING_MODEL = "";
+    }
+  });
+
+  it("throws llm_disabled without calling the API when no LLM is configured", async () => {
+    const mutable = config as Record<string, unknown>;
+    const original = mutable.OPENAI_API_KEY;
+    mutable.OPENAI_API_KEY = "";
+    try {
+      await expect(getEmbedding("LCP")).rejects.toMatchObject({ code: "llm_disabled", status: 501 });
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockLogUsage).not.toHaveBeenCalled();
+    } finally {
+      mutable.OPENAI_API_KEY = original;
+    }
   });
 });

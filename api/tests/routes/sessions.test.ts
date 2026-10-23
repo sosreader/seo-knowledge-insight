@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock config — no OpenAI key by default
 vi.mock("../../src/config.js", () => ({
@@ -160,6 +160,34 @@ function buildApp() {
   return app;
 }
 
+/** 測試區塊內暫時給 LLM key（401／403／429 fallback 與驗證錯誤要先通過 llm_disabled 閘門）。 */
+function withLlmKey(): void {
+  let original: unknown;
+  beforeEach(() => {
+    original = config.OPENAI_API_KEY;
+    (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+  });
+  afterEach(() => {
+    (config as Record<string, unknown>).OPENAI_API_KEY = original;
+  });
+}
+
+async function createSessionAndSend(app: Hono, message: string) {
+  const createRes = await app.request("/api/v1/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Test" }),
+  });
+  const { data: session } = await createRes.json();
+  const res = await app.request(`/api/v1/sessions/${session.id}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+  const detail = await (await app.request(`/api/v1/sessions/${session.id}`)).json();
+  return { res, messages: detail.data.messages as Array<Record<string, any>> };
+}
+
 describe("Sessions API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -204,66 +232,41 @@ describe("Sessions API", () => {
     });
   });
 
-  describe("POST /:session_id/messages — context-only mode", () => {
-    it("returns context-only when no OpenAI key", async () => {
-      const app = buildApp();
+  describe("POST /:session_id/messages — LLM disabled", () => {
+    it("returns 501 llm_disabled and persists nothing when no OpenAI key and no LLM_BASE_URL", async () => {
+      const { res, messages } = await createSessionAndSend(buildApp(), "What is SEO?");
+      expect(res.status).toBe(501);
+      const body = await res.json();
+      expect(body.error).toBe("llm_disabled");
+      expect(messages).toHaveLength(0);
+      expect(mockKeywordSearch).not.toHaveBeenCalled();
+      expect(mockRagChat).not.toHaveBeenCalled();
+    });
+  });
 
-      // Create session first
-      const createRes = await app.request("/api/v1/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "Test" }),
-      });
-      const { data: session } = await createRes.json();
+  describe("POST /:session_id/messages — context-only fallback (LLM 429)", () => {
+    withLlmKey();
 
-      // Send message
-      const res = await app.request(
-        `/api/v1/sessions/${session.id}/messages`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: "What is SEO?" }),
-        },
-      );
-
+    it("returns context-only and saves an empty assistant message", async () => {
+      mockRagChat.mockRejectedValueOnce(Object.assign(new Error("rate limited"), { status: 429 }));
+      const { res, messages } = await createSessionAndSend(buildApp(), "What is SEO?");
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.data.mode).toBe("context-only");
       expect(body.data.answer).toBeNull();
-      expect(body.data.sources).toHaveLength(1);
       expect(body.data.sources[0].question).toBe("What is SEO?");
       expect(mockKeywordSearch).toHaveBeenCalledWith("What is SEO?", 5);
-      expect(mockRagChat).not.toHaveBeenCalled();
+      expect(messages).toHaveLength(2);
+      expect(messages[0]!.content).toBe("What is SEO?");
+      expect(messages[1]!.content).toBe(""); // empty string, not null
     });
 
-    it("saves empty content for assistant message in context-only mode", async () => {
+    it("rethrows non-quota LLM errors", async () => {
+      mockRagChat.mockRejectedValueOnce(Object.assign(new Error("boom"), { status: 500 }));
       const app = buildApp();
-
-      const createRes = await app.request("/api/v1/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "Test" }),
-      });
-      const { data: session } = await createRes.json();
-
-      await app.request(`/api/v1/sessions/${session.id}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "What is SEO?" }),
-      });
-
-      // Check session detail has correct messages
-      const detailRes = await app.request(
-        `/api/v1/sessions/${session.id}`,
-      );
-      const detail = await detailRes.json();
-      const msgs = detail.data.messages;
-
-      expect(msgs).toHaveLength(2);
-      expect(msgs[0].role).toBe("user");
-      expect(msgs[0].content).toBe("What is SEO?");
-      expect(msgs[1].role).toBe("assistant");
-      expect(msgs[1].content).toBe(""); // empty string, not null
+      app.onError((_err, c) => c.json({ error: "x" }, 500));
+      const { res } = await createSessionAndSend(app, "What is SEO?");
+      expect(res.status).toBe(500);
     });
   });
 
@@ -303,35 +306,21 @@ describe("Sessions API", () => {
   });
 
   describe("POST /:session_id/messages — metadata", () => {
-    it("saves metadata on assistant message in context-only mode", async () => {
-      const app = buildApp();
-
-      const createRes = await app.request("/api/v1/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "Meta Test" }),
-      });
-      const { data: session } = await createRes.json();
-
-      await app.request(`/api/v1/sessions/${session.id}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "What is SEO?" }),
-      });
-
-      const detailRes = await app.request(`/api/v1/sessions/${session.id}`);
-      const detail = await detailRes.json();
-      const msgs = detail.data.messages;
-
-      expect(msgs).toHaveLength(2);
-      // user message has no metadata
-      expect(msgs[0].metadata).toBeUndefined();
-      // assistant message has metadata
-      expect(msgs[1].metadata).toBeDefined();
-      expect(msgs[1].metadata.provider).toBe("local");
-      expect(msgs[1].metadata.mode).toBe("context-only");
-      expect(msgs[1].metadata.retrieval_count).toBe(1);
-      expect(typeof msgs[1].metadata.duration_ms).toBe("number");
+    it("saves metadata on assistant message in context-only fallback", async () => {
+      const original = config.OPENAI_API_KEY;
+      (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+      mockRagChat.mockRejectedValueOnce(Object.assign(new Error("unauthorized"), { status: 401 }));
+      try {
+        const { messages: msgs } = await createSessionAndSend(buildApp(), "What is SEO?");
+        expect(msgs).toHaveLength(2);
+        expect(msgs[0]!.metadata).toBeUndefined();
+        expect(msgs[1]!.metadata.provider).toBe("local");
+        expect(msgs[1]!.metadata.mode).toBe("context-only");
+        expect(msgs[1]!.metadata.retrieval_count).toBe(1);
+        expect(typeof msgs[1]!.metadata.duration_ms).toBe("number");
+      } finally {
+        (config as Record<string, unknown>).OPENAI_API_KEY = original;
+      }
     });
 
     it("saves metadata on assistant message in full mode", async () => {
@@ -372,6 +361,8 @@ describe("Sessions API", () => {
   });
 
   describe("POST /:session_id/messages — error handling", () => {
+    withLlmKey();
+
     it("returns 400 for invalid session ID format", async () => {
       const app = buildApp();
       const res = await app.request(
@@ -484,6 +475,7 @@ describe("Sessions API", () => {
     });
 
     it("returns 400 for invalid mode value", async () => {
+      (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
       const app = buildApp();
       const createRes = await app.request("/api/v1/sessions", {
         method: "POST",
@@ -497,6 +489,7 @@ describe("Sessions API", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: "What is SEO?", mode: "invalid" }),
       });
+      (config as Record<string, unknown>).OPENAI_API_KEY = "";
       expect(res.status).toBe(400);
     });
   });

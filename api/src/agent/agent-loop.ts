@@ -6,7 +6,7 @@
 
 import OpenAI from "openai";
 import { reasoningOptions } from "../utils/model-options.js";
-import { config } from "../config.js";
+import { createLlmClient, llmChatModel, llmEmbeddingModel } from "../services/llm-client.js";
 import { getOpenAITools, type ToolName } from "./tool-definitions.js";
 
 const ALLOWED_TOOLS: ReadonlySet<string> = new Set<ToolName>([
@@ -19,6 +19,7 @@ import { executeTool } from "./tool-executor.js";
 import type { AgentConfig, AgentDeps, AgentResponse, ToolResult } from "./types.js";
 import { itemToSource, type SourceItem, type MessageMetadata } from "../schemas/chat.js";
 import { observe } from "../utils/observability.js";
+import { logLLMUsage } from "../utils/llm-usage-logger.js";
 
 const SYSTEM_PROMPT = `你是一位資深 SEO 顧問，可以使用工具搜尋 SEO 知識庫來回答問題。
 
@@ -38,14 +39,14 @@ const SYSTEM_PROMPT = `你是一位資深 SEO 顧問，可以使用工具搜尋 
 const DEFAULT_CONFIG: AgentConfig = {
   maxTurns: 5,
   timeoutMs: 90_000,
-  model: config.CHAT_MODEL,
+  model: llmChatModel(),
   temperature: 0.3,
 };
 
 let openaiClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: config.OPENAI_API_KEY });
+    openaiClient = createLlmClient();
   }
   return openaiClient;
 }
@@ -63,7 +64,7 @@ function buildMetadata(
     model,
     provider: "openai",
     mode: "agent",
-    embedding_model: config.OPENAI_EMBEDDING_MODEL,
+    embedding_model: llmEmbeddingModel(),
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     total_tokens: inputTokens + outputTokens,
@@ -121,7 +122,7 @@ function collectSources(toolCalls: readonly ToolResult[]): readonly SourceItem[]
   return sources;
 }
 
-export async function agentChat(
+async function runAgentChat(
   message: string,
   history: ReadonlyArray<{ role: string; content: string }> | null,
   deps: AgentDeps,
@@ -273,6 +274,29 @@ export async function agentChat(
     mode: "agent",
     metadata: buildMetadata(finalModel, totalInputTokens, totalOutputTokens, startMs, sources.length, allToolCalls.length, turns),
   };
+}
+
+/** 有實際 LLM 呼叫（token > 0）才記 app_llm_usage；fire-and-forget。 */
+function logAgentUsage(result: AgentResponse): void {
+  const meta = result.metadata;
+  const input = meta.input_tokens ?? 0;
+  const output = meta.output_tokens ?? 0;
+  if (input + output === 0) return;
+  logLLMUsage({
+    endpoint: "/api/v1/chat:agent",
+    model: meta.model ?? llmChatModel(),
+    input_tokens: input,
+    output_tokens: output,
+    latency_ms: meta.duration_ms ?? 0,
+  });
+}
+
+export async function agentChat(
+  ...args: Parameters<typeof runAgentChat>
+): Promise<AgentResponse> {
+  const result = await runAgentChat(...args);
+  logAgentUsage(result);
+  return result;
 }
 
 /** Observed version — wraps agentChat as a Laminar span. */

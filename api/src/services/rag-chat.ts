@@ -7,6 +7,7 @@
 import OpenAI from "openai";
 import { reasoningOptions } from "../utils/model-options.js";
 import { config } from "../config.js";
+import { createLlmClient, llmChatModel, llmEmbeddingModel } from "./llm-client.js";
 import { getEmbedding } from "./embedding.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
 import { itemToSource, type ChatResponse, type MessageMetadata } from "../schemas/chat.js";
@@ -29,7 +30,7 @@ import {
 let openaiClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: config.OPENAI_API_KEY });
+    openaiClient = createLlmClient();
   }
   return openaiClient;
 }
@@ -98,8 +99,8 @@ export async function ragChat(
 
   // 5. Call GPT (max_completion_tokens for reasoning models like gpt-5.x)
   const resp = await getOpenAI().chat.completions.create({
-    model: config.CHAT_MODEL,
-    ...reasoningOptions(config.CHAT_MODEL),
+    model: llmChatModel(),
+    ...reasoningOptions(llmChatModel()),
     messages: messages as Array<{ role: "system" | "user" | "assistant"; content: string }>,
     temperature: 0.3,
     max_completion_tokens: 2000,
@@ -119,8 +120,8 @@ export async function ragChat(
 
   const usage = resp.usage;
   const metadata = buildMetadata({
-    model: resp.model ?? config.CHAT_MODEL,
-    embeddingModel: config.OPENAI_EMBEDDING_MODEL,
+    model: resp.model ?? llmChatModel(),
+    embeddingModel: llmEmbeddingModel(),
     inputTokens: usage?.prompt_tokens,
     outputTokens: usage?.completion_tokens,
     totalTokens: usage?.total_tokens,
@@ -138,7 +139,7 @@ export async function ragChat(
   // Log LLM usage (fire-and-forget)
   logLLMUsage({
     endpoint: "/api/v1/chat",
-    model: resp.model ?? config.CHAT_MODEL,
+    model: resp.model ?? llmChatModel(),
     input_tokens: usage?.prompt_tokens ?? 0,
     output_tokens: usage?.completion_tokens ?? 0,
     latency_ms: Date.now() - startMs,

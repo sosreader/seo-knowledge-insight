@@ -3,19 +3,21 @@
  */
 
 import { config } from "../config.js";
+import { isLlmEnabled } from "../services/llm-client.js";
 
 export type SearchMode = "hybrid" | "keyword";
 export type ChatMode = "rag" | "context-only" | "agent";
 export type RequestMode = "agent" | "rag";
 
+/** OpenAI 相容 LLM 可用（OPENAI_API_KEY 或 LLM_BASE_URL）。名稱沿用，語意見 services/llm-client.ts。 */
 export function hasOpenAI(): boolean {
-  return config.OPENAI_API_KEY.length > 0;
+  return isLlmEnabled();
 }
 
 export function isAgentEnabled(): boolean {
   if (config.AGENT_ENABLED === true) return true;
   if (config.AGENT_ENABLED === false) return false;
-  // "auto": enable when OpenAI key is available
+  // "auto": enable when an OpenAI-compatible LLM is available
   return hasOpenAI();
 }
 

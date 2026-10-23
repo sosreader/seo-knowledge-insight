@@ -8,6 +8,7 @@
 import OpenAI from "openai";
 import { reasoningOptions } from "../utils/model-options.js";
 import { config } from "../config.js";
+import { createLlmClient, llmChatModel, llmEmbeddingModel } from "./llm-client.js";
 import { getEmbedding } from "./embedding.js";
 import { qaStore, type QAItem } from "../store/qa-store.js";
 import { itemToSource, type SourceItem, type MessageMetadata } from "../schemas/chat.js";
@@ -25,7 +26,7 @@ import {
 let openaiClient: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: config.OPENAI_API_KEY });
+    openaiClient = createLlmClient();
   }
   return openaiClient;
 }
@@ -96,8 +97,8 @@ export async function ragChatStream(
 
     // 5. Stream GPT response
     const stream = await getOpenAI().chat.completions.create({
-      model: config.CHAT_MODEL,
-      ...reasoningOptions(config.CHAT_MODEL),
+      model: llmChatModel(),
+      ...reasoningOptions(llmChatModel()),
       messages: messages as Array<{ role: "system" | "user" | "assistant"; content: string }>,
       temperature: 0.3,
       max_completion_tokens: 2000,
@@ -108,7 +109,7 @@ export async function ragChatStream(
     let fullAnswer = "";
     let inputTokens = 0;
     let outputTokens = 0;
-    let modelName = config.CHAT_MODEL;
+    let modelName = llmChatModel();
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta?.content;
@@ -148,7 +149,7 @@ export async function ragChatStream(
       model: modelName,
       provider: "openai",
       mode: "rag",
-      embedding_model: config.OPENAI_EMBEDDING_MODEL,
+      embedding_model: llmEmbeddingModel(),
       input_tokens: inputTokens,
       output_tokens: outputTokens,
       total_tokens: inputTokens + outputTokens,

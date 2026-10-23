@@ -204,7 +204,7 @@ describe("需要 QA 的 endpoint 才 lazy 載入", () => {
     expect(mocks.loadQaStore).toHaveBeenCalledTimes(1);
   });
 
-  it("POST /api/v1/sessions/:id/messages 會觸發載入（列表不會）", async () => {
+  it("POST /api/v1/sessions/:id/messages 在 LLM 關閉時 501、不觸發載入", async () => {
     const res = await app.request(
       "/api/v1/sessions/00000000-0000-4000-8000-000000000000/messages",
       {
@@ -214,9 +214,9 @@ describe("需要 QA 的 endpoint 才 lazy 載入", () => {
       },
     );
 
-    // session 不存在 → 404；重點是 middleware 已先跑過
-    expect(res.status).toBe(404);
-    expect(mocks.loadQaStore).toHaveBeenCalledTimes(1);
+    // 線上無 LLM → requireLlm 先回 501，連 QA 都不必載入
+    expect(res.status).toBe(501);
+    expect(mocks.loadQaStore).not.toHaveBeenCalled();
   });
 
   it("GET /api/v1/qa 也走同一組 lazy 載入", async () => {

@@ -68,6 +68,9 @@ synonymsRoute.delete("/:term", async (c) => {
     return c.json(fail(`Term '${term}' is a built-in entry and cannot be deleted`), 403);
   }
 
-  await synonymsStore.delete(term);
+  const deleted = await synonymsStore.delete(term);
+  if (!deleted) {
+    return c.json(fail(`Term '${term}' not found`), 404);
+  }
   return c.json(ok({ deleted: true, term }));
 });
