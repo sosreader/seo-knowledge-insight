@@ -55,14 +55,24 @@ export function hasPg(): boolean {
   return configuredSecretFile() !== "";
 }
 
+/** 檔案內容就是值，只去掉結尾換行（同 VW settings._read_secret_dir；密碼頭尾的空白要保留）。 */
+function stripTrailingNewlines(raw: string): string {
+  return raw.replace(/\n+$/, "");
+}
+
 function readSecretDir(dir: string): Record<string, string> {
-  const present = new Set(readdirSync(dir));
-  return Object.fromEntries(
-    SECRET_FIELDS.filter((f) => present.has(f)).map((f) => [
-      f,
-      readFileSync(join(dir, f), "utf-8").trim(),
-    ]),
-  );
+  try {
+    const present = new Set(readdirSync(dir));
+    return Object.fromEntries(
+      SECRET_FIELDS.filter((f) => present.has(f)).map((f) => [
+        f,
+        stripTrailingNewlines(readFileSync(join(dir, f), "utf-8")),
+      ]),
+    );
+  } catch {
+    // 例如 projected volume 少了某個 key、權限不足（EACCES）：一律視為 DB 不可用（503），不讓它變 500
+    throw new DbUnavailableError("db-rag secret 目錄無法讀取");
+  }
 }
 
 function readSecretJson(path: string): Record<string, unknown> {
@@ -218,6 +228,13 @@ async function runWithTimeout<T extends pg.QueryResultRow>(
 }
 
 /** 執行單一查詢並回傳完整結果；錯誤經 classifyPgError 轉換。 */
+/** 密碼錯（例如 secret 已輪替）時丟掉 pool，下一個請求重讀 secret 檔建新 pool。 */
+function resetPoolOnAuthFailure(err: unknown): void {
+  if ((err as { code?: string })?.code === "28P01") {
+    void closePool().catch(() => undefined);
+  }
+}
+
 export async function pgQueryResult<T extends pg.QueryResultRow>(
   text: string,
   values: readonly unknown[] = [],
@@ -233,6 +250,7 @@ export async function pgQueryResult<T extends pg.QueryResultRow>(
       client.release();
     }
   } catch (err) {
+    resetPoolOnAuthFailure(err);
     throw classifyPgError(err);
   }
 }
@@ -262,6 +280,7 @@ export async function withPgTransaction<T>(fn: (client: Queryable) => Promise<T>
       client.release();
     }
   } catch (err) {
+    resetPoolOnAuthFailure(err);
     throw classifyPgError(err);
   }
 }

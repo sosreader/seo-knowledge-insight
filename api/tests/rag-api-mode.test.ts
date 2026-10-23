@@ -94,9 +94,19 @@ describe("rag-api mode without a mounted db-rag secret", () => {
     expect(json.error).toBe("db_unavailable");
   });
 
-  it("QA routes report the degraded store with 503 (not 500)", async () => {
-    const { status } = await call("GET", "/api/v1/qa");
+  it.each([
+    ["GET", "/api/v1/qa", undefined],
+    ["POST", "/api/v1/search", { query: "LCP" }],
+    ["POST", "/api/v1/chat", { message: "LCP" }],
+  ])("%s %s reports the degraded QA store with 503 (not 500)", async (method, path, body) => {
+    const { status } = await call(method, path, body);
     expect(status).toBe(503);
+  });
+
+  it("POST /synonyms → 503 db_unavailable", async () => {
+    const { status, json } = await call("POST", "/api/v1/synonyms", { term: "lcp", synonyms: ["largest contentful paint"] });
+    expect(status).toBe(503);
+    expect(json.error).toBe("db_unavailable");
   });
 
   it.each([

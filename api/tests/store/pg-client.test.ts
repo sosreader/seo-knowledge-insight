@@ -59,6 +59,24 @@ describe("readDbSecret", () => {
     expect(readDbSecret(d)).toEqual(SECRET);
   });
 
+  it("strips only trailing newlines in directory mode, keeping spaces in the password", () => {
+    const d = join(dir, "spaced");
+    mkdirSync(d);
+    for (const [k, v] of Object.entries({ ...SECRET, password: " pw with spaces " })) {
+      writeFileSync(join(d, k), `${v}\n`);
+    }
+    expect(readDbSecret(d).password).toBe(" pw with spaces ");
+    expect(readDbSecret(d).host).toBe(SECRET.host);
+  });
+
+  it("maps an unreadable secret directory entry to DbUnavailableError (not a raw fs error)", () => {
+    const d = join(dir, "broken");
+    mkdirSync(d);
+    mkdirSync(join(d, "password")); // readFileSync on a directory → EISDIR
+    expect(() => readDbSecret(d)).toThrow(DbUnavailableError);
+    expect(() => readDbSecret(d)).toThrow(/無法讀取/);
+  });
+
   it("treats an empty mounted directory as unavailable and names the missing keys only", () => {
     const d = join(dir, "empty");
     mkdirSync(d);
@@ -240,6 +258,21 @@ describe.skipIf(!pgAvailable)("pg-client against PostgreSQL (warehouse_rag)", ()
   it("surfaces permission errors as plain errors (500), not 503", async () => {
     // warehouse_rag 沒有 app_report 權限（roles-matrix）
     await expect(pgQuery("SELECT 1 FROM app_report")).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("drops the pool after an auth failure so the next request re-reads the secret", async () => {
+    const bad = writeJson("badpw.json", {
+      username: pgInfo!.ragUser,
+      password: "wrong-password",
+      host: pgInfo!.host,
+      port: pgInfo!.port,
+      dbname: fx.dbName(),
+    });
+    await _configurePgClientForTest({ secretFile: bad, ssl: false });
+    const first = getPool();
+    await expect(pgQuery("SELECT 1")).rejects.toBeInstanceOf(DbUnavailableError);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(getPool()).not.toBe(first);
   });
 
   it("reports an unreachable database as DbUnavailableError", async () => {

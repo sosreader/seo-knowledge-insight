@@ -1,7 +1,8 @@
 /**
  * Vitest globalSetup：啟一個 pgvector PostgreSQL 容器，套 VW migration 做成 template DB。
  *
- * - 設 SKIP_PG_TESTS=1 可略過（沒有 Docker 的環境）；整合測試會以 describe.skipIf 跳過。
+ * - 設 SKIP_PG_TESTS=1 可略過；本機起不了容器（沒有 Docker）也會略過並警告，CI（env CI）則直接失敗。
+ *   略過時整合測試以 describe.skipIf 跳過。
  * - 測試以 warehouse_rag 登入，權限與正式環境相同（逐表 GRANT 來自 0011）。
  */
 
@@ -69,7 +70,16 @@ export default async function setup(project: TestProject): Promise<() => Promise
     project.provide("pgFixture", null);
     return async () => undefined;
   }
-  const container = await new PostgreSqlContainer(PGVECTOR_IMAGE).start();
+  let container: StartedPostgreSqlContainer;
+  try {
+    container = await new PostgreSqlContainer(PGVECTOR_IMAGE).start();
+  } catch (err) {
+    // CI 一定要跑整合測試：起不來就整個失敗。本機沒有 Docker 時略過並明講。
+    if (process.env.CI) throw err;
+    console.warn(`[pg tests] 無法啟動 PostgreSQL 容器，略過 PG 整合測試（${(err as Error).message}）`);
+    project.provide("pgFixture", null);
+    return async () => undefined;
+  }
   await buildTemplate(container);
   const info: PgFixtureInfo = {
     host: container.getHost(),

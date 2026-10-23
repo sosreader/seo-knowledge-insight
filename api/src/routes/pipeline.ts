@@ -664,8 +664,8 @@ pipelineRoute.get("/llm-usage", async (c) => {
   } catch (e) {
     const mapped = storeFailure(c, e);
     if (mapped) return mapped;
-    const msg = e instanceof Error ? e.message : String(e);
-    return c.json(fail(`LLM usage query failed: ${msg}`), 500);
+    console.error("LLM usage query failed:", e instanceof Error ? e.message : String(e));
+    return c.json(fail("LLM usage query failed"), 500);
   }
 });
 
@@ -735,7 +735,7 @@ pipelineRoute.get("/metrics/trends", async (c) => {
   } catch (e) {
     const mapped = storeFailure(c, e);
     if (mapped) return mapped;
-    const msg = e instanceof Error ? e.message : String(e);
-    return c.json(fail(`Trend analysis failed: ${msg}`), 500);
+    console.error("Trend analysis failed:", e instanceof Error ? e.message : String(e));
+    return c.json(fail("Trend analysis failed"), 500);
   }
 });
