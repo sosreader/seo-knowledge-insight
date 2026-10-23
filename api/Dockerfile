@@ -72,6 +72,9 @@ COPY --chown=${APP_UID}:${APP_UID} package.json ./
 COPY --from=prod-deps --chown=${APP_UID}:${APP_UID} /app/node_modules ./node_modules
 COPY --from=builder --chown=${APP_UID}:${APP_UID} /app/dist ./dist
 COPY --from=rds-ca --chmod=0644 /tmp/global-bundle.pem /etc/ssl/rds/global-bundle.pem
+# BuildKit 的 COPY --chmod 會把 COPY 順手建出的目錄（/etc/ssl、/etc/ssl/rds）也設成 0644，非 root 無法
+# 進入目錄，Node 啟動讀 openssl.cnf 時 EACCES 直接 crash（2026-10-23 vocus-stg 實測）。目錄補回 0755。
+RUN chmod 0755 /etc/ssl /etc/ssl/rds
 
 USER ${APP_UID}:${APP_UID}
 
