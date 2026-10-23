@@ -10,7 +10,7 @@ Tests whether generated meeting-prep reports are properly grounded in the KB:
 
 Dataset:  eval/golden_meeting_prep.json
 Fixtures: eval/fixtures/meeting_prep/*.md
-Data:     output/qa_final.json (local) or Supabase qa_items (CI fallback)
+Data:     output/qa_final.json (local) or rag-api GET /qa/{id} (RAG_API_BASE, see evals/rag_client.py)
 Requires: LMNR_PROJECT_API_KEY
 
 Run:
@@ -24,13 +24,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import re
 import sys
 from pathlib import Path
-from urllib.parse import urlencode
-
-import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -42,6 +38,8 @@ load_dotenv(PROJECT_ROOT / ".env")
 logger = logging.getLogger(__name__)
 
 from lmnr import evaluate  # type: ignore[import]
+
+from evals import rag_client  # noqa: E402
 
 # ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -121,106 +119,52 @@ _dataset = [
     for case in _golden_filtered
 ]
 
-# ── KB loading (local → Supabase fallback, same as eval_retrieval.py) ────────
+# ── KB loading (local file first, rag-api per-id lookup otherwise) ────────────
 
-_SUPABASE_PAGE_SIZE = 1000
 _kb_cache: list[dict] | None = None
-
-
-def _fetch_supabase_qa_items(supabase_url: str, anon_key: str) -> list[dict]:
-    """Fetch all QA items from Supabase with pagination."""
-    headers = {"apikey": anon_key, "Authorization": f"Bearer {anon_key}"}
-    items: list[dict] = []
-    offset = 0
-
-    while True:
-        query = urlencode(
-            {
-                "select": "id,question,category,source_type,source_collection",
-                "order": "seq.asc",
-                "limit": _SUPABASE_PAGE_SIZE,
-                "offset": offset,
-            }
-        )
-        try:
-            resp = requests.get(
-                f"{supabase_url}/rest/v1/qa_items?{query}",
-                headers=headers,
-                timeout=30,
-            )
-        except Exception as exc:
-            logger.error("[eval_meeting_prep_grounding] Supabase request failed: %s", exc)
-            return []
-
-        if resp.status_code != 200:
-            logger.error(
-                "[eval_meeting_prep_grounding] Supabase fetch failed: %s %s",
-                resp.status_code,
-                resp.text[:200],
-            )
-            return []
-
-        page_items = resp.json()
-        items.extend(page_items)
-
-        if len(page_items) < _SUPABASE_PAGE_SIZE:
-            break
-        offset += len(page_items)
-
-    logger.info(
-        "[eval_meeting_prep_grounding] Loaded %d QA items from Supabase", len(items)
-    )
-    return items
+_remote_kb_cache: dict[str, dict | None] = {}
 
 
 def _load_qa_items() -> list[dict]:
-    """Load QA items from local file first, fallback to Supabase REST API."""
+    """Load QA items from the local output/qa_final.json ([] when absent)."""
     global _kb_cache
     if _kb_cache is not None:
         return _kb_cache
 
     qa_final_path = PROJECT_ROOT / "output" / "qa_final.json"
-
-    # 1. Try local file
+    items: list[dict] = []
     if qa_final_path.exists():
         try:
             data = json.loads(qa_final_path.read_text(encoding="utf-8"))
             items = data.get("qa_database", [])
-            if items:
-                logger.info(
-                    "[eval_meeting_prep_grounding] Loaded %d QA items from local file",
-                    len(items),
-                )
-                _kb_cache = items
-                return items
+            logger.info(
+                "[eval_meeting_prep_grounding] Loaded %d QA items from local file",
+                len(items),
+            )
         except (json.JSONDecodeError, OSError) as e:
             logger.warning(
                 "[eval_meeting_prep_grounding] Local file read failed: %s", e
             )
-
-    # 2. Fallback to Supabase
-    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    anon_key = os.environ.get("SUPABASE_ANON_KEY", "")
-
-    if not supabase_url or not anon_key:
-        logger.error(
-            "[eval_meeting_prep_grounding] No local qa_final.json and "
-            "no SUPABASE_URL/SUPABASE_ANON_KEY set"
-        )
-        _kb_cache = []
-        return []
-
-    logger.info("[eval_meeting_prep_grounding] Loading QA items from Supabase...")
-    items = _fetch_supabase_qa_items(supabase_url, anon_key)
     _kb_cache = items
     return items
+
+
+def _resolve_kb_item(cit_id: str, kb_index: dict[str, dict]) -> dict | None:
+    """Local index first; otherwise GET /qa/{id} from rag-api (cached per id)."""
+    if cit_id in kb_index:
+        return kb_index[cit_id]
+    if not cit_id:
+        return None
+    if cit_id not in _remote_kb_cache:
+        _remote_kb_cache[cit_id] = rag_client.fetch_qa_item(cit_id)
+    return _remote_kb_cache[cit_id]
 
 
 def _build_kb_index(kb_items: list[dict]) -> dict[str, dict]:
     """Build a lookup dict: stable_id -> {category, ...}.
 
     Citations reference items by stable_id (hex string), not integer id.
-    Local qa_final.json uses 'stable_id' field; Supabase uses 'id' (which is stable_id).
+    Local qa_final.json uses 'stable_id' field; rag-api uses 'id' (which is stable_id).
     """
     index: dict[str, dict] = {}
     for item in kb_items:
@@ -228,7 +172,7 @@ def _build_kb_index(kb_items: list[dict]) -> dict[str, dict]:
         sid = item.get("stable_id")
         if sid:
             index[sid] = item
-        # Supabase: 'id' column IS the stable_id (hex string)
+        # rag-api: 'id' IS the stable_id (hex string)
         elif isinstance(item.get("id"), str):
             index[item["id"]] = item
     return index
@@ -315,7 +259,7 @@ def executor(data: dict) -> dict:
     kb_lookup: list[dict] = []
     for cit in citations:
         cit_id = cit.get("id", "")
-        kb_item = kb_index.get(cit_id)
+        kb_item = _resolve_kb_item(cit_id, kb_index)
         kb_lookup.append(
             {
                 "citation_id": cit_id,
@@ -452,15 +396,16 @@ def _run_threshold_gate() -> None:
 
     print("\n--- CI Eval Gate: meeting_prep_grounding thresholds ---")
 
-    # Pre-check KB availability; skip gate if KB is empty (avoids false CI failure)
-    kb_items = _load_qa_items()
-    if not kb_items:
-        print(
-            "  SKIP: KB empty (no local qa_final.json and Supabase unavailable). "
-            "Grounding gate skipped.",
-            file=sys.stderr,
-        )
-        return
+    # Pre-check KB availability; skip gate if neither local KB nor rag-api is usable
+    if not _load_qa_items():
+        ok, reason = rag_client.preflight()
+        if not ok:
+            print(f"::warning::eval_meeting_prep_grounding gate SKIP: {reason}")
+            print(
+                f"  SKIP: no local qa_final.json and {reason}. Grounding gate skipped.",
+                file=sys.stderr,
+            )
+            return
 
     pre_results = [(executor(dp["data"]), dp["target"]) for dp in _dataset]
     _exec_cache = {

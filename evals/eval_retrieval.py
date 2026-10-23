@@ -6,7 +6,8 @@ the expected SEO keywords and categories for known real-world scenarios.
 
 Dataset:  eval/golden_retrieval.json
 Requires: LMNR_PROJECT_API_KEY
-Data source: output/qa_final.json (local) or Supabase qa_items (CI fallback)
+Search target: RAG_API_BASE (default online rag-api, keyword mode; see evals/rag_client.py)
+Fallback data: output/qa_final.json (local naive search only)
 
 Run:
     python evals/eval_retrieval.py
@@ -20,12 +21,8 @@ import argparse
 import json
 import logging
 import math
-import os
 import sys
 from pathlib import Path
-from urllib.parse import urlencode
-
-import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -37,6 +34,8 @@ load_dotenv(PROJECT_ROOT / ".env")
 logger = logging.getLogger(__name__)
 
 from lmnr import evaluate  # type: ignore[import]
+
+from evals import rag_client  # noqa: E402
 
 # ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -79,39 +78,11 @@ _dataset = [
 
 # ── Executor ──────────────────────────────────────────────────────────────────
 
-_API_BASE = os.environ.get("EVAL_API_BASE", "http://localhost:8002")
-_API_KEY = os.environ.get("SEO_API_KEY", "")
-_SUPABASE_PAGE_SIZE = 1000
-
-
 def _search_via_api(query: str, top_k: int = 5) -> list[dict] | None:
-    """Try calling the actual search API. Returns None if server unavailable."""
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if _API_KEY:
-        headers["X-API-Key"] = _API_KEY
-
-    payload: dict[str, object] = {"query": query, "top_k": top_k}
-    if _filter_model:
-        payload["extraction_model"] = _filter_model
-
-    try:
-        resp = requests.post(
-            f"{_API_BASE}/api/v1/search",
-            json=payload,
-            headers=headers,
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            body = resp.json()
-            results = body.get("data", {}).get("results", [])
-            if results:
-                return results
-        logger.warning("[eval_retrieval] API returned %s", resp.status_code)
-    except requests.ConnectionError:
-        logger.info("[eval_retrieval] API not reachable, falling back to naive search")
-    except Exception as e:
-        logger.warning("[eval_retrieval] API call failed: %s", e)
-    return None
+    """Call rag-api POST /search (no mode: keyword when LLM is off). None if unusable."""
+    extra = {"extraction_model": _filter_model} if _filter_model else None
+    results = rag_client.search_results(query, top_k=top_k, timeout=10, extra=extra)
+    return results or None
 
 
 def _local_items_support_model_filter(items: list[dict], model: str | None) -> bool:
@@ -121,76 +92,29 @@ def _local_items_support_model_filter(items: list[dict], model: str | None) -> b
     return any(item.get("extraction_model") for item in items)
 
 
-def _fetch_supabase_qa_items(supabase_url: str, anon_key: str) -> list[dict]:
-    """Fetch all QA items from Supabase with pagination."""
-    headers = {"apikey": anon_key, "Authorization": f"Bearer {anon_key}"}
-    items: list[dict] = []
-    offset = 0
-
-    while True:
-        query = urlencode(
-            {
-                "select": (
-                    "id,question,answer,keywords,category,confidence,difficulty,evergreen,"
-                    "source_title,source_type,source_collection,source_url,extraction_model"
-                ),
-                "order": "seq.asc",
-                "limit": _SUPABASE_PAGE_SIZE,
-                "offset": offset,
-            }
-        )
-        resp = requests.get(
-            f"{supabase_url}/rest/v1/qa_items?{query}",
-            headers=headers,
-            timeout=30,
-        )
-
-        if resp.status_code != 200:
-            logger.error("[eval_retrieval] Supabase fetch failed: %s %s", resp.status_code, resp.text[:200])
-            return []
-
-        page_items = resp.json()
-        items.extend(page_items)
-
-        if len(page_items) < _SUPABASE_PAGE_SIZE:
-            break
-
-        offset += len(page_items)
-
-    logger.info("[eval_retrieval] Loaded %d QA items from Supabase", len(items))
-    return items
-
-
 def _load_qa_items() -> list[dict]:
-    """Load QA items from local file first, fallback to Supabase REST API."""
+    """Load QA items from the local output/qa_final.json (naive-search fallback only)."""
     qa_final_path = PROJECT_ROOT / "output" / "qa_final.json"
 
-    # 1. Try local file
-    if qa_final_path.exists():
-        try:
-            data = json.loads(qa_final_path.read_text(encoding="utf-8"))
-            items = data.get("qa_database", [])
-            if items:
-                if _local_items_support_model_filter(items, _filter_model):
-                    logger.info("[eval_retrieval] Loaded %d QA items from local file", len(items))
-                    return items
-                logger.info(
-                    "[eval_retrieval] Local file lacks extraction_model for --model=%s, falling back to Supabase",
-                    _filter_model,
-                )
-        except (json.JSONDecodeError, OSError) as e:
-            logger.warning("[eval_retrieval] Local file read failed: %s", e)
-
-    # 2. Fallback to Supabase
-    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    anon_key = os.environ.get("SUPABASE_ANON_KEY", "")
-
-    if not supabase_url or not anon_key:
-        logger.error("[eval_retrieval] No local qa_final.json and no SUPABASE_URL/SUPABASE_ANON_KEY set")
+    if not qa_final_path.exists():
+        logger.error("[eval_retrieval] No local qa_final.json for naive fallback")
         return []
 
-    logger.info("[eval_retrieval] Loading QA items from Supabase...")
-    return _fetch_supabase_qa_items(supabase_url, anon_key)
+    try:
+        data = json.loads(qa_final_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("[eval_retrieval] Local file read failed: %s", e)
+        return []
+
+    items = data.get("qa_database", [])
+    if items and _local_items_support_model_filter(items, _filter_model):
+        logger.info("[eval_retrieval] Loaded %d QA items from local file", len(items))
+        return items
+    if items:
+        logger.info(
+            "[eval_retrieval] Local file lacks extraction_model for --model=%s", _filter_model
+        )
+    return []
 
 
 def _naive_search(query: str, qa_items: list[dict]) -> list[dict]:
@@ -407,6 +331,19 @@ _threshold_path = PROJECT_ROOT / "eval" / "eval_thresholds.json"
 _exec_cache: dict[str, dict] = {}
 
 
+def _threshold_section() -> str:
+    """'retrieval' (hybrid, LLM on) or 'retrieval_keyword' (rag-api answers llm_disabled)."""
+    return "retrieval" if rag_client.llm_available() else "retrieval_keyword"
+
+
+def _target_unavailable_reason() -> str | None:
+    """Why the search target can't be used (None when usable or a local file exists)."""
+    if (PROJECT_ROOT / "output" / "qa_final.json").exists():
+        return None
+    ok, reason = rag_client.preflight()
+    return None if ok else reason
+
+
 def _run_threshold_gate() -> None:
     """Run retrieval threshold gate and populate executor cache."""
     global _exec_cache
@@ -415,14 +352,15 @@ def _run_threshold_gate() -> None:
         _exec_cache = {}
         return
 
+    section = _threshold_section()
     with open(_threshold_path, encoding="utf-8") as _tf:
-        retrieval_thresholds: dict[str, float] = json.load(_tf).get("retrieval", {})
+        retrieval_thresholds: dict[str, float] = json.load(_tf).get(section, {})
 
     if not retrieval_thresholds:
         _exec_cache = {}
         return
 
-    print("\n--- CI Eval Gate: retrieval thresholds ---")
+    print(f"\n--- CI Eval Gate: {section} thresholds ---")
 
     pre_results = [(retrieval_executor(dp["data"]), dp["target"]) for dp in _dataset]
     _exec_cache = {dp["data"]["query"]: out for dp, (out, _) in zip(_dataset, pre_results)}
@@ -454,6 +392,13 @@ def _cached_executor(data: dict) -> dict:
 
 def run_eval() -> None:
     """Run threshold gate and Laminar evaluation."""
+    unavailable = _target_unavailable_reason()
+    if unavailable:
+        # GitHub Actions annotation keeps the skip visible without failing the job.
+        print(f"::warning::eval_retrieval SKIP: {unavailable} (base={rag_client.rag_api_base()})")
+        print(f"[eval_retrieval] SKIP: {unavailable}", file=sys.stderr)
+        return
+
     _run_threshold_gate()
 
     group_name = f"retrieval_quality_{_filter_model}" if _filter_model else "retrieval_quality"

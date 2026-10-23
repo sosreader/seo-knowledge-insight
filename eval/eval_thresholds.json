@@ -9,6 +9,16 @@
     "boosterless_precision_at_k": 0.60,
     "ndcg_at_k": 0.75
   },
+  "retrieval_keyword": {
+    "hit_rate": 0.90,
+    "mrr": 0.85,
+    "keyword_hit_rate": 0.85,
+    "precision_at_k": 0.75,
+    "dual_category_recall_at_k": 0.80,
+    "multi_label_f1_at_k": 0.75,
+    "boosterless_precision_at_k": 0.75,
+    "ndcg_at_k": 0.78
+  },
   "retrieval_stable": {
     "hit_rate": 0.95,
     "mrr": 0.90,

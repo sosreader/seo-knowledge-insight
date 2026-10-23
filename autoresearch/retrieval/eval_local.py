@@ -7,7 +7,10 @@ loop: stdout last line is machine-readable COMPOSITE_SCORE=X.XXXX.
 
 Usage:
     .venv/bin/python autoresearch/eval_local.py
-    .venv/bin/python autoresearch/eval_local.py --api-base http://localhost:8002
+    .venv/bin/python autoresearch/eval_local.py --api-base http://localhost:8080
+
+Target / auth come from env by default (see evals/rag_client.py):
+    RAG_API_BASE, CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET, SEO_API_KEY
 """
 from __future__ import annotations
 
@@ -21,14 +24,23 @@ from pathlib import Path
 import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from evals import rag_client  # noqa: E402
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 parser = argparse.ArgumentParser(description="Local retrieval eval (no Laminar)")
 parser.add_argument(
-    "--api-base", default="http://localhost:8002", help="API base URL"
+    "--api-base",
+    default=rag_client.rag_api_base(),
+    help="rag-api base incl. route prefix (default: $RAG_API_BASE or online rag-api)",
 )
-parser.add_argument("--api-key", default="", help="X-API-Key header value")
+parser.add_argument(
+    "--api-key",
+    default="",
+    help="X-API-Key header value (local api-key mode; ignored when a CF Access pair is set)",
+)
 parser.add_argument(
     "--golden",
     default=str(PROJECT_ROOT / "eval" / "golden_retrieval.json"),
@@ -52,15 +64,21 @@ print(f"[eval_local] {len(golden_cases)} golden cases loaded", file=sys.stderr)
 
 # ── Search executor ──────────────────────────────────────────────────────────
 
+def _auth_headers() -> dict[str, str]:
+    """CF Access pair / SEO_API_KEY from env; --api-key only when no CF pair is set."""
+    headers = rag_client.build_headers()
+    if args.api_key and "CF-Access-Client-Id" not in headers:
+        headers["X-API-Key"] = args.api_key
+    return headers
+
+
 def search_api(query: str, top_k: int = 5) -> list[dict]:
     """Call search API with retry on 429. Returns results list."""
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if args.api_key:
-        headers["X-API-Key"] = args.api_key
+    headers = _auth_headers()
 
     for attempt in range(4):
         resp = requests.post(
-            f"{args.api_base}/api/v1/search",
+            f"{args.api_base.rstrip('/')}/search",
             json={"query": query, "top_k": top_k},
             headers=headers,
             timeout=15,
@@ -212,7 +230,12 @@ EVALUATORS = {
 def main() -> None:
     # Verify server reachable
     try:
-        resp = requests.get(f"{args.api_base}/health", timeout=5)
+        resp = requests.get(
+            f"{args.api_base.rstrip('/')}/qa",
+            params={"limit": 1},
+            headers=_auth_headers(),
+            timeout=15,
+        )
         if resp.status_code != 200:
             print(
                 f"[eval_local] Server returned {resp.status_code}", file=sys.stderr

@@ -26,16 +26,20 @@ jobs:
       - name: Run retrieval eval
         env:
           LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        # CI 無本地 qa_final.json，自動 fallback 到 Supabase REST API
+          CF_ACCESS_CLIENT_ID: ${{ secrets.RAG_EVAL_CF_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.RAG_EVAL_CF_CLIENT_SECRET }}
+        # 打線上 rag-api（RAG_API_BASE 預設 https://warehouse-api.vocus.cc/internal/rag），
+        # POST /search 不帶 mode，線上無 LLM 時自動走 keyword。
+        # 憑證缺失或 rag-api 不可達時 eval 以 ::warning:: 標記並 skip（exit 0），不讓 workflow 紅
         run: lmnr eval evals/eval_retrieval.py
 
       - name: Run extraction eval
         env:
           LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        # extraction eval 需要本地 output/qa_per_meeting/，CI 無此資料，graceful skip (exit 0)
+        # LLM 分項：線上 rag-api 未啟用 LLM，extraction 需要本地 output/qa_per_meeting/，
+        # CI 無此資料，graceful skip (exit 0)；chat／chat_maturity 在 llm_disabled 501 時同樣 skip，
+        # 完整 LLM 分數改在本機 Mac 以 Ollama 跑（RAG_API_BASE=http://localhost:8080）
         run: lmnr eval evals/eval_extraction.py
 
       - name: Run meeting-prep structure eval
@@ -47,9 +51,10 @@ jobs:
       - name: Run meeting-prep grounding eval
         env:
           LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        # 讀取 fixtures + KB lookup（local → Supabase fallback）
+          CF_ACCESS_CLIENT_ID: ${{ secrets.RAG_EVAL_CF_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.RAG_EVAL_CF_CLIENT_SECRET }}
+        # 讀取 fixtures + KB lookup（本地 qa_final.json → rag-api GET /qa/{id}）；
+        # rag-api 不可用時 gate 以 ::warning:: skip
         run: lmnr eval evals/eval_meeting_prep_grounding.py
 
       - name: Run report quality eval
