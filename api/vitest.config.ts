@@ -15,6 +15,7 @@ export default defineConfig({
         "src/**/*.d.ts",
         "src/lambda.ts",
         "src/index.ts",
+        "src/cli.ts",                  // 進入點，邏輯在 src/jobs/cli.ts
         "src/openapi.ts",              // static OpenAPI spec definition
         "src/services/report-llm.ts",      // OpenAI integration (requires API key)
         "src/services/metrics-parser.ts",  // Google Sheets CSV integration

@@ -387,6 +387,8 @@ api/
 │   ├── index.ts              # 入口點（middleware + route mount + OpenAPI/Scalar + initStores()）
 │   ├── openapi.ts            # OpenAPI 3.1 spec（32 paths, 36 endpoints）
 │   ├── lambda.ts             # Lambda 入口（cold start + hono/aws-lambda handler）
+│   ├── cli.ts                # CLI 入口（node dist/cli.js <command>，K8s CronJob 用；邏輯在 jobs/）
+│   ├── jobs/                 # CLI 子命令：freshness.ts（公式）、update-freshness.ts（DB）、cli.ts（參數與 exit code）
 │   ├── config.ts             # Zod 驗證環境變數 + paths
 │   ├── routes/               # 10 個路由
 │   │   ├── health.ts
@@ -563,6 +565,25 @@ LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 - 全量 in-memory cosine similarity
 
 ---
+
+## 週期性工作：update-freshness（CLI）
+
+`freshness_score`（指數衰減）每週一 02:00 UTC 重算，由 vocus-warehouse namespace 的 CronJob `rag-update-freshness`（deployment-eks）執行同一個 rag-api image：
+
+```bash
+node dist/cli.js update-freshness [--dry-run] [--since YYYY-MM-DD] [--limit N]
+```
+
+- 連線身分 `warehouse_rag`（`VW_DB_SECRET_FILE_RAG`），對 `app_qa_item` 只 UPDATE `freshness_score`；不碰 `updated_at` 與其他欄。
+- 公式與 Python 版 `scripts/update_freshness.py` 一致：`score = exp(-ln2 × age_days / 540)`，evergreen 一律 1.0，日期空白或無法解析視為 1.0，下限 0.01、四捨五入 4 位，與現值差 ≤ 0.001 跳過。`age_days` 以 UTC 整天數計。
+- 分批 `UPDATE ... FROM unnest(...)`（100 列一批）；單批失敗不中斷其他批，DB 連不上則放棄剩餘批次。`--dry-run` 零寫入。
+- stdout 輸出單行 JSON：`update_freshness_start`、`update_freshness_done`（處理列數、`distribution.before`／`planned_after` 的 min／avg／max、`readback` 讀回表內分布與 `legacy_at_full_score`、`duration_ms`）或 `update_freshness_failed`。exit code：0 成功、1 失敗（含任一批失敗）、2 用法錯誤。
+
+與 Python 版的差異：預設就寫入（Python 預設 dry-run，要 `--execute`）；`--verify` 併入執行結果的 `readback`；寫的是 RDS `app_qa_item`，不是 Supabase `qa_items`。
+
+注意：rag-api 啟動時把 QA metadata 載入記憶體且不重新整理，keyword 路徑讀的是記憶體內的 `freshness_score`；CronJob 寫入後，要 `rollout restart` rag-api 才會生效（`hybridSearch` 的向量路徑每次查詢讀 DB，不受影響）。
+
+Python 版與 `.github/workflows/update-freshness.yml` 暫時保留（切換完成後再停用／刪除）。parity 由 `tests/fixtures/freshness-parity/golden.json` 保證，該檔由 Python 版實跑產生（`generate_golden.py`）。
 
 ## LLM 關閉時的行為（線上 rag-api 現況）
 

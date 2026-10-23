@@ -3,7 +3,8 @@ import { defineConfig } from "tsup";
 export default defineConfig([
   // Node.js server build (default, external node_modules)
   {
-    entry: { index: "src/index.ts" },
+    // cli：K8s CronJob 用（node dist/cli.js update-freshness），與 index 共用同一個 image
+    entry: { index: "src/index.ts", cli: "src/cli.ts" },
     format: ["esm"],
     target: "node22",
     outDir: "dist",
