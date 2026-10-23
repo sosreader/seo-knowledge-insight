@@ -5,7 +5,8 @@ import { qaStore, type QAItem } from "../store/qa-store.js";
 
 export const qaRoute = new Hono();
 
-function toSchema(item: QAItem) {
+/** GET /qa 與 /qa/:id 的回應形狀（OpenAPI QAItem 以測試鎖住同一組欄位）。 */
+export function toSchema(item: QAItem) {
   return {
     id: item.id,
     seq: item.seq,
