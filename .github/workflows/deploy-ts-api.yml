@@ -1,11 +1,8 @@
 name: Deploy TypeScript API
 
+# 2026-10-23（ski-rag-into-vocus-warehouse S2.2）：api/ 已改接 vocus-warehouse（PG adapter），Lambda 沒有
+# VW_DB_SECRET_FILE_RAG，自動部署會讓 Lambda 落到檔案模式。Lambda 退役前（Phase E）只保留手動觸發。
 on:
-  push:
-    branches: [main]
-    paths:
-      - "api/**"
-      - ".github/workflows/deploy-ts-api.yml"
   workflow_dispatch:
     inputs:
       force_deploy:
