@@ -11,6 +11,11 @@ Tests whether the POST /api/v1/pipeline/crawled-not-indexed endpoint:
 Dataset:  eval/golden_crawled_not_indexed.json
 Requires: LMNR_PROJECT_API_KEY
 
+Target (env):
+    EVAL_API_BASE    default http://localhost:8002
+    EVAL_API_PREFIX  default /api/v1（rag-api 經 tunnel：/internal/rag）
+    SEO_API_KEY or CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET
+
 Run:
     python evals/eval_crawled_not_indexed.py
     lmnr eval evals/eval_crawled_not_indexed.py
@@ -21,6 +26,7 @@ import json
 import logging
 import os
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 import requests
@@ -68,25 +74,55 @@ _dataset = [
 
 # ── Executor ───────────────────────────────────────────────────────────────────
 
-_API_BASE = os.environ.get("EVAL_API_BASE", "http://localhost:8002")
-_API_KEY = os.environ.get("SEO_API_KEY", "")
+_DEFAULT_API_BASE = "http://localhost:8002"
+_DEFAULT_API_PREFIX = "/api/v1"
+
+
+def _endpoint_url(env: Mapping[str, str] | None = None) -> str:
+    """Endpoint URL from env.
+
+    EVAL_API_BASE   service root (rag-api: https://warehouse-api.vocus.cc)
+    EVAL_API_PREFIX route prefix (rag-api via tunnel: /internal/rag; default /api/v1)
+    """
+    source = os.environ if env is None else env
+    base = (source.get("EVAL_API_BASE") or _DEFAULT_API_BASE).rstrip("/")
+    prefix = "/" + (source.get("EVAL_API_PREFIX") or _DEFAULT_API_PREFIX).strip("/")
+    return f"{base}{prefix}/pipeline/crawled-not-indexed"
+
+
+def _build_headers(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Request headers from env; values are never logged.
+
+    SEO_API_KEY                          → X-API-Key (api-key auth mode)
+    CF_ACCESS_CLIENT_ID / _SECRET (both) → Cloudflare Access service token (rag-api)
+    """
+    source = os.environ if env is None else env
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    api_key = source.get("SEO_API_KEY", "")
+    if api_key:
+        headers["X-API-Key"] = api_key
+    client_id = source.get("CF_ACCESS_CLIENT_ID", "")
+    client_secret = source.get("CF_ACCESS_CLIENT_SECRET", "")
+    if client_id and client_secret:
+        headers["CF-Access-Client-Id"] = client_id
+        headers["CF-Access-Client-Secret"] = client_secret
+    return headers
 
 
 def executor(data: dict) -> dict:
-    """Call POST /api/v1/pipeline/crawled-not-indexed with raw_tsv mode."""
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if _API_KEY:
-        headers["X-API-Key"] = _API_KEY
+    """Call POST <base><prefix>/pipeline/crawled-not-indexed with raw_tsv mode."""
+    url = _endpoint_url()
+    headers = _build_headers()
 
     try:
         resp = requests.post(
-            f"{_API_BASE}/api/v1/pipeline/crawled-not-indexed",
+            url,
             json={"raw_tsv": data["raw_tsv"]},
             headers=headers,
             timeout=15,
         )
     except requests.ConnectionError:
-        logger.warning("[eval_crawled_not_indexed] API not reachable at %s", _API_BASE)
+        logger.warning("[eval_crawled_not_indexed] API not reachable at %s", url)
         return {"error": "API not reachable"}
     except Exception as exc:
         logger.warning("[eval_crawled_not_indexed] Request failed: %s", exc)
