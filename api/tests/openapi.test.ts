@@ -173,3 +173,17 @@ describe("OpenAPI feature gates (501)", () => {
     expect(spec.paths["/api/v1/pipeline/meetings/{id}/preview"]!.get!.responses["501"]!.description).toContain("run_locally");
   });
 });
+
+describe("OpenAPI QAItem matches the /qa response shape", () => {
+  it("documents exactly the fields toSchema returns, with the real difficulty values", async () => {
+    const { buildOpenAPISpec } = await import("../src/openapi.js");
+    const { toSchema } = await import("../src/routes/qa.js");
+    const { FAKE_ITEMS } = await import("./setup.js");
+    const spec = buildOpenAPISpec() as {
+      components: { schemas: { QAItem: { properties: Record<string, { enum?: string[] }> } } };
+    };
+    const documented = Object.keys(spec.components.schemas.QAItem.properties).sort();
+    expect(documented).toEqual(Object.keys(toSchema(FAKE_ITEMS[0]!)).sort());
+    expect(spec.components.schemas.QAItem.properties.difficulty!.enum).toEqual(["基礎", "進階"]);
+  });
+});
