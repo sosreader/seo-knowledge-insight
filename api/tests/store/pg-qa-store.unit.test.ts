@@ -54,6 +54,7 @@ const FAKE_ROWS = FAKE_ITEMS.map((item) => ({
 }));
 
 import { PgQAStore } from "../../src/store/pg-qa-store.js";
+import { DbTimeoutError } from "../../src/store/store-errors.js";
 
 describe("PgQAStore (mocked pgQuery)", () => {
   let store: PgQAStore;
@@ -224,5 +225,109 @@ describe("PgQAStore (mocked pgQuery)", () => {
 
   it("hasEmbeddings is always true for the PG store", () => {
     expect(store.hasEmbeddings).toBe(true);
+  });
+});
+
+describe("PgQAStore.reload (mocked pgQuery)", () => {
+  let store: PgQAStore;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    mockPgQuery.mockResolvedValueOnce(FAKE_ROWS);
+    store = new PgQAStore();
+    await store.load();
+  });
+
+  it("re-runs the same LOAD_SQL with the 25s timeout", async () => {
+    const [loadSql, , loadOptions] = mockPgQuery.mock.calls[0]!;
+    mockPgQuery.mockResolvedValueOnce(FAKE_ROWS);
+    await store.reload();
+    const [sql, params, options] = mockPgQuery.mock.calls[1]!;
+    expect(sql).toBe(loadSql);
+    expect(params).toEqual([]);
+    expect(options).toEqual(loadOptions);
+  });
+
+  it("swaps items, idIndex and seqIndex together on success (new freshness_score visible)", async () => {
+    const first = FAKE_ROWS[0]!;
+    const before = store.getById(first.id)!;
+    const refreshed = FAKE_ROWS.map((r) => (r.id === first.id ? { ...r, freshness_score: 0.123 } : r));
+    mockPgQuery.mockResolvedValueOnce(refreshed);
+
+    const result = await store.reload();
+
+    expect(result).toEqual({ ok: true, count: FAKE_ROWS.length });
+    expect(store.getById(first.id)!.freshness_score).toBeCloseTo(0.123);
+    expect(store.getBySeq(first.seq)!.freshness_score).toBeCloseTo(0.123);
+    expect(store.allItems.find((i) => i.id === first.id)!.freshness_score).toBeCloseTo(0.123);
+    // 舊物件沒有被原地改動（不可變換入）
+    expect(before.freshness_score).toBe(first.freshness_score);
+  });
+
+  it("reflects added and removed rows", async () => {
+    const [removed, ...rest] = FAKE_ROWS;
+    const added = { ...FAKE_ROWS[0]!, id: "ffffffffffffffff", seq: 9999 };
+    mockPgQuery.mockResolvedValueOnce([...rest, added]);
+
+    await store.reload();
+
+    expect(store.getById(removed!.id)).toBeUndefined();
+    expect(store.getBySeq(9999)?.id).toBe("ffffffffffffffff");
+    expect(store.count).toBe(FAKE_ROWS.length);
+  });
+
+  it("keeps the previous data and returns the fixed code when the query fails", async () => {
+    const countBefore = store.count;
+    mockPgQuery.mockRejectedValueOnce(new DbTimeoutError());
+
+    const result = await store.reload();
+
+    expect(result).toEqual({ ok: false, code: "db_timeout" });
+    expect(store.count).toBe(countBefore);
+    expect(store.loaded).toBe(true);
+    expect(store.getBySeq(1)).toBeDefined();
+  });
+
+  it("maps unknown errors to reload_failed without leaking the message", async () => {
+    mockPgQuery.mockRejectedValueOnce(new Error("password authentication failed host=db.internal"));
+    const result = await store.reload();
+    expect(result).toEqual({ ok: false, code: "reload_failed" });
+  });
+
+  it("keeps the previous data when a row fails to map (no half-loaded state)", async () => {
+    const countBefore = store.count;
+    mockPgQuery.mockResolvedValueOnce([FAKE_ROWS[0], null]);
+    const result = await store.reload();
+    expect(result).toEqual({ ok: false, code: "reload_failed" });
+    expect(store.count).toBe(countBefore);
+    expect(store.getById(FAKE_ROWS[1]!.id)).toBeDefined();
+  });
+
+  it("refuses to replace existing data with an empty result", async () => {
+    const countBefore = store.count;
+    mockPgQuery.mockResolvedValueOnce([]);
+    const result = await store.reload();
+    expect(result).toEqual({ ok: false, code: "empty_result" });
+    expect(store.count).toBe(countBefore);
+  });
+
+  it("accepts an empty result when nothing was loaded yet", async () => {
+    const fresh = new PgQAStore();
+    mockPgQuery.mockResolvedValueOnce([]);
+    expect(await fresh.reload()).toEqual({ ok: true, count: 0 });
+    expect(fresh.loaded).toBe(true);
+  });
+
+  it("serves reads from the old snapshot while a reload is still in flight", async () => {
+    let resolveSelect!: (rows: unknown[]) => void;
+    mockPgQuery.mockImplementationOnce(() => new Promise((resolve) => (resolveSelect = resolve)));
+    const pending = store.reload();
+
+    expect(store.getBySeq(1)).toBeDefined();
+    expect(store.count).toBe(FAKE_ROWS.length);
+
+    resolveSelect(FAKE_ROWS.slice(0, 1));
+    expect(await pending).toEqual({ ok: true, count: 1 });
+    expect(store.count).toBe(1);
   });
 });

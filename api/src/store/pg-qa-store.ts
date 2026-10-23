@@ -22,6 +22,7 @@ import {
   type ListQaParams,
 } from "./qa-filter.js";
 import type { QAItem } from "./qa-store.js";
+import { reloadErrorCode, type StoreReloadResult } from "./store-errors.js";
 import {
   KW_BOOST_CONFIG,
   OVER_RETRIEVE_FACTOR,
@@ -64,10 +65,17 @@ export function normalizeHitIds(ids: readonly string[]): string[] {
   return [...new Set(ids.filter(Boolean))].slice(0, MAX_HIT_IDS);
 }
 
+/** 一次載入的完整快照；換入時三個欄位一起換，讀取端不會看到新舊混合。 */
+interface QASnapshot {
+  readonly items: readonly QAItem[];
+  readonly idIndex: ReadonlyMap<string, QAItem>;
+  readonly seqIndex: ReadonlyMap<number, QAItem>;
+}
+
 export class PgQAStore {
-  private items: QAItem[] = [];
-  private idIndex: Map<string, QAItem> = new Map();
-  private seqIndex: Map<number, QAItem> = new Map();
+  private items: readonly QAItem[] = [];
+  private idIndex: ReadonlyMap<string, QAItem> = new Map();
+  private seqIndex: ReadonlyMap<number, QAItem> = new Map();
   private _loaded = false;
 
   get loaded(): boolean {
@@ -88,15 +96,47 @@ export class PgQAStore {
     return true;
   }
 
+  /** 查詢 app_qa_item 並建出新快照；不碰現有資料，失敗直接往外拋。 */
+  private async fetchSnapshot(): Promise<QASnapshot> {
+    const rows = await pgQuery<QARow>(LOAD_SQL, [], { timeoutMs: LOAD_TIMEOUT_MS });
+    const items = rows.map(rowToQAItem);
+    return {
+      items,
+      idIndex: new Map(items.map((item) => [item.id, item])),
+      seqIndex: new Map(items.map((item) => [item.seq, item])),
+    };
+  }
+
+  /** 同步一次換掉整組快照（中間沒有 await，並行的讀取不會看到半載狀態）。 */
+  private applySnapshot(snapshot: QASnapshot): void {
+    this.items = snapshot.items;
+    this.idIndex = snapshot.idIndex;
+    this.seqIndex = snapshot.seqIndex;
+    this._loaded = true;
+  }
+
   /** 啟動時載入全部 QA metadata；失敗往外拋，由 ensureQaStoreLoaded() 降級並允許重試。 */
   async load(): Promise<void> {
-    const rows = await pgQuery<QARow>(LOAD_SQL, [], { timeoutMs: LOAD_TIMEOUT_MS });
-    const allItems = rows.map(rowToQAItem);
-    this.items = allItems;
-    this.idIndex = new Map(allItems.map((item) => [item.id, item]));
-    this.seqIndex = new Map(allItems.map((item) => [item.seq, item]));
-    this._loaded = true;
+    this.applySnapshot(await this.fetchSnapshot());
     console.log(`PgQAStore loaded: ${this.items.length} items from vocus-warehouse`);
+  }
+
+  /**
+   * 定期重載（例如 CronJob 週更 freshness_score 後）：重新執行 LOAD_SQL，成功才整組換入。
+   * 失敗不拋、不動現有資料，只回固定錯誤代碼。查到 0 列但目前有資料視為異常（empty_result），
+   * 寧可保留舊資料，避免暫時性異常把整個搜尋清空。
+   */
+  async reload(): Promise<StoreReloadResult> {
+    try {
+      const snapshot = await this.fetchSnapshot();
+      if (snapshot.items.length === 0 && this.items.length > 0) {
+        return { ok: false, code: "empty_result" };
+      }
+      this.applySnapshot(snapshot);
+      return { ok: true, count: snapshot.items.length };
+    } catch (err) {
+      return { ok: false, code: reloadErrorCode(err) };
+    }
   }
 
   getById(qaId: string): QAItem | undefined {

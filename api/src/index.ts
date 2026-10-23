@@ -28,7 +28,9 @@ import {
   ensureSynonymsLoaded,
 } from "./store/store-init.js";
 import { initLaminar, flushLaminar } from "./utils/observability.js";
-import { closePool } from "./store/pg-client.js";
+import { closePool, hasPg } from "./store/pg-client.js";
+import { reloadPgStores } from "./store/store-reload.js";
+import { resolveReloadIntervalMs, startStoreReloader } from "./services/store-reloader.js";
 import { resolveServerCapabilities, formatCapabilityTag } from "./utils/capabilities.js";
 
 const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.AWS_EXECUTION_ENV;
@@ -171,7 +173,17 @@ if (process.env.NODE_ENV !== "test" && !isLambda) {
     console.log(`Server running on http://localhost:${info.port}`);
   });
 
+  // 定期重載：CronJob 週更 freshness_score 後不必重啟 rag-api。只在 PG 模式啟用；
+  // RAG_RELOAD_INTERVAL_MS=0 可停用（預設 6 小時）。
+  const reloader = hasPg()
+    ? startStoreReloader({
+        intervalMs: resolveReloadIntervalMs(config.RAG_RELOAD_INTERVAL_MS),
+        reload: reloadPgStores,
+      })
+    : null;
+
   const shutdown = async () => {
+    reloader?.stop();
     await flushLaminar();
     await closePool().catch(() => undefined);
     process.exit(0);

@@ -537,6 +537,7 @@ RERANKER_ENABLED=auto          # Reranker 開關（auto/true/false）
 AGENT_ENABLED=auto             # Agent mode 開關（auto/true/false，auto=有 OpenAI key 就啟用）
 AGENT_MAX_TURNS=5              # Agent loop 最大輪數（1-10）
 AGENT_TIMEOUT_MS=90000         # Agent loop 總逾時（ms）
+RAG_RELOAD_INTERVAL_MS=21600000 # PG 模式：QA／synonyms 定期重載間隔（ms），預設 6 小時；0 = 停用
 LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 ```
 
@@ -554,6 +555,7 @@ LMNR_PROJECT_API_KEY=...       # Laminar tracing（若無則跳過）
 - 有 `deleted_at` 的表（`app_session`、`app_metrics_snapshot`）每個 SELECT 明寫 `deleted_at IS NULL`（VW 無 RLS）
 - secret 檔不在、TLS 驗證失敗、DB 連不上：路由回 503 `db_unavailable`，app 照常啟動；逾時回 504 `db_timeout`
 - `/reports`、`/meeting-prep` 回 410 `not_available_in_rag_api`
+- 定期重載：長駐 process 每 `RAG_RELOAD_INTERVAL_MS`（預設 6 小時）重新載入 QA 與 synonyms，CronJob `update-freshness` 週更 `freshness_score` 後不必重啟。成功才整組換入，失敗保留舊資料；上一輪未完成就跳過本輪；每輪輸出一行 JSON log（`{"event":"store_reload","ok":true,"qa_items":N,"synonyms":M,"duration_ms":…}`，失敗為 `ok:false` 加固定 `code`）。`RAG_RELOAD_INTERVAL_MS=0` 停用
 
 本機跑整合測試需要 Docker（testcontainers 起 `pgvector/pgvector:pg17`，套 `tests/fixtures/schema/` 的 VW migration）；沒有 Docker 時設 `SKIP_PG_TESTS=1` 略過。
 

@@ -82,6 +82,9 @@ const envSchema = z.object({
   // vocus-warehouse（warehouse_rag）：K8s Secret vocus-warehouse-db-rag 掛載的檔案或目錄路徑。
   // 有設 → PG 模式（rag-api）；未設 → 本機檔案模式（output/）。見 store/pg-client.ts。
   VW_DB_SECRET_FILE_RAG: z.string().default(""),
+  // QA／synonyms store 定期重載間隔（毫秒），預設 6 小時（21600000）。
+  // 0 或非正整數 → 停用。解析見 services/store-reloader.ts 的 resolveReloadIntervalMs()。
+  RAG_RELOAD_INTERVAL_MS: z.string().default(""),
   // sslmode=verify-full 的 CA bundle；image 內由 Dockerfile 下載（同 vocus-warehouse）。
   PGSSLROOTCERT: z.string().default("/etc/ssl/rds/global-bundle.pem"),
 });
