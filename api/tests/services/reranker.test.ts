@@ -24,12 +24,14 @@ vi.mock("@anthropic-ai/sdk", () => ({
 vi.mock("../../src/config.js", () => ({
   config: {
     ANTHROPIC_API_KEY: "test-key",
+    OPENAI_API_KEY: "sk-test",
     CHAT_CONTEXT_K: 5,
   },
   paths: {},
 }));
 
 import { rerank } from "../../src/services/reranker.js";
+import { config } from "../../src/config.js";
 import type { QAItem } from "../../src/store/qa-store.js";
 
 function makeItem(id: string, question: string, category: string): QAItem {
@@ -93,6 +95,22 @@ describe("rerank", () => {
     // With topK=3 and length=6, should return 3 items
     const result = await rerank("query", candidates, 3);
     expect(result.length).toBeLessThanOrEqual(3);
+  });
+
+  it("throws llm_disabled without calling Claude when no OpenAI-compatible LLM is configured", async () => {
+    const mutable = config as Record<string, unknown>;
+    const original = mutable.OPENAI_API_KEY;
+    mutable.OPENAI_API_KEY = "";
+    try {
+      const candidates = Array.from({ length: 4 }, (_, i) => ({
+        item: makeItem(`id${i}`, `Q${i}`, "SEO"),
+        score: 1.0 - i * 0.1,
+      }));
+      await expect(rerank("query", candidates, 2)).rejects.toMatchObject({ code: "llm_disabled", status: 501 });
+      expect(mockCreate).not.toHaveBeenCalled();
+    } finally {
+      mutable.OPENAI_API_KEY = original;
+    }
   });
 
   it("returns empty array for empty candidates", async () => {

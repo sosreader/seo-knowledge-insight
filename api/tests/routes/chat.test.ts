@@ -149,25 +149,58 @@ function buildApp() {
   return app;
 }
 
+/** LLM 可用但上游回 429 → 退 context-only（keyword 來源、answer null）。 */
+async function postContextOnlyFallback(message: string) {
+  const original = config.OPENAI_API_KEY;
+  (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+  mockRagChat.mockRejectedValueOnce(Object.assign(new Error("rate limited"), { status: 429 }));
+  try {
+    const res = await buildApp().request("/api/v1/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+    return res.json();
+  } finally {
+    (config as Record<string, unknown>).OPENAI_API_KEY = original;
+  }
+}
+
 describe("POST /api/v1/chat", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("returns context-only mode when no OpenAI key", async () => {
+  it("returns 501 llm_disabled when no OpenAI key and no LLM_BASE_URL", async () => {
     const app = buildApp();
     const res = await app.request("/api/v1/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: "What is SEO?" }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(501);
     const body = await res.json();
-    expect(body.data.mode).toBe("context-only");
-    expect(body.data.answer).toBeNull();
-    expect(body.data.sources).toHaveLength(1);
-    expect(body.data.sources[0].question).toBe("What is SEO?");
-    expect(mockKeywordSearch).toHaveBeenCalledWith("What is SEO?", 5);
+    expect(body.error).toBe("llm_disabled");
+    expect(body.message).toBe("線上未啟用 LLM，請在本機模式執行");
+    expect(mockKeywordSearch).not.toHaveBeenCalled();
+    expect(mockRagChat).not.toHaveBeenCalled();
+  });
+
+  it("uses the LLM when only LLM_BASE_URL (local Ollama) is set", async () => {
+    (config as Record<string, unknown>).LLM_BASE_URL = "http://localhost:11434/v1";
+    try {
+      const res = await buildApp().request("/api/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "What is SEO?" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.mode).toBe("rag");
+      expect(mockRagChat).toHaveBeenCalled();
+    } finally {
+      (config as Record<string, unknown>).LLM_BASE_URL = "";
+    }
   });
 
   it("returns rag mode when OpenAI key is set", async () => {
@@ -211,14 +244,8 @@ describe("POST /api/v1/chat", () => {
     expect(res.status).toBe(400);
   });
 
-  it("context-only mode includes score rounded to 4 decimal places", async () => {
-    const app = buildApp();
-    const res = await app.request("/api/v1/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: "SEO basics" }),
-    });
-    const body = await res.json();
+  it("context-only fallback includes score rounded to 4 decimal places", async () => {
+    const body = await postContextOnlyFallback("SEO basics");
     expect(body.data.sources[0].score).toBe(0.5);
   });
 
@@ -266,14 +293,8 @@ describe("POST /api/v1/chat", () => {
     }
   });
 
-  it("context-only mode includes metadata with provider and retrieval_count", async () => {
-    const app = buildApp();
-    const res = await app.request("/api/v1/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: "What is SEO?" }),
-    });
-    const body = await res.json();
+  it("context-only fallback includes metadata with provider and retrieval_count", async () => {
+    const body = await postContextOnlyFallback("What is SEO?");
     expect(body.data.metadata).toBeDefined();
     expect(body.data.metadata.provider).toBe("local");
     expect(body.data.metadata.mode).toBe("context-only");
@@ -308,13 +329,7 @@ describe("POST /api/v1/chat", () => {
   });
 
   it("sources include source_type, source_collection, source_url", async () => {
-    const app = buildApp();
-    const res = await app.request("/api/v1/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: "What is SEO?" }),
-    });
-    const body = await res.json();
+    const body = await postContextOnlyFallback("What is SEO?");
     const source = body.data.sources[0];
     expect(source.source_type).toBe("meeting");
     expect(source.source_collection).toBe("seo-meetings");
@@ -434,16 +449,17 @@ describe("POST /api/v1/chat/stream", () => {
     vi.clearAllMocks();
   });
 
-  it("returns context-only when no OpenAI key (non-streaming fallback)", async () => {
+  it("returns 501 llm_disabled when no LLM is configured", async () => {
     const app = buildApp();
     const res = await app.request("/api/v1/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: "What is SEO?" }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(501);
     const body = await res.json();
-    expect(body.data.mode).toBe("context-only");
+    expect(body.error).toBe("llm_disabled");
+    expect(mockRagChatStream).not.toHaveBeenCalled();
   });
 
   it("returns 400 for invalid body", async () => {

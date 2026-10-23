@@ -8,6 +8,7 @@ import { qaStore } from "../store/qa-store.js";
 import { resolveMode } from "../utils/mode-detect.js";
 import { resolveCapabilities, formatCapabilityTag } from "../utils/capabilities.js";
 import { config } from "../config.js";
+import { featureUnavailableBody } from "../utils/feature-errors.js";
 import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
 import { createAgentDeps } from "../agent/agent-deps.js";
 
@@ -49,9 +50,9 @@ chatRoute.post("/", async (c) => {
 
   const caps = resolveCapabilities(c.req.header("user-agent"));
 
+  // 線上 LLM 關閉（index.ts 的 requireLlm 已先擋；直接掛 route 時同樣回 501）
   if (caps.llm === "none") {
-    const result = { ...contextOnlyResponse(message), execution_context: formatCapabilityTag(caps) };
-    return c.json(ok(result));
+    return c.json(featureUnavailableBody("llm_disabled"), 501);
   }
 
   const historyDicts = history.map((h) => ({
@@ -137,9 +138,7 @@ chatRoute.post("/stream", async (c) => {
   const streamCaps = resolveCapabilities(c.req.header("user-agent"));
 
   if (streamCaps.llm === "none") {
-    // Streaming not available without OpenAI — return non-streaming fallback
-    const result = { ...contextOnlyResponse(message), execution_context: formatCapabilityTag(streamCaps) };
-    return c.json(ok(result));
+    return c.json(featureUnavailableBody("llm_disabled"), 501);
   }
 
   if (isLambdaRuntime()) {

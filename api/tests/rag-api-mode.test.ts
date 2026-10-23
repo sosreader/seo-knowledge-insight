@@ -3,6 +3,7 @@
  *   - app 照常啟動，/health 200 且 capabilities.store = postgres
  *   - 需要 DB 的路由回 503 db_unavailable（不是 500、不是 crash）
  *   - /reports、/meeting-prep 回 410 not_available_in_rag_api（warehouse_rag 沒有這兩表的權限）
+ *   - 沒有 OPENAI_API_KEY／LLM_BASE_URL → /chat 先回 501 llm_disabled（不等 QA store）
  */
 
 import { describe, it, expect, vi, beforeAll } from "vitest";
@@ -98,10 +99,15 @@ describe("rag-api mode without a mounted db-rag secret", () => {
   it.each([
     ["GET", "/api/v1/qa", undefined],
     ["POST", "/api/v1/search", { query: "LCP" }],
-    ["POST", "/api/v1/chat", { message: "LCP" }],
   ])("%s %s reports the degraded QA store with 503 (not 500)", async (method, path, body) => {
     const { status } = await call(method, path, body);
     expect(status).toBe(503);
+  });
+
+  it("POST /api/v1/chat → 501 llm_disabled before waiting for the QA store", async () => {
+    const { status, json } = await call("POST", "/api/v1/chat", { message: "LCP" });
+    expect(status).toBe(501);
+    expect(json.error).toBe("llm_disabled");
   });
 
   it("POST /synonyms → 503 db_unavailable", async () => {

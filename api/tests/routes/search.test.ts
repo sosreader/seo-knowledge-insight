@@ -510,4 +510,61 @@ describe("POST /api/v1/search", () => {
     expect(body.data.results).toHaveLength(2);
     expect(body.data.results[0].id).toBe("l4-item");
   });
+
+  describe("mode parameter", () => {
+    const post = (body: Record<string, unknown>) =>
+      buildApp().request("/api/v1/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    it("no mode without LLM → keyword with llm_disabled in data and meta", async () => {
+      const res = await post({ query: "SEO" });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data).toMatchObject({ mode: "keyword", llm_disabled: true });
+      expect(body.meta).toMatchObject({ mode: "keyword", llm_disabled: true });
+      expect(mockHybridSearch).not.toHaveBeenCalled();
+    });
+
+    it.each(["hybrid", "semantic"])("mode=%s without LLM → 501 llm_disabled", async (mode) => {
+      const res = await post({ query: "SEO", mode });
+      expect(res.status).toBe(501);
+      const body = await res.json();
+      expect(body.error).toBe("llm_disabled");
+      expect(mockHybridSearch).not.toHaveBeenCalled();
+      expect(mockKeywordSearch).not.toHaveBeenCalled();
+    });
+
+    it("mode=keyword with LLM → keyword without touching embeddings", async () => {
+      const original = config.OPENAI_API_KEY;
+      (config as Record<string, unknown>).OPENAI_API_KEY = "sk-test-key";
+      try {
+        const res = await post({ query: "SEO", mode: "keyword" });
+        const body = await res.json();
+        expect(body.data).toMatchObject({ mode: "keyword", llm_disabled: false });
+        expect(mockHybridSearch).not.toHaveBeenCalled();
+      } finally {
+        (config as Record<string, unknown>).OPENAI_API_KEY = original;
+      }
+    });
+
+    it("mode=semantic with LLM_BASE_URL → hybrid retrieval path", async () => {
+      (config as Record<string, unknown>).LLM_BASE_URL = "http://localhost:11434/v1";
+      try {
+        const res = await post({ query: "SEO", mode: "semantic" });
+        const body = await res.json();
+        expect(body.data).toMatchObject({ mode: "hybrid", llm_disabled: false });
+        expect(mockHybridSearch).toHaveBeenCalled();
+      } finally {
+        (config as Record<string, unknown>).LLM_BASE_URL = "";
+      }
+    });
+
+    it("rejects an unknown mode with 400", async () => {
+      const res = await post({ query: "SEO", mode: "vector" });
+      expect(res.status).toBe(400);
+    });
+  });
 });

@@ -8,6 +8,7 @@
  */
 
 import { config } from "../config.js";
+import { assertLlmEnabled } from "./llm-client.js";
 import type { QAItem } from "../store/qa-store.js";
 
 interface RerankCandidate {
@@ -34,6 +35,9 @@ export async function rerank(
 ): Promise<ReadonlyArray<{ item: QAItem; score: number }>> {
   if (candidates.length === 0) return candidates;
   if (candidates.length <= topK) return candidates;
+
+  // 線上 LLM 關閉時 reranker 一併關閉（llm_disabled 501），即使另外設了 Anthropic key
+  assertLlmEnabled();
 
   // Require Anthropic API key
   if (!config.ANTHROPIC_API_KEY) {

@@ -11,10 +11,12 @@ import { ok, fail } from "../schemas/api-response.js";
 import { sessionStore } from "../store/session-store.js";
 import type { Session } from "../store/session-store.js";
 import { ragChatObserved as ragChat } from "../services/rag-chat.js";
-import { resolveMode } from "../utils/mode-detect.js";
+import { resolveMode, type RequestMode } from "../utils/mode-detect.js";
+import type { MaturityLevel } from "../utils/maturity.js";
 import { resolveCapabilities, formatCapabilityTag } from "../utils/capabilities.js";
 import { qaStore } from "../store/qa-store.js";
 import { config } from "../config.js";
+import { featureUnavailableBody } from "../utils/feature-errors.js";
 import { agentChatObserved as agentChat } from "../agent/agent-loop.js";
 import { createAgentDeps } from "../agent/agent-deps.js";
 
@@ -60,6 +62,67 @@ function toDetail(s: Session): SessionDetailOut {
       ...(m.metadata ? { metadata: m.metadata } : {}),
     })),
   };
+}
+
+type ChatResult = {
+  answer: string | null;
+  sources: Record<string, unknown>[];
+  mode: string;
+  metadata?: Record<string, unknown>;
+};
+
+function contextOnlyResult(userMessage: string, startMs: number): ChatResult {
+  const sources = keywordHitsToSources(userMessage, config.CHAT_CONTEXT_K);
+  return {
+    answer: null, sources, mode: "context-only",
+    metadata: { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - startMs },
+  };
+}
+
+async function runChatMode(
+  userMessage: string,
+  history: ReadonlyArray<{ role: string; content: string }>,
+  requestMode: RequestMode | undefined,
+  maturity: MaturityLevel | null,
+): Promise<ChatResult> {
+  const prior = history.length > 0 ? history : null;
+  if (resolveMode(requestMode) === "agent") {
+    const agentResult = await agentChat(
+      userMessage, prior, createAgentDeps(),
+      { maxTurns: config.AGENT_MAX_TURNS, timeoutMs: config.AGENT_TIMEOUT_MS },
+      maturity,
+    );
+    return {
+      answer: agentResult.answer,
+      sources: agentResult.sources as unknown as Record<string, unknown>[],
+      mode: agentResult.mode,
+      metadata: agentResult.metadata as unknown as Record<string, unknown>,
+    };
+  }
+  const ragResult = await ragChat(userMessage, prior, maturity);
+  return {
+    answer: ragResult.answer,
+    sources: ragResult.sources as unknown as Record<string, unknown>[],
+    mode: ragResult.mode ?? "rag",
+    metadata: ragResult.metadata as unknown as Record<string, unknown>,
+  };
+}
+
+/** LLM 回答；OpenAI 相容端點驗證／額度錯誤（401／403／429）時退 context-only。 */
+async function answerMessage(
+  userMessage: string,
+  history: ReadonlyArray<{ role: string; content: string }>,
+  requestMode: RequestMode | undefined,
+  maturity: MaturityLevel | null,
+): Promise<ChatResult> {
+  const startMs = Date.now();
+  try {
+    return await runChatMode(userMessage, history, requestMode, maturity);
+  } catch (err: unknown) {
+    const status = (err as { status?: number }).status;
+    if (status === 401 || status === 403 || status === 429) return contextOnlyResult(userMessage, startMs);
+    throw err;
+  }
 }
 
 sessionsRoute.get("/", async (c) => {
@@ -110,6 +173,12 @@ sessionsRoute.get("/:session_id", async (c) => {
 });
 
 sessionsRoute.post("/:session_id/messages", async (c) => {
+  // LLM 關閉 → 501，且在寫入使用者訊息之前就擋下（不留半套對話）
+  const caps = resolveCapabilities(c.req.header("user-agent"));
+  if (caps.llm === "none") {
+    return c.json(featureUnavailableBody("llm_disabled"), 501);
+  }
+
   const sessionId = c.req.param("session_id");
   if (!sessionIdSchema.safeParse(sessionId).success) {
     return c.json(fail("Invalid session ID format"), 400);
@@ -158,57 +227,8 @@ sessionsRoute.post("/:session_id/messages", async (c) => {
     content: m.content,
   }));
 
-  // 3. Call RAG chat (with context-only fallback when no OpenAI)
-  let result: { answer: string | null; sources: Record<string, unknown>[]; mode: string; metadata?: Record<string, unknown> };
-  const ragStartMs = Date.now();
-  const caps = resolveCapabilities(c.req.header("user-agent"));
-
-  if (caps.llm === "openai") {
-    const effectiveMode = resolveMode(requestMode);
-    try {
-      if (effectiveMode === "agent") {
-        const deps = createAgentDeps();
-        const agentResult = await agentChat(
-          userMessage,
-          history.length > 0 ? history : null,
-          deps,
-          { maxTurns: config.AGENT_MAX_TURNS, timeoutMs: config.AGENT_TIMEOUT_MS },
-          effectiveMaturity,
-        );
-        result = {
-          answer: agentResult.answer,
-          sources: agentResult.sources as unknown as Record<string, unknown>[],
-          mode: agentResult.mode,
-          metadata: agentResult.metadata as unknown as Record<string, unknown>,
-        };
-      } else {
-        const ragResult = await ragChat(userMessage, history.length > 0 ? history : null, effectiveMaturity);
-        result = {
-          answer: ragResult.answer,
-          sources: ragResult.sources as unknown as Record<string, unknown>[],
-          mode: ragResult.mode ?? "rag",
-          metadata: ragResult.metadata as unknown as Record<string, unknown>,
-        };
-      }
-    } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      if (status === 401 || status === 403 || status === 429) {
-        const sources = keywordHitsToSources(userMessage, config.CHAT_CONTEXT_K);
-        result = {
-          answer: null, sources, mode: "context-only",
-          metadata: { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - ragStartMs },
-        };
-      } else {
-        throw err;
-      }
-    }
-  } else {
-    const sources = keywordHitsToSources(userMessage, config.CHAT_CONTEXT_K);
-    result = {
-      answer: null, sources, mode: "context-only",
-      metadata: { provider: "local", mode: "context-only", retrieval_count: sources.length, duration_ms: Date.now() - ragStartMs },
-    };
-  }
+  // 3. Call RAG chat（LLM 已確認可用；401／403／429 時退 context-only）
+  const result = await answerMessage(userMessage, history, requestMode, effectiveMaturity);
 
   // 4. Save assistant message
   const assistantMsg = {

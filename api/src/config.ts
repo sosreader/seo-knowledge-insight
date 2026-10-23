@@ -19,6 +19,13 @@ const envSchema = z.object({
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
   CHAT_MODEL: z.string().default("gpt-6-luna"),
 
+  // OpenAI 相容端點。空值 → OpenAI 官方；本機可指向 Ollama 的 /v1（例：http://localhost:11434/v1）。
+  // OPENAI_API_KEY 與 LLM_BASE_URL 皆空 → LLM disabled：chat／agent／hybrid・semantic search／reranker 回 501 llm_disabled。
+  LLM_BASE_URL: z.string().default(""),
+  // 覆寫 CHAT_MODEL／OPENAI_EMBEDDING_MODEL（本機 Ollama 的模型名不同）；空值沿用舊設定。
+  LLM_CHAT_MODEL: z.string().default(""),
+  LLM_EMBEDDING_MODEL: z.string().default(""),
+
   // Lambda 模式（AUTH_MODE=api-key，Lambda 預設）與本機 docker-compose 用的 X-API-Key。
   SEO_API_KEY: z.string().default(""),
 
