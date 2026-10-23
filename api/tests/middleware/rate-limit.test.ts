@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Hono } from "hono";
-import { rateLimit, resetRateLimitStore } from "../../src/middleware/rate-limit.js";
+import { rateLimit, resetRateLimitStore, pruneEntries } from "../../src/middleware/rate-limit.js";
 
 function createApp(maxRequests: number) {
   const app = new Hono();
@@ -51,5 +51,69 @@ describe("rate-limit middleware", () => {
 
     expect(resA.status).toBe(200);
     expect(resB.status).toBe(200);
+  });
+});
+
+describe("rate-limit identity keys", () => {
+  beforeEach(() => {
+    resetRateLimitStore();
+  });
+
+  function identityApp(max: number, windowMs: number, bucket?: string) {
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      const id = c.req.header("x-test-identity");
+      if (id) c.set("accessIdentity", id);
+      await next();
+    });
+    app.use("/chat/*", rateLimit(max, windowMs, bucket ? { bucket } : undefined));
+    app.post("/chat/:id", (c) => c.json({ ok: true }));
+    return app;
+  }
+
+  it("keys by the Access identity rather than the client IP", async () => {
+    const app = identityApp(1, 60_000);
+    const send = (id: string) =>
+      app.request("/chat/x", {
+        method: "POST",
+        headers: { "x-test-identity": id, "x-forwarded-for": "10.0.0.1" },
+      });
+    expect((await send("alice")).status).toBe(200);
+    expect((await send("bob")).status).toBe(200);
+    expect((await send("alice")).status).toBe(429);
+  });
+
+  it("shares one bucket across paths when a bucket name is given", async () => {
+    const app = identityApp(1, 60_000, "chat");
+    const send = (path: string) =>
+      app.request(path, { method: "POST", headers: { "x-test-identity": "alice" } });
+    expect((await send("/chat/a")).status).toBe(200);
+    expect((await send("/chat/b")).status).toBe(429);
+  });
+
+  it("keeps daily windows independent of a shorter window on the same identity", async () => {
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("accessIdentity", "alice");
+      await next();
+    });
+    app.use("/chat", rateLimit(5, 60_000, { bucket: "chat-minute" }));
+    app.use("/chat", rateLimit(2, 86_400_000, { bucket: "chat-day" }));
+    app.post("/chat", (c) => c.json({ ok: true }));
+    expect((await app.request("/chat", { method: "POST" })).status).toBe(200);
+    expect((await app.request("/chat", { method: "POST" })).status).toBe(200);
+    const res = await app.request("/chat", { method: "POST" });
+    expect(res.status).toBe(429);
+    expect(res.headers.get("X-RateLimit-Limit")).toBe("2");
+  });
+
+  it("prunes entries using each entry's own window", () => {
+    const now = 10_000_000;
+    const store = new Map([
+      ["day", { timestamps: [now - 120_000], windowMs: 86_400_000 }],
+      ["minute", { timestamps: [now - 120_000], windowMs: 60_000 }],
+    ]);
+    const pruned = pruneEntries(store, now);
+    expect([...pruned.keys()]).toEqual(["day"]);
   });
 });

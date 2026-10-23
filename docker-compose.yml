@@ -14,6 +14,8 @@ services:
       - NODE_ENV=development
       - PORT=8002
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+      # 本機沿用 X-API-Key（SEO_API_KEY 空值且非 production 時不驗）；EKS 容器預設 cf-access（見 api/README.md）
+      - AUTH_MODE=api-key
       - SEO_API_KEY=
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - LMNR_PROJECT_API_KEY=${LMNR_PROJECT_API_KEY:-}

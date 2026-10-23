@@ -65,8 +65,10 @@ pnpm start                   # node dist/index.js，port 8002
 Client → Function URL / localhost:8002
   → CORS → Security Headers → Request Logger（JSON log + X-Request-Id）
   → /health（直接回應，無 auth，不產生 log）
-  → /api/v1/* → Auth → Rate Limit → Route Handler → Service → Store → vocus-warehouse (pg) / File
+  → /api/v1/*、/internal/rag/* → Auth → Rate Limit → Route Handler → Service → Store → vocus-warehouse (pg) / File
 ```
+
+`/internal/rag/*` 與 `/api/v1/*` 是同一組路由；EKS 上 Cloudflare tunnel ingress `^/internal/rag/` 原樣轉送路徑到 rag-api。
 
 **分層設計：**
 
@@ -326,7 +328,32 @@ Client → Function URL / localhost:8002
 
 ## 認證與授權
 
-### API Key
+驗證模式由 env `AUTH_MODE` 決定（`src/middleware/auth-mode.ts`）：
+
+| 模式 | 何時 | 驗證 |
+| --- | --- | --- |
+| `cf-access` | 容器（EKS rag-api）的預設；無法辨識的值也落到這裡 | Cloudflare Access JWT |
+| `api-key` | Lambda 的預設（Lambda 即將退役）；本機 docker-compose 明設 | `X-API-Key` |
+
+### Cloudflare Access JWT（容器模式）
+
+`src/middleware/cf-access.ts`，語意對齊 vocus-warehouse `auth/access_jwt.py`：
+
+- 驗 header `Cf-Access-Jwt-Assertion`，只收 RS256，kid 必填
+- 簽章 key 取自 `https://<CF_ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs`，快取 1 小時，未知 kid 重抓一次（重抓間隔至少 30 秒）
+- `iss` 必須是 `https://<CF_ACCESS_TEAM_DOMAIN>`，`aud` 至少一個在 `RAG_AUDS`（逗號分隔），`exp`／`nbf` 容忍 60 秒
+- 身分：JWT `sub`；service token 的 `sub` 為空，改用 `common_name`。身分寫進 context（`accessIdentity`），限流以此為 key
+
+| 情況 | 狀態碼 | `error` |
+| --- | --- | --- |
+| `RAG_AUDS` 或 `CF_ACCESS_TEAM_DOMAIN` 缺值（S2.4 回填前） | 503 | `unavailable` |
+| JWKS 從未取得（egress 擋住等） | 503 | `unavailable` |
+| 沒帶 token、簽章／alg／kid／iss／aud／exp／nbf 任一不符、沒有身分 | 401 | `unauthorized` |
+
+`/health`、`/openapi.json`、`/docs` 不經過驗證；tunnel 只轉送 `/internal/rag/*`，這三條不對外。
+env 不熱更新：`RAG_AUDS` 變更後需 rollout restart。
+
+### API Key（Lambda 與本機）
 
 在 header 帶 `X-API-Key`：
 
@@ -340,11 +367,11 @@ curl -H "X-API-Key: your-api-key" http://localhost:8002/api/v1/qa
 
 根據端點不同，設定不同的限制：
 
-- **搜尋/Q&A 端點**：60 requests / min
-- **Chat 端點**：20 requests / min
+- **搜尋/Q&A 端點**：60 requests / min（`RATE_LIMIT_DEFAULT`）
+- **Chat 類端點**（`/chat`、`/chat/*`、`/sessions/:id/messages`）：每身分共用 10 requests / min（`RATE_LIMIT_CHAT`）＋ 200 requests / day（`RATE_LIMIT_CHAT_DAILY`）
 - **Report 生成**：5 requests / min
 
-超過限制時，伺服器回傳 429 Limit Exceeded。
+key 是 CF Access 身分（沒有身分時退回 client IP）；計數在 process 記憶體內，不跨副本共享。超過限制時回 429＋`Retry-After`。
 
 > **Lambda 環境**：in-memory rate limiting 無效（每個執行環境有獨立 Map），自動 bypass。需要限流時應使用 API Gateway throttling。
 
@@ -372,8 +399,12 @@ api/
 │   │   ├── synonyms.ts
 │   │   └── meeting-prep.ts
 │   ├── middleware/
-│   │   ├── auth.ts              # API Key 驗證（timingSafeEqual）
-│   │   ├── rate-limit.ts        # Sliding window 速率限制（Lambda 自動 bypass）
+│   │   ├── auth.ts              # API Key 驗證（timingSafeEqual；Lambda／本機）
+│   │   ├── auth-mode.ts         # AUTH_MODE 解析（cf-access｜api-key）
+│   │   ├── cf-access.ts         # Cloudflare Access JWT 驗證（容器模式）
+│   │   ├── jwks-cache.ts        # team JWKS 快取（1 h、未知 kid 重抓）
+│   │   ├── access-context.ts    # context 內的 Access 身分
+│   │   ├── rate-limit.ts        # Sliding window 速率限制，key 為 Access 身分（Lambda 自動 bypass）
 │   │   ├── cors.ts              # CORS 設定
 │   │   ├── security-headers.ts  # HTTP security headers（X-Content-Type-Options 等）
 │   │   ├── request-logger.ts    # 結構化 JSON request log + X-Request-Id
@@ -468,8 +499,16 @@ api/
 建立 `.env` 檔案（或設定系統環境變數）：
 
 ```env
-# 必要
+# 驗證模式：cf-access（容器預設）｜api-key（Lambda 預設；本機 docker-compose 明設）
+AUTH_MODE=api-key
+# api-key 模式
 SEO_API_KEY=your-secret-api-key
+# cf-access 模式（EKS 由 ConfigMap vocus-warehouse-access 的 team_domain／rag_auds 帶入）
+CF_ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com
+RAG_AUDS=<aud1>,<aud2>
+# chat 類路由每身分限流
+RATE_LIMIT_CHAT=10
+RATE_LIMIT_CHAT_DAILY=200
 PORT=8002
 
 # vocus-warehouse（設定後切換至 PG 模式；rag-api 由 K8s Secret vocus-warehouse-db-rag 掛載）
