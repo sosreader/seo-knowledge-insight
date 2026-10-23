@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+# retrieval／meeting-prep structure／grounding／report quality 的 run_eval() 在 `if __name__ == "__main__"`
+# 底下，`lmnr eval <file>` 只匯入模組（log 為 `Loaded 0 evaluations`），門檻閘門不會執行，
+# 所以這四步直接用 python 執行。extraction 為模組層級 evaluate()，維持 `lmnr eval`。
 jobs:
   eval:
     name: Offline evals (retrieval + extraction + meeting-prep)
@@ -31,7 +34,7 @@ jobs:
         # 打線上 rag-api（RAG_API_BASE 預設 https://warehouse-api.vocus.cc/internal/rag），
         # POST /search 不帶 mode，線上無 LLM 時自動走 keyword。
         # 憑證缺失或 rag-api 不可達時 eval 以 ::warning:: 標記並 skip（exit 0），不讓 workflow 紅
-        run: lmnr eval evals/eval_retrieval.py
+        run: python evals/eval_retrieval.py
 
       - name: Run extraction eval
         env:
@@ -46,7 +49,7 @@ jobs:
         env:
           LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
         # 純 file-based，fixtures committed 至 eval/fixtures/meeting_prep/
-        run: lmnr eval evals/eval_meeting_prep_structure.py
+        run: python evals/eval_meeting_prep_structure.py
 
       - name: Run meeting-prep grounding eval
         env:
@@ -55,10 +58,10 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.RAG_EVAL_CF_CLIENT_SECRET }}
         # 讀取 fixtures + KB lookup（本地 qa_final.json → rag-api GET /qa/{id}）；
         # rag-api 不可用時 gate 以 ::warning:: skip
-        run: lmnr eval evals/eval_meeting_prep_grounding.py
+        run: python evals/eval_meeting_prep_grounding.py
 
       - name: Run report quality eval
         env:
           LMNR_PROJECT_API_KEY: ${{ secrets.LMNR_PROJECT_API_KEY }}
         # 純 file-based，fixtures committed 至 eval/fixtures/reports/
-        run: lmnr eval evals/eval_report_quality.py
+        run: python evals/eval_report_quality.py
